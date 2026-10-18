@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy:
+    name: policy
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch naming and linked issue
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          [[ "$HEAD_BRANCH" =~ ^(feature|fix|bugfix|docs|chore|release)/[a-z0-9][a-z0-9._-]*$ ]] || {
+            echo "::error::Branch must follow feature/, fix/, bugfix/, docs/, chore/, or release/."; exit 1;
+          }
+          [[ "$PR_BODY" =~ \#[0-9]+ ]] || {
+            echo "::error::PR body must link a GitHub issue (e.g. Relates to #12)."; exit 1;
+          }
+
+  go:
+    name: go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Format check
+        run: |
+          unformatted="$(gofmt -l $(git ls-files '*.go'))"
+          if [ -n "$unformatted" ]; then echo "$unformatted"; exit 1; fi
+      - name: Vet
+        run: go vet ./...
+      - name: Unit tests (race detector)
+        run: go test -race -count=1 ./...
+      - name: Build backend and MCP
+        run: |
+          mkdir -p dist
+          go build -trimpath -o dist/floweysales_backend .
+          go build -trimpath -o dist/floweysales_mcp ./cmd/mcp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: go-linux-amd64
+          path: dist/
+          retention-days: 14
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frozen dependencies
+        run: npm ci --prefix frontend
+      - name: Production Angular build
+        run: npm run build --prefix frontend
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-preview
+          path: www/browser/
+          if-no-files-found: error
+          retention-days: 14

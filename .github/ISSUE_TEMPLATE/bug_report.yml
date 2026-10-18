@@ -1,0 +1,20 @@
+name: Bug report
+description: Report a reproducible defect in the application, AI or providers
+title: "fix: "
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations: {required: true}
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations: {required: true}
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps and logs (redact credentials)
+    validations: {required: true}
