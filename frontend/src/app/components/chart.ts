@@ -149,6 +149,9 @@ export class TradingChartComponent implements AfterViewInit {
   private signals: (string | null)[] = [];
   private meta: PointMeta[] = [];
 
+  /** How x-axis labels are formatted for the loaded series. */
+  private xLabelMode: 'intraday' | 'sparse' | 'date' = 'date';
+
   constructor() {
     // Re-color when the theme changes.
     effect(() => {
@@ -196,14 +199,19 @@ export class TradingChartComponent implements AfterViewInit {
     const intraday = /^(5m|15m|1h|4h|5|15|60)$/.test(iv);
     const weekly = iv.includes('w');
     const longTerm = !intraday && ['3Y', '5Y', '10Y', 'MAX'].includes(series.range);
+    const sparse = weekly || longTerm;
+    this.xLabelMode = intraday ? 'intraday' : sparse ? 'sparse' : 'date';
 
-    const labelOf = (t: number): string => {
+    const labelOf = (t: number, prevYear: number): string => {
       const d = new Date(t * 1000);
       if (intraday) {
         return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
       }
-      if (weekly || longTerm) {
-        return d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+      if (sparse) {
+        // Long ranges: label only year transitions so the axis reads 2023,
+        // 2024, ... instead of repeating month names across the whole span.
+        const year = d.getFullYear();
+        return year !== prevYear ? String(year) : '';
       }
       return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     };
@@ -230,14 +238,18 @@ export class TradingChartComponent implements AfterViewInit {
     const stops = series.stops;
     const hasStops = Array.isArray(stops) && stops.length === points.length;
 
+    // Force the first point to carry a year label so the axis is anchored.
+    let prevYear = new Date(points[0].t * 1000).getFullYear() - 1;
+
     for (let i = 0; i < points.length; i++) {
       const p = points[i];
       fast = p.c * fastK + fast * (1 - fastK);
-      slow = p.c * slowK + slow * (1 - slowK);
+      slow = p.c * slowK + slow * (1 - fastK);
       highest = Math.max(highest, p.h || p.c);
       lowest = Math.min(lowest, p.l || p.c);
 
-      fullLabels.push(labelOf(p.t));
+      fullLabels.push(labelOf(p.t, prevYear));
+      prevYear = new Date(p.t * 1000).getFullYear();
       fullPrices.push(p.c);
       fullStops.push(hasStops && stops![i] > 0 ? stops![i] : null);
       fullFast.push(fast);
@@ -300,7 +312,8 @@ export class TradingChartComponent implements AfterViewInit {
     if (!this.chart) return;
 
     const timestamp = record.timestamp || Math.floor(Date.now() / 1000);
-    const label = new Date(timestamp * 1000).toLocaleTimeString();
+    const prevT = this.meta.length ? this.meta[this.meta.length - 1].t : undefined;
+    const label = this.xLabelFor(timestamp, prevT);
     const priceVal =
       record.marketData && typeof record.marketData.price === 'number'
         ? record.marketData.price
@@ -346,6 +359,19 @@ export class TradingChartComponent implements AfterViewInit {
     }
     this.applyIndicators();
     this.chart.update('none');
+  }
+
+  /** Formats one x-axis label consistently with the loaded series' mode. */
+  private xLabelFor(t: number, prevT?: number): string {
+    const d = new Date(t * 1000);
+    if (this.xLabelMode === 'intraday') {
+      return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    }
+    if (this.xLabelMode === 'sparse') {
+      const prevYear = prevT ? new Date(prevT * 1000).getFullYear() : -1;
+      return d.getFullYear() !== prevYear ? String(d.getFullYear()) : '';
+    }
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   }
 
   clear(): void {
