@@ -41,7 +41,8 @@ Rules:
 - Always call tools to ground numbers in real data; never invent prices or financials.
 - Prefer YAHOO for stocks and BINANCE for crypto unless the user asks otherwise.
 - Be brief: short paragraphs or bullet lists, no filler. Cite the range/provider you used.
-- If a tool returns no data, say so and suggest an alternative provider or symbol.`
+- If a tool returns no data, say so and suggest an alternative provider or symbol.
+- If the user explicitly mentions a ticker/symbol in their question that differs from the UI context, ALWAYS use the symbol from the user's question. The UI context is only a fallback when the user doesn't specify a symbol.`
 
 // Run executes the multi-step tool-calling loop. Content deltas and tool
 // events are pushed through emit (may be nil).
