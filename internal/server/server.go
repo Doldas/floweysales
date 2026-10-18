@@ -40,13 +40,13 @@ func (c *SharedMarketConfig) Set(symbol string, provider market.Provider) {
 
 // Engine owns the HTTP mux and wires every endpoint group.
 type Engine struct {
-	authService *identity.Service
+	authService      *identity.Service
 	authCookieSecure bool
-	authLimiter authRateLimit
-	db            *storage.Database
-	config        *SharedMarketConfig
-	finnhubAPIKey string
-	trackerCfg    tracker.Config
+	authLimiter      authRateLimit
+	db               *storage.Database
+	config           *SharedMarketConfig
+	finnhubAPIKey    string
+	trackerCfg       tracker.Config
 
 	webFS   fs.FS // optional embedded www/ filesystem (e.g. //go:embed www)
 	hub     *sseHub
