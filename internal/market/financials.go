@@ -21,6 +21,7 @@ type QuarterlyFinancial struct {
 	OperatingIncome *float64 `json:"operating_income,omitempty"`
 	NetIncome       *float64 `json:"net_income,omitempty"`
 	EPS             *float64 `json:"eps,omitempty"`
+	DataQualityWarnings []string `json:"data_quality_warnings,omitempty"`
 	FreeCashFlow    *float64 `json:"free_cash_flow,omitempty"`
 	Currency        string   `json:"currency,omitempty"`
 	Form            string   `json:"form,omitempty"` // "10-Q" etc (SEC filings)
@@ -220,7 +221,17 @@ func fetchYahooFinancials(symbol string) (FinancialsResponse, error) {
 	for _, row := range byDate {
 		reports = append(reports, *row)
 	}
-	sortByPeriodDesc(reports)
+	// Some Yahoo company fundamentals map the same EBIT metric to both
+    // "quarterlyGrossProfit" and "quarterlyOperatingIncome" (e.g. CGI).
+    // Do not manufacture a gross margin from an indistinguishable value.
+    for i:=range reports{
+      row:=&reports[i]
+      if row.GrossProfit!=nil && row.OperatingIncome!=nil && *row.GrossProfit==*row.OperatingIncome && *row.GrossProfit!=0{
+        row.GrossProfit=nil
+        row.DataQualityWarnings=append(row.DataQualityWarnings,"gross_profit omitted: provider reported exactly the same value as operating_income; verify official statements")
+      }
+    }
+    sortByPeriodDesc(reports)
 
 	res := FinancialsResponse{
 		Symbol:   formatted,
