@@ -119,7 +119,7 @@ func ToolDefs() []Tool {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "get_market_stats",
-				Description: "Aggregate stats from our own recorded tick history for a symbol (min/max/avg/latest price, number of records).",
+				Description: "Get stats from the locally recorded engine tick database, NOT a live provider quote. If no ticks have been recorded, returns data_available=false and no synthetic zero price.",
 				Parameters: obj(map[string]any{
 					"symbol": str("Ticker symbol."),
 				}, "symbol"),
@@ -230,7 +230,7 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 		if bar.Close <= 0 {
 			return "", fmt.Errorf("invalid closing price for %s", symbol)
 		}
-		return toJSON(map[string]any{"symbol": symbol, "provider": series.Provider, "currency": series.Currency, "last_close": bar.Close, "as_of_unix": bar.Timestamp, "quote_type": "historical_close", "is_realtime": false})
+		return toJSON(map[string]any{"symbol": symbol, "provider": series.Provider, "currency": series.Currency, "last_close": bar.Close, "as_of_unix": bar.Timestamp, "quote_type": "ohlc_bar_close", "interval": series.Interval, "is_realtime": false})
 
 	case "calculate_financial_ratios":
 		return calculateFinancialRatios(args)
@@ -243,6 +243,9 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 		stats, err := src.Stats(symbol)
 		if err != nil {
 			return "", err
+		}
+		if stats.RecordCount == 0 {
+			return toJSON(map[string]any{"symbol": symbol, "record_count": 0, "data_available": false, "note": "No locally recorded ticks. Use get_latest_close for the most recent provider OHLC bar."})
 		}
 		return toJSON(stats)
 
