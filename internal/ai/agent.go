@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // Event is one step of an agent run, streamed to the UI or logged by tests.
@@ -78,6 +79,22 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		}
 
 		messages = append(messages, assistant)
+
+		// If the model returns nothing (no content, no tool calls) after having
+		// used tools on the previous turn, nudge it to produce a final answer
+		// instead of silently ending the conversation.
+		if len(assistant.ToolCalls) == 0 && strings.TrimSpace(assistant.Content) == "" {
+			if step > 1 {
+				messages = append(messages, Message{
+					Role:    "user",
+					Content: "Please provide your final answer based on the tool results.",
+				})
+				continue
+			}
+			// Step 1 with no content and no tools: just finish.
+			emit(Event{Type: "done", Steps: step})
+			return nil
+		}
 
 		if len(assistant.ToolCalls) == 0 {
 			emit(Event{Type: "done", Steps: step})
