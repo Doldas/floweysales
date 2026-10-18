@@ -298,7 +298,8 @@ export class App {
 
     this.api.search(symbol, provider).subscribe({
       next: (results) => {
-        // "BTC" → "BTCUSDT" style normalization for Binance.
+        // Prefer the exact search hit so the tracked symbol is the
+        // provider's own (e.g. "BTCUSDT" on Binance) — no re-suffixing.
         if (!results || results.length === 0) {
           this.showUnknownTickerError(symbol, provider);
           return;

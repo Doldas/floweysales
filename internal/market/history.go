@@ -238,9 +238,6 @@ func fetchYahooHistory(symbol, rng string) (HistorySeries, error) {
 
 func fetchBinanceHistory(symbol, rng string) (HistorySeries, error) {
 	formatted := strings.ToUpper(strings.TrimSpace(symbol))
-	if !strings.Contains(formatted, "USDT") {
-		formatted += "USDT"
-	}
 
 	specs := map[string]struct {
 		interval string

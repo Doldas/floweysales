@@ -174,14 +174,12 @@ func SearchBinance(query string) []SearchResult {
 
 	q := strings.ToUpper(strings.TrimSpace(query))
 	results := []SearchResult{}
-	// Append USDT like the ticker fetch does, so "BTC" finds "BTCUSDT".
-	candidates := map[string]bool{q: true, strings.TrimSuffix(q, "USDT") + "USDT": true}
 	for _, s := range symbols {
-		if candidates[s.Symbol] {
+		if strings.EqualFold(s.Symbol, q) {
 			results = append(results, s)
 			continue
 		}
-		if prefix := strings.ReplaceAll(q, "USDT", ""); prefix != "" && strings.HasPrefix(s.Symbol, prefix) {
+		if strings.HasPrefix(s.Symbol, q) {
 			results = append(results, s)
 		}
 		if len(results) >= 10 {

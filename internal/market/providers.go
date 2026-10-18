@@ -252,9 +252,6 @@ func (a *BinanceAsset) ToJSON() map[string]any {
 // FetchBinance fetches the latest ticker price from Binance.
 func FetchBinance(query string) (MarketAsset, error) {
 	formatted := strings.ToUpper(strings.TrimSpace(query))
-	if !strings.Contains(formatted, "USDT") {
-		formatted += "USDT"
-	}
 
 	endpoint := "https://api.binance.com/api/v3/ticker/price?symbol=" + url.QueryEscape(formatted)
 	body, err := httpGet(endpoint, nil)
