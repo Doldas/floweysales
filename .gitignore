@@ -1,0 +1,29 @@
+# Secrets — never commit
+config.properties
+.env
+.env.*
+*.pem
+*.key
+
+# Go binaries
+floweysales_backend
+floweysales_mcp
+*.exe
+*.dll
+*.so
+
+# Node / frontend build
+node_modules/
+www/
+dist/
+
+# Tooling / IDE
+.idea/
+.vscode/
+.ai/
+*.swp
+
+# Logs & temp
+*.log
+tmp-*
+.DS_Store

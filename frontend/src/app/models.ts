@@ -1,0 +1,259 @@
+export interface MarketData {
+  assetDataProvider?: string;
+  type?: string;
+  symbol?: string;
+  name?: string;
+  price?: number;
+  currency?: string;
+  isin?: string;
+  description?: string;
+  navDate?: string;
+  rating?: number;
+  fees?: { product?: number; management?: number };
+  risk?: { value?: number; text?: string };
+  performance?: {
+    '1d'?: number; '1m'?: number; '3m'?: number; '6m'?: number;
+    '1y'?: number; 'thisYear'?: number; '3y'?: number; '5y'?: number;
+  };
+  esg?: {
+    score?: number; rating?: number; lowCarbon?: boolean;
+    environmentalScore?: number; socialScore?: number; governanceScore?: number;
+    carbonRiskScore?: number; category?: string; svanen?: boolean;
+  };
+  holdings?: Array<[string, number] | StockHolding>;
+  extended_info?: {
+    indexFund?: boolean; sharpeRatio?: number; standardDeviation?: number;
+    capital?: number; primaryBenchmark?: string; recommendedHoldingPeriod?: string;
+  };
+  quote?: {
+    buy?: number; sell?: number; last?: number; highest?: number; lowest?: number;
+    change?: number; changePercent?: number; spread?: number;
+  };
+  keyIndicators?: {
+    peRatio?: number; psRatio?: number; pbRatio?: number; eps?: number;
+    directYield?: number; marketCap?: number;
+  };
+  listing?: {
+    shortName?: string; tickerSymbol?: string; marketPlaceName?: string; marketListName?: string;
+  };
+  full_data?: unknown;
+}
+
+export interface StockHolding {
+  name?: string;
+  symbol?: string;
+  weight?: number;
+  percent?: number;
+  country?: string;
+  sector?: string;
+}
+
+export interface SymbolInfo {
+  symbol: string;
+  name: string;
+  type: string;
+  exchange: string;
+}
+
+export interface TradingRecord {
+  timestamp: number;
+  symbol: string;
+  price: number;
+  stop_loss: number;
+  fast_ema: number;
+  slow_ema: number;
+  currency: string;
+  status: string;
+  marketData?: MarketData;
+}
+
+export type OrderSide = 'BUY' | 'SELL';
+export type OrderType = 'MARKET' | 'LIMIT' | 'STOP' | 'STOP_LIMIT';
+export type OrderTif = 'GTC' | 'DAY' | 'IOC';
+export type OrderStatus = 'OPEN' | 'FILLED' | 'CANCELLED' | 'REJECTED';
+
+/** One simulated broker execution, including its lifecycle fields. */
+export interface Order {
+  id: number;
+  symbol: string;
+  side: OrderSide;
+  type: OrderType;
+  tif: OrderTif;
+  quantity: number;
+  /** Reference price captured when the order was submitted. */
+  price: number;
+  limit_price: number;
+  stop_price: number;
+  fill_price: number;
+  fee: number;
+  timestamp: number;
+  filled_at: number;
+  status: OrderStatus;
+  reason: string;
+}
+
+/** Net holding of one symbol after every execution is netted out. */
+export interface Position {
+  symbol: string;
+  quantity: number;
+  avg_entry: number;
+  cost_basis: number;
+  last_price: number;
+  market_value: number;
+  unrealized_pnl: number;
+  realized_pnl: number;
+  open_orders: number;
+  first_fill_at: number;
+  last_fill_at: number;
+}
+
+/** Account level view of the book. */
+export interface PortfolioSummary {
+  starting_cash: number;
+  cash: number;
+  buying_power: number;
+  equity: number;
+  market_value: number;
+  unrealized_pnl: number;
+  realized_pnl: number;
+  commission_paid: number;
+  position_count: number;
+  long_count: number;
+  short_count: number;
+  open_order_count: number;
+  trade_count: number;
+  winning_symbols: number;
+  losing_symbols: number;
+  allow_short: boolean;
+  commission_pct: number;
+  commission_fixed: number;
+}
+
+export interface PortfolioResponse {
+  positions: Position[];
+  summary: PortfolioSummary;
+}
+
+/** Payload sent to POST /api/orders. */
+export interface OrderRequest {
+  symbol: string;
+  side: OrderSide;
+  type: OrderType;
+  tif: OrderTif;
+  quantity: number;
+  limit_price?: number;
+  stop_price?: number;
+}
+
+export interface OrderResponse {
+  status: string;
+  order_id: number;
+  order: Order;
+  summary?: PortfolioSummary;
+}
+
+export interface ForumPost {
+  id: number;
+  author: string;
+  title: string;
+  content: string;
+  symbol?: string;
+  timestamp: number;
+  upvotes: number;
+}
+
+export interface MarketStats {
+  symbol: string;
+  min_price: number;
+  max_price: number;
+  avg_price: number;
+  latest_price: number;
+  record_count: number;
+}
+
+export type ProviderId = 'YAHOO' | 'AVANZA' | 'FINNHUB' | 'BINANCE';
+
+export const PROVIDERS: { id: ProviderId; label: string }[] = [
+  { id: 'YAHOO', label: 'Yahoo Finance' },
+  { id: 'AVANZA', label: 'Avanza' },
+  { id: 'FINNHUB', label: 'Finnhub' },
+  { id: 'BINANCE', label: 'Binance' },
+];
+
+/** A single OHLC bar from the provider. */
+export interface HistoryPoint {
+  t: number; // unix seconds
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  v: number;
+}
+
+/** Provider OHLC series served by GET /api/history. */
+export interface HistorySeries {
+  symbol: string;
+  provider: string;
+  range: string;
+  interval: string;
+  currency: string;
+  points: HistoryPoint[];
+  emaConfig: { fastPeriod: number; slowPeriod: number };
+  /** Trailing-stop level per point (aligned with points), replayed by the backend. */
+  stops?: number[];
+}
+
+export const HISTORY_RANGES = ['1D', '5D', '1M', '3M', '1Y', '3Y', '5Y', '10Y', 'MAX'] as const;
+export type HistoryRange = (typeof HISTORY_RANGES)[number];
+
+/** One reported company quarter from GET /api/financials. */
+export interface QuarterlyFinancial {
+  period: string; // "Q3 2026"
+  period_end: string; // "2026-06-30"
+  revenue?: number;
+  gross_profit?: number;
+  operating_income?: number;
+  net_income?: number;
+  eps?: number;
+  free_cash_flow?: number;
+  currency?: string;
+  form?: string; // SEC form ("10-Q") when known
+}
+
+/** Quarterly statements response envelope. */
+export interface FinancialsResponse {
+  symbol: string;
+  provider: string;
+  source: string;
+  reports: QuarterlyFinancial[];
+  note?: string;
+}
+
+// AI Chat types
+export interface Message {
+  role: 'user' | 'assistant' | 'tool' | 'system';
+  content?: string;
+  name?: string;
+  tool_call_id?: string;
+  content_json?: any;
+  tool_calls?: any[];
+}
+
+export interface ChatRequest {
+  model: string;
+  messages: Message[];
+  tools?: any[];
+  tool_choice?: string;
+  temperature?: number;
+  stream?: boolean;
+}
+
+export interface ToolCall {
+  index: number;
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string;
+  };
+}

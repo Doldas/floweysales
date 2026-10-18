@@ -1,0 +1,148 @@
+<div class="ai-chat-wrapper" [class.minimized]="isMinimized()">
+
+  <!-- Collapsed launcher -->
+  @if (isMinimized()) {
+    <button class="ai-launcher" (click)="toggleMinimize()" aria-label="Open AI assistant" title="Open AI assistant">
+      <mat-icon>smart_toy</mat-icon>
+      <span class="ai-launcher-dot"></span>
+    </button>
+  } @else {
+    <div class="ai-chat-panel">
+
+      <header class="ai-chat-header">
+        <mat-icon class="ai-logo">smart_toy</mat-icon>
+        <h2 class="ai-title">FloweySales AI</h2>
+        <span class="ai-model" [title]="model()">{{ model() || 'not configured' }}</span>
+        <span class="header-spacer"></span>
+        <button mat-icon-button class="icon-btn" (click)="openSettings()" aria-label="Settings" title="Settings">
+          <mat-icon>settings</mat-icon>
+        </button>
+        <button mat-icon-button class="icon-btn" (click)="clearChat()" aria-label="Clear chat" title="Clear chat">
+          <mat-icon>delete_sweep</mat-icon>
+        </button>
+        <button mat-icon-button class="icon-btn" (click)="toggleMinimize()" aria-label="Minimize">
+          <mat-icon>expand_more</mat-icon>
+        </button>
+      </header>
+
+      @if (showSettings()) {
+        <section class="ai-settings">
+          <div class="settings-row">
+            <span class="settings-label">Presets</span>
+            <div class="preset-list">
+              @for (p of presets(); track p.label) {
+                <button type="button" class="preset-chip" [class.active]="baseUrl() === p.base_url"
+                        (click)="selectPreset(p)">
+                  {{ p.label }}{{ p.local ? ' (local)' : '' }}
+                </button>
+              }
+            </div>
+          </div>
+
+          <label class="field">
+            <span>Base URL</span>
+            <input type="text" [ngModel]="baseUrl()" (ngModelChange)="baseUrl.set($event)"
+                   placeholder="https://api.openai.com/v1" />
+          </label>
+
+          <label class="field">
+            <span>Model</span>
+            <input type="text" [ngModel]="model()" (ngModelChange)="model.set($event)"
+                   placeholder="gpt-4o-mini / llama3.1" />
+          </label>
+
+          <label class="field">
+            <span>API key {{ serverHasKey() ? '(server key set)' : '' }}</span>
+            <input type="password" [ngModel]="apiKey()" (ngModelChange)="apiKey.set($event)"
+                   placeholder="sk-… (blank for local models)" autocomplete="off" />
+          </label>
+
+          <label class="field">
+            <span>System prompt</span>
+            <textarea rows="2" [ngModel]="systemPrompt()" (ngModelChange)="systemPrompt.set($event)"
+                      placeholder="Optional instructions for the assistant"></textarea>
+          </label>
+
+          @if (connectionError()) {
+            <div class="settings-error">{{ connectionError() }}</div>
+          }
+
+          <div class="settings-actions">
+            <button mat-flat-button color="primary" (click)="saveSettings()">Save</button>
+            <button mat-button (click)="closeSettings()">Cancel</button>
+          </div>
+        </section>
+      }
+
+      <div class="ai-chat-area" #messagesContainer>
+        @if (messages().length === 0) {
+          <div class="ai-empty">
+            <p>Ask about prices, technicals, financials or market stats. The assistant can call live backend tools.</p>
+            <div class="ai-suggestions">
+              @for (q of quickPrompts; track q) {
+                <button type="button" class="ai-suggestion-btn" (click)="onSuggestionClick(q)">{{ q }}</button>
+              }
+            </div>
+            @if (!baseUrl() || !model()) {
+              <p class="ai-hint">Configure a model endpoint first — open <button class="link" (click)="openSettings()">settings</button>.</p>
+            }
+          </div>
+        }
+
+        @for (msg of messages(); track trackByIndex($index); let i = $index) {
+          @if (msg.role === 'tool') {
+            <div class="ai-tool">
+              <div class="ai-tool-head">
+                <mat-icon>build</mat-icon>
+                <span>{{ msg.name }}</span>
+              </div>
+              <pre>{{ toolOutput(msg.content) }}</pre>
+            </div>
+          } @else {
+            <div class="ai-message" [class.user]="msg.role === 'user'" [class.assistant]="msg.role === 'assistant'">
+              <span class="avatar">{{ msg.role === 'user' ? 'You' : 'AI' }}</span>
+              @if (msg.role === 'assistant') {
+                <div class="bubble chat-markdown" [innerHTML]="md(msg.content)"></div>
+              } @else {
+                <div class="bubble">{{ msg.content }}</div>
+              }
+            </div>
+          }
+        }
+
+        @if (showThinking()) {
+          <div class="ai-message assistant thinking">
+            <span class="avatar">AI</span>
+            <div class="bubble">
+              <mat-spinner diameter="14"></mat-spinner>
+              <span>Thinking…</span>
+            </div>
+          </div>
+        }
+      </div>
+
+      @if (connectionError() && !showSettings()) {
+        <div class="ai-error-bar">{{ connectionError() }}</div>
+      }
+
+      <mat-divider></mat-divider>
+
+      <div class="ai-input-row">
+        <textarea
+          #composer
+          class="ai-input"
+          rows="2"
+          [(ngModel)]="inputText"
+          (input)="onInput($any($event.target))"
+          (keydown)="onInputKeydown($event)"
+          [disabled]="isStreaming()"
+          placeholder="Message the assistant…  Markdown, tables and code blocks supported.&#10;Enter to send · Shift+Enter for a new line"
+        ></textarea>
+        <button mat-fab class="ai-send" [disabled]="!canSend() || !inputText.trim()"
+                (click)="sendMessage(inputText)" aria-label="Send">
+          <mat-icon>send</mat-icon>
+        </button>
+      </div>
+    </div>
+  }
+</div>

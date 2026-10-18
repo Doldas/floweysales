@@ -1,0 +1,59 @@
+:host {
+  display: block;
+}
+
+.forum-card {
+  margin-top: 24px;
+  backdrop-filter: blur(10px);
+}
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  margin-bottom: 16px;
+
+  .composer-row {
+    display: flex;
+    gap: 10px;
+
+    .author-field { width: 220px; }
+    .title-field { flex: 1; }
+  }
+}
+
+.post-card {
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.post-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.post-title {
+  font-weight: 700;
+  font-size: 1rem;
+  margin: 4px 0;
+}
+
+.post-body {
+  font-size: 0.92rem;
+  opacity: 0.9;
+  white-space: pre-wrap;
+}
+
+.post-actions {
+  margin-top: 8px;
+}
+
+.hint {
+  text-align: center;
+  opacity: 0.65;
+  padding: 12px 0;
+}

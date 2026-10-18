@@ -1,0 +1,219 @@
+<mat-toolbar class="topbar" color="primary">
+  <mat-icon class="logo-mark">query_stats</mat-icon>
+  <span class="brand">FLOWEYSALES <span class="brand-sub">TERMINAL</span></span>
+  <span class="sym-badge" [matTooltip]="trackedName()">[{{ trackedSymbol() || '---' }}]</span>
+  <span class="asset-name">{{ trackedName() }}</span>
+
+  <div class="spacer"></div>
+
+  <button class="status-badge" [class.live]="connected()" [class.down]="!connected()">
+    @if (connected()) {
+      <span class="pulse"></span>
+    }
+    {{ statusBadgeText() }}
+  </button>
+</mat-toolbar>
+
+@if (connecting()) {
+  <mat-progress-bar mode="indeterminate" class="top-progress"></mat-progress-bar>
+}
+
+<div class="container">
+
+  <!-- ASSET CONTROL BAR -->
+  <mat-card class="glass control-card">
+    <mat-card-content class="control-row">
+      <mat-form-field appearance="outline" class="symbol-field">
+        <mat-label>Search & track ticker</mat-label>
+        <input
+          matInput
+          [matAutocomplete]="auto"
+          [formControl]="symbolCtl"
+          (keyup.enter)="trackAsset()"
+          placeholder="e.g. VOLV-B or BTC"
+        >
+        @if (searching()) {
+          <mat-icon class="spin">sync</mat-icon>
+        }
+        <mat-autocomplete #auto="matAutocomplete" [displayWith]="displayOption">
+          <mat-option
+            *ngFor="let opt of searchOptions()"
+            [value]="opt"
+          >
+            <div class="search-line">
+              <span class="search-sym">{{ opt.symbol }}</span>
+              <span class="search-name">{{ opt.name }}</span>
+              <span class="search-type">{{ opt.type }}</span>
+            </div>
+          </mat-option>
+        </mat-autocomplete>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="provider-field">
+        <mat-label>Provider</mat-label>
+        <mat-select [value]="provider()" (selectionChange)="onProviderChanged($event.value)">
+          @for (p of providers; track p.id) {
+            <mat-option [value]="p.id">{{ p.label }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <button mat-flat-button color="primary" class="track-btn" (click)="trackAsset()">
+        <mat-icon>track_changes</mat-icon> Track Asset
+      </button>
+
+      <div class="spacer"></div>
+
+      <button
+        mat-stroked-button
+        class="clear-btn"
+        [color]="askedClear() ? 'warn' : undefined"
+        (click)="confirmClearHistory()"
+        matTooltip="Delete all trading history (click twice to confirm)"
+      >
+        <mat-icon>delete_sweep</mat-icon>
+        {{ askedClear() ? 'Confirm clear?' : 'Clear history' }}
+      </button>
+
+      <mat-form-field appearance="fill" class="theme-field">
+        <mat-label>Theme</mat-label>
+        <mat-select [value]="themeService.theme()" (selectionChange)="changeTheme($event.value)">
+          @for (t of themes; track t.id) {
+            <mat-option [value]="t.id">{{ t.label }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- KPI CARDS -->
+  <div class="grid">
+    <mat-card class="glass kpi">
+      <div class="kpi-title">Latest Price</div>
+      <div class="kpi-value txt-green">
+        {{ livePrice().toFixed(2) }} {{ currency() }}
+      </div>
+      @if (dayChange() !== null) {
+        <div class="kpi-sub" [class.positive]="dayChange()! >= 0" [class.negative]="dayChange()! < 0">
+          {{ (dayChange()! >= 0 ? '+' : '') + dayChange()!.toFixed(2) }}% today
+        </div>
+      } @else if (historySeed()) {
+        <div class="kpi-sub muted-sub">from market history</div>
+      }
+    </mat-card>
+    <mat-card class="glass kpi">
+      <div class="kpi-title">Stop Loss</div>
+      <div class="kpi-value txt-red">
+        @if ((latestTick()?.stop_loss ?? 0) > 0) {
+          {{ latestTick()!.stop_loss.toFixed(2) }} {{ currency() }}
+        } @else {
+          Standby…
+        }
+      </div>
+    </mat-card>
+    <mat-card class="glass kpi">
+      <div class="kpi-title">Fast EMA</div>
+      <div class="kpi-value txt-blue">{{ (latestTick()?.fast_ema ?? historySeed()?.fastEMA ?? 0).toFixed(2) }}</div>
+    </mat-card>
+    <mat-card class="glass kpi">
+      <div class="kpi-title">Slow EMA</div>
+      <div class="kpi-value txt-orange">{{ (latestTick()?.slow_ema ?? historySeed()?.slowEMA ?? 0).toFixed(2) }}</div>
+    </mat-card>
+    <mat-card class="glass kpi">
+      <div class="kpi-title">Total Unrealized P&L</div>
+      <div class="kpi-value" [class.txt-green]="totalPnL() >= 0" [class.txt-red]="totalPnL() < 0"
+           [class.muted]="totalPnL() === 0">
+        {{ (totalPnL() >= 0 ? '+' : '') + totalPnL().toFixed(2) }} {{ currency() }}
+      </div>
+    </mat-card>
+  </div>
+
+  <!-- ASSET FUNDAMENTALS -->
+  @if (hasAssetFundamentals()) {
+    <fse-asset-info [data]="marketData()" [currentCurrency]="currency()"></fse-asset-info>
+  }
+
+  <!-- QUARTERLY FINANCIALS -->
+  <fse-financials [symbol]="trackedSymbol()" [provider]="provider()"></fse-financials>
+
+  <!-- AI CHAT -->
+  <fse-ai-chat></fse-ai-chat>
+
+  <!-- CHART -->
+  <mat-card class="glass chart-card">
+    <mat-card-header>
+      <mat-card-title>Live Trading Chart</mat-card-title>
+      <div class="spacer"></div>
+      <mat-button-toggle-group
+        [value]="historyRange()"
+        (change)="setHistoryRange($event.value)"
+        class="range-toggle"
+        aria-label="History range"
+      >
+        @for (r of historyRanges; track r) {
+          <mat-button-toggle [value]="r">{{ r }}</mat-button-toggle>
+        }
+      </mat-button-toggle-group>
+      <button mat-icon-button (click)="resetZoom()" matTooltip="Reset zoom" class="reset-btn">
+        <mat-icon>zoom_out_map</mat-icon>
+      </button>
+    </mat-card-header>
+    @if (loadingHistory()) {
+      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+    }
+    <div class="indicator-bar">
+      <mat-icon class="indicator-icon">insights</mat-icon>
+      <span class="indicator-label">Studies</span>
+      <mat-button-toggle-group
+        multiple
+        [value]="enabledIndicatorKeys()"
+        (change)="onIndicatorsChange($event.value)"
+        class="indicator-toggles"
+        aria-label="Chart analysis studies"
+      >
+        @for (k of indicatorKeys; track k) {
+          <mat-button-toggle [value]="k">{{ indicatorLabels[k] }}</mat-button-toggle>
+        }
+      </mat-button-toggle-group>
+    </div>
+    <mat-card-content>
+      <fse-trading-chart [epoch]="chartEpoch()" [flags]="indicators()"></fse-trading-chart>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- ANALYSIS INSIGHTS -->
+  @if (insights().length) {
+    <mat-card class="glass insights-card">
+      <mat-card-header>
+        <mat-card-title>Analysis Insights</mat-card-title>
+        <div class="spacer"></div>
+        <span class="insights-range-badge">{{ trackedSymbol() }} · {{ historyRange() }}</span>
+      </mat-card-header>
+      <mat-card-content class="insights-grid">
+        @for (ins of insights(); track ins.label) {
+          <div class="insight" [class.pos]="ins.tone === 'pos'" [class.neg]="ins.tone === 'neg'">
+            <div class="insight-label">{{ ins.label }}</div>
+            <div class="insight-value">{{ ins.value }}</div>
+            @if (ins.sub) {
+              <div class="insight-sub">{{ ins.sub }}</div>
+            }
+          </div>
+        }
+      </mat-card-content>
+    </mat-card>
+  }
+
+  <!-- LEDGER -->
+  <fse-ledger
+    [trackedSymbol]="trackedSymbol()"
+    [livePrice]="livePrice()"
+    [currency]="currency()"
+  ></fse-ledger>
+
+  <!-- FORUM -->
+  <fse-forum [trackedSymbol]="trackedSymbol()"></fse-forum>
+
+  <footer class="footer">
+    Welfory AB • FloweySales Quantum Trading Protocol • Go Engine + Angular Terminal
+  </footer>
+</div>

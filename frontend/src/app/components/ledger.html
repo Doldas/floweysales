@@ -1,0 +1,364 @@
+<mat-card class="glass ledger-card">
+  <mat-card-header>
+    <mat-card-title>Trading Desk</mat-card-title>
+    <mat-card-subtitle>
+      Order ticket with pre-trade checks, net positions and the execution blotter
+    </mat-card-subtitle>
+  </mat-card-header>
+
+  <mat-card-content>
+    <!-- ACCOUNT SUMMARY -->
+    <div class="account-strip" aria-label="Account summary">
+      @for (tile of tiles(); track tile.label) {
+        <div class="tile">
+          <span class="tile-label">{{ tile.label }}</span>
+          <span class="tile-value" [class.txt-green]="tile.cls === 'txt-green'"
+                [class.txt-red]="tile.cls === 'txt-red'">{{ tile.value }}</span>
+        </div>
+      }
+    </div>
+
+    <div class="desk-grid">
+      <!-- ORDER TICKET -->
+      <section class="ticket" aria-label="Order ticket">
+        <div class="panel-head">
+          <div class="panel-title">
+            <mat-icon>receipt_long</mat-icon>
+            <span>Order ticket</span>
+          </div>
+          <div class="mark">
+            <span class="mark-label">Last</span>
+            <span class="mark-value">
+              {{ mark() > 0 ? (mark() | number: '1.2-4') : '—' }} {{ currency() }}
+            </span>
+          </div>
+        </div>
+
+        @if (step === 'compose') {
+          <form class="ticket-form" (ngSubmit)="review()" novalidate>
+            <mat-button-toggle-group class="side-toggle" name="side" [(ngModel)]="side">
+              <mat-button-toggle value="BUY" class="side-buy">
+                <mat-icon>trending_up</mat-icon> Buy
+              </mat-button-toggle>
+              <mat-button-toggle value="SELL" class="side-sell">
+                <mat-icon>trending_down</mat-icon> Sell
+              </mat-button-toggle>
+            </mat-button-toggle-group>
+
+            <div class="field-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Order type</mat-label>
+                <mat-select [(ngModel)]="orderType" name="orderType">
+                  <mat-option value="MARKET">Market</mat-option>
+                  <mat-option value="LIMIT">Limit</mat-option>
+                  <mat-option value="STOP">Stop</mat-option>
+                  <mat-option value="STOP_LIMIT">Stop-limit</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Time in force</mat-label>
+                <mat-select [(ngModel)]="tif" name="tif">
+                  <mat-option value="GTC">Good till cancelled</mat-option>
+                  <mat-option value="DAY">Day</mat-option>
+                  <mat-option value="IOC">Immediate or cancel</mat-option>
+                </mat-select>
+              </mat-form-field>
+            </div>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Quantity</mat-label>
+              <input matInput type="number" min="0" step="any" inputmode="decimal"
+                     [(ngModel)]="qty" name="qty" placeholder="0">
+              <mat-hint align="end">units of {{ symbolLabel }}</mat-hint>
+            </mat-form-field>
+
+            <div class="presets">
+              @for (p of presets; track p) {
+                <button type="button" class="chip" (click)="applyPreset(p)">{{ p }}%</button>
+              }
+              <button type="button" class="chip chip-max" (click)="applyMax()">Max</button>
+              <span class="preset-note">
+                @if (side === 'BUY') {
+                  Available {{ money(summary()?.buying_power ?? 0) }}
+                } @else {
+                  Holding {{ qtyText(held()) }}
+                }
+              </span>
+            </div>
+
+            @if (needsLimit()) {
+              <mat-form-field appearance="outline">
+                <mat-label>Limit price</mat-label>
+                <input matInput type="number" min="0" step="any" inputmode="decimal"
+                       [(ngModel)]="limitPrice" name="limitPrice"
+                       placeholder="{{ mark() > 0 ? mark() : '' }}">
+                <mat-hint align="end">{{ currency() }}</mat-hint>
+              </mat-form-field>
+            }
+
+            @if (needsStop()) {
+              <mat-form-field appearance="outline">
+                <mat-label>Stop price</mat-label>
+                <input matInput type="number" min="0" step="any" inputmode="decimal"
+                       [(ngModel)]="stopPrice" name="stopPrice"
+                       placeholder="{{ mark() > 0 ? mark() : '' }}">
+                <mat-hint align="end">triggers the order</mat-hint>
+              </mat-form-field>
+            }
+
+            @if (validationError(); as problem) {
+              <div class="ticket-error" role="alert">
+                <mat-icon>error_outline</mat-icon>
+                <span>{{ problem }}</span>
+              </div>
+            }
+
+            <dl class="estimate">
+              @for (row of estimate(); track row.label) {
+                <div class="est-row" [class.strong]="row.strong">
+                  <dt>{{ row.label }}</dt>
+                  <dd>{{ row.value }}</dd>
+                </div>
+              }
+            </dl>
+
+            <div class="ticket-actions">
+              <button mat-flat-button type="submit" class="primary-action"
+                      [class.buy]="side === 'BUY'" [class.sell]="side === 'SELL'">
+                <mat-icon>{{ side === 'BUY' ? 'shopping_cart' : 'sell' }}</mat-icon>
+                Review {{ side === 'BUY' ? 'buy' : 'sell' }} order
+              </button>
+            </div>
+          </form>
+        } @else {
+          <div class="review">
+            <div class="review-head">
+              <mat-icon class="review-icon">fact_check</mat-icon>
+              <div>
+                <div class="review-title">Review order</div>
+                <div class="review-sub">Nothing is sent to the engine until you confirm.</div>
+              </div>
+            </div>
+
+            <dl class="review-rows">
+              @for (row of reviewRows(); track row.label) {
+                <div class="review-row">
+                  <dt>{{ row.label }}</dt>
+                  <dd>{{ row.value }}</dd>
+                </div>
+              }
+            </dl>
+
+            <dl class="estimate">
+              @for (row of estimate(); track row.label) {
+                <div class="est-row" [class.strong]="row.strong">
+                  <dt>{{ row.label }}</dt>
+                  <dd>{{ row.value }}</dd>
+                </div>
+              }
+            </dl>
+
+            @if (serverError; as problem) {
+              <div class="ticket-error" role="alert">
+                <mat-icon>error_outline</mat-icon>
+                <span>{{ problem }}</span>
+              </div>
+            }
+
+            <div class="ticket-actions">
+              <button mat-stroked-button type="button" class="back-action"
+                      [disabled]="busy()" (click)="backToCompose()">
+                <mat-icon>arrow_back</mat-icon> Back
+              </button>
+              <button mat-flat-button type="button" class="primary-action"
+                      [class.buy]="side === 'BUY'" [class.sell]="side === 'SELL'"
+                      [disabled]="busy()" (click)="submit()">
+                @if (busy()) {
+                  <mat-spinner diameter="18" class="btn-spinner"></mat-spinner>
+                } @else {
+                  <mat-icon>check_circle</mat-icon>
+                }
+                Confirm {{ side === 'BUY' ? 'buy' : 'sell' }}
+              </button>
+            </div>
+          </div>
+        }
+      </section>
+
+      <!-- BLOTTER -->
+      <section class="blotter" aria-label="Positions and orders">
+        <div class="blotter-head">
+          <div class="tabs" role="tablist">
+            <button type="button" role="tab" [class.active]="tab() === 'positions'"
+                    [attr.aria-selected]="tab() === 'positions'"
+                    (click)="tab.set('positions')">
+              Positions <span class="count">{{ tabCount('positions') }}</span>
+            </button>
+            <button type="button" role="tab" [class.active]="tab() === 'open'"
+                    [attr.aria-selected]="tab() === 'open'"
+                    (click)="tab.set('open')">
+              Open orders <span class="count">{{ tabCount('open') }}</span>
+            </button>
+            <button type="button" role="tab" [class.active]="tab() === 'history'"
+                    [attr.aria-selected]="tab() === 'history'"
+                    (click)="tab.set('history')">
+              History <span class="count">{{ tabCount('history') }}</span>
+            </button>
+          </div>
+
+          @if (tab() === 'open' && openOrders().length) {
+            <button mat-stroked-button type="button" class="cancel-all"
+                    title="Cancel every working order" [disabled]="busy()" (click)="cancelAll()">
+              <mat-icon>block</mat-icon> Cancel all
+            </button>
+          }
+        </div>
+
+        @switch (tab()) {
+          @case ('positions') {
+            <div class="table-wrap">
+              <table class="desk-table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th class="num">Qty</th>
+                    <th class="num">Avg entry</th>
+                    <th class="num">Last</th>
+                    <th class="num">Market value</th>
+                    <th class="num">Unrealised P&amp;L</th>
+                    <th class="num">%</th>
+                    <th class="num">Realised</th>
+                    <th class="actions-col">Trade</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (p of positions(); track p.symbol) {
+                    <tr>
+                      <td class="sym">{{ p.symbol }}</td>
+                      <td class="num">{{ qtyText(p.quantity) }}</td>
+                      <td class="num">{{ p.avg_entry.toFixed(4) }}</td>
+                      <td class="num">{{ lastOf(p).toFixed(4) }}</td>
+                      <td class="num">{{ money(p.market_value) }}</td>
+                      <td class="num" [class.txt-green]="positionPnl(p) > 0"
+                          [class.txt-red]="positionPnl(p) < 0">
+                        {{ signed(positionPnl(p)) }} {{ currency() }}
+                      </td>
+                      <td class="num" [class.txt-green]="positionPnl(p) > 0"
+                          [class.txt-red]="positionPnl(p) < 0">
+                        {{ signed(positionPnlPct(p)) }}%
+                      </td>
+                      <td class="num" [class.txt-green]="p.realized_pnl > 0"
+                          [class.txt-red]="p.realized_pnl < 0">
+                        {{ signed(p.realized_pnl) }}
+                      </td>
+                      <td class="actions-col">
+                        <button type="button" class="mini buy" title="Buy more"
+                                (click)="placeFromPosition(p, 'BUY')">Buy</button>
+                        <button type="button" class="mini sell" title="Sell this position"
+                                [disabled]="p.quantity <= 0"
+                                (click)="placeFromPosition(p, 'SELL')">Sell</button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+              @if (!positions().length) {
+                <div class="empty-hint">
+                  No open positions. Fill in the ticket and review a buy order to open one.
+                </div>
+              }
+            </div>
+          }
+
+          @case ('open') {
+            <div class="table-wrap">
+              <table class="desk-table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Side</th>
+                    <th>Type</th>
+                    <th class="num">Qty</th>
+                    <th>Pricing</th>
+                    <th>TIF</th>
+                    <th>Placed</th>
+                    <th class="actions-col">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (o of openOrders(); track o.id) {
+                    <tr>
+                      <td class="sym">{{ o.symbol }}</td>
+                      <td>
+                        <span class="trade-badge" [class.buy]="o.side === 'BUY'"
+                              [class.sell]="o.side !== 'BUY'">{{ o.side }}</span>
+                      </td>
+                      <td>{{ o.type }}</td>
+                      <td class="num">{{ qtyText(o.quantity) }}</td>
+                      <td>{{ orderPriceLabel(o) }}</td>
+                      <td>{{ o.tif }}</td>
+                      <td>{{ timeOf(o) | date: 'MMM d, HH:mm:ss' }}</td>
+                      <td class="actions-col">
+                        <button type="button" class="mini cancel" title="Cancel order"
+                                [disabled]="busy()" (click)="cancel(o)">Cancel</button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+              @if (!openOrders().length) {
+                <div class="empty-hint">No working orders — nothing is resting in the market.</div>
+              }
+            </div>
+          }
+
+          @case ('history') {
+            <div class="table-wrap">
+              <table class="desk-table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Side</th>
+                    <th>Type</th>
+                    <th class="num">Qty</th>
+                    <th class="num">Submitted</th>
+                    <th class="num">Fill</th>
+                    <th class="num">Fee</th>
+                    <th>Status</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (o of orders(); track o.id) {
+                    <tr [attr.title]="o.reason">
+                      <td class="sym">{{ o.symbol }}</td>
+                      <td>
+                        <span class="trade-badge" [class.buy]="o.side === 'BUY'"
+                              [class.sell]="o.side !== 'BUY'">{{ o.side }}</span>
+                      </td>
+                      <td>{{ o.type }}</td>
+                      <td class="num">{{ qtyText(o.quantity) }}</td>
+                      <td class="num">{{ o.price.toFixed(4) }}</td>
+                      <td class="num">
+                        {{ o.fill_price > 0 ? o.fill_price.toFixed(4) : '—' }}
+                      </td>
+                      <td class="num">{{ o.fee > 0 ? o.fee.toFixed(2) : '—' }}</td>
+                      <td>
+                        <span class="status-chip" [ngClass]="statusClass(o.status)">{{ o.status }}</span>
+                      </td>
+                      <td>{{ timeOf(o) | date: 'MMM d, HH:mm:ss' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+              @if (!orders().length) {
+                <div class="empty-hint">No executions yet for {{ symbolLabel }}.</div>
+              }
+            </div>
+          }
+        }
+      </section>
+    </div>
+  </mat-card-content>
+</mat-card>

@@ -1,0 +1,56 @@
+<mat-card class="glass forum-card">
+  <mat-card-header>
+    <mat-card-title>Community Insights & Trader Forum</mat-card-title>
+    <mat-card-subtitle>💬 Share market analysis and strategy signals</mat-card-subtitle>
+  </mat-card-header>
+
+  <mat-card-content>
+    <div class="composer">
+      <div class="composer-row">
+        <mat-form-field appearance="outline" class="author-field">
+          <mat-label>Your Name / Handle</mat-label>
+          <input matInput [(ngModel)]="author" maxlength="40">
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="title-field">
+          <mat-label>Post Title</mat-label>
+          <input matInput [(ngModel)]="title" maxlength="120">
+        </mat-form-field>
+      </div>
+      <mat-form-field appearance="outline" class="content-field">
+        <mat-label>Your trading thesis...</mat-label>
+        <textarea matInput [(ngModel)]="content" rows="3"></textarea>
+      </mat-form-field>
+      <button mat-flat-button color="primary" (click)="submit()">
+        <mat-icon>rocket_launch</mat-icon> Broadcast Post
+      </button>
+    </div>
+
+    @if (loading()) {
+      <p class="hint">Loading posts…</p>
+    }
+
+    @if (!loading() && !posts().length) {
+      <p class="hint">No posts found for <b>{{ trackedSymbol() }}</b>. Be the first to post!</p>
+    }
+
+    @for (post of posts(); track post.id) {
+      <mat-card class="post-card">
+        <mat-card-content>
+          <div class="post-head">
+            <span class="post-author">👤 {{ post.author }}
+              @if (post.symbol) { <small>({{ post.symbol }})</small> }
+            </span>
+            <span class="post-time">{{ post.timestamp * 1000 | date:'short' }}</span>
+          </div>
+          <div class="post-title">{{ post.title }}</div>
+          <div class="post-body">{{ post.content }}</div>
+          <div class="post-actions">
+            <button mat-stroked-button (click)="vote(post)">
+              👍 Upvote ({{ post.upvotes }})
+            </button>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    }
+  </mat-card-content>
+</mat-card>

@@ -1,0 +1,91 @@
+@if (visible()) {
+  <mat-card class="glass financials-card">
+    <mat-card-header>
+      <mat-card-title>Quarterly Financials</mat-card-title>
+      <div class="spacer"></div>
+      @if (sourceLabel()) {
+        <span class="fin-source" [matTooltip]="'Statement data via ' + sourceLabel()">
+          {{ sourceLabel() }}
+        </span>
+      }
+      @if (currency()) {
+        <span class="fin-currency">{{ currency() }}</span>
+      }
+      <button mat-icon-button class="fin-reload" (click)="reload()" matTooltip="Reload statements">
+        <mat-icon>refresh</mat-icon>
+      </button>
+    </mat-card-header>
+
+    @if (loading()) {
+      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+    }
+
+    <mat-card-content>
+      @if (showBody()) {
+        @if (error()) {
+          <div class="fin-state fin-error">
+            <mat-icon>error_outline</mat-icon>
+            <span>{{ error() }}</span>
+          </div>
+        } @else if (!hasReports()) {
+          <div class="fin-state fin-note">
+            <mat-icon>info_outline</mat-icon>
+            <span>{{ note() }}</span>
+          </div>
+        } @else {
+          <div class="fin-scroll">
+            <table mat-table [dataSource]="rows()" class="fin-table">
+              <ng-container matColumnDef="period">
+                <th mat-header-cell *matHeaderCellDef>Period</th>
+                <td mat-cell *matCellDef="let row">
+                  <span class="fin-period">{{ row.period }}</span>
+                  <span class="fin-sub">{{ row.periodEnd }}@if (row.form) { · {{ row.form }} }</span>
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="revenue">
+                <th mat-header-cell *matHeaderCellDef>Revenue</th>
+                <td mat-cell *matCellDef="let row">
+                  <span class="fin-num">{{ row.revenue }}</span>
+                  @if (row.qoq) {
+                    <span class="fin-sub" [class.pos]="row.qoqTone === 'pos'" [class.neg]="row.qoqTone === 'neg'">
+                      {{ row.qoq }} QoQ
+                    </span>
+                  }
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="netIncome">
+                <th mat-header-cell *matHeaderCellDef>Net Income</th>
+                <td mat-cell *matCellDef="let row"><span class="fin-num">{{ row.netIncome }}</span></td>
+              </ng-container>
+
+              <ng-container matColumnDef="grossMargin">
+                <th mat-header-cell *matHeaderCellDef>Gross Margin</th>
+                <td mat-cell *matCellDef="let row"><span class="fin-num">{{ row.grossMargin }}</span></td>
+              </ng-container>
+
+              <ng-container matColumnDef="netMargin">
+                <th mat-header-cell *matHeaderCellDef>Net Margin</th>
+                <td mat-cell *matCellDef="let row"><span class="fin-num">{{ row.netMargin }}</span></td>
+              </ng-container>
+
+              <ng-container matColumnDef="eps">
+                <th mat-header-cell *matHeaderCellDef>EPS (dil.)</th>
+                <td mat-cell *matCellDef="let row"><span class="fin-num">{{ row.eps }}</span></td>
+              </ng-container>
+
+              <ng-container matColumnDef="fcf">
+                <th mat-header-cell *matHeaderCellDef>Free Cash Flow</th>
+                <td mat-cell *matCellDef="let row"><span class="fin-num">{{ row.fcf }}</span></td>
+              </ng-container>
+
+              <tr mat-header-row *matHeaderRowDef="columns"></tr>
+              <tr mat-row *matRowDef="let row; columns: columns"></tr>
+            </table>
+          </div>
+        }
+      }
+    </mat-card-content>
+  </mat-card>
+}

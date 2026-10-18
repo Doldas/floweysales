@@ -1,0 +1,51 @@
+# All configurable properties is loaded from environment variables or from this config.properties file.
+
+# SMTP SETTINGS / MAIL SETTINGS
+SMTP_APP_MAIL=gamitronservers@gmail.com
+SMTP_APP_MAIL_PSW=
+EMAIL_COOLDOWN_DURATION_MIN=10
+DEFAULT_SMTP_MAIL_RECIPIENT=your@email.com
+# Market Properties
+DEFAULT_MARKET_SYMBOL=GIB
+# YAHOO / BINANCE / FINNHUB / AVANZA
+DEFAULT_MARKET_PROVIDER=YAHOO
+# FinnHub.io API -  REQUIRED FOR FINNHUB market provider
+FINNHUB_API_KEY=
+# Web UI
+REST_API_HOST=0.0.0.0
+REST_API_PORT=8080
+REST_API_UPDATE_RATE=1
+
+# AI / LLM SETTINGS (any OpenAI-compatible endpoint; leave blank to configure in the UI)
+# OpenAI:     https://api.openai.com/v1          model: gpt-4o-mini
+# Ollama:     http://localhost:11434/v1          model: llama3.1        (local, no key)
+# LM Studio:  http://localhost:1234/v1           model: local-model     (local, no key)
+# llama.cpp:  http://localhost:8080/v1           model: local-model     (local, no key)
+# vLLM:       http://localhost:8000/v1           model: local-model     (local, no key)
+OPENAI_BASE_URL=
+OPENAI_API_KEY=
+OPENAI_MODEL=
+
+# SQLITE file path
+SQLITE_STORAGE_PATH=:memory:
+
+# Trading Properties
+DEFAULT_BASE_OFFSET=0.002
+DEFAULT_MIN_OFFSET=0.0008
+DEFAULT_MAX_OFFSET=0.005
+
+DEFAULT_FAST_PERIOD=12.0
+DEFAULT_SLOW_PERIOD=26.0
+
+DEFAULT_WARMUP_TICKS=10
+DEFAULT_TRANSITION_TICKS=30
+
+# PORTFOLIO / ORDER TICKET
+# Starting account equity used for buying power and the portfolio summary.
+PORTFOLIO_CASH=100000
+# Commission charged on every execution: TRADE_COMMISSION_PCT% of the notional
+# plus TRADE_COMMISSION_FIXED. Both default to 0 (commission free).
+TRADE_COMMISSION_PCT=0
+TRADE_COMMISSION_FIXED=0
+# true lets the ticket open short positions; false rejects sells you do not hold.
+ALLOW_SHORT_SELLING=false

@@ -1,0 +1,271 @@
+// Angular Material prebuilt theme + FloweySales cyber overlay theme.
+
+@use '@angular/material' as mat;
+
+html {
+  color-scheme: dark;
+
+  @include mat.theme((
+    color: (
+      primary: mat.$azure-palette,
+      tertiary: mat.$blue-palette,
+    ),
+    typography: Roboto,
+    density: 0,
+  ));
+}
+
+/* ------------------------------------------------------------------ */
+/* Google fonts are loaded from index.html; graceful fallback applies. */
+/* ------------------------------------------------------------------ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Roboto, 'Segoe UI', sans-serif;
+  color: #f0f6fc;
+  transition: background 0.5s ease;
+}
+
+// Ambient backgrounds per theme.
+body.theme-cyberpunk {
+  background: radial-gradient(1200px 700px at 80% -10%, rgba(0, 240, 255, 0.12), transparent 60%),
+              radial-gradient(900px 500px at 10% 110%, rgba(255, 0, 128, 0.1), transparent 55%),
+              #0a0c14;
+}
+body.theme-deepspace {
+  background: radial-gradient(1100px 650px at 70% -20%, rgba(99, 102, 241, 0.2), transparent 60%),
+              radial-gradient(900px 600px at 20% 110%, rgba(168, 85, 247, 0.14), transparent 55%),
+              #070a18;
+}
+body.theme-matrix {
+  background: radial-gradient(1100px 650px at 75% -15%, rgba(0, 255, 102, 0.12), transparent 60%),
+              radial-gradient(800px 500px at 15% 110%, rgba(51, 255, 153, 0.08), transparent 55%),
+              #030a06;
+}
+body.theme-mediterranean {
+  background: radial-gradient(1100px 650px at 70% -15%, rgba(0, 242, 254, 0.14), transparent 60%),
+              radial-gradient(800px 500px at 10% 110%, rgba(79, 172, 254, 0.12), transparent 55%),
+              #071018;
+}
+
+// Frosted-glass Material card treatment.
+.mat-mdc-card.glass {
+  background: rgba(13, 17, 30, 0.72) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px !important;
+  color: #f0f6fc;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35) !important;
+}
+
+.mat-mdc-card.glass figcaption,
+.mat-mdc-card.glass .mat-mdc-card-subtitle {
+  color: rgba(240, 246, 252, 0.6) !important;
+}
+
+// Dark-friendly Material form fields and inputs.
+.mat-mdc-form-field .mat-mdc-floating-label { color: rgba(240, 246, 252, 0.65) !important; }
+.mat-mdc-form-field .mat-mdc-input-element { color: #f0f6fc !important; }
+.mat-mdc-form-field .mat-mdc-text-field-wrapper {
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+.mdc-text-field--outlined .mdc-notched-outline__leading,
+.mdc-text-field--outlined .mdc-notched-outline__trailing {
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+.mdc-text-field--outlined .mdc-notched-outline__notch {
+  border-color: rgba(255, 255, 255, 0) !important;
+}
+.mat-mdc-form-field.mat-focused .mdc-notched-outline__leading,
+.mat-mdc-form-field.mat-focused .mdc-notched-outline__trailing,
+.mat-mdc-form-field.mat-focused .mdc-notched-outline__notch {
+  border-color: #00f0ff !important;
+}
+
+// Overlay containers (snackbars, selects, tooltips, autocomplete).
+.cdk-overlay-container .mat-mdc-snack-bar-container {
+  &.snack-error .mdc-snackbar__surface {
+    background: #6b0f26;
+    color: #ffe5ea;
+  }
+  &.snack-ok .mdc-snackbar__surface {
+    background: #0b483a;
+    color: #e6fff6;
+  }
+}
+
+.mat-mdc-option .mdc-list-item__primary-text .search-line {
+  color: #f0f6fc;
+}
+
+.mat-mdc-tab-header, .mat-mdc-tab-body {
+  color: #f0f6fc;
+}
+
+.mat-mdc-tab-labels { color: #f0f6fc; }
+
+/* ------------------------------------------------------------------ */
+/* Chat markdown (rendered via innerHTML -> must be global styles).     */
+/* ------------------------------------------------------------------ */
+
+.chat-markdown,
+.bubble.chat-markdown {
+  > :first-child { margin-top: 0; }
+  > :last-child { margin-bottom: 0; }
+
+  p {
+    margin: 0 0 0.6em;
+    line-height: 1.5;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    margin: 0.8em 0 0.4em;
+    line-height: 1.25;
+    font-weight: 700;
+    color: #fff;
+  }
+  h1 { font-size: 1.15em; }
+  h2 { font-size: 1.08em; }
+  h3 { font-size: 1.02em; }
+  h4, h5, h6 { font-size: 0.98em; }
+
+  a {
+    color: #7fb8ff;
+    text-decoration: underline;
+    word-break: break-word;
+  }
+
+  strong { color: #fff; font-weight: 700; }
+  em { font-style: italic; }
+  del { color: rgba(255, 255, 255, 0.45); }
+
+  code {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85em;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    padding: 0.1em 0.4em;
+    color: #9be3ff;
+    word-break: break-word;
+  }
+
+  ul, ol {
+    margin: 0.4em 0 0.7em;
+    padding-left: 1.3em;
+    line-height: 1.5;
+  }
+  li { margin: 0.2em 0; }
+  ul li::marker { color: #7fb8ff; }
+  ol li::marker { color: #7fb8ff; font-weight: 600; }
+
+  blockquote {
+    margin: 0.5em 0;
+    padding: 0.35em 0.8em;
+    border-left: 3px solid rgba(127, 184, 255, 0.55);
+    background: rgba(127, 184, 255, 0.08);
+    border-radius: 0 6px 6px 0;
+    color: rgba(255, 255, 255, 0.82);
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    margin: 0.8em 0;
+  }
+
+  .md-code {
+    margin: 0.6em 0;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .md-code-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 8px 4px 10px;
+    background: rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .md-lang {
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .md-copy {
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 5px;
+    padding: 2px 8px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .md-copy:hover { background: rgba(127, 184, 255, 0.28); color: #fff; }
+
+  .md-code pre {
+    margin: 0;
+    padding: 9px 11px;
+    overflow-x: auto;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: #d7e3f4;
+    scrollbar-width: thin;
+  }
+
+  .md-code code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font-size: 1em;
+    white-space: pre;
+  }
+
+  .md-table-wrap {
+    overflow-x: auto;
+    margin: 0.6em 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+  }
+
+  thead th {
+    background: rgba(127, 184, 255, 0.14);
+    color: #fff;
+    font-weight: 600;
+    text-align: left;
+    padding: 6px 10px;
+    white-space: nowrap;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  }
+
+  tbody td {
+    padding: 5px 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.88);
+    white-space: nowrap;
+  }
+
+  tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+}

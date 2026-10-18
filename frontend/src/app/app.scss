@@ -1,0 +1,297 @@
+:host {
+  display: block;
+  min-height: 100vh;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(10, 12, 20, 0.9);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 10px;
+}
+
+.logo-mark { color: var(--accent, #00f0ff); }
+
+.brand {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+
+  .brand-sub {
+    font-weight: 300;
+    opacity: 0.55;
+    margin-left: 6px;
+  }
+}
+
+.sym-badge {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  color: #00f0ff;
+  background: rgba(0, 240, 255, 0.1);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 8px;
+  padding: 2px 10px;
+  margin-left: 18px;
+  white-space: nowrap;
+}
+
+.asset-name {
+  opacity: 0.75;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+}
+
+.spacer { flex: 1 1 auto; }
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 6px 16px;
+  border: 1px solid transparent;
+  background: rgba(255, 0, 85, 0.12);
+  color: #ff0055;
+
+  &.live {
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.15), rgba(0, 255, 157, 0.15));
+    color: #9ff;
+  }
+
+  .pulse {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse 1.4s ease infinite;
+  }
+}
+
+@keyframes pulse {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(1.25); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.top-progress {
+  position: sticky;
+  top: 64px;
+  z-index: 99;
+}
+
+.container {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 20px 22px 60px;
+}
+
+.control-card {
+  margin-bottom: 18px;
+  backdrop-filter: blur(10px);
+}
+
+.control-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+
+  .symbol-field { flex: 1 1 340px; }
+  .provider-field { width: 190px; }
+  .theme-field { width: 170px; }
+  .track-btn { height: 52px; }
+}
+
+.search-line {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  overflow: hidden;
+
+  .search-sym { font-weight: 700; color: #00f0ff; }
+  .search-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .search-type { font-size: 0.75rem; opacity: 0.55; }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.kpi {
+  padding: 14px 18px;
+  backdrop-filter: blur(10px);
+
+  .kpi-title {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.6;
+  }
+
+  .kpi-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.45rem;
+    font-weight: 700;
+    margin-top: 6px;
+
+    &.muted { color: rgba(255, 255, 255, 0.45); }
+  }
+
+  .kpi-sub {
+    font-size: 0.85rem;
+    margin-top: 2px;
+
+    &.positive { color: #00ff9d; }
+    &.negative { color: #ff0055; }
+  }
+}
+
+.chart-card {
+  margin-top: 18px;
+  backdrop-filter: blur(10px);
+}
+
+.reset-btn { opacity: 0.7; }
+
+.footer {
+  margin-top: 34px;
+  text-align: center;
+  opacity: 0.4;
+  font-size: 0.8rem;
+}
+
+.txt-green { color: #00ff9d; }
+.txt-red { color: #ff0055; }
+.txt-blue { color: #4facfe; }
+.txt-orange { color: #ffaa00; }
+
+// spinner
+.spin { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.range-toggle {
+  margin-right: 10px;
+  transform: scale(0.85);
+  transform-origin: right center;
+
+  ::ng-deep mat-button-toggle {
+    color: rgba(255, 255, 255, 0.75);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.72rem;
+  }
+  ::ng-deep mat-button-toggle.mat-button-toggle-checked {
+    color: #00ff9d;
+    background: rgba(0, 255, 157, 0.12);
+  }
+}
+
+.muted-sub { color: rgba(255, 255, 255, 0.45); font-size: 0.75rem; }
+
+// ---- analysis studies (indicator chips under the chart header) ------------
+.indicator-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 16px 8px;
+
+  .indicator-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    opacity: 0.6;
+  }
+
+  .indicator-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    opacity: 0.55;
+  }
+}
+
+.indicator-toggles {
+  transform: scale(0.85);
+  transform-origin: left center;
+
+  ::ng-deep mat-button-toggle {
+    color: rgba(255, 255, 255, 0.75);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.66rem;
+    padding: 0 8px;
+  }
+  ::ng-deep mat-button-toggle.mat-button-toggle-checked {
+    color: #4facfe;
+    background: rgba(79, 172, 254, 0.14);
+  }
+}
+
+// ---- analysis insights ------------------------------------------------------
+.insights-card {
+  margin-top: 18px;
+  backdrop-filter: blur(10px);
+
+  .insights-range-badge {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.72rem;
+    opacity: 0.55;
+    margin-right: 6px;
+  }
+}
+
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.insight {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  transition: border-color 0.15s ease;
+
+  .insight-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.6;
+  }
+
+  .insight-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-top: 5px;
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  .insight-sub {
+    font-size: 0.74rem;
+    margin-top: 3px;
+    opacity: 0.55;
+  }
+
+  &.pos {
+    border-color: rgba(0, 255, 157, 0.35);
+    .insight-value { color: #00ff9d; }
+  }
+  &.neg {
+    border-color: rgba(255, 0, 85, 0.35);
+    .insight-value { color: #ff5578; }
+  }
+}
