@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+  <changeSet id="001-users" author="floweysales" dbms="mysql">
+    <createTable tableName="auth_users" remarks="Authenticated platform owners; no cross-user portfolio sharing">
+      <column name="id" type="BIGINT" autoIncrement="true">
+        <constraints primaryKey="true" nullable="false" primaryKeyName="pk_auth_users"/>
+      </column>
+      <column name="email" type="VARCHAR(254)">
+        <constraints nullable="false" unique="true" uniqueConstraintName="uq_auth_users_email"/>
+      </column>
+      <column name="password_hash" type="VARCHAR(255)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="role" type="VARCHAR(16)" defaultValue="owner">
+        <constraints nullable="false"/>
+      </column>
+      <column name="active" type="BOOLEAN" defaultValueBoolean="true">
+        <constraints nullable="false"/>
+      </column>
+      <column name="created_at" type="DATETIME(6)">
+        <constraints nullable="false"/>
+      </column>
+    </createTable>
+    <rollback><dropTable tableName="auth_users"/></rollback>
+  </changeSet>
+
+  <changeSet id="002-sessions" author="floweysales" dbms="mysql">
+    <createTable tableName="auth_sessions" remarks="Only SHA-256 token digests are stored; raw cookies are never persisted">
+      <column name="token_hash" type="CHAR(64)">
+        <constraints primaryKey="true" nullable="false" primaryKeyName="pk_auth_sessions"/>
+      </column>
+      <column name="user_id" type="BIGINT">
+        <constraints nullable="false"/>
+      </column>
+      <column name="created_at" type="DATETIME(6)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="expires_at" type="DATETIME(6)">
+        <constraints nullable="false"/>
+      </column>
+    </createTable>
+    <addForeignKeyConstraint baseTableName="auth_sessions" baseColumnNames="user_id"
+      constraintName="fk_auth_sessions_user" referencedTableName="auth_users"
+      referencedColumnNames="id" onDelete="CASCADE"/>
+    <createIndex tableName="auth_sessions" indexName="idx_auth_sessions_expires">
+      <column name="expires_at"/>
+    </createIndex>
+    <createIndex tableName="auth_sessions" indexName="idx_auth_sessions_user">
+      <column name="user_id"/>
+    </createIndex>
+    <rollback><dropTable tableName="auth_sessions"/></rollback>
+  </changeSet>
+</databaseChangeLog>
