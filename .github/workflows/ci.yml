@@ -45,16 +45,7 @@ jobs:
       - name: Format check
         run: |
           unformatted="$(gofmt -l $(git ls-files '*.go'))"
-          if [ -n "$unformatted" ]; then
-            echo "$unformatted"
-            while IFS= read -r f; do
-              echo "===GOFMT_START:$f"
-              gofmt "$f" | base64 -w0
-              echo
-              echo "===GOFMT_END:$f"
-            done <<< "$unformatted"
-            exit 1
-          fi
+          if [ -n "$unformatted" ]; then echo "$unformatted"; exit 1; fi
       - name: Vet
         run: go vet ./...
       - name: Unit tests (race detector)

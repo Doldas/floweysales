@@ -5,7 +5,7 @@ SSE price stream and the web UI.
 
 ## Requirements
 
-- Go 1.24+
+- Go 1.27.1+ (see `go.mod`)
 - Node.js + npm (only needed to build/develop the frontend)
 
 ## Quick start
@@ -15,6 +15,12 @@ make run          # builds frontend -> www/, builds Go binary, launches on :8080
 ```
 
 Then open http://localhost:8080.
+
+## Project status and roadmap
+
+FloweySales is an open-source, local-first research application with Go market adapters, a paper-trading engine, an Angular UI and an OpenAI-compatible agent. See [vision](docs/vision.md), [roadmap](docs/roadmap.md), [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md) and [GitHub setup](docs/github-operations.md). The hosted [GitHub Pages site](https://doldas.github.io/floweysales/) is **static project documentation**, not a remote brokerage app.
+
+Data and model outputs are research aids, not investment advice. Fully automatic live trading is **not supported**; future work requires separate security, compliance and risk gates.
 
 ## Common commands
 

@@ -99,7 +99,7 @@ func ToolDefs() []Tool {
 			Function: ToolFunction{
 				Name:        "get_latest_close",
 				Description: "Get the latest available provider OHLC closing price and its timestamp, NOT a live quote. Use this when the local tick database has no records.",
-				Parameters: obj(map[string]any{"symbol": str("Ticker symbol."), "provider": providerProp}, "symbol"),
+				Parameters:  obj(map[string]any{"symbol": str("Ticker symbol."), "provider": providerProp}, "symbol"),
 			},
 		},
 		{
@@ -108,10 +108,10 @@ func ToolDefs() []Tool {
 				Name:        "calculate_financial_ratios",
 				Description: "Calculate gross, operating and net margins, year-on-year revenue growth, P/E and P/FCF from explicitly supplied verified numerical inputs. Omitted metrics remain absent.",
 				Parameters: obj(map[string]any{
-					"revenue": map[string]any{"type":"number"}, "prior_year_revenue": map[string]any{"type":"number"},
-					"gross_profit": map[string]any{"type":"number"}, "operating_income": map[string]any{"type":"number"},
-					"net_income": map[string]any{"type":"number"}, "free_cash_flow": map[string]any{"type":"number"},
-					"market_cap": map[string]any{"type":"number"}, "net_cash": map[string]any{"type":"number"},
+					"revenue": map[string]any{"type": "number"}, "prior_year_revenue": map[string]any{"type": "number"},
+					"gross_profit": map[string]any{"type": "number"}, "operating_income": map[string]any{"type": "number"},
+					"net_income": map[string]any{"type": "number"}, "free_cash_flow": map[string]any{"type": "number"},
+					"market_cap": map[string]any{"type": "number"}, "net_cash": map[string]any{"type": "number"},
 				}, "revenue"),
 			},
 		},
@@ -216,12 +216,20 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 
 	case "get_latest_close":
 		symbol := strArg(args, "symbol")
-		if symbol == "" { return "", fmt.Errorf("symbol is required") }
+		if symbol == "" {
+			return "", fmt.Errorf("symbol is required")
+		}
 		series, err := src.History(symbol, providerArg(args), market.Range5D)
-		if err != nil { return "", err }
-		if len(series.Points) == 0 { return "", fmt.Errorf("no recent OHLC data for %s", symbol) }
+		if err != nil {
+			return "", err
+		}
+		if len(series.Points) == 0 {
+			return "", fmt.Errorf("no recent OHLC data for %s", symbol)
+		}
 		bar := series.Points[len(series.Points)-1]
-		if bar.Close <= 0 { return "", fmt.Errorf("invalid closing price for %s", symbol) }
+		if bar.Close <= 0 {
+			return "", fmt.Errorf("invalid closing price for %s", symbol)
+		}
 		return toJSON(map[string]any{"symbol": symbol, "provider": series.Provider, "currency": series.Currency, "last_close": bar.Close, "as_of_unix": bar.Timestamp, "quote_type": "historical_close", "is_realtime": false})
 
 	case "calculate_financial_ratios":

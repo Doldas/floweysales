@@ -9,15 +9,15 @@ import (
 
 // Event is one step of an agent run, streamed to the UI or logged by tests.
 type Event struct {
-	Type      string `json:"type"` // delta | tool_start | tool_result | transcript_message | error | done
+	Type      string   `json:"type"` // delta | tool_start | tool_result | transcript_message | error | done
 	Message   *Message `json:"message,omitempty"`
-	Content   string `json:"content,omitempty"`
-	Name      string `json:"name,omitempty"`
-	Arguments string `json:"arguments,omitempty"`
-	Result    string `json:"result,omitempty"`
-	ToolError string `json:"tool_error,omitempty"`
-	Steps     int    `json:"steps,omitempty"`
-	Error     string `json:"error,omitempty"`
+	Content   string   `json:"content,omitempty"`
+	Name      string   `json:"name,omitempty"`
+	Arguments string   `json:"arguments,omitempty"`
+	Result    string   `json:"result,omitempty"`
+	ToolError string   `json:"tool_error,omitempty"`
+	Steps     int      `json:"steps,omitempty"`
+	Error     string   `json:"error,omitempty"`
 }
 
 // AgentOptions tunes a run.
