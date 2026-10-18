@@ -37,12 +37,45 @@ func NewClient(baseURL, apiKey, model string) *Client {
 // Complete runs one streaming chat completion. onContent (may be nil) receives
 // content deltas as they arrive. It returns the fully assembled assistant
 // message, which may contain tool_calls instead of text.
+// Automatically continues if the model hits the token limit (finish_reason="length").
 func (c *Client) Complete(ctx context.Context, messages []Message, tools []Tool, onContent func(string)) (Message, error) {
 	if c.BaseURL == "" {
 		return Message{}, errors.New("ai: no base URL configured")
 	}
 	if c.Model == "" {
 		return Message{}, errors.New("ai: no model configured")
+	}
+
+	// Make the initial request
+	msg, finishReason, err := c.completeOnce(ctx, messages, tools, onContent)
+	if err != nil {
+		return Message{}, err
+	}
+
+	// If the model hit the token limit, continue until we get a proper stop
+	for finishReason == "length" || finishReason == "max_tokens" {
+		// Append the partial response and ask the model to continue
+		messages = append(messages, msg)
+		messages = append(messages, Message{
+			Role:    "user",
+			Content: "Continue.",
+		})
+		msg, finishReason, err = c.completeOnce(ctx, messages, tools, onContent)
+		if err != nil {
+			return Message{}, err
+		}
+	}
+
+	return msg, nil
+}
+
+// completeOnce makes a single streaming request and returns the message plus the finish_reason.
+func (c *Client) completeOnce(ctx context.Context, messages []Message, tools []Tool, onContent func(string)) (Message, string, error) {
+	if c.BaseURL == "" {
+		return Message{}, "", errors.New("ai: no base URL configured")
+	}
+	if c.Model == "" {
+		return Message{}, "", errors.New("ai: no model configured")
 	}
 
 	reqBody := ChatRequest{
@@ -59,13 +92,13 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []Tool,
 
 	raw, err := json.Marshal(reqBody)
 	if err != nil {
-		return Message{}, err
+		return Message{}, "", err
 	}
 
 	endpoint := c.BaseURL + "/chat/completions"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
 	if err != nil {
-		return Message{}, err
+		return Message{}, "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
@@ -75,7 +108,7 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []Tool,
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return Message{}, fmt.Errorf("ai: %s: %w", endpoint, err)
+		return Message{}, "", fmt.Errorf("ai: %s: %w", endpoint, err)
 	}
 	defer resp.Body.Close()
 
@@ -83,43 +116,48 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []Tool,
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		var env ChatResponse
 		if json.Unmarshal(body, &env) == nil && env.Error != nil {
-			return Message{}, fmt.Errorf("ai: %s returned %d: %w", endpoint, resp.StatusCode, env.Error)
+			return Message{}, "", fmt.Errorf("ai: %s returned %d: %w", endpoint, resp.StatusCode, env.Error)
 		}
-		return Message{}, fmt.Errorf("ai: %s returned %d: %s", endpoint, resp.StatusCode, strings.TrimSpace(string(body)))
+		return Message{}, "", fmt.Errorf("ai: %s returned %d: %s", endpoint, resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	contentType := resp.Header.Get("Content-Type")
 	if strings.Contains(contentType, "application/json") {
-		// Provider ignored stream:true and answered in one shot.
 		body, _ := io.ReadAll(resp.Body)
 		var one ChatResponse
 		if err := json.Unmarshal(body, &one); err != nil {
-			return Message{}, fmt.Errorf("ai: decode response: %w", err)
+			return Message{}, "", fmt.Errorf("ai: decode response: %w", err)
 		}
 		if one.Error != nil {
-			return Message{}, one.Error
+			return Message{}, "", one.Error
 		}
 		if len(one.Choices) == 0 {
-			return Message{}, errors.New("ai: empty response")
+			return Message{}, "", errors.New("ai: empty response")
 		}
 		msg := one.Choices[0].Message
+		fr := ""
+		if len(one.Choices) > 0 {
+			fr = one.Choices[0].FinishReason
+		}
 		if msg.Content != "" && onContent != nil {
 			onContent(msg.Content)
 		}
-		return msg, nil
+		return msg, fr, nil
 	}
 
-	return c.readStream(resp.Body, onContent)
+	msg, fr, err := c.readStream(resp.Body, onContent)
+	return msg, fr, err
 }
 
 // readStream parses the SSE frames of a streaming completion and reassembles
-// content plus incremental tool-call fragments.
-func (c *Client) readStream(body io.Reader, onContent func(string)) (Message, error) {
+// content plus incremental tool-call fragments. Returns the message and the finish_reason.
+func (c *Client) readStream(body io.Reader, onContent func(string)) (Message, string, error) {
 	scan := bufio.NewScanner(body)
 	scan.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 
 	assistant := Message{Role: "assistant"}
 	var content strings.Builder
+	var finishReason string
 
 	type partialCall struct {
 		id   string
@@ -148,7 +186,7 @@ func (c *Client) readStream(body io.Reader, onContent func(string)) (Message, er
 			continue
 		}
 		if chunk.Error != nil {
-			return Message{}, chunk.Error
+			return Message{}, "", chunk.Error
 		}
 		if len(chunk.Choices) == 0 {
 			continue
@@ -159,6 +197,10 @@ func (c *Client) readStream(body io.Reader, onContent func(string)) (Message, er
 			if onContent != nil {
 				onContent(delta.Content)
 			}
+		}
+		// Capture finish_reason from the last meaningful chunk
+		if chunk.Choices[0].FinishReason != "" {
+			finishReason = chunk.Choices[0].FinishReason
 		}
 		for _, tc := range delta.ToolCalls {
 			pc, ok := calls[tc.Index]
@@ -177,7 +219,7 @@ func (c *Client) readStream(body io.Reader, onContent func(string)) (Message, er
 		}
 	}
 	if err := scan.Err(); err != nil {
-		return Message{}, fmt.Errorf("ai: read stream: %w", err)
+		return Message{}, "", fmt.Errorf("ai: read stream: %w", err)
 	}
 
 	assistant.Content = content.String()
@@ -199,5 +241,5 @@ func (c *Client) readStream(body io.Reader, onContent func(string)) (Message, er
 			})
 		}
 	}
-	return assistant, nil
+	return assistant, finishReason, nil
 }
