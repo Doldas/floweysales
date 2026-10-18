@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	RoleUser = "USER"
-	RoleSysAdmin = "SYS_ADMIN"
+	RoleUser           = "USER"
+	RoleSysAdmin       = "SYS_ADMIN"
 	PasswordIterations = 600000 // OWASP PBKDF2-HMAC-SHA256 FIPS-compatible minimum.
 	SessionTTL         = 12 * time.Hour
 )
@@ -41,35 +41,46 @@ type Service struct{ db *sql.DB }
 // AISettings persists nonsecret connection metadata. Tokens and API keys
 // are deliberately managed in backend environment configuration.
 type AISettings struct {
- BaseURL string `json:"base_url"`
- Model string `json:"model"`
+	BaseURL string `json:"base_url"`
+	Model   string `json:"model"`
 }
+
 func (s *Service) LoadAISettings(ctx context.Context) (AISettings, bool, error) {
- var cfg AISettings
- err := s.db.QueryRowContext(ctx,"SELECT base_url, model FROM ai_configuration WHERE id = 1").Scan(&cfg.BaseURL,&cfg.Model)
- if errors.Is(err,sql.ErrNoRows) {return AISettings{},false,nil}
- return cfg,err == nil,err
+	var cfg AISettings
+	err := s.db.QueryRowContext(ctx, "SELECT base_url, model FROM ai_configuration WHERE id = 1").Scan(&cfg.BaseURL, &cfg.Model)
+	if errors.Is(err, sql.ErrNoRows) {
+		return AISettings{}, false, nil
+	}
+	return cfg, err == nil, err
 }
 func (s *Service) SaveAISettings(ctx context.Context, cfg AISettings) error {
- _,err := s.db.ExecContext(ctx,`INSERT INTO ai_configuration (id, base_url, model, updated_at)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO ai_configuration (id, base_url, model, updated_at)
  VALUES (1, ?, ?, ?) ON DUPLICATE KEY UPDATE base_url=VALUES(base_url), model=VALUES(model), updated_at=VALUES(updated_at)`,
- cfg.BaseURL,cfg.Model,time.Now().UTC())
- return err
+		cfg.BaseURL, cfg.Model, time.Now().UTC())
+	return err
 }
 
 // CreateUser provisions a read-only research account. No public registration.
 // A SYS_ADMIN is bootstrapped out of band, not created by this endpoint.
-func (s *Service) CreateUser(ctx context.Context, rawEmail, password string) (User,error) {
- email,err:=NormalizeEmail(rawEmail)
- if err!=nil{return User{},err}
- hash,err:=HashPassword(password)
- if err!=nil{return User{},err}
- result,err:=s.db.ExecContext(ctx,"INSERT INTO auth_users (email, password_hash, role, active, created_at) VALUES (?, ?, ?, TRUE, ?)",
- email,hash,RoleUser,time.Now().UTC())
- if err!=nil{return User{},err}
- id,err:=result.LastInsertId()
- if err!=nil{return User{},err}
- return User{ID:id,Email:email,Role:RoleUser},nil
+func (s *Service) CreateUser(ctx context.Context, rawEmail, password string) (User, error) {
+	email, err := NormalizeEmail(rawEmail)
+	if err != nil {
+		return User{}, err
+	}
+	hash, err := HashPassword(password)
+	if err != nil {
+		return User{}, err
+	}
+	result, err := s.db.ExecContext(ctx, "INSERT INTO auth_users (email, password_hash, role, active, created_at) VALUES (?, ?, ?, TRUE, ?)",
+		email, hash, RoleUser, time.Now().UTC())
+	if err != nil {
+		return User{}, err
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return User{}, err
+	}
+	return User{ID: id, Email: email, Role: RoleUser}, nil
 }
 
 func Open(dsn string) (*Service, error) {

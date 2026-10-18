@@ -153,9 +153,9 @@ func main() {
 		app.ResolveConfig("OPENAI_API_KEY", "", defaults),
 		app.ResolveConfig("OPENAI_MODEL", "", defaults),
 	)
-    if err := restAPI.RestoreAISettings(); err != nil {
-        log.Fatalf("[AUTH] Could not load AI configuration: %v",err)
-    }
+	if err := restAPI.RestoreAISettings(); err != nil {
+		log.Fatalf("[AUTH] Could not load AI configuration: %v", err)
+	}
 	restAPI.ConfigureTrading(portfolio)
 	if err := restAPI.Start(restApiHost, restApiPort); err != nil {
 		log.Fatalf("[FATAL ERROR] Could not bind to %s:%s - Port in use! (%v)", restApiHost, restApiPort, err)
