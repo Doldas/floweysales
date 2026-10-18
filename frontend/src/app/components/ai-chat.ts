@@ -37,6 +37,8 @@ interface AiConfig {
   presets: AiPreset[];
   tools: string[];
   can_configure: boolean;
+  max_steps: number;
+  max_tool_calls: number;
 }
 
 /**
@@ -79,6 +81,8 @@ export class AiChatComponent implements OnInit, OnDestroy {
 
   readonly baseUrl = signal('');
   readonly model = signal('');
+  readonly maxSteps = signal(12);
+  readonly maxToolCalls = signal(48);
   readonly presets = signal<AiPreset[]>([]);
   readonly serverHasKey = signal(false);
 
@@ -137,6 +141,8 @@ export class AiChatComponent implements OnInit, OnDestroy {
       this.presets.set(cfg.presets || []);
       this.serverHasKey.set(!!cfg.has_server_key);
       this.model.set(cfg.model || "");
+      this.maxSteps.set(cfg.max_steps || 12);
+      this.maxToolCalls.set(cfg.max_tool_calls || 48);
       this.baseUrl.set(cfg.base_url || "");
     } catch {}
   }
@@ -169,7 +175,7 @@ export class AiChatComponent implements OnInit, OnDestroy {
       const result = await fetch('/api/ai/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base_url: this.baseUrl().trim(), model: this.model().trim() }),
+        body: JSON.stringify({ base_url: this.baseUrl().trim(), model: this.model().trim(), max_steps: this.maxSteps(), max_tool_calls: this.maxToolCalls() }),
       });
       if (!result.ok) {
         const error = await result.json().catch(() => null);

@@ -24,6 +24,7 @@ type Event struct {
 type AgentOptions struct {
 	SystemPrompt       string
 	MaxSteps           int
+	MaxToolCalls int
 	MaxToolResultBytes int
 	DisableTools       bool
 }
@@ -54,9 +55,10 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	if emit == nil {
 		emit = func(Event) {}
 	}
-	if opts.MaxSteps <= 0 {
-		opts.MaxSteps = 12
-	}
+	if opts.MaxSteps <= 0 {opts.MaxSteps = 12}
+    if opts.MaxSteps > 32 {opts.MaxSteps=32}
+    if opts.MaxToolCalls <= 0 {opts.MaxToolCalls = 48}
+    if opts.MaxToolCalls > 128 {opts.MaxToolCalls=128}
 	if opts.MaxToolResultBytes <= 0 {
 		opts.MaxToolResultBytes = 24000
 	}
@@ -74,6 +76,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		tools = nil
 	}
 
+	toolCalls := 0
 	for step := 1; step <= opts.MaxSteps; step++ {
 		assistant, err := client.Complete(ctx, messages, tools, func(d string) {
 			emit(Event{Type: "delta", Content: d})
@@ -108,6 +111,12 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		}
 
 		for _, tc := range assistant.ToolCalls {
+            if toolCalls >= opts.MaxToolCalls {
+              emit(Event{Type:"error",Error:fmt.Sprintf("Agent tool-call budget exhausted (%d calls). Task may be incomplete.",opts.MaxToolCalls)})
+              emit(Event{Type:"done",Steps:step})
+              return nil
+            }
+            toolCalls++
 			emit(Event{Type: "tool_start", Name: tc.Function.Name, Arguments: tc.Function.Arguments})
 
 			result, err := Execute(ctx, src, tc.Function.Name, tc.Function.Arguments)

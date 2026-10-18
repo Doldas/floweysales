@@ -93,6 +93,7 @@ func (e *Engine) registerAIRoutes() {
 	e.mux.HandleFunc("GET /api/ai/config", func(w http.ResponseWriter, r *http.Request) {
 		corsHeader(w)
 		baseURL, apiKey, model := e.aiDefaults()
+        maxSteps,maxCalls:=e.agentLimits()
 		role := identity.RoleSysAdmin
 		if e.authService != nil {
 			u, _ := e.currentUser(r)
@@ -105,6 +106,8 @@ func (e *Engine) registerAIRoutes() {
 			"configured":     baseURL != "",
 			"base_url":       baseURL,
 			"model":          model,
+            "max_steps": maxSteps,
+            "max_tool_calls": maxCalls,
 			"has_server_key": apiKey != "" && role == identity.RoleSysAdmin,
 			"tools": func() []string {
 				if role == identity.RoleSysAdmin {
@@ -139,6 +142,8 @@ func (e *Engine) registerAIRoutes() {
 		var body struct {
 			BaseURL string `json:"base_url"`
 			Model   string `json:"model"`
+            MaxSteps int `json:"max_steps"`
+            MaxToolCalls int `json:"max_tool_calls"`
 		}
 		dec := json.NewDecoder(r.Body)
 		dec.DisallowUnknownFields()
@@ -153,6 +158,10 @@ func (e *Engine) registerAIRoutes() {
 		}
 		body.BaseURL = strings.TrimSpace(body.BaseURL)
 		body.Model = strings.TrimSpace(body.Model)
+        if body.MaxSteps<1 || body.MaxSteps>32 || body.MaxToolCalls<1 || body.MaxToolCalls>128 {
+          writeJSON(w,400,map[string]any{"error":"Agent budget out of range: model rounds 1-32, tool calls 1-128"})
+          return
+        }
 		parsed, err := url.Parse(body.BaseURL)
 		if err != nil || parsed.Hostname() == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") ||
 			parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
@@ -161,13 +170,14 @@ func (e *Engine) registerAIRoutes() {
 			return
 		}
 		// The DB is authoritative. Update runtime state only after commit.
-		if err := e.authService.SaveAISettings(r.Context(), identity.AISettings{BaseURL: body.BaseURL, Model: body.Model}); err != nil {
+		if err := e.authService.SaveAISettings(r.Context(), identity.AISettings{BaseURL: body.BaseURL, Model: body.Model, MaxSteps: body.MaxSteps, MaxToolCalls: body.MaxToolCalls}); err != nil {
 			writeJSON(w, 500, map[string]any{"error": "Unable to persist AI configuration"})
 			return
 		}
 		_, key, _ := e.aiDefaults()
 		e.ConfigureAI(body.BaseURL, key, body.Model)
-		writeJSON(w, 200, map[string]any{"configured": true, "base_url": body.BaseURL, "model": body.Model})
+        e.ConfigureAgentLimits(body.MaxSteps,body.MaxToolCalls)
+		writeJSON(w, 200, map[string]any{"configured": true, "base_url": body.BaseURL, "model": body.Model, "max_steps":body.MaxSteps, "max_tool_calls":body.MaxToolCalls})
 	})
 
 	// GET /api/ai/tools returns the tool catalogue (names + schemas) for
@@ -265,7 +275,8 @@ func (e *Engine) registerAIRoutes() {
 		}
 
 		client := ai.NewClient(baseURL, apiKey, model)
-		opts := ai.AgentOptions{SystemPrompt: req.SystemPrompt}
+		maxSteps,maxCalls:=e.agentLimits()
+		opts := ai.AgentOptions{SystemPrompt: req.SystemPrompt, MaxSteps:maxSteps, MaxToolCalls:maxCalls}
 		if req.Tools != nil && !*req.Tools {
 			opts.DisableTools = true
 		}

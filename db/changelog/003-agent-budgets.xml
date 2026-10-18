@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="005-agent-budgets" author="floweysales" dbms="mysql">
+   <addColumn tableName="ai_configuration">
+     <column name="max_steps" type="INT" defaultValueNumeric="12"><constraints nullable="false"/></column>
+     <column name="max_tool_calls" type="INT" defaultValueNumeric="48"><constraints nullable="false"/></column>
+   </addColumn>
+   <rollback>
+     <dropColumn tableName="ai_configuration" columnName="max_tool_calls"/>
+     <dropColumn tableName="ai_configuration" columnName="max_steps"/>
+   </rollback>
+ </changeSet>
+</databaseChangeLog>

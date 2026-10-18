@@ -53,6 +53,14 @@
                    placeholder="gpt-4o-mini / llama3.1" />
           </label>
 
+          <label class="field">
+            <span>Max model rounds (1–32)</span>
+            <input type="number" min="1" max="32" [ngModel]="maxSteps()" (ngModelChange)="maxSteps.set(+$event)" />
+          </label>
+          <label class="field">
+            <span>Max tool calls per question (1–128)</span>
+            <input type="number" min="1" max="128" [ngModel]="maxToolCalls()" (ngModelChange)="maxToolCalls.set(+$event)" />
+          </label>
           <p class="settings-label">API credentials are configured server-side by the administrator.</p>
 
           @if (connectionError()) {
