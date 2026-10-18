@@ -132,3 +132,36 @@ func TestExecuteHistorySummaryTail(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentModelRoundLimit(t *testing.T) {
+    srv:=mockOpenAI(t)
+    defer srv.Close()
+    client:=NewClient(srv.URL,"","test")
+    var events []Event
+    err:=Run(context.Background(),client,fakeDS{},[]Message{{Role:"user",Content:"price"}},
+        AgentOptions{MaxSteps:1,MaxToolCalls:6},func(e Event){events=append(events,e)})
+    if err!=nil{t.Fatal(err)}
+    var exhausted bool
+    for _,ev:=range events{
+      if ev.Type=="error" && strings.Contains(ev.Error,"limit of 1 model rounds"){exhausted=true}
+    }
+    if !exhausted{t.Fatalf("expected limit event: %+v",events)}
+}
+func TestAgentToolCallBudget(t *testing.T) {
+    // First iteration may call one tool, second is blocked when budget exhausted.
+    var rounds int
+    mock:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+      rounds++
+      w.Header().Set("Content-Type","text/event-stream")
+      _,_=fmt.Fprintf(w,`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_%d","type":"function","function":{"name":"get_market_stats","arguments":"{\\"symbol\\":\\"TEST\\"}"}}]}}]}`+"\n\n",rounds)
+      _,_=w.Write([]byte(`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`+"\n\n"))
+      _,_=w.Write([]byte("data: [DONE]\n\n"))
+    }))
+    defer mock.Close()
+    var events []Event
+    err:=Run(context.Background(),NewClient(mock.URL,"","test"),fakeDS{},[]Message{{Role:"user",Content:"test"}},AgentOptions{MaxSteps:4,MaxToolCalls:1},func(e Event){events=append(events,e)})
+    if err!=nil{t.Fatal(err)}
+    n:=0
+    for _,e:=range events{if e.Type=="tool_start"{n++}}
+    if n>1{t.Fatalf("exceeded tool budget, got %d tool executions",n)}
+}

@@ -121,3 +121,32 @@ per process.
 Existing SQLite DDL and old in-process migrations remain active for existing
 users. A separate future migration project will baseline that schema into
 Liquibase before retiring Go DDL. Do not run MySQL changelogs against SQLite.
+
+## Configurable AI budgets and sourced search
+
+As `SYS_ADMIN`, set **model rounds (1–32)** and **tool calls (1–128)**
+in the AI settings panel or `PUT /api/ai/config` with
+`base_url`, `model`, `max_steps` and `max_tool_calls`.
+Both budgets are stored in Liquibase-managed `ai_configuration` and
+restored on application restart. The default is 12 rounds / 48 tool calls.
+`AI_MAX_STEPS` and `AI_MAX_TOOL_CALLS` are environment defaults until
+the administrator saves overriding values. A model round is one completion,
+not necessarily one tool invocation; multiple tool calls in a round count
+individually. The agent reports a partial/incomplete task upon exhaustion.
+
+To enable web search configure `BRAVE_SEARCH_API_KEY` as a **server-side
+environment variable** (API subscription/token from Brave Search). The
+`search_web` tool searches public pages and includes URLs, date hints and
+short snippets. Web results are untrusted and must be cross-checked against
+primary official financial filings. No browser or AI chat field can change
+the Brave API key. Without a key the tool gives an explicit unavailable error.
+
+Correct valuation: `calculate_financial_ratios` requires a reporting
+`period` (quarter/ttm/annual). Quarterly net income or FCF never yields a
+P/E or P/FCF. `calculate_ttm_valuation` requires exactly four quarterly EPS
+values and share price for P/E, or four quarterly FCF values and market cap
+for P/FCF. All inputs must use matching currency and financial periods.
+Incomplete quarters do not produce invented numbers.
+
+See [automatic Docker/Podman updates](auto-updates.md). The updater preserves
+MySQL identities, sessions, persisted AI settings, local `.env` and SQLite data.
