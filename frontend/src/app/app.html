@@ -1,3 +1,8 @@
+@if (!auth.ready()) {
+  <main style="min-height:100vh;display:grid;place-items:center">Checking session…</main>
+} @else if (auth.enabled() && !auth.user()) {
+  <fse-login></fse-login>
+} @else {
 <mat-toolbar class="topbar" color="primary">
   <mat-icon class="logo-mark">query_stats</mat-icon>
   <span class="brand">FLOWEYSALES <span class="brand-sub">TERMINAL</span></span>
@@ -12,6 +17,9 @@
     }
     {{ statusBadgeText() }}
   </button>
+  @if (auth.enabled()) {
+    <button mat-stroked-button (click)="auth.logout()" aria-label="Sign out">Sign out</button>
+  }
 </mat-toolbar>
 
 @if (connecting()) {
@@ -222,3 +230,5 @@
     Welfory AB • FloweySales Quantum Trading Protocol • Go Engine + Angular Terminal
   </footer>
 </div>
+
+}

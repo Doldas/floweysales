@@ -49,6 +49,17 @@ jobs:
         run: |
           unformatted="$(gofmt -l $(git ls-files '*.go'))"
           if [ -n "$unformatted" ]; then echo "$unformatted"; exit 1; fi
+      - name: Resolve Go module checksums
+        run: |
+          go mod tidy
+          if ! git diff --exit-code -- go.mod go.sum; then
+            echo "::error::Commit the updated Go module metadata."
+            echo "===GO_MOD_SUM_START"
+            base64 -w0 go.sum
+            echo
+            echo "===GO_MOD_SUM_END"
+            exit 1
+          fi
       - name: Vet
         run: go vet ./...
       - name: Unit tests (race detector)
@@ -84,3 +95,19 @@ jobs:
           path: www/browser/
           if-no-files-found: error
           retention-days: 14
+
+  identity-schema:
+    name: identity-schema
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate and apply MySQL identity schema
+        env:
+          MYSQL_PASSWORD: ci-only-identity-password
+          MYSQL_ROOT_PASSWORD: ci-only-root-password
+        run: |
+          docker compose -f compose.identity.yml up -d mysql
+          docker compose -f compose.identity.yml --profile migration run --build --rm migrate validate
+          docker compose -f compose.identity.yml --profile migration run --rm migrate update
+          docker compose -f compose.identity.yml --profile migration run --rm migrate status --verbose
+          docker compose -f compose.identity.yml down -v

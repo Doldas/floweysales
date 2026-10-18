@@ -1,5 +1,5 @@
 # FloweySales build & run commands.
-# The only hard requirement: Go 1.24+ (Node/npm needed for frontend changes).
+# Go 1.27.1+ (see go.mod) (Node/npm needed for frontend changes).
 
 GO      ?= go
 BINARY  := floweysales_backend
@@ -58,3 +58,15 @@ dev: ## Recompile & run backend without rebuilding Angular
 clean: ## Remove binary and Angular build output
 	rm -f $(BINARY) $(MCP)
 	rm -rf www/browser www/3rdpartylicenses.txt
+
+.PHONY: db-up db-validate db-migrate db-status db-down
+db-up: ## Start local MySQL identity database
+	docker compose -f compose.identity.yml up -d mysql
+db-validate: ## Validate Liquibase changelog
+	docker compose -f compose.identity.yml --profile migration run --rm migrate validate
+db-migrate: ## Apply MySQL identity schema migrations
+	docker compose -f compose.identity.yml --profile migration run --rm migrate update
+db-status: ## Show pending migrations
+	docker compose -f compose.identity.yml --profile migration run --rm migrate status --verbose
+db-down: ## Stop MySQL, keeping database volume
+	docker compose -f compose.identity.yml down
