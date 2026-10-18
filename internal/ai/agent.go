@@ -9,7 +9,8 @@ import (
 
 // Event is one step of an agent run, streamed to the UI or logged by tests.
 type Event struct {
-	Type      string `json:"type"` // delta | tool_start | tool_result | error | done
+	Type      string `json:"type"` // delta | tool_start | tool_result | transcript_message | error | done
+	Message   *Message `json:"message,omitempty"`
 	Content   string `json:"content,omitempty"`
 	Name      string `json:"name,omitempty"`
 	Arguments string `json:"arguments,omitempty"`
@@ -28,7 +29,7 @@ type AgentOptions struct {
 }
 
 // DefaultSystemPrompt instructs the model how to use the market tools.
-const DefaultSystemPrompt = `You are FloweySales Analyst, a concise trading and market-research assistant embedded in a live trading dashboard.
+const DefaultSystemPrompt = `You are FloweySales Analyst, a financial research assistant embedded in a trading dashboard. Support fundamental analysis and evidence-based market research.
 
 You have tools that query the FloweySales backend for real market data:
 - search_symbols: find tickers
@@ -40,7 +41,10 @@ You have tools that query the FloweySales backend for real market data:
 Rules:
 - Always call tools to ground numbers in real data; never invent prices or financials.
 - Prefer YAHOO for stocks and BINANCE for crypto unless the user asks otherwise.
-- Be brief: short paragraphs or bullet lists, no filler. Cite the range/provider you used.
+- For fundamental-analysis requests prioritize reported financials, verified inputs and formulas; do not substitute technical indicators for a DCF or filing analysis.
+- State clearly when required capabilities or financial data are unavailable. Never fabricate SEC filings, financial ratios, tools, or investment recommendations.
+- For multi-step requests, track the requested deliverables and make clear which are finished, missing or estimated.
+- Be clear and concise; cite the date/range/provider used.
 - If a tool returns no data, say so and suggest an alternative provider or symbol.
 - If the user explicitly mentions a ticker/symbol in their question that differs from the UI context, ALWAYS use the symbol from the user's question. The UI context is only a fallback when the user doesn't specify a symbol.`
 
@@ -51,7 +55,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		emit = func(Event) {}
 	}
 	if opts.MaxSteps <= 0 {
-		opts.MaxSteps = 6
+		opts.MaxSteps = 12
 	}
 	if opts.MaxToolResultBytes <= 0 {
 		opts.MaxToolResultBytes = 24000
@@ -80,6 +84,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		}
 
 		messages = append(messages, assistant)
+		emit(Event{Type: "transcript_message", Message: &assistant})
 
 		// If the model returns nothing (no content, no tool calls) after having
 		// used tools on the previous turn, nudge it to produce a final answer
@@ -116,19 +121,21 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 				}
 			}
 			if len(result) > opts.MaxToolResultBytes {
-				result = result[:opts.MaxToolResultBytes] + `..."truncated"}`
+				// Preserve valid JSON even when a provider returns an oversized payload.
+				preview := result[:opts.MaxToolResultBytes]
+				wrapped, _ := json.Marshal(map[string]any{"truncated": true, "original_bytes": len(result), "preview_text": preview})
+				result = string(wrapped)
 			}
 			ev.Result = result
 			emit(ev)
 
-			messages = append(messages, Message{
-				Role:       "tool",
-				ToolCallID: tc.ID,
-				Content:    result,
-			})
+			toolMessage := Message{Role: "tool", ToolCallID: tc.ID, Content: result}
+			messages = append(messages, toolMessage)
+			emit(Event{Type: "transcript_message", Message: &toolMessage})
 		}
 	}
 
+	emit(Event{Type: "error", Error: fmt.Sprintf("Agent reached the limit of %d model rounds; the task may be incomplete. Continue the conversation to resume.", opts.MaxSteps)})
 	emit(Event{Type: "done", Steps: opts.MaxSteps})
 	return nil
 }

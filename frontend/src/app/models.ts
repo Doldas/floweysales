@@ -208,7 +208,8 @@ export type HistoryRange = (typeof HISTORY_RANGES)[number];
 
 /** One reported company quarter from GET /api/financials. */
 export interface QuarterlyFinancial {
-  period: string; // "Q3 2026"
+  period: string; // e.g. "CY2026 Q3" (Yahoo) or "Q2 FY2027" (Finnhub)
+  period_basis?: "calendar" | "fiscal";
   period_end: string; // "2026-06-30"
   revenue?: number;
   gross_profit?: number;

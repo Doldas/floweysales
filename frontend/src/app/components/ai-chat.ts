@@ -108,6 +108,8 @@ export class AiChatComponent implements OnInit, OnDestroy {
   readonly contextPrice = input<string | null>(null);
 
   private assistantIndex = -1;
+  /** Full wire transcript; tool calls and results must survive follow-up prompts. */
+  private wireMessages: Message[] = [];
 
   ngOnInit(): void {
     try {
@@ -190,6 +192,7 @@ export class AiChatComponent implements OnInit, OnDestroy {
   }
 
   clearChat(): void {
+    this.wireMessages = [];
     this.messages.set([]);
     this.assistantIndex = -1;
   }
@@ -219,12 +222,11 @@ export class AiChatComponent implements OnInit, OnDestroy {
     setTimeout(() => this.onInput(this.composer?.nativeElement));
     this.connectionError.set('');
     this.appendMessage({ role: 'user', content });
+    this.wireMessages.push({ role: 'user', content });
     this.isStreaming.set(true);
     this.assistantIndex = -1;
 
-    const history = this.messages()
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .map((m) => ({ role: m.role, content: m.content ?? '' }));
+    const history = this.wireMessages.map((m) => ({ ...m }));
 
     const controller = new AbortController();
     this.abort.set(controller);
@@ -296,6 +298,11 @@ export class AiChatComponent implements OnInit, OnDestroy {
         continue;
       }
       switch (ev.type) {
+        case 'transcript_message':
+          if (ev.message && ['assistant', 'tool'].includes(ev.message.role)) {
+            this.wireMessages.push(ev.message as Message);
+          }
+          break;
         case 'delta':
           this.upsertAssistant(ev.content || '');
           break;
