@@ -1,0 +1,75 @@
+name: floweysales
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: floweysales_auth
+      MYSQL_USER: flowey_auth
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+    networks: [internal]
+
+  migrate:
+    image: ghcr.io/doldas/floweysales-migrate:${FLOWEYSALES_TAG:-stable}
+    profiles: [migration]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      LIQUIBASE_COMMAND_URL: jdbc:mysql://mysql:3306/floweysales_auth
+      LIQUIBASE_COMMAND_USERNAME: flowey_auth
+      LIQUIBASE_COMMAND_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      LIQUIBASE_COMMAND_CHANGELOG_FILE: db.changelog-master.xml
+    networks: [internal]
+    command: ["update"]
+
+  app:
+    image: ghcr.io/doldas/floweysales:${FLOWEYSALES_TAG:-stable}
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      REST_API_HOST: 0.0.0.0
+      REST_API_PORT: 8080
+      AUTH_ENABLED: "true"
+      AUTH_MYSQL_DSN: 'flowey_auth:${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}@tcp(mysql:3306)/floweysales_auth?parseTime=true&loc=UTC&tls=false'
+      AUTH_BOOTSTRAP_EMAIL: ${AUTH_BOOTSTRAP_EMAIL:-}
+      AUTH_BOOTSTRAP_PASSWORD: ${AUTH_BOOTSTRAP_PASSWORD:-}
+      AUTH_COOKIE_SECURE: "${AUTH_COOKIE_SECURE:-false}" # false ONLY for 127.0.0.1 HTTP; use HTTPS proxy for external deployment
+      SQLITE_STORAGE_PATH: /data/floweysales.db
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
+      BRAVE_SEARCH_API_KEY: ${BRAVE_SEARCH_API_KEY:-}
+      AI_MAX_STEPS: ${AI_MAX_STEPS:-12}
+      AI_MAX_TOOL_CALLS: ${AI_MAX_TOOL_CALLS:-48}
+
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    volumes:
+      - trading_data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    networks: [internal]
+
+networks:
+  internal:
+
+volumes:
+  mysql_data:
+  trading_data:
