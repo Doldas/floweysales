@@ -20,18 +20,16 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - name: Test policy guardrails
+        run: bash scripts/test-pr-policy.sh
       - name: Check branch naming and linked issue
         env:
           HEAD_BRANCH: ${{ github.head_ref }}
           PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          set -euo pipefail
-          [[ "$HEAD_BRANCH" =~ ^(feature|fix|bugfix|docs|chore|release)/[a-z0-9][a-z0-9._-]*$ ]] || {
-            echo "::error::Branch must follow feature/, fix/, bugfix/, docs/, chore/, or release/."; exit 1;
-          }
-          [[ "$PR_BODY" =~ \#[0-9]+ ]] || {
-            echo "::error::PR body must link a GitHub issue (e.g. Relates to #12)."; exit 1;
-          }
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: bash scripts/check-pr-policy.sh
 
   go:
     name: go
