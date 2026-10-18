@@ -1,0 +1,39 @@
+name: floweysales-identity
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: floweysales_auth
+      MYSQL_USER: flowey_auth
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - auth_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u \"$$MYSQL_USER\" --silent"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/liquibase.Dockerfile
+    profiles: ["migration"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./db/changelog:/liquibase/changelog:ro
+    environment:
+      LIQUIBASE_COMMAND_URL: jdbc:mysql://mysql:3306/floweysales_auth
+      LIQUIBASE_COMMAND_USERNAME: flowey_auth
+      LIQUIBASE_COMMAND_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      LIQUIBASE_COMMAND_CHANGELOG_FILE: db.changelog-master.xml
+    command: ["update"]
+
+volumes:
+  auth_mysql:

@@ -33,6 +33,8 @@ import {
 } from 'rxjs';
 
 import { MarketService, describeHttpError } from './services';
+import { AuthState } from './auth.service';
+import { LoginComponent } from './components/login';
 import { LiveSseService } from './live.service';
 import { OrdersState } from './orders-state';
 import { ThemeService, THEMES } from './theme.service';
@@ -87,6 +89,7 @@ const FIRST_TICK_TIMEOUT_MS = 25_000;
     MatProgressBarModule,
     MatTooltipModule,
     AiChatComponent,
+    LoginComponent,
     AssetInfoComponent,
     FinancialsComponent,
     TradingChartComponent,
@@ -98,6 +101,7 @@ const FIRST_TICK_TIMEOUT_MS = 25_000;
 })
 export class App {
   private readonly api = inject(MarketService);
+  readonly auth = inject(AuthState);
   private readonly stream = inject(LiveSseService);
   private readonly ordersState = inject(OrdersState);
   private readonly snackBar = inject(MatSnackBar);
@@ -167,6 +171,7 @@ export class App {
   private gotTickForCurrentAsset = false;
 
   constructor() {
+    void this.auth.check();
     // Persist indicator toggles across sessions.
     effect(() => saveIndicatorFlags(this.indicators()));
 

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"floweysales/internal/identity"
 	"floweysales/internal/market"
 	"floweysales/internal/storage"
 	"floweysales/internal/tracker"
@@ -39,10 +40,13 @@ func (c *SharedMarketConfig) Set(symbol string, provider market.Provider) {
 
 // Engine owns the HTTP mux and wires every endpoint group.
 type Engine struct {
-	db            *storage.Database
-	config        *SharedMarketConfig
-	finnhubAPIKey string
-	trackerCfg    tracker.Config
+	authService      *identity.Service
+	authCookieSecure bool
+	authLimiter      authRateLimit
+	db               *storage.Database
+	config           *SharedMarketConfig
+	finnhubAPIKey    string
+	trackerCfg       tracker.Config
 
 	webFS   fs.FS // optional embedded www/ filesystem (e.g. //go:embed www)
 	hub     *sseHub
@@ -125,7 +129,7 @@ func (e *Engine) Start(host, port string) error {
 	addr := host + ":" + port
 	e.httpSrv = &http.Server{
 		Addr:    addr,
-		Handler: e.mux,
+		Handler: e.Handler(),
 	}
 
 	ln, err := netListen(addr)

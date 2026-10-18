@@ -9,7 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"context"
 	"floweysales/internal/app"
+	"floweysales/internal/identity"
 	"floweysales/internal/market"
 	"floweysales/internal/notify"
 	"floweysales/internal/server"
@@ -121,6 +123,31 @@ func main() {
 	defer db.Close()
 
 	restAPI := server.NewEngine(db, sharedConfig, wwwFS, finnhubAPIKey, cfg)
+	if strings.EqualFold(app.ResolveConfig("AUTH_ENABLED", "false", defaults), "true") {
+		// Auth credentials are deliberately environment-only, never committed properties.
+		identityDB, err := identity.Open(os.Getenv("AUTH_MYSQL_DSN"))
+		if err != nil {
+			log.Fatalf("[AUTH] %v", err)
+		}
+		defer identityDB.Close()
+		email, password := os.Getenv("AUTH_BOOTSTRAP_EMAIL"), os.Getenv("AUTH_BOOTSTRAP_PASSWORD")
+		if (email == "") != (password == "") {
+			log.Fatal("[AUTH] Set both AUTH_BOOTSTRAP_EMAIL and AUTH_BOOTSTRAP_PASSWORD, or neither")
+		}
+		if email != "" {
+			if err := identityDB.BootstrapOwner(context.Background(), email, password); err != nil {
+				log.Fatalf("[AUTH] Cannot bootstrap owner: %v", err)
+			}
+		}
+		exists, err := identityDB.OwnerExists(context.Background())
+		if err != nil || !exists {
+			log.Fatal("[AUTH] No owner exists; provide bootstrap credentials on first start")
+		}
+		secureCookie := !strings.EqualFold(app.ResolveConfig("AUTH_COOKIE_SECURE", "true", defaults), "false")
+		restAPI.ConfigureAuth(identityDB, secureCookie)
+		log.Printf("[AUTH] Owner authentication active (secure cookie=%v)", secureCookie)
+	}
+
 	restAPI.ConfigureAI(
 		app.ResolveConfig("OPENAI_BASE_URL", "", defaults),
 		app.ResolveConfig("OPENAI_API_KEY", "", defaults),
