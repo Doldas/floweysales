@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"io/fs"
 	"log"
@@ -117,6 +118,22 @@ func (e *Engine) ConfigureAI(baseURL, apiKey, model string) {
 }
 
 // aiDefaults returns the configured endpoint without leaking the key.
+// RestoreAISettings reads the nonsecret configuration persisted by Liquibase.
+// Environment configuration is used if the administrator has not saved one.
+func (e *Engine) RestoreAISettings() error {
+	if e.authService == nil {
+		return nil
+	}
+	cfg, exists, err := e.authService.LoadAISettings(context.Background())
+	if err != nil {
+		return err
+	}
+	if exists {
+		_, key, _ := e.aiDefaults()
+		e.ConfigureAI(cfg.BaseURL, key, cfg.Model)
+	}
+	return nil
+}
 func (e *Engine) aiDefaults() (baseURL, apiKey, model string) {
 	e.aiMu.Lock()
 	defer e.aiMu.Unlock()

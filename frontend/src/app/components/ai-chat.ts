@@ -36,6 +36,7 @@ interface AiConfig {
   has_server_key: boolean;
   presets: AiPreset[];
   tools: string[];
+  can_configure: boolean;
 }
 
 /**
@@ -72,11 +73,11 @@ export class AiChatComponent implements OnInit, OnDestroy {
   /** Starts collapsed so the floating panel never covers page controls. */
   readonly isMinimized = signal(true);
   readonly showSettings = signal(false);
-  readonly systemPrompt = signal('');
+  readonly canConfigure = signal(false);
+  readonly serverConfigured = signal(false);
   readonly connectionError = signal('');
 
   readonly baseUrl = signal('');
-  readonly apiKey = signal('');
   readonly model = signal('');
   readonly presets = signal<AiPreset[]>([]);
   readonly serverHasKey = signal(false);
@@ -92,7 +93,7 @@ export class AiChatComponent implements OnInit, OnDestroy {
     'Compare EMA 9 vs EMA 21',
   ];
 
-  readonly canSend = computed(() => !this.isStreaming() && !!this.model().trim() && !!this.baseUrl().trim());
+  readonly canSend = computed(() => !this.isStreaming() && this.serverConfigured() && !!this.model().trim());
 
   readonly showThinking = computed(() => {
     if (!this.isStreaming()) return false;
@@ -113,14 +114,9 @@ export class AiChatComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     try {
-      const stored = localStorage.getItem('ai_chat_config');
-      if (stored) {
-        const cfg = JSON.parse(stored);
-        this.baseUrl.set(cfg.baseUrl || '');
-        this.apiKey.set(cfg.apiKey || '');
-        this.model.set(cfg.model || '');
-      }
-      this.systemPrompt.set(localStorage.getItem('ai_system_prompt') || '');
+      // Purge legacy browser-stored API keys; credentials belong on the server.
+      localStorage.removeItem('ai_chat_config');
+      localStorage.removeItem('ai_system_prompt');
       this.isMinimized.set(localStorage.getItem('ai_panel_open') !== '1');
     } catch {}
 
@@ -129,7 +125,6 @@ export class AiChatComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.abort()?.abort();
-    this.persistConfig();
   }
 
   private async loadConfig(): Promise<void> {
@@ -137,21 +132,12 @@ export class AiChatComponent implements OnInit, OnDestroy {
       const res = await fetch('/api/ai/config');
       if (!res.ok) return;
       const cfg: AiConfig = await res.json();
+      this.canConfigure.set(!!cfg.can_configure);
+      this.serverConfigured.set(!!cfg.configured);
       this.presets.set(cfg.presets || []);
       this.serverHasKey.set(!!cfg.has_server_key);
-      if (!this.model().trim() && cfg.model) this.model.set(cfg.model);
-      if (!this.baseUrl().trim() && cfg.base_url) this.baseUrl.set(cfg.base_url);
-    } catch {}
-  }
-
-  private persistConfig(): void {
-    try {
-      localStorage.setItem('ai_chat_config', JSON.stringify({
-        baseUrl: this.baseUrl().trim(),
-        apiKey: this.apiKey().trim(),
-        model: this.model().trim(),
-      }));
-      localStorage.setItem('ai_system_prompt', this.systemPrompt());
+      this.model.set(cfg.model || "");
+      this.baseUrl.set(cfg.base_url || "");
     } catch {}
   }
 
@@ -166,24 +152,34 @@ export class AiChatComponent implements OnInit, OnDestroy {
   }
 
   openSettings(): void {
-    this.showSettings.set(true);
+    if (this.canConfigure()) this.showSettings.set(true);
   }
 
   closeSettings(): void {
     this.showSettings.set(false);
   }
 
-  saveSettings(): void {
-    if (!this.baseUrl().trim()) {
-      this.flashError('Base URL is required');
+  async saveSettings(): Promise<void> {
+    if (!this.canConfigure()) return;
+    if (!this.baseUrl().trim() || !this.model().trim()) {
+      this.flashError('Base URL and model are required');
       return;
     }
-    if (!this.model().trim()) {
-      this.flashError('Model is required');
-      return;
+    try {
+      const result = await fetch('/api/ai/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base_url: this.baseUrl().trim(), model: this.model().trim() }),
+      });
+      if (!result.ok) {
+        const error = await result.json().catch(() => null);
+        throw new Error(error?.error || ('Configuration failed (HTTP ' + result.status + ')'));
+      }
+      this.serverConfigured.set(true);
+      this.showSettings.set(false);
+    } catch (err) {
+      this.flashError(err instanceof Error ? err.message : 'Unable to save AI settings');
     }
-    this.persistConfig();
-    this.showSettings.set(false);
   }
 
   selectPreset(p: AiPreset): void {
@@ -238,10 +234,6 @@ export class AiChatComponent implements OnInit, OnDestroy {
         signal: controller.signal,
         body: JSON.stringify({
           messages: history,
-          base_url: this.baseUrl().trim(),
-          api_key: this.apiKey().trim(),
-          model: this.model().trim(),
-          system_prompt: this.systemPrompt().trim(),
           // Pass UI context so the agent knows what the user is looking at.
           symbol: this.contextSymbol(),
           provider: this.contextProvider(),

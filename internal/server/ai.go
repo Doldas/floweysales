@@ -2,8 +2,10 @@ package server
 
 import (
 	"encoding/json"
+	"floweysales/internal/identity"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"floweysales/internal/ai"
@@ -91,14 +93,81 @@ func (e *Engine) registerAIRoutes() {
 	e.mux.HandleFunc("GET /api/ai/config", func(w http.ResponseWriter, r *http.Request) {
 		corsHeader(w)
 		baseURL, apiKey, model := e.aiDefaults()
+		role := identity.RoleSysAdmin
+		if e.authService != nil {
+			u, _ := e.currentUser(r)
+			role = u.Role
+		}
+		if role != identity.RoleSysAdmin {
+			baseURL = ""
+		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"configured":     baseURL != "",
 			"base_url":       baseURL,
 			"model":          model,
-			"has_server_key": apiKey != "",
-			"tools":          ai.ToolNames(),
-			"presets":        aiPresets(),
+			"has_server_key": apiKey != "" && role == identity.RoleSysAdmin,
+			"tools": func() []string {
+				if role == identity.RoleSysAdmin {
+					return ai.ToolNames()
+				}
+				return []string{}
+			}(),
+			"presets": func() []map[string]any {
+				if role == identity.RoleSysAdmin {
+					return aiPresets()
+				}
+				return []map[string]any{}
+			}(),
+			"can_configure": role == identity.RoleSysAdmin,
 		})
+	})
+
+	// Only SYS_ADMIN may change global AI endpoint/model. API keys remain
+	// environment-only and never leave the server. Nonsecret settings persist.
+	e.mux.HandleFunc("PUT /api/ai/config", func(w http.ResponseWriter, r *http.Request) {
+		if e.authService == nil {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "Enable authentication to manage global AI settings"})
+			return
+		}
+		user, ok := e.currentUser(r)
+		if !ok || user.Role != identity.RoleSysAdmin {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "SYS_ADMIN required"})
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 4096)
+		defer r.Body.Close()
+		var body struct {
+			BaseURL string `json:"base_url"`
+			Model   string `json:"model"`
+		}
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&body); err != nil {
+			writeJSON(w, 400, map[string]any{"error": "Invalid request"})
+			return
+		}
+		var extra any
+		if dec.Decode(&extra) != io.EOF {
+			writeJSON(w, 400, map[string]any{"error": "Invalid request"})
+			return
+		}
+		body.BaseURL = strings.TrimSpace(body.BaseURL)
+		body.Model = strings.TrimSpace(body.Model)
+		parsed, err := url.Parse(body.BaseURL)
+		if err != nil || parsed.Hostname() == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") ||
+			parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
+			len(body.BaseURL) > 512 || len(body.Model) > 128 || len(body.Model) == 0 {
+			writeJSON(w, 400, map[string]any{"error": "Invalid model or endpoint URL"})
+			return
+		}
+		// The DB is authoritative. Update runtime state only after commit.
+		if err := e.authService.SaveAISettings(r.Context(), identity.AISettings{BaseURL: body.BaseURL, Model: body.Model}); err != nil {
+			writeJSON(w, 500, map[string]any{"error": "Unable to persist AI configuration"})
+			return
+		}
+		_, key, _ := e.aiDefaults()
+		e.ConfigureAI(body.BaseURL, key, body.Model)
+		writeJSON(w, 200, map[string]any{"configured": true, "base_url": body.BaseURL, "model": body.Model})
 	})
 
 	// GET /api/ai/tools returns the tool catalogue (names + schemas) for
@@ -148,9 +217,16 @@ func (e *Engine) registerAIRoutes() {
 		}
 
 		defBase, defKey, defModel := e.aiDefaults()
-		baseURL := firstNonEmpty(req.BaseURL, defBase)
-		apiKey := firstNonEmpty(req.APIKey, defKey)
-		model := firstNonEmpty(req.Model, defModel)
+		baseURL, apiKey, model := defBase, defKey, defModel
+		if e.authService == nil {
+			// Legacy local, unauthenticated development compatibility.
+			baseURL = firstNonEmpty(req.BaseURL, defBase)
+			apiKey = firstNonEmpty(req.APIKey, defKey)
+			model = firstNonEmpty(req.Model, defModel)
+		} else if req.BaseURL != "" || req.APIKey != "" || req.Model != "" || req.SystemPrompt != "" {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "Only SYS_ADMIN can configure the AI endpoint. Remove chat-level model, key and system prompt overrides."})
+			return
+		}
 
 		if strings.TrimSpace(baseURL) == "" {
 			writeJSON(w, http.StatusBadRequest, map[string]any{
@@ -192,6 +268,14 @@ func (e *Engine) registerAIRoutes() {
 		opts := ai.AgentOptions{SystemPrompt: req.SystemPrompt}
 		if req.Tools != nil && !*req.Tools {
 			opts.DisableTools = true
+		}
+		if e.authService != nil {
+			u, ok := e.currentUser(r)
+			if !ok || u.Role != identity.RoleSysAdmin {
+				// Engine config, local ticks and orders are currently shared.
+				// Disable all LLM tools until a USER-safe, scoped catalog exists.
+				opts.DisableTools = true
+			}
 		}
 
 		// Run synchronously against the request context; every event is flushed

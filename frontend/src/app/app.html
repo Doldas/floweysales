@@ -2,6 +2,14 @@
   <main style="min-height:100vh;display:grid;place-items:center">Checking session…</main>
 } @else if (auth.enabled() && !auth.user()) {
   <fse-login></fse-login>
+} @else if (auth.enabled() && auth.user()?.role === 'USER') {
+  <div class="container">
+    <h2>FloweySales Research</h2>
+    <p>Signed in as {{ auth.user()?.email }} · USER (read-only research access)</p>
+    <button mat-stroked-button (click)="auth.logout()">Sign out</button>
+    <fse-financials [symbol]="trackedSymbol()" [provider]="provider()"></fse-financials>
+    <fse-ai-chat [contextSymbol]="trackedSymbol()" [contextProvider]="provider()" [contextRange]="historyRange()" [contextPrice]="livePrice() | number:'1.2-4'"></fse-ai-chat>
+  </div>
 } @else {
 <mat-toolbar class="topbar" color="primary">
   <mat-icon class="logo-mark">query_stats</mat-icon>

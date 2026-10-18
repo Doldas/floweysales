@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -75,14 +77,78 @@ func (e *Engine) Handler() http.Handler {
 			return
 		}
 		if e.authService != nil {
-			if _, ok := e.currentUser(r); !ok {
+			u, ok := e.currentUser(r)
+			if !ok {
 				writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "Authentication required"})
 				return
 			}
+			if !allowedAPI(u.Role, r.Method, r.URL.Path) {
+				writeJSON(w, http.StatusForbidden, map[string]any{"error": "Insufficient permissions"})
+				return
+			}
+		}
+		if r.URL.Path == "/api/admin/users" {
+			e.serveUserProvision(w, r)
+			return
 		}
 		e.mux.ServeHTTP(w, r)
 	})
 }
+
+// USER accounts are restricted to public-market research while the
+// SQLite orderbook and portfolio remain global. No accidental cross-user
+// access is allowed before the tenant-scoped storage migration.
+func allowedAPI(role, method, path string) bool {
+	if role == identity.RoleSysAdmin {
+		return true
+	}
+	if role != identity.RoleUser {
+		return false
+	}
+	switch {
+	case method == http.MethodGet && (path == "/api/search" || path == "/api/history" || path == "/api/financials" || path == "/api/ai/config" || path == "/api/ai/tools"):
+		return true
+	case method == http.MethodPost && path == "/api/ai/chat":
+		return true
+	default:
+		return false
+	}
+}
+
+func (e *Engine) serveUserProvision(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost || e.authService == nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": "Not found"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 8192)
+	defer r.Body.Close()
+	var body struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Invalid user request"})
+		return
+	}
+	var tail any
+	if decoder.Decode(&tail) != io.EOF {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Invalid user request"})
+		return
+	}
+	user, err := e.authService.CreateUser(r.Context(), body.Email, body.Password)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, sql.ErrConnDone) {
+			status = http.StatusServiceUnavailable
+		}
+		writeJSON(w, status, map[string]any{"error": "Could not create user (check email, password policy and uniqueness)"})
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"user": user})
+}
+
 func isCrossSite(r *http.Request) bool {
 	// Cross-origin browser requests, including those without Origin.
 	if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
