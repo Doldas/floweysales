@@ -51,7 +51,18 @@ func FetchQuarterlyFinancials(symbol string, provider Provider, finnhubKey strin
 	case ProviderYahoo:
 		return fetchYahooFinancials(symbol)
 	case ProviderAvanza:
-		ticker, err := avanzaYahooTicker(symbol)
+		// The market-guide endpoint only accepts numeric orderbook IDs, so a
+		// Yahoo-style ticker (e.g. "VOL-B" tracked from the Yahoo provider)
+		// must be resolved through the Avanza search first — same as history.
+		id := symbol
+		if !isDigits(symbol) {
+			resolved, _, err := resolveAvanzaID(symbol, 5)
+			if err != nil {
+				return FinancialsResponse{}, fmt.Errorf("[Financials] Avanza: %w", err)
+			}
+			id = resolved
+		}
+		ticker, err := avanzaYahooTicker(id)
 		if err != nil {
 			return FinancialsResponse{}, fmt.Errorf("[Financials] Avanza: %w", err)
 		}
