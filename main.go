@@ -149,9 +149,9 @@ func main() {
 	}
 
 	restAPI.ConfigureAgentLimits(
-        parseInt(app.ResolveConfig("AI_MAX_STEPS","12",defaults),12),
-        parseInt(app.ResolveConfig("AI_MAX_TOOL_CALLS","48",defaults),48),
-    )
+		parseInt(app.ResolveConfig("AI_MAX_STEPS", "12", defaults), 12),
+		parseInt(app.ResolveConfig("AI_MAX_TOOL_CALLS", "48", defaults), 48),
+	)
 	restAPI.ConfigureAI(
 		app.ResolveConfig("OPENAI_BASE_URL", "", defaults),
 		app.ResolveConfig("OPENAI_API_KEY", "", defaults),

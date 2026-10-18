@@ -41,10 +41,10 @@ type Service struct{ db *sql.DB }
 // AISettings persists nonsecret connection metadata. Tokens and API keys
 // are deliberately managed in backend environment configuration.
 type AISettings struct {
-	BaseURL string `json:"base_url"`
-	Model   string `json:"model"`
-	MaxSteps int `json:"max_steps"`
-	MaxToolCalls int `json:"max_tool_calls"`
+	BaseURL      string `json:"base_url"`
+	Model        string `json:"model"`
+	MaxSteps     int    `json:"max_steps"`
+	MaxToolCalls int    `json:"max_tool_calls"`
 }
 
 func (s *Service) LoadAISettings(ctx context.Context) (AISettings, bool, error) {

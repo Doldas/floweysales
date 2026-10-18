@@ -135,15 +135,15 @@ func TestMySQLAuthGate(t *testing.T) {
 	}
 
 	// Check validated server-side budget restrictions, then persist SYS_ADMIN settings.
-    assert(request("PUT", "/api/ai/config", map[string]any{
-        "base_url":"http://localhost:11434/v1","model":"x","max_steps":100000,"max_tool_calls":1,
-    }, cookies[0],""),http.StatusBadRequest)
-    // Persist SYS_ADMIN endpoint/model and verify database readback.
 	assert(request("PUT", "/api/ai/config", map[string]any{
-        "base_url":"http://localhost:11434/v1","model":"qwen-local","max_steps":18,"max_tool_calls":45,
-    }, cookies[0],""),http.StatusOK)
+		"base_url": "http://localhost:11434/v1", "model": "x", "max_steps": 100000, "max_tool_calls": 1,
+	}, cookies[0], ""), http.StatusBadRequest)
+	// Persist SYS_ADMIN endpoint/model and verify database readback.
+	assert(request("PUT", "/api/ai/config", map[string]any{
+		"base_url": "http://localhost:11434/v1", "model": "qwen-local", "max_steps": 18, "max_tool_calls": 45,
+	}, cookies[0], ""), http.StatusOK)
 	saved, found, err := auth.LoadAISettings(t.Context())
-	if err != nil || !found || saved.Model != "qwen-local" || saved.MaxSteps!=18 || saved.MaxToolCalls!=45 {
+	if err != nil || !found || saved.Model != "qwen-local" || saved.MaxSteps != 18 || saved.MaxToolCalls != 45 {
 		t.Fatalf("persist AI settings: %+v exists=%v err=%v", saved, found, err)
 	}
 
