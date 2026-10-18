@@ -48,7 +48,15 @@ jobs:
       - name: Format check
         run: |
           unformatted="$(gofmt -l $(git ls-files '*.go'))"
-          if [ -n "$unformatted" ]; then echo "$unformatted"; exit 1; fi
+          if [ -n "$unformatted" ]; then
+            while IFS= read -r file; do
+              echo "===GOFMT_START:$file"
+              gofmt "$file" | base64 -w0
+              echo
+              echo "===GOFMT_END:$file"
+            done <<< "$unformatted"
+            exit 1
+          fi
       - name: Resolve Go module checksums
         run: |
           go mod tidy
