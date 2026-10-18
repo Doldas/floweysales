@@ -11,7 +11,7 @@ FloweySales is an open-source, local-first investment research platform. We use 
 - `chore/<slug>`: infrastructure / dependency updates.
 - `release/<slug>`: stabilization only when a milestone needs a freeze.
 
-Keep branches short-lived and open PRs **into `main`**. Every PR must reference an issue (`Relates to #N`) and pass `policy`, `go`, and `frontend` checks. Prefer squash merge; versioned `v*` tags trigger cross-platform binary artifacts. Unlike flowerly_os, FloweySales deliberately starts with lightweight trunk-based development rather than a mandatory chain of release branches.
+Keep branches short-lived and open PRs **into `main`**. Verified Dependabot PRs created by `dependabot[bot]` within this repository on `dependabot/*` branches are exempt from **only** the human branch name and issue-reference requirements. They still require the usual build/test CI checks and compatibility review. Every PR must reference an issue (`Relates to #N`) and pass `policy`, `go`, and `frontend` checks. Prefer squash merge; versioned `v*` tags trigger cross-platform binary artifacts. Unlike flowerly_os, FloweySales deliberately starts with lightweight trunk-based development rather than a mandatory chain of release branches.
 
 ## Local checks
 
