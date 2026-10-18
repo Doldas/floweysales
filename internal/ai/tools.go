@@ -47,6 +47,14 @@ func ToolDefs() []Tool {
 	}
 
 	return []Tool{
+        {
+            Type: "function",
+            Function: ToolFunction{
+                Name: "search_web",
+                Description: "Search the live public web for company identities, SEC filings, recent financial news, official sources, and dated links. Returns source URLs, titles and short snippets only (not verified financial statements). Cite sources and verify primary filings.",
+                Parameters: obj(map[string]any{"query": str("Focused search terms, e.g. 'CGI Inc GIB NYSE investor relations Q3 2026 earnings'")}, "query"),
+            },
+        },
 		{
 			Type: "function",
 			Function: ToolFunction{
@@ -169,6 +177,9 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 	}
 
 	switch name {
+    case "search_web":
+        query:=strArg(args,"query")
+        return SearchWeb(ctx,query)
 	case "search_symbols":
 		query := strArg(args, "query")
 		if query == "" {
