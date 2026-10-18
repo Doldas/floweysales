@@ -8,6 +8,7 @@ import {
   computed,
   inject,
   signal,
+  input,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -99,6 +100,12 @@ export class AiChatComponent implements OnInit, OnDestroy {
     const last = msgs[msgs.length - 1];
     return !last || last.role !== 'assistant';
   });
+
+  /** UI context from the parent (tracked symbol, provider, range, price). */
+  readonly contextSymbol = input<string>('');
+  readonly contextProvider = input<string>('');
+  readonly contextRange = input<string>('');
+  readonly contextPrice = input<string | null>(null);
 
   private assistantIndex = -1;
 
@@ -233,6 +240,11 @@ export class AiChatComponent implements OnInit, OnDestroy {
           api_key: this.apiKey().trim(),
           model: this.model().trim(),
           system_prompt: this.systemPrompt().trim(),
+          // Pass UI context so the agent knows what the user is looking at.
+          symbol: this.contextSymbol(),
+          provider: this.contextProvider(),
+          range: this.contextRange(),
+          price: this.contextPrice() ?? '',
         }),
       });
 

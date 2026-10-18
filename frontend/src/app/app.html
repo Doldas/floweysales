@@ -137,7 +137,12 @@
   <fse-financials [symbol]="trackedSymbol()" [provider]="provider()"></fse-financials>
 
   <!-- AI CHAT -->
-  <fse-ai-chat></fse-ai-chat>
+  <fse-ai-chat
+    [contextSymbol]="trackedSymbol()"
+    [contextProvider]="provider()"
+    [contextRange]="historyRange()"
+    [contextPrice]="livePrice() | number:'1.2-4'"
+  ></fse-ai-chat>
 
   <!-- CHART -->
   <mat-card class="glass chart-card">

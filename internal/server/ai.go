@@ -77,6 +77,11 @@ type chatRequestBody struct {
 	Model        string       `json:"model"`
 	SystemPrompt string       `json:"system_prompt"`
 	Tools        *bool        `json:"tools"`
+	// Optional UI context so the model knows what the user is looking at.
+	Symbol   string `json:"symbol,omitempty"`
+	Provider string `json:"provider,omitempty"`
+	Range    string `json:"range,omitempty"`
+	Price    string `json:"price,omitempty"`
 }
 
 // registerAIRoutes wires the OpenAI-compatible chat proxy and its config probe.
@@ -121,6 +126,25 @@ func (e *Engine) registerAIRoutes() {
 		if len(req.Messages) == 0 {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "messages is required"})
 			return
+		}
+
+		// Prepend UI context as a system message so the model knows what the user is viewing.
+		if req.Symbol != "" || req.Provider != "" || req.Range != "" || req.Price != "" {
+			ctxParts := []string{"[UI context]"}
+			if req.Symbol != "" {
+				ctxParts = append(ctxParts, "symbol="+req.Symbol)
+			}
+			if req.Provider != "" {
+				ctxParts = append(ctxParts, "provider="+req.Provider)
+			}
+			if req.Range != "" {
+				ctxParts = append(ctxParts, "range="+req.Range)
+			}
+			if req.Price != "" {
+				ctxParts = append(ctxParts, "price="+req.Price)
+			}
+			contextMsg := ai.Message{Role: "system", Content: strings.Join(ctxParts, " | ")}
+			req.Messages = append([]ai.Message{contextMsg}, req.Messages...)
 		}
 
 		defBase, defKey, defModel := e.aiDefaults()
