@@ -97,8 +97,29 @@ func ToolDefs() []Tool {
 		{
 			Type: "function",
 			Function: ToolFunction{
+				Name:        "get_latest_close",
+				Description: "Get the latest available provider OHLC closing price and its timestamp, NOT a live quote. Use this when the local tick database has no records.",
+				Parameters:  obj(map[string]any{"symbol": str("Ticker symbol."), "provider": providerProp}, "symbol"),
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "calculate_financial_ratios",
+				Description: "Calculate gross, operating and net margins, year-on-year revenue growth, P/E and P/FCF from explicitly supplied verified numerical inputs. Omitted metrics remain absent.",
+				Parameters: obj(map[string]any{
+					"revenue": map[string]any{"type": "number"}, "prior_year_revenue": map[string]any{"type": "number"},
+					"gross_profit": map[string]any{"type": "number"}, "operating_income": map[string]any{"type": "number"},
+					"net_income": map[string]any{"type": "number"}, "free_cash_flow": map[string]any{"type": "number"},
+					"market_cap": map[string]any{"type": "number"}, "net_cash": map[string]any{"type": "number"},
+				}, "revenue"),
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
 				Name:        "get_market_stats",
-				Description: "Aggregate stats from our own recorded tick history for a symbol (min/max/avg/latest price, number of records).",
+				Description: "Get stats from the locally recorded engine tick database, NOT a live provider quote. If no ticks have been recorded, returns data_available=false and no synthetic zero price.",
 				Parameters: obj(map[string]any{
 					"symbol": str("Ticker symbol."),
 				}, "symbol"),
@@ -193,6 +214,27 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 		}
 		return toJSON(res)
 
+	case "get_latest_close":
+		symbol := strArg(args, "symbol")
+		if symbol == "" {
+			return "", fmt.Errorf("symbol is required")
+		}
+		series, err := src.History(symbol, providerArg(args), market.Range5D)
+		if err != nil {
+			return "", err
+		}
+		if len(series.Points) == 0 {
+			return "", fmt.Errorf("no recent OHLC data for %s", symbol)
+		}
+		bar := series.Points[len(series.Points)-1]
+		if bar.Close <= 0 {
+			return "", fmt.Errorf("invalid closing price for %s", symbol)
+		}
+		return toJSON(map[string]any{"symbol": symbol, "provider": series.Provider, "currency": series.Currency, "last_close": bar.Close, "as_of_unix": bar.Timestamp, "quote_type": "ohlc_bar_close", "interval": series.Interval, "is_realtime": false})
+
+	case "calculate_financial_ratios":
+		return calculateFinancialRatios(args)
+
 	case "get_market_stats":
 		symbol := strArg(args, "symbol")
 		if symbol == "" {
@@ -201,6 +243,9 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 		stats, err := src.Stats(symbol)
 		if err != nil {
 			return "", err
+		}
+		if stats.RecordCount == 0 {
+			return toJSON(map[string]any{"symbol": symbol, "record_count": 0, "data_available": false, "note": "No locally recorded ticks. Use get_latest_close for the most recent provider OHLC bar."})
 		}
 		return toJSON(stats)
 

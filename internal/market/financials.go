@@ -13,8 +13,9 @@ import (
 // QuarterlyFinancial is one reported company quarter. Missing values are
 // omitted so the frontend can render "—" instead of a misleading zero.
 type QuarterlyFinancial struct {
-	Period          string   `json:"period"`     // "Q3 2026"
-	PeriodEnd       string   `json:"period_end"` // "2026-06-30"
+	Period          string   `json:"period"`                 // Calendar quarter for Yahoo, fiscal quarter for Finnhub
+	PeriodBasis     string   `json:"period_basis,omitempty"` // calendar | fiscal
+	PeriodEnd       string   `json:"period_end"`             // "2026-06-30"
 	Revenue         *float64 `json:"revenue,omitempty"`
 	GrossProfit     *float64 `json:"gross_profit,omitempty"`
 	OperatingIncome *float64 `json:"operating_income,omitempty"`
@@ -116,7 +117,7 @@ func quarterLabel(iso string) string {
 		return iso
 	}
 	q := (int(t.Month())-1)/3 + 1
-	return fmt.Sprintf("Q%d %d", q, t.Year())
+	return fmt.Sprintf("CY%d Q%d", t.Year(), q)
 }
 
 // ---------------------------------------------------------------------------
@@ -191,9 +192,10 @@ func fetchYahooFinancials(symbol string) (FinancialsResponse, error) {
 			row := byDate[date]
 			if row == nil {
 				row = &QuarterlyFinancial{
-					Period:    quarterLabel(date),
-					PeriodEnd: date,
-					Currency:  safeString(v, "currencyCode"),
+					Period:      quarterLabel(date),
+					PeriodBasis: "calendar",
+					PeriodEnd:   date,
+					Currency:    safeString(v, "currencyCode"),
 				}
 				byDate[date] = row
 			}
@@ -289,10 +291,11 @@ func fetchFinnhubFinancials(symbol, apiKey string) (FinancialsResponse, error) {
 		cumulative := monthsBetween(r.StartDate, r.EndDate) > 4
 
 		row := QuarterlyFinancial{
-			Period:    fmt.Sprintf("Q%d %d", r.Quarter, r.Year),
-			PeriodEnd: periodEnd,
-			Currency:  "USD",
-			Form:      r.Form,
+			Period:      fmt.Sprintf("Q%d FY%d", r.Quarter, r.Year),
+			PeriodBasis: "fiscal",
+			PeriodEnd:   periodEnd,
+			Currency:    "USD",
+			Form:        r.Form,
 		}
 		var rev, gross, op, ni, eps, fcf *float64
 		for _, item := range r.Report.IC {
