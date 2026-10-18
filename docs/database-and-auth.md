@@ -11,7 +11,9 @@ not needed for this core relational model.
 This is an **incremental migration**. The existing SQLite database continues
 to store the current single-account paper-trading/market history. It is NOT
 migrated by this change, and its tables are not altered by Liquibase.
-The new MySQL database only stores the owner identity and login sessions.
+The new MySQL database stores SYS_ADMIN and USER identities, login sessions, and persisted nonsecret AI model settings.
+
+**USER accounts are research-only.** SYS_ADMIN may provision them through a secured endpoint, but regular users cannot access shared portfolio, order, tick-history, configuration, or mutating endpoints. The AI agent's non-user-scoped tools are also disabled for USER until proper tenant scoping exists. No public self-registration is offered.
 
 **No multi-tenant accounts are exposed yet.** The paper portfolio and trading
 engine are currently shared process-wide; offering public sign-up would
@@ -47,7 +49,7 @@ export AUTH_COOKIE_SECURE=false
 make run
 ```
 
-On first boot the configured owner account is created **only if no account exists**.
+On first boot the configured SYS_ADMIN account is created **only if no account exists**.
 After that, remove the bootstrap password from the environment; subsequent
 runs do not overwrite it. Never commit these values or paste them in issues.
 The bootstrap password must be >= 14 characters.
@@ -58,6 +60,32 @@ connection (`tls=true` and valid server CA). Do not publish MySQL's port
 on a public interface. Set `AUTH_ENABLED=true` before exposing the web
 dashboard; with auth disabled the old local development mode remains open.
 There is intentionally no public registration or password-reset endpoint.
+
+## Roles and AI administration
+
+- `SYS_ADMIN`: owner role with protected access to AI configuration, orders,
+  global market tracking and user provisioning.
+- `USER`: safe research endpoints, fundamental reports and an AI chat with the
+  server-selected model. Cannot override model/URL/API key/system prompt in chat
+  requests, call agent tools on shared records, or access global orderbook.
+- Legacy `owner` rows are updated to `SYS_ADMIN` by migration
+  `db/changelog/002-rbac-ai.xml`. The original 001 migration stays immutable.
+- AI settings `base_url` and `model` are persisted to MySQL by
+  `PUT /api/ai/config`; secret `OPENAI_API_KEY` remains environment-only.
+  These settings persist after application restart.
+- A SYS_ADMIN provisions a USER by sending
+  `POST /api/admin/users` with `{"email":"person@example.org","password":"14+ unique characters"}`.
+  This does **not** create a SYS_ADMIN. There is no public registration.
+- Creating users is a deliberately administrative API operation for now. Use
+  an authenticated browser/session or a same-origin admin client. Avoid printing
+  credentials in shell history. Prefer future invitation-based onboarding.
+
+## Containers
+
+Both Docker Compose and Podman Compose can run the full application, database
+and Liquibase. See [containers.md](containers.md) and
+`compose.yml`. The existing `compose.identity.yml` is for DB-only local
+development. Never use `down -v` on a volume containing financial history.
 
 ## CLI
 
@@ -73,12 +101,12 @@ The Compose `migrate` container defaults to `update`. For status:
 
 ## Auth contracts
 
-- `GET /api/auth/me`: returns authenticated owner when enabled, or
+- `GET /api/auth/me`: returns authenticated user with role when enabled, or
   `{ "enabled": false }` in local legacy mode.
 - `POST /api/auth/login`: email + password; returns opaque HttpOnly session
   cookie, `SameSite=Strict`, time-limited; no JWT in browser storage.
 - `POST /api/auth/logout`: deletes DB session and clears cookie.
-- All other `/api/*` calls require a session when `AUTH_ENABLED=true`.
+- All other `/api/*` calls require a session when `AUTH_ENABLED=true`; individual requests are also authorized by role.
 - Browser login and logout operate over the same origin, with CSRF origin
   checking on mutating requests.
 

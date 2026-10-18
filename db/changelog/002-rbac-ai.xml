@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+  <!-- Never rewrite the already-applied 001-identity.xml changeSets. -->
+  <changeSet id="003-rbac-roles" author="floweysales" dbms="mysql">
+    <sql>UPDATE auth_users SET role = 'SYS_ADMIN' WHERE role = 'owner'</sql>
+    <addDefaultValue tableName="auth_users" columnName="role"
+      columnDataType="VARCHAR(16)" defaultValue="USER"/>
+    <sql>ALTER TABLE auth_users ADD CONSTRAINT ck_auth_users_role CHECK (role IN ('USER', 'SYS_ADMIN'))</sql>
+    <rollback>
+      <sql>ALTER TABLE auth_users DROP CHECK ck_auth_users_role</sql>
+      <dropDefaultValue tableName="auth_users" columnName="role" columnDataType="VARCHAR(16)"/>
+    </rollback>
+  </changeSet>
+
+  <changeSet id="004-ai-configuration" author="floweysales" dbms="mysql">
+    <createTable tableName="ai_configuration">
+      <column name="id" type="SMALLINT">
+        <constraints primaryKey="true" nullable="false" primaryKeyName="pk_ai_configuration"/>
+      </column>
+      <column name="base_url" type="VARCHAR(512)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="model" type="VARCHAR(128)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="updated_at" type="DATETIME(6)">
+        <constraints nullable="false"/>
+      </column>
+    </createTable>
+    <rollback><dropTable tableName="ai_configuration"/></rollback>
+  </changeSet>
+</databaseChangeLog>

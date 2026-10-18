@@ -70,3 +70,15 @@ db-status: ## Show pending migrations
 	docker compose -f compose.identity.yml --profile migration run --rm migrate status --verbose
 db-down: ## Stop MySQL, keeping database volume
 	docker compose -f compose.identity.yml down
+
+# Full-stack Docker/Podman Compose. Example: make stack-up COMPOSE='podman compose'
+COMPOSE ?= docker compose
+.PHONY: stack-up stack-down stack-status
+stack-up: ## Build and start MySQL, migrate schema, and launch application
+	$(COMPOSE) -f compose.yml up -d mysql
+	$(COMPOSE) -f compose.yml --profile migration run --build --rm migrate
+	$(COMPOSE) -f compose.yml up -d --build app
+stack-down: ## Stop container stack (preserves database volumes)
+	$(COMPOSE) -f compose.yml down
+stack-status: ## Show container status
+	$(COMPOSE) -f compose.yml ps

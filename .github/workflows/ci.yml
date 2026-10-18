@@ -132,3 +132,18 @@ jobs:
           MYSQL_PASSWORD: ci-only-identity-password
           MYSQL_ROOT_PASSWORD: ci-only-root-password
         run: docker compose -f compose.identity.yml down -v
+
+  container-image:
+    name: container-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose model (no committed secrets)
+        env:
+          MYSQL_PASSWORD: ci-only-mysql-pass
+          MYSQL_ROOT_PASSWORD: ci-only-root-pass
+          AUTH_BOOTSTRAP_EMAIL: admin@example.test
+          AUTH_BOOTSTRAP_PASSWORD: ci-only-long-bootstrap-password
+        run: docker compose -f compose.yml config --quiet
+      - name: Build production application image
+        run: docker build -t floweysales:ci .

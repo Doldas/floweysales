@@ -14,9 +14,11 @@
         <h2 class="ai-title">FloweySales AI</h2>
         <span class="ai-model" [title]="model()">{{ model() || 'not configured' }}</span>
         <span class="header-spacer"></span>
-        <button mat-icon-button class="icon-btn" (click)="openSettings()" aria-label="Settings" title="Settings">
-          <mat-icon>settings</mat-icon>
-        </button>
+        @if (canConfigure()) {
+          <button mat-icon-button class="icon-btn" (click)="openSettings()" aria-label="Admin AI settings" title="Admin AI settings">
+            <mat-icon>settings</mat-icon>
+          </button>
+        }
         <button mat-icon-button class="icon-btn" (click)="clearChat()" aria-label="Clear chat" title="Clear chat">
           <mat-icon>delete_sweep</mat-icon>
         </button>
@@ -51,17 +53,7 @@
                    placeholder="gpt-4o-mini / llama3.1" />
           </label>
 
-          <label class="field">
-            <span>API key {{ serverHasKey() ? '(server key set)' : '' }}</span>
-            <input type="password" [ngModel]="apiKey()" (ngModelChange)="apiKey.set($event)"
-                   placeholder="sk-… (blank for local models)" autocomplete="off" />
-          </label>
-
-          <label class="field">
-            <span>System prompt</span>
-            <textarea rows="2" [ngModel]="systemPrompt()" (ngModelChange)="systemPrompt.set($event)"
-                      placeholder="Optional instructions for the assistant"></textarea>
-          </label>
+          <p class="settings-label">API credentials are configured server-side by the administrator.</p>
 
           @if (connectionError()) {
             <div class="settings-error">{{ connectionError() }}</div>
@@ -83,8 +75,8 @@
                 <button type="button" class="ai-suggestion-btn" (click)="onSuggestionClick(q)">{{ q }}</button>
               }
             </div>
-            @if (!baseUrl() || !model()) {
-              <p class="ai-hint">Configure a model endpoint first — open <button class="link" (click)="openSettings()">settings</button>.</p>
+            @if (!serverConfigured()) {
+              <p class="ai-hint">AI model is not configured. Ask a SYS_ADMIN to configure the endpoint.</p>
             }
           </div>
         }

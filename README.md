@@ -18,7 +18,7 @@ Then open http://localhost:8080.
 
 ## Project status and roadmap
 
-FloweySales is an open-source, local-first research application with Go market adapters, a paper-trading engine, an Angular UI and an OpenAI-compatible agent. See [vision](docs/vision.md), [roadmap](docs/roadmap.md), [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md) and [GitHub setup](docs/github-operations.md). The hosted [GitHub Pages site](https://doldas.github.io/floweysales/) is **static project documentation**, not a remote brokerage app.
+FloweySales is an open-source, local-first research application with Go market adapters, a paper-trading engine, an Angular UI and an OpenAI-compatible agent. See [container setup](docs/containers.md), [database & roles](docs/database-and-auth.md), [vision](docs/vision.md), [roadmap](docs/roadmap.md), [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md) and [GitHub setup](docs/github-operations.md). The hosted [GitHub Pages site](https://doldas.github.io/floweysales/) is **static project documentation**, not a remote brokerage app.
 
 Data and model outputs are research aids, not investment advice. Fully automatic live trading is **not supported**; future work requires separate security, compliance and risk gates.
 

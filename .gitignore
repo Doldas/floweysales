@@ -30,6 +30,7 @@ tmp-*
 
 # Local identity database artifacts
 !.env.identity.example
+!.env.container.example
 *.db
 *.db-shm
 *.db-wal
