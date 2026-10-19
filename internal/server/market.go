@@ -27,6 +27,19 @@ func netListen(addr string) (net.Listener, error) {
 
 // registerMarketRoutes wires prices, stats, symbols and the SSE stream.
 func (e *Engine) registerMarketRoutes() {
+	e.mux.HandleFunc("GET /api/providers", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, market.ProviderCapabilities())
+	})
+	e.mux.HandleFunc("GET /api/quote", func(w http.ResponseWriter, r *http.Request) {
+		symbol := r.URL.Query().Get("symbol")
+		provider := market.ParseProvider(r.URL.Query().Get("provider"))
+		out, err := market.LatestSnapshot(symbol, provider, e.finnhubAPIKey)
+		if err != nil {
+			writeJSON(w, 502, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, out)
+	})
 	// Pure calculator; never creates orders or changes shared portfolio.
 	e.mux.HandleFunc("POST /api/valuation/dcf", func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
