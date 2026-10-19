@@ -524,3 +524,68 @@ mat-form-field {
 .txt-muted {
   opacity: 0.7;
 }
+
+
+// Phone layout: turn wide positions/orders/history tables into labeled cards.
+@media (max-width: 700px) {
+  .ledger-card { margin-top: 14px; }
+  .account-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .tile { min-width: 0; padding: 9px; }
+  .tile-value { white-space: normal; overflow-wrap: anywhere; font-size: 0.87rem; }
+  .desk-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .ticket, .blotter { min-width: 0; padding: 10px; }
+  .panel-head, .blotter-head { align-items: start; }
+  .field-row { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .ticket-actions { flex-wrap: wrap; }
+  .ticket-actions button { min-height: 44px; }
+  .tabs {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    button { flex: 0 0 auto; min-height: 44px; padding: 8px 10px; }
+  }
+  .table-wrap { overflow-x: visible; min-width: 0; }
+  .desk-table {
+    display: block;
+    width: 100%;
+    border: 0;
+    thead { display: none; }
+    tbody { display: grid; gap: 10px; min-width: 0; }
+    tr {
+      display: block;
+      min-width: 0;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+    td, td.num, td.actions-col {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      text-align: right;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      min-width: 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 7px 0;
+      font-size: 0.76rem;
+      &::before {
+        content: attr(data-label);
+        color: rgba(240, 246, 252, 0.6);
+        font-size: 0.7rem;
+        font-weight: 500;
+        text-align: left;
+        flex: 0 0 39%;
+      }
+    }
+    tr td:last-child { border-bottom: 0; }
+  }
+  .mini { min-height: 40px; min-width: 44px; padding: 8px; }
+  .estimate dd, .review-row dd { overflow-wrap: anywhere; }
+}
+@media (max-width: 390px) {
+  .presets .preset-note { margin-left: 0; flex: 1 1 100%; }
+}

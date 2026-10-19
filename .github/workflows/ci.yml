@@ -97,6 +97,19 @@ jobs:
         run: npm ci --prefix frontend
       - name: Production Angular build
         run: npm run build --prefix frontend
+      - name: Install headless Chromium for responsive layout tests
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Test Samsung S24, phones, tablets and desktop in Chromium
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory www/browser >/tmp/floweysales-frontend-server.log 2>&1 &
+          web_pid=$!
+          trap 'kill "$web_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then break; fi
+            sleep 1
+          done
+          npm run smoke:responsive --prefix frontend
       - uses: actions/upload-artifact@v4
         with:
           name: frontend-preview

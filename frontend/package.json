@@ -13,7 +13,8 @@
     "smoke:analysis": "node smoke-analysis.mjs",
     "smoke:financials": "node smoke-financials.mjs",
     "smoke:ai": "node smoke-ai.mjs",
-    "smoke:trading": "node smoke-trading.mjs"
+    "smoke:trading": "node smoke-trading.mjs",
+    "smoke:responsive": "node smoke-responsive.mjs"
   },
   "private": true,
   "packageManager": "npm@12.2.0",

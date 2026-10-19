@@ -235,24 +235,24 @@
                 <tbody>
                   @for (p of positions(); track p.symbol) {
                     <tr>
-                      <td class="sym">{{ p.symbol }}</td>
-                      <td class="num">{{ qtyText(p.quantity) }}</td>
-                      <td class="num">{{ p.avg_entry.toFixed(4) }}</td>
-                      <td class="num">{{ lastOf(p).toFixed(4) }}</td>
-                      <td class="num">{{ money(p.market_value) }}</td>
-                      <td class="num" [class.txt-green]="positionPnl(p) > 0"
+                      <td data-label="Symbol" class="sym">{{ p.symbol }}</td>
+                      <td data-label="Quantity" class="num">{{ qtyText(p.quantity) }}</td>
+                      <td data-label="Average entry" class="num">{{ p.avg_entry.toFixed(4) }}</td>
+                      <td data-label="Last price" class="num">{{ lastOf(p).toFixed(4) }}</td>
+                      <td data-label="Market value" class="num">{{ money(p.market_value) }}</td>
+                      <td data-label="Unrealised P&L" class="num" [class.txt-green]="positionPnl(p) > 0"
                           [class.txt-red]="positionPnl(p) < 0">
                         {{ signed(positionPnl(p)) }} {{ currency() }}
                       </td>
-                      <td class="num" [class.txt-green]="positionPnl(p) > 0"
+                      <td data-label="Return" class="num" [class.txt-green]="positionPnl(p) > 0"
                           [class.txt-red]="positionPnl(p) < 0">
                         {{ signed(positionPnlPct(p)) }}%
                       </td>
-                      <td class="num" [class.txt-green]="p.realized_pnl > 0"
+                      <td data-label="Realised P&L" class="num" [class.txt-green]="p.realized_pnl > 0"
                           [class.txt-red]="p.realized_pnl < 0">
                         {{ signed(p.realized_pnl) }}
                       </td>
-                      <td class="actions-col">
+                      <td data-label="Trade" class="actions-col">
                         <button type="button" class="mini buy" title="Buy more"
                                 (click)="placeFromPosition(p, 'BUY')">Buy</button>
                         <button type="button" class="mini sell" title="Sell this position"
@@ -289,17 +289,17 @@
                 <tbody>
                   @for (o of openOrders(); track o.id) {
                     <tr>
-                      <td class="sym">{{ o.symbol }}</td>
-                      <td>
+                      <td data-label="Symbol" class="sym">{{ o.symbol }}</td>
+                      <td data-label="Side">
                         <span class="trade-badge" [class.buy]="o.side === 'BUY'"
                               [class.sell]="o.side !== 'BUY'">{{ o.side }}</span>
                       </td>
-                      <td>{{ o.type }}</td>
-                      <td class="num">{{ qtyText(o.quantity) }}</td>
-                      <td>{{ orderPriceLabel(o) }}</td>
-                      <td>{{ o.tif }}</td>
-                      <td>{{ timeOf(o) | date: 'MMM d, HH:mm:ss' }}</td>
-                      <td class="actions-col">
+                      <td data-label="Order type">{{ o.type }}</td>
+                      <td data-label="Quantity" class="num">{{ qtyText(o.quantity) }}</td>
+                      <td data-label="Pricing">{{ orderPriceLabel(o) }}</td>
+                      <td data-label="Time in force">{{ o.tif }}</td>
+                      <td data-label="Placed">{{ timeOf(o) | date: 'MMM d, HH:mm:ss' }}</td>
+                      <td data-label="Action" class="actions-col">
                         <button type="button" class="mini cancel" title="Cancel order"
                                 [disabled]="busy()" (click)="cancel(o)">Cancel</button>
                       </td>
@@ -332,22 +332,22 @@
                 <tbody>
                   @for (o of orders(); track o.id) {
                     <tr [attr.title]="o.reason">
-                      <td class="sym">{{ o.symbol }}</td>
-                      <td>
+                      <td data-label="Symbol" class="sym">{{ o.symbol }}</td>
+                      <td data-label="Side">
                         <span class="trade-badge" [class.buy]="o.side === 'BUY'"
                               [class.sell]="o.side !== 'BUY'">{{ o.side }}</span>
                       </td>
-                      <td>{{ o.type }}</td>
-                      <td class="num">{{ qtyText(o.quantity) }}</td>
-                      <td class="num">{{ o.price.toFixed(4) }}</td>
-                      <td class="num">
+                      <td data-label="Order type">{{ o.type }}</td>
+                      <td data-label="Quantity" class="num">{{ qtyText(o.quantity) }}</td>
+                      <td data-label="Submitted" class="num">{{ o.price.toFixed(4) }}</td>
+                      <td data-label="Fill" class="num">
                         {{ o.fill_price > 0 ? o.fill_price.toFixed(4) : '—' }}
                       </td>
-                      <td class="num">{{ o.fee > 0 ? o.fee.toFixed(2) : '—' }}</td>
-                      <td>
+                      <td data-label="Fee" class="num">{{ o.fee > 0 ? o.fee.toFixed(2) : '—' }}</td>
+                      <td data-label="Status">
                         <span class="status-chip" [ngClass]="statusClass(o.status)">{{ o.status }}</span>
                       </td>
-                      <td>{{ timeOf(o) | date: 'MMM d, HH:mm:ss' }}</td>
+                      <td data-label="Time">{{ timeOf(o) | date: 'MMM d, HH:mm:ss' }}</td>
                     </tr>
                   }
                 </tbody>

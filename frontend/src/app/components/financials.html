@@ -33,6 +33,25 @@
             <span>{{ note() }}</span>
           </div>
         } @else {
+          <div class="fin-mobile-list" role="list" aria-label="Quarterly financial reports">
+            @for (row of rows(); track row.period) {
+              <article class="fin-mobile-report" role="listitem">
+                <div class="fin-mobile-period">{{ row.period }}
+                  <small>{{ row.periodEnd }}@if (row.form) { · {{ row.form }} }</small>
+                </div>
+                <dl class="fin-mobile-metrics">
+                  <div><dt>Revenue</dt><dd><span class="fin-num">{{ row.revenue }}</span>
+                    @if (row.qoq) { <span class="fin-sub" [class.pos]="row.qoqTone === 'pos'" [class.neg]="row.qoqTone === 'neg'">{{ row.qoq }} QoQ</span> }
+                  </dd></div>
+                  <div><dt>Net income</dt><dd>{{ row.netIncome }}</dd></div>
+                  <div><dt>Gross margin</dt><dd>{{ row.grossMargin }}</dd></div>
+                  <div><dt>Net margin</dt><dd>{{ row.netMargin }}</dd></div>
+                  <div><dt>Diluted EPS</dt><dd>{{ row.eps }}</dd></div>
+                  <div><dt>Free cash flow</dt><dd>{{ row.fcf }}</dd></div>
+                </dl>
+              </article>
+            }
+          </div>
           <div class="fin-scroll">
             <table mat-table [dataSource]="rows()" class="fin-table">
               <ng-container matColumnDef="period">

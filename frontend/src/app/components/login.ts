@@ -36,13 +36,15 @@ import { AuthState } from '../auth.service';
   </main>
   `,
   styles: [`
-    .auth-page{min-height:100vh;display:grid;place-items:center;padding:1.5rem;background:#0b1424}
-    .auth-card{width:min(100%,430px);padding:1.5rem}
+    .auth-page{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:max(16px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));background:#0b1424}
+    .auth-card{width:min(100%,430px);min-width:0;padding:clamp(12px,4vw,24px);overflow-wrap:anywhere}
     mat-card-content{padding-top:1.5rem}
     .auth-caption{font-size:14px;opacity:.75;margin-bottom:1.5rem}
     form,mat-form-field{display:block;width:100%}
     .auth-error{color:#e65454;font-size:14px}
-    button{width:100%;margin-top:.5rem}
+    button{width:100%;min-height:48px;margin-top:.5rem}
+    input{font-size:16px}
+    @media(max-width:390px){mat-card-content{padding-inline:0}.auth-card{padding:14px}}
   `]
 })
 export class LoginComponent {
