@@ -31,8 +31,8 @@ func (s engineSource) History(symbol, provider, rng string) (market.HistorySerie
 func (s engineSource) Financials(symbol, provider string) (market.FinancialsResponse, error) {
 	return s.e.GetFinancials(symbol, market.ParseProvider(provider))
 }
-func (s engineSource) FinancialsRange(symbol,provider string,years market.FinancialYearRange)(market.FinancialsResponse,error){
- return s.e.GetFinancialsRange(symbol,market.ParseProvider(provider),years)
+func (s engineSource) FinancialsRange(symbol, provider string, years market.FinancialYearRange) (market.FinancialsResponse, error) {
+	return s.e.GetFinancialsRange(symbol, market.ParseProvider(provider), years)
 }
 
 func (s engineSource) Stats(symbol string) (storage.MarketStats, error) {

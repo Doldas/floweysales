@@ -2,13 +2,13 @@ package server
 
 import (
 	"encoding/json"
- "fmt"
- "strings"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
- "strconv"
+	"strconv"
+	"strings"
 	"time"
 
 	"floweysales/internal/market"
@@ -188,8 +188,11 @@ func (e *Engine) registerMarketRoutes() {
 			return
 		}
 		provider := market.ParseProvider(queryParam(r, "provider", "YAHOO"))
-        years,err:=parseFinancialYearRange(r)
-        if err!=nil {writeJSON(w,http.StatusBadRequest,map[string]any{"error":err.Error()});return}
+		years, err := parseFinancialYearRange(r)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
 		res, err := e.GetFinancialsRange(symbol, provider, years)
 		if err != nil {
 			writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error()})
@@ -273,28 +276,43 @@ func (e *Engine) GetHistory(symbol string, provider market.Provider, rng string)
 }
 
 // parseFinancialYearRange validates optional inclusive query params.
-func parseFinancialYearRange(r *http.Request)(market.FinancialYearRange,error){
- q:=r.URL.Query()
- _,hasFrom:=q["from_year"];_,hasTo:=q["to_year"]
- if !hasFrom && !hasTo {return market.FinancialYearRange{},nil}
- if !hasFrom || !hasTo {return market.FinancialYearRange{},fmt.Errorf("from_year and to_year must both be provided")}
- from,err1:=strconv.Atoi(q.Get("from_year"));to,err2:=strconv.Atoi(q.Get("to_year"))
- if err1!=nil || err2!=nil{return market.FinancialYearRange{},fmt.Errorf("from_year and to_year must be integers")}
- if from==0 && to==0{return market.FinancialYearRange{},fmt.Errorf("from_year and to_year cannot both be zero; omit both for recent reports")}
- years:=market.FinancialYearRange{FromYear:from,ToYear:to}
- if err:=years.Validate();err!=nil{return market.FinancialYearRange{},err}
- return years,nil
+func parseFinancialYearRange(r *http.Request) (market.FinancialYearRange, error) {
+	q := r.URL.Query()
+	_, hasFrom := q["from_year"]
+	_, hasTo := q["to_year"]
+	if !hasFrom && !hasTo {
+		return market.FinancialYearRange{}, nil
+	}
+	if !hasFrom || !hasTo {
+		return market.FinancialYearRange{}, fmt.Errorf("from_year and to_year must both be provided")
+	}
+	from, err1 := strconv.Atoi(q.Get("from_year"))
+	to, err2 := strconv.Atoi(q.Get("to_year"))
+	if err1 != nil || err2 != nil {
+		return market.FinancialYearRange{}, fmt.Errorf("from_year and to_year must be integers")
+	}
+	if from == 0 && to == 0 {
+		return market.FinancialYearRange{}, fmt.Errorf("from_year and to_year cannot both be zero; omit both for recent reports")
+	}
+	years := market.FinancialYearRange{FromYear: from, ToYear: to}
+	if err := years.Validate(); err != nil {
+		return market.FinancialYearRange{}, err
+	}
+	return years, nil
 }
 
 // GetFinancials returns recent financial reports (backwards compatible).
-func (e *Engine) GetFinancials(symbol string, provider market.Provider) (market.FinancialsResponse,error){
- return e.GetFinancialsRange(symbol,provider,market.FinancialYearRange{})
+func (e *Engine) GetFinancials(symbol string, provider market.Provider) (market.FinancialsResponse, error) {
+	return e.GetFinancialsRange(symbol, provider, market.FinancialYearRange{})
 }
+
 // GetFinancialsRange returns source-fetched quarterly reports for requested years.
 // Cache keys include the range so default and historical data never collide.
 func (e *Engine) GetFinancialsRange(symbol string, provider market.Provider, years market.FinancialYearRange) (market.FinancialsResponse, error) {
- if err:=years.Validate();err!=nil{return market.FinancialsResponse{},err}
-	key := fmt.Sprintf("%s|%s|%d|%d",provider.String(),strings.ToUpper(strings.TrimSpace(symbol)),years.FromYear,years.ToYear)
+	if err := years.Validate(); err != nil {
+		return market.FinancialsResponse{}, err
+	}
+	key := fmt.Sprintf("%s|%s|%d|%d", provider.String(), strings.ToUpper(strings.TrimSpace(symbol)), years.FromYear, years.ToYear)
 
 	e.financialsMu.Lock()
 	if entry, ok := e.financialsCache[key]; ok && time.Since(entry.fetched) < financialsCacheTTL {

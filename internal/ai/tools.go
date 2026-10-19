@@ -158,10 +158,10 @@ func ToolDefs() []Tool {
 				Name:        "get_quarterly_financials",
 				Description: "Get quarterly income statements with optionally inclusive from_year and to_year (calendar year of period_end, e.g. 2020–2025). Both years required for historical range; omitted years return legacy recent reports. Source availability may differ. Includes fiscal quarter labels where available.",
 				Parameters: obj(map[string]any{
-					"symbol":   str("Ticker symbol, e.g. MSFT or VOLV-B.ST."),
-					"provider": providerProp,
-                    "from_year": map[string]any{"type":"integer","description":"Inclusive first year of period_end; supply with to_year"},
-                    "to_year": map[string]any{"type":"integer","description":"Inclusive last year of period_end; supply with from_year"},
+					"symbol":    str("Ticker symbol, e.g. MSFT or VOLV-B.ST."),
+					"provider":  providerProp,
+					"from_year": map[string]any{"type": "integer", "description": "Inclusive first year of period_end; supply with to_year"},
+					"to_year":   map[string]any{"type": "integer", "description": "Inclusive last year of period_end; supply with from_year"},
 				}, "symbol"),
 			},
 		},
@@ -374,31 +374,42 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 		return toJSON(snap)
 
 	case "get_quarterly_financials":
-        symbol:=strArg(args,"symbol")
-        if symbol=="" {return "",fmt.Errorf("symbol is required")}
-        _,fromPresent:=args["from_year"];_,toPresent:=args["to_year"]
-        if fromPresent != toPresent {return "",fmt.Errorf("from_year and to_year must both be supplied")}
-        years:=market.FinancialYearRange{}
-        if fromPresent {
-          from,okFrom:=args["from_year"].(float64)
-          to,okTo:=args["to_year"].(float64)
-          if !okFrom || !okTo || math.Trunc(from)!=from || math.Trunc(to)!=to ||
-            math.IsNaN(from)||math.IsNaN(to)||math.IsInf(from,0)||math.IsInf(to,0) ||
-            from<1900 || from>3000 || to<1900 || to>3000 {
-            return "",fmt.Errorf("from_year and to_year must be integer years")
-          }
-          years=market.FinancialYearRange{FromYear:int(from),ToYear:int(to)}
-          if err:=years.Validate();err!=nil{return "",err}
-        }
-        var res market.FinancialsResponse
-        var err error
-        if years.Enabled(){
-          ranged,ok:=src.(interface{ FinancialsRange(symbol,provider string,years market.FinancialYearRange)(market.FinancialsResponse,error) })
-          if !ok {return "",fmt.Errorf("year-range financials are unavailable for this data source")}
-          res,err=ranged.FinancialsRange(symbol,providerArg(args),years)
-        }else{
-          res,err=src.Financials(symbol,providerArg(args))
-        }
+		symbol := strArg(args, "symbol")
+		if symbol == "" {
+			return "", fmt.Errorf("symbol is required")
+		}
+		_, fromPresent := args["from_year"]
+		_, toPresent := args["to_year"]
+		if fromPresent != toPresent {
+			return "", fmt.Errorf("from_year and to_year must both be supplied")
+		}
+		years := market.FinancialYearRange{}
+		if fromPresent {
+			from, okFrom := args["from_year"].(float64)
+			to, okTo := args["to_year"].(float64)
+			if !okFrom || !okTo || math.Trunc(from) != from || math.Trunc(to) != to ||
+				math.IsNaN(from) || math.IsNaN(to) || math.IsInf(from, 0) || math.IsInf(to, 0) ||
+				from < 1900 || from > 3000 || to < 1900 || to > 3000 {
+				return "", fmt.Errorf("from_year and to_year must be integer years")
+			}
+			years = market.FinancialYearRange{FromYear: int(from), ToYear: int(to)}
+			if err := years.Validate(); err != nil {
+				return "", err
+			}
+		}
+		var res market.FinancialsResponse
+		var err error
+		if years.Enabled() {
+			ranged, ok := src.(interface {
+				FinancialsRange(symbol, provider string, years market.FinancialYearRange) (market.FinancialsResponse, error)
+			})
+			if !ok {
+				return "", fmt.Errorf("year-range financials are unavailable for this data source")
+			}
+			res, err = ranged.FinancialsRange(symbol, providerArg(args), years)
+		} else {
+			res, err = src.Financials(symbol, providerArg(args))
+		}
 		if err != nil {
 			return "", err
 		}
