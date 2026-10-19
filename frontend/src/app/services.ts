@@ -42,8 +42,13 @@ export class MarketService {
   }
 
   /** Quarterly income-statement reports for the tracked ticker. */
-  getQuarterlyFinancials(symbol: string, provider: string): Observable<FinancialsResponse> {
-    return this.http.get<FinancialsResponse>('/api/financials', { params: { symbol, provider } });
+  getQuarterlyFinancials(symbol: string, provider: string, fromYear?: number, toYear?: number): Observable<FinancialsResponse> {
+    const params: Record<string,string> = { symbol, provider };
+    if (fromYear !== undefined && toYear !== undefined) {
+      params['from_year'] = String(fromYear);
+      params['to_year'] = String(toYear);
+    }
+    return this.http.get<FinancialsResponse>('/api/financials', { params });
   }
 
   getStats(symbol: string): Observable<MarketStatsJSON> {

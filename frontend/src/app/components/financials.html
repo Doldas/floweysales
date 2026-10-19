@@ -16,11 +16,34 @@
       </button>
     </mat-card-header>
 
+    <div class="fin-year-controls" aria-label="Financial reporting years">
+      <mat-button-toggle-group [value]="yearMode()" (change)="setYearMode($event.value)" aria-label="Quarterly financial period">
+        <mat-button-toggle value="recent">Recent</mat-button-toggle>
+        <mat-button-toggle value="custom">Year range</mat-button-toggle>
+      </mat-button-toggle-group>
+      @if (yearMode() === 'custom') {
+        <div class="fin-year-selectors">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>From year</mat-label>
+            <mat-select [value]="fromYear()" (selectionChange)="setFromYear($event.value)">
+              @for (year of yearOptions; track year) { <mat-option [value]="year">{{ year }}</mat-option> }
+            </mat-select>
+          </mat-form-field>
+          <span class="fin-year-divider" aria-hidden="true">–</span>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>To year</mat-label>
+            <mat-select [value]="toYear()" (selectionChange)="setToYear($event.value)">
+              @for (year of yearOptions; track year) { <mat-option [value]="year">{{ year }}</mat-option> }
+            </mat-select>
+          </mat-form-field>
+        </div>
+      }
+    </div>
     @if (loading()) {
       <mat-progress-bar mode="indeterminate"></mat-progress-bar>
     }
 
-    <mat-card-content>
+    <mat-card-content> 
       @if (showBody()) {
         @if (error()) {
           <div class="fin-state fin-error">
