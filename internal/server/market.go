@@ -1,13 +1,16 @@
 package server
 
 import (
+ "encoding/json"
+ "io"
 	"log"
 	"net"
 	"net/http"
 	"time"
 
 	"floweysales/internal/market"
-	"floweysales/internal/sec"
+ "floweysales/internal/sec"
+ "floweysales/internal/valuation"
 	"floweysales/internal/tracker"
 )
 
@@ -24,32 +27,33 @@ func netListen(addr string) (net.Listener, error) {
 
 // registerMarketRoutes wires prices, stats, symbols and the SSE stream.
 func (e *Engine) registerMarketRoutes() {
-	e.mux.HandleFunc("GET /api/sec/filings", func(w http.ResponseWriter, r *http.Request) {
-		ticker := r.URL.Query().Get("symbol")
-		if ticker == "" {
-			writeJSON(w, 400, map[string]any{"error": "symbol is required"})
-			return
-		}
-		res, err := sec.Production().Filings(r.Context(), ticker, 8)
-		if err != nil {
-			writeJSON(w, 502, map[string]any{"error": err.Error()})
-			return
-		}
-		writeJSON(w, 200, res)
-	})
-	e.mux.HandleFunc("GET /api/sec/facts", func(w http.ResponseWriter, r *http.Request) {
-		ticker := r.URL.Query().Get("symbol")
-		if ticker == "" {
-			writeJSON(w, 400, map[string]any{"error": "symbol is required"})
-			return
-		}
-		res, err := sec.Production().CompanyFacts(r.Context(), ticker)
-		if err != nil {
-			writeJSON(w, 502, map[string]any{"error": err.Error()})
-			return
-		}
-		writeJSON(w, 200, res)
-	})
+ // Pure calculator; never creates orders or changes shared portfolio.
+ e.mux.HandleFunc("POST /api/valuation/dcf",func(w http.ResponseWriter,r *http.Request){
+  r.Body=http.MaxBytesReader(w,r.Body,32*1024)
+  defer r.Body.Close()
+  var in valuation.Input
+  dec:=json.NewDecoder(r.Body);dec.DisallowUnknownFields()
+  if err:=dec.Decode(&in);err!=nil{writeJSON(w,400,map[string]any{"error":"invalid DCF input"});return}
+  var extra any
+  if dec.Decode(&extra)!=io.EOF{writeJSON(w,400,map[string]any{"error":"trailing JSON payload"});return}
+  out,err:=valuation.Calculate(in)
+  if err!=nil{writeJSON(w,422,map[string]any{"error":err.Error()});return}
+  writeJSON(w,200,out)
+ })
+ e.mux.HandleFunc("GET /api/sec/filings",func(w http.ResponseWriter,r *http.Request){
+   ticker:=r.URL.Query().Get("symbol")
+   if ticker==""{writeJSON(w,400,map[string]any{"error":"symbol is required"});return}
+   res,err:=sec.Production().Filings(r.Context(),ticker,8)
+   if err!=nil{writeJSON(w,502,map[string]any{"error":err.Error()});return}
+   writeJSON(w,200,res)
+ })
+ e.mux.HandleFunc("GET /api/sec/facts",func(w http.ResponseWriter,r *http.Request){
+   ticker:=r.URL.Query().Get("symbol")
+   if ticker==""{writeJSON(w,400,map[string]any{"error":"symbol is required"});return}
+   res,err:=sec.Production().CompanyFacts(r.Context(),ticker)
+   if err!=nil{writeJSON(w,502,map[string]any{"error":err.Error()});return}
+   writeJSON(w,200,res)
+ })
 	// --- PRICES & HISTORY ---
 
 	e.mux.HandleFunc("GET /api/prices", func(w http.ResponseWriter, r *http.Request) {

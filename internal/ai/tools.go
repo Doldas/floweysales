@@ -9,7 +9,8 @@ import (
 	"strings"
 
 	"floweysales/internal/market"
-	"floweysales/internal/sec"
+ "floweysales/internal/sec"
+ "floweysales/internal/valuation"
 	"floweysales/internal/storage"
 )
 
@@ -48,14 +49,51 @@ func ToolDefs() []Tool {
 	}
 
 	return []Tool{
-		{Type: "function", Function: ToolFunction{
-			Name: "get_sec_filings", Description: "Search official SEC EDGAR submissions for a US-listed company ticker. Returns true 10-K, 10-Q, 8-K, accession IDs, fiscal reporting dates and filing URLs. SEC_USER_AGENT with contact required.",
-			Parameters: obj(map[string]any{"symbol": str("US SEC ticker, e.g. NVDA, MSFT"), "limit": map[string]any{"type": "integer", "description": "1-30, default 8"}}, "symbol"),
-		}},
-		{Type: "function", Function: ToolFunction{
-			Name: "get_sec_facts", Description: "Fetch official SEC companyfacts XBRL for a ticker. Returns financial facts with exact start/end, quarter/annual/instant classification, unit, form, SEC accession, fiscal year/quarter, filed date and official archive link. Does not silently convert year-to-date figures.",
-			Parameters: obj(map[string]any{"symbol": str("US SEC ticker, e.g. NVDA")}, "symbol"),
-		}},
+ {Type:"function",Function:ToolFunction{
+    Name:"calculate_dcf",
+    Description:"Deterministic 5-year FCFF DCF with three named scenarios bear/base/bull, source URLs and explicit fiscal baseline, diluted shares, net debt, WACC, terminal growth and probability. Missing inputs are errors; cashflows are discounted at WACC and enterprise value is bridged to equity.",
+    Parameters:obj(map[string]any{
+     "ticker":str("Issuer ticker"),
+     "currency":str("3-letter reporting currency, e.g. USD"),
+     "period_end":str("YYYY-MM-DD baseline period"),
+     "source_urls":map[string]any{"type":"array","items":map[string]any{"type":"string"}},
+     "base_fcff":map[string]any{"type":"number"},
+     "net_debt":map[string]any{"type":"number"},
+     "diluted_shares":map[string]any{"type":"number"},
+     "market_price":map[string]any{"type":"number"},
+     "scenarios":map[string]any{"type":"array","description":"Three bear/base/bull scenarios, each with five annual_growth rates, WACC, terminal_growth and probability summing to 1",
+      "items":map[string]any{"type":"object","properties":map[string]any{
+       "name":str("bear, base or bull"),
+       "annual_growth":map[string]any{"type":"array","items":map[string]any{"type":"number"}},
+       "wacc":map[string]any{"type":"number"},
+       "terminal_growth":map[string]any{"type":"number"},
+       "probability":map[string]any{"type":"number"},
+      },"required":[]string{"name","annual_growth","wacc","terminal_growth","probability"}}},
+    },"ticker","currency","period_end","source_urls","base_fcff","net_debt","diluted_shares","scenarios"),
+  }},
+ {Type:"function",Function:ToolFunction{
+    Name:"calculate_wacc",Description:"Audited deterministic WACC from market equity/debt values and cost of equity/debt and tax rate fractions.",
+    Parameters:obj(map[string]any{
+      "equity_market_value":map[string]any{"type":"number"},
+      "debt_market_value":map[string]any{"type":"number"},
+      "cost_equity":map[string]any{"type":"number"},
+      "cost_debt":map[string]any{"type":"number"},
+      "tax_rate":map[string]any{"type":"number"},
+    },"equity_market_value","debt_market_value","cost_equity","cost_debt","tax_rate"),
+  }},
+ {Type:"function",Function:ToolFunction{
+    Name:"calculate_roic",Description:"Deterministic ROIC percent = NOPAT / average invested capital (same period and currency).",
+    Parameters:obj(map[string]any{"nopat":map[string]any{"type":"number"},"average_invested_capital":map[string]any{"type":"number"}},"nopat","average_invested_capital"),
+  }},
+
+  {Type:"function",Function:ToolFunction{
+   Name:"get_sec_filings",Description:"Search official SEC EDGAR submissions for a US-listed company ticker. Returns true 10-K, 10-Q, 8-K, accession IDs, fiscal reporting dates and filing URLs. SEC_USER_AGENT with contact required.",
+   Parameters:obj(map[string]any{"symbol":str("US SEC ticker, e.g. NVDA, MSFT"),"limit":map[string]any{"type":"integer","description":"1-30, default 8"}},"symbol"),
+  }},
+  {Type:"function",Function:ToolFunction{
+   Name:"get_sec_facts",Description:"Fetch official SEC companyfacts XBRL for a ticker. Returns financial facts with exact start/end, quarter/annual/instant classification, unit, form, SEC accession, fiscal year/quarter, filed date and official archive link. Does not silently convert year-to-date figures.",
+   Parameters:obj(map[string]any{"symbol":str("US SEC ticker, e.g. NVDA")},"symbol"),
+  }},
 		{
 			Type: "function",
 			Function: ToolFunction{
@@ -203,26 +241,37 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 	}
 
 	switch name {
-	case "get_sec_filings":
-		ticker := strArg(args, "symbol")
-		if ticker == "" {
-			return "", fmt.Errorf("symbol required")
-		}
-		out, err := sec.Production().Filings(ctx, ticker, intArg(args, "limit", 8))
-		if err != nil {
-			return "", err
-		}
-		return toJSON(out)
-	case "get_sec_facts":
-		ticker := strArg(args, "symbol")
-		if ticker == "" {
-			return "", fmt.Errorf("symbol required")
-		}
-		out, err := sec.Production().CompanyFacts(ctx, ticker)
-		if err != nil {
-			return "", err
-		}
-		return toJSON(out)
+ case "calculate_dcf":
+  var in valuation.Input
+  if err:=json.Unmarshal([]byte(argsJSON),&in);err!=nil{return "",err}
+  out,err:=valuation.Calculate(in)
+  if err!=nil{return "",err}
+  return toJSON(out)
+ case "calculate_wacc":
+  var in valuation.WACCInput
+  if err:=json.Unmarshal([]byte(argsJSON),&in);err!=nil{return "",err}
+  rate,err:=valuation.WACC(in)
+  if err!=nil{return "",err}
+  return toJSON(map[string]any{"wacc_fraction":rate,"wacc_pct":100*rate,"basis":"supplied assumptions, not independently verified"})
+ case "calculate_roic":
+  nopat,haveN,err:=requiredNumber(args,"nopat");if err!=nil{return "",err}
+  capital,haveC,err:=requiredNumber(args,"average_invested_capital");if err!=nil{return "",err}
+  if !haveN || !haveC{return "",fmt.Errorf("nopat and average_invested_capital are required")}
+  rate,err:=valuation.ROIC(nopat,capital)
+  if err!=nil{return "",err}
+  return toJSON(map[string]any{"roic_fraction":rate,"roic_pct":100*rate,"basis":"supplied assumptions, not independently verified"})
+ case "get_sec_filings":
+  ticker:=strArg(args,"symbol")
+  if ticker==""{return "",fmt.Errorf("symbol required")}
+  out,err:=sec.Production().Filings(ctx,ticker,intArg(args,"limit",8))
+  if err!=nil{return "",err}
+  return toJSON(out)
+ case "get_sec_facts":
+  ticker:=strArg(args,"symbol")
+  if ticker==""{return "",fmt.Errorf("symbol required")}
+  out,err:=sec.Production().CompanyFacts(ctx,ticker)
+  if err!=nil{return "",err}
+  return toJSON(out)
 	case "search_web":
 		query := strArg(args, "query")
 		return SearchWeb(ctx, query)

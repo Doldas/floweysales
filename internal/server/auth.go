@@ -108,7 +108,7 @@ func allowedAPI(role, method, path string) bool {
 	switch {
 	case method == http.MethodGet && (path == "/api/search" || path == "/api/history" || path == "/api/financials" || path == "/api/sec/filings" || path == "/api/sec/facts" || path == "/api/ai/config" || path == "/api/ai/tools"):
 		return true
-	case method == http.MethodPost && path == "/api/ai/chat":
+	case method == http.MethodPost && path == "/api/ai/chat" || path == "/api/valuation/dcf":
 		return true
 	default:
 		return false
