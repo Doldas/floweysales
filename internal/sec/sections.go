@@ -81,7 +81,15 @@ func (c *Client) FilingSection(ctx context.Context,ticker,form,item string)(Sect
  req.Header.Set("User-Agent",c.UserAgent)
  req.Header.Set("Accept","text/html")
  // URLs come exclusively from our SEC submissions parser, never user input.
- resp,err:=c.HTTP.Do(req)
+ safeClient:=*c.HTTP
+ safeClient.CheckRedirect=func(next *http.Request,via []*http.Request)error{
+  if next.URL.Scheme!="https" || next.URL.Hostname()!="www.sec.gov" {
+   return errors.New("SEC document redirected outside official SEC HTTPS host")
+  }
+  if len(via)>5{return errors.New("too many SEC redirects")}
+  return nil
+ }
+ resp,err:=safeClient.Do(req)
  if err!=nil{return Section{},err}
  defer resp.Body.Close()
  if resp.StatusCode!=200{return Section{},fmt.Errorf("SEC filing document returned HTTP %d",resp.StatusCode)}
