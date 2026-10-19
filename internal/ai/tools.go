@@ -50,14 +50,14 @@ func ToolDefs() []Tool {
 	}
 
 	return []Tool{
- {Type:"function",Function:ToolFunction{
-  Name:"get_provider_capabilities",Description:"Get each market data provider's official/unofficial access, available capabilities, subscription requirements, cache TTL and quote type.",
-  Parameters:obj(map[string]any{}),
- }},
- {Type:"function",Function:ToolFunction{
-  Name:"get_provider_quote",Description:"Get last provider OHLC close with accurate timestamp, currency, true underlying source, age, stale status and interval. Never treat as live executable bid/ask.",
-  Parameters:obj(map[string]any{"symbol":str("Ticker symbol"),"provider":providerProp},"symbol"),
- }},
+		{Type: "function", Function: ToolFunction{
+			Name: "get_provider_capabilities", Description: "Get each market data provider's official/unofficial access, available capabilities, subscription requirements, cache TTL and quote type.",
+			Parameters: obj(map[string]any{}),
+		}},
+		{Type: "function", Function: ToolFunction{
+			Name: "get_provider_quote", Description: "Get last provider OHLC close with accurate timestamp, currency, true underlying source, age, stale status and interval. Never treat as live executable bid/ask.",
+			Parameters: obj(map[string]any{"symbol": str("Ticker symbol"), "provider": providerProp}, "symbol"),
+		}},
 		{Type: "function", Function: ToolFunction{
 			Name:        "calculate_dcf",
 			Description: "Deterministic 5-year FCFF DCF with three named scenarios bear/base/bull, source URLs and explicit fiscal baseline, diluted shares, net debt, WACC, terminal growth and probability. Missing inputs are errors; cashflows are discounted at WACC and enterprise value is bridged to equity.",
@@ -250,13 +250,18 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 	}
 
 	switch name {
- case "get_provider_capabilities":
-  return toJSON(market.ProviderCapabilities())
- case "get_provider_quote":
-  s:=strArg(args,"symbol");if s==""{return "",fmt.Errorf("symbol required")}
-  result,err:=market.LatestSnapshot(s,market.ParseProvider(providerArg(args)),os.Getenv("FINNHUB_API_KEY"))
-  if err!=nil{return "",err}
-  return toJSON(result)
+	case "get_provider_capabilities":
+		return toJSON(market.ProviderCapabilities())
+	case "get_provider_quote":
+		s := strArg(args, "symbol")
+		if s == "" {
+			return "", fmt.Errorf("symbol required")
+		}
+		result, err := market.LatestSnapshot(s, market.ParseProvider(providerArg(args)), os.Getenv("FINNHUB_API_KEY"))
+		if err != nil {
+			return "", err
+		}
+		return toJSON(result)
 	case "calculate_dcf":
 		var in valuation.Input
 		if err := json.Unmarshal([]byte(argsJSON), &in); err != nil {
