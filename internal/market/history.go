@@ -602,7 +602,8 @@ func avanzaYahooFallback(targetID, instrumentType, rng string) (HistorySeries, e
 	if err != nil {
 		return HistorySeries{}, fmt.Errorf("[AvanzaHistory] Yahoo fallback failed for %s (→ %s): %w", targetID, ticker, err)
 	}
-	series.Provider = "AVANZA"
-	series.Interval = "yahoo:" + ticker
+	// Preserve the actual Yahoo origin and real OHLC interval; never report
+	// Yahoo fallback data as direct AVANZA market data.
+	series.Provider = "YAHOO"
 	return series, nil
 }
