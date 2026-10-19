@@ -280,6 +280,7 @@ func parseFinancialYearRange(r *http.Request)(market.FinancialYearRange,error){
  if !hasFrom || !hasTo {return market.FinancialYearRange{},fmt.Errorf("from_year and to_year must both be provided")}
  from,err1:=strconv.Atoi(q.Get("from_year"));to,err2:=strconv.Atoi(q.Get("to_year"))
  if err1!=nil || err2!=nil{return market.FinancialYearRange{},fmt.Errorf("from_year and to_year must be integers")}
+ if from==0 && to==0{return market.FinancialYearRange{},fmt.Errorf("from_year and to_year cannot both be zero; omit both for recent reports")}
  years:=market.FinancialYearRange{FromYear:from,ToYear:to}
  if err:=years.Validate();err!=nil{return market.FinancialYearRange{},err}
  return years,nil
