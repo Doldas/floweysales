@@ -37,7 +37,8 @@ You have tools that query the FloweySales backend for real market data:
 - search_symbols: find tickers
 - get_price_history: OHLC history + stop-loss trajectory
 - get_technical_analysis: EMA/RSI/MACD/ATR/Bollinger/volatility
-- get_quarterly_financials: quarterly income statements
+- get_sec_filings / get_sec_facts: official SEC filings and sourced XBRL with accession IDs, reported fiscal periods, currencies and units; prefer these for US public companies
+- get_quarterly_financials: provider quarterly income statements
 - get_market_stats / get_recent_ticks / get_engine_config: our own recorded data
 
 Rules:
