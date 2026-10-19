@@ -269,3 +269,30 @@ body.theme-mediterranean {
 
   tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
 }
+
+
+/* Fluid layout guardrails, safe touch targets and readable narrow-view content. */
+html, body { width: 100%; max-width: 100%; }
+body { overflow-x: clip; }
+app-root, fse-asset-info, fse-financials, fse-ledger, fse-forum {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+.mat-mdc-card.glass { min-width: 0; }
+.mat-mdc-card-header, .mat-mdc-card-content { min-width: 0; }
+.chat-markdown, .bubble.chat-markdown { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.chat-markdown .md-table-wrap { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.chat-markdown .md-code { max-width: 100%; }
+.chat-markdown img { max-width: 100%; height: auto; }
+@media (max-width: 700px) {
+  .mat-mdc-card.glass { border-radius: 12px !important; }
+  .mat-mdc-card-content { padding-inline: 12px !important; }
+  .mat-mdc-card-header { padding-inline: 12px !important; }
+  .mat-mdc-form-field { min-width: 0; max-width: 100%; }
+  .mat-mdc-form-field input { font-size: 16px; }
+  .mat-mdc-snack-bar-container { max-width: calc(100vw - 16px) !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse, .spin { animation: none !important; }
+}

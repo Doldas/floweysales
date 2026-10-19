@@ -57,3 +57,15 @@
   opacity: 0.65;
   padding: 12px 0;
 }
+
+
+@media (max-width: 700px) {
+  .forum-card { margin-top: 14px; }
+  .composer .composer-row { flex-direction: column; gap: 0; }
+  .composer .composer-row .author-field,
+  .composer .composer-row .title-field { width: 100%; flex: 1 1 auto; min-width: 0; }
+  .composer button { min-height: 44px; align-self: stretch; }
+  .post-head { gap: 4px 10px; flex-wrap: wrap; overflow-wrap: anywhere; }
+  .post-title, .post-body { overflow-wrap: anywhere; }
+  .post-actions button { min-height: 44px; }
+}
