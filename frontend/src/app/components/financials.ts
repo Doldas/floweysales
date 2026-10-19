@@ -13,6 +13,9 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
 
 import { MarketService, describeHttpError } from '../services';
 import type { FinancialsResponse, ProviderId, QuarterlyFinancial } from '../models';
@@ -48,6 +51,9 @@ const DASH = '—';
     MatButtonModule,
     MatProgressBarModule,
     MatTooltipModule,
+    MatButtonToggleModule,
+    MatFormFieldModule,
+    MatSelectModule,
   ],
   templateUrl: './financials.html',
   styleUrl: './financials.scss',
@@ -58,6 +64,10 @@ export class FinancialsComponent {
   readonly symbol = input('');
   readonly provider = input<ProviderId>('YAHOO');
 
+  readonly yearOptions = Array.from({length: new Date().getFullYear() - 1999}, (_,i) => new Date().getFullYear()-i);
+  readonly yearMode = signal<'recent'|'custom'>('recent');
+  readonly fromYear = signal(Math.max(2000,new Date().getFullYear()-4));
+  readonly toYear = signal(new Date().getFullYear());
   readonly loading = signal(false);
   readonly error = signal('');
   readonly data = signal<FinancialsResponse | null>(null);
@@ -112,6 +122,22 @@ export class FinancialsComponent {
     });
   }
 
+  setYearMode(mode: 'recent'|'custom'):void {
+    if (mode===this.yearMode()) return;
+    this.yearMode.set(mode);
+    this.reload();
+  }
+
+  setFromYear(year: number):void {
+    this.fromYear.set(year);
+    if (this.yearMode()==='custom') this.reload();
+  }
+
+  setToYear(year: number):void {
+    this.toYear.set(year);
+    if (this.yearMode()==='custom') this.reload();
+  }
+
   reload(): void {
     const symbol = this.symbol();
     if (!symbol) return;
@@ -122,7 +148,16 @@ export class FinancialsComponent {
     const id = ++this.requestId;
     this.loading.set(true);
     this.error.set('');
-    this.api.getQuarterlyFinancials(symbol, provider).subscribe({
+    const custom=this.yearMode()==='custom';
+    const from=custom?this.fromYear():undefined;
+    const to=custom?this.toYear():undefined;
+    if (custom && (from!>to! || to!-from!+1>20)) {
+      this.loading.set(false);
+      this.data.set(null);
+      this.error.set('Select a valid range of up to 20 years (start must be at or before end).');
+      return;
+    }
+    this.api.getQuarterlyFinancials(symbol, provider, from, to).subscribe({
       next: (res) => {
         if (id !== this.requestId) return;
         this.loading.set(false);

@@ -223,6 +223,8 @@ export interface QuarterlyFinancial {
 
 /** Quarterly statements response envelope. */
 export interface FinancialsResponse {
+  from_year?: number;
+  to_year?: number;
   symbol: string;
   provider: string;
   source: string;

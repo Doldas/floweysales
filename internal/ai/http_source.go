@@ -87,6 +87,23 @@ func (s *HTTPDataSource) Financials(symbol, provider string) (market.FinancialsR
 	return out, err
 }
 
+// FinancialsRange requests inclusive reported-end calendar years from REST.
+func (s *HTTPDataSource) FinancialsRange(symbol, provider string, years market.FinancialYearRange) (market.FinancialsResponse, error) {
+	if err := years.Validate(); err != nil {
+		return market.FinancialsResponse{}, err
+	}
+	if !years.Enabled() {
+		return s.Financials(symbol, provider)
+	}
+	var out market.FinancialsResponse
+	err := s.get("/api/financials", url.Values{
+		"symbol": {symbol}, "provider": {provider},
+		"from_year": {fmt.Sprintf("%d", years.FromYear)},
+		"to_year":   {fmt.Sprintf("%d", years.ToYear)},
+	}, &out)
+	return out, err
+}
+
 // Stats implements DataSource.
 func (s *HTTPDataSource) Stats(symbol string) (storage.MarketStats, error) {
 	var out storage.MarketStats

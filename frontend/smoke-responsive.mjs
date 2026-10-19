@@ -26,6 +26,7 @@ async function testViewport(name, width, height, role = 'SYS_ADMIN') {
     hasTouch: width <= 1024,
   });
   const errors = [];
+  const financialRangeRequests = [];
   page.on('pageerror', e => errors.push(e.message));
 
   await page.route('**/api/**', async route => {
@@ -35,6 +36,14 @@ async function testViewport(name, width, height, role = 'SYS_ADMIN') {
       body = JSON.stringify({ enabled: true, user: { id: 1, email: 'responsive@example.test', role } });
     } else if (pathname === '/api/config') {
       body = JSON.stringify({ symbol: 'NVDA', provider: 'YAHOO' });
+    } else if (pathname === '/api/financials') {
+      const params = new URL(route.request().url()).searchParams;
+      financialRangeRequests.push({ from: params.get('from_year'), to: params.get('to_year') });
+      body = JSON.stringify({
+        symbol: 'NVDA', provider: 'YAHOO', source: 'yahoo',
+        reports: [{ period:'CY2025 Q4', period_end:'2025-12-31',
+          revenue:100000000,net_income:25000000,eps:2.5,free_cash_flow:15000000,currency:'USD' }],
+      });
     } else if (pathname === '/api/ai/config') {
       body = JSON.stringify({ configured: true, model: 'local-test', max_steps: 12, max_tool_calls: 48, can_configure: role === 'SYS_ADMIN', presets: [], tools: [] });
     } else {
@@ -93,6 +102,15 @@ async function testViewport(name, width, height, role = 'SYS_ADMIN') {
     } else {
       check('research page visible', await page.locator('.research-container').isVisible());
       check('no admin trading terminal', await page.locator('.ledger-card').count() === 0);
+      await page.locator('mat-button-toggle[value="custom"]').click();
+      await page.locator('.fin-year-selectors mat-select').first().click();
+      const chosenYear = String(new Date().getFullYear() - 5);
+      await page.getByRole('option', { name: chosenYear, exact: true }).click();
+      await page.waitForTimeout(200);
+      check('custom from_year/to_year sent to API',
+        financialRangeRequests.some(q => q.from === chosenYear && q.to === String(new Date().getFullYear())),
+        JSON.stringify(financialRangeRequests));
+      check('mobile quarterly report cards visible', await page.locator('.fin-mobile-report').first().isVisible());
     }
     check('no uncaught JavaScript errors', errors.length === 0, errors.join(' | '));
   } catch (e) {
