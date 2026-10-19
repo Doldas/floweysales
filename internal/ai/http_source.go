@@ -104,6 +104,13 @@ func (s *HTTPDataSource) FinancialsRange(symbol, provider string, years market.F
 	return out, err
 }
 
+func (s *HTTPDataSource) ProviderResearch(provider,operation,symbol,from,to string)(market.ResearchResult,error){
+ var out market.ResearchResult
+ err:=s.get("/api/provider/research",url.Values{"provider":{provider},"operation":{operation},
+  "symbol":{symbol},"from":{from},"to":{to}},&out)
+ return out,err
+}
+
 // Stats implements DataSource.
 func (s *HTTPDataSource) Stats(symbol string) (storage.MarketStats, error) {
 	var out storage.MarketStats

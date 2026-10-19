@@ -9,7 +9,6 @@ import (
  "net/http"
  "net/url"
  "regexp"
- "strconv"
  "strings"
  "time"
 )
@@ -146,4 +145,3 @@ func fetchResearchWithClient(ctx context.Context,client *http.Client,baseOverrid
  },nil
 }
 // Response size is capped; this helper is deliberately not used as a generic HTTP proxy.
-var _ = strconv.Itoa
