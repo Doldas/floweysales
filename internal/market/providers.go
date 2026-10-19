@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
- "sync"
+	"sync"
 	"time"
 )
 
@@ -20,15 +20,21 @@ var httpClient = &http.Client{
 // response body. Any non-200 status yields an error.
 var avanzaMu sync.Mutex
 var avanzaLast time.Time
-func throttleAvanza(endpoint string){
- if !strings.HasPrefix(endpoint,"https://www.avanza.se/_api/"){return}
- avanzaMu.Lock();defer avanzaMu.Unlock()
- remaining:=time.Second-time.Since(avanzaLast)
- if remaining>0{time.Sleep(remaining)}
- avanzaLast=time.Now()
+
+func throttleAvanza(endpoint string) {
+	if !strings.HasPrefix(endpoint, "https://www.avanza.se/_api/") {
+		return
+	}
+	avanzaMu.Lock()
+	defer avanzaMu.Unlock()
+	remaining := time.Second - time.Since(avanzaLast)
+	if remaining > 0 {
+		time.Sleep(remaining)
+	}
+	avanzaLast = time.Now()
 }
-func httpGet(endpoint string, headers map[string]string) ([]byte,error) {
- throttleAvanza(endpoint)
+func httpGet(endpoint string, headers map[string]string) ([]byte, error) {
+	throttleAvanza(endpoint)
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -49,7 +55,7 @@ func httpGet(endpoint string, headers map[string]string) ([]byte,error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body,8*1024*1024))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 8*1024*1024))
 	if err != nil {
 		return nil, err
 	}
@@ -60,8 +66,8 @@ func httpGet(endpoint string, headers map[string]string) ([]byte,error) {
 }
 
 // httpPostJSON performs a POST with a JSON body.
-func httpPostJSON(endpoint string,payload any,headers map[string]string)([]byte,error) {
- throttleAvanza(endpoint)
+func httpPostJSON(endpoint string, payload any, headers map[string]string) ([]byte, error) {
+	throttleAvanza(endpoint)
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -87,7 +93,7 @@ func httpPostJSON(endpoint string,payload any,headers map[string]string)([]byte,
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body,8*1024*1024))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 8*1024*1024))
 	if err != nil {
 		return nil, err
 	}
@@ -361,7 +367,7 @@ func FetchFinnhub(query, apiKey string) (MarketAsset, error) {
 // ---------------------------------------------------------------------------
 
 var avanzaHeaders = map[string]string{
-	"User-Agent": "FloweySales/1.0 (unofficial public market-data research)",
+	"User-Agent":   "FloweySales/1.0 (unofficial public market-data research)",
 	"Accept":       "application/json, text/plain, */*",
 	"Content-Type": "application/json",
 }
@@ -560,8 +566,10 @@ func resolveAvanzaID(query string, searchSize int) (string, string, error) {
 
 // FetchAvanza fetches fund or stock details from Avanza. Numeric queries are
 // treated as IDs directly, other queries are resolved via search first.
-func FetchAvanza(query string) (MarketAsset,error) {
-  if !AvanzaEnabled(){return nil,fmt.Errorf("unofficial Avanza adapter disabled; opt in via AVANZA_UNOFFICIAL_ENABLED=true")}
+func FetchAvanza(query string) (MarketAsset, error) {
+	if !AvanzaEnabled() {
+		return nil, fmt.Errorf("unofficial Avanza adapter disabled; opt in via AVANZA_UNOFFICIAL_ENABLED=true")
+	}
 	targetID := query
 	instrumentType := "fund"
 
@@ -678,8 +686,10 @@ func parseAvanzaStock(body []byte) (MarketAsset, error) {
 
 // FetchAvanzaForumPosts fetches forum posts for an instrument from Avanza,
 // returning a normalized JSON array of posts.
-func FetchAvanzaForumPosts(query string,limit int) []map[string]any {
-  if !AvanzaEnabled(){return []map[string]any{}}
+func FetchAvanzaForumPosts(query string, limit int) []map[string]any {
+	if !AvanzaEnabled() {
+		return []map[string]any{}
+	}
 	posts := []map[string]any{}
 	if query == "" {
 		return posts
