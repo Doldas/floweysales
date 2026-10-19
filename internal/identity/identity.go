@@ -41,22 +41,24 @@ type Service struct{ db *sql.DB }
 // AISettings persists nonsecret connection metadata. Tokens and API keys
 // are deliberately managed in backend environment configuration.
 type AISettings struct {
-	BaseURL string `json:"base_url"`
-	Model   string `json:"model"`
+	BaseURL      string `json:"base_url"`
+	Model        string `json:"model"`
+	MaxSteps     int    `json:"max_steps"`
+	MaxToolCalls int    `json:"max_tool_calls"`
 }
 
 func (s *Service) LoadAISettings(ctx context.Context) (AISettings, bool, error) {
 	var cfg AISettings
-	err := s.db.QueryRowContext(ctx, "SELECT base_url, model FROM ai_configuration WHERE id = 1").Scan(&cfg.BaseURL, &cfg.Model)
+	err := s.db.QueryRowContext(ctx, "SELECT base_url, model, max_steps, max_tool_calls FROM ai_configuration WHERE id = 1").Scan(&cfg.BaseURL, &cfg.Model, &cfg.MaxSteps, &cfg.MaxToolCalls)
 	if errors.Is(err, sql.ErrNoRows) {
 		return AISettings{}, false, nil
 	}
 	return cfg, err == nil, err
 }
 func (s *Service) SaveAISettings(ctx context.Context, cfg AISettings) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO ai_configuration (id, base_url, model, updated_at)
- VALUES (1, ?, ?, ?) ON DUPLICATE KEY UPDATE base_url=VALUES(base_url), model=VALUES(model), updated_at=VALUES(updated_at)`,
-		cfg.BaseURL, cfg.Model, time.Now().UTC())
+	_, err := s.db.ExecContext(ctx, `INSERT INTO ai_configuration (id, base_url, model, max_steps, max_tool_calls, updated_at)
+ VALUES (1, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE base_url=VALUES(base_url), model=VALUES(model), max_steps=VALUES(max_steps), max_tool_calls=VALUES(max_tool_calls), updated_at=VALUES(updated_at)`,
+		cfg.BaseURL, cfg.Model, cfg.MaxSteps, cfg.MaxToolCalls, time.Now().UTC())
 	return err
 }
 

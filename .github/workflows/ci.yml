@@ -144,6 +144,11 @@ jobs:
           MYSQL_ROOT_PASSWORD: ci-only-root-pass
           AUTH_BOOTSTRAP_EMAIL: admin@example.test
           AUTH_BOOTSTRAP_PASSWORD: ci-only-long-bootstrap-password
-        run: docker compose -f compose.yml config --quiet
+        run: |
+          docker compose -f compose.yml config --quiet
+          docker compose -f compose.deploy.yml config --quiet
+          bash -n scripts/auto-update.sh scripts/install-auto-update.sh
       - name: Build production application image
         run: docker build -t floweysales:ci .
+      - name: Build packaged Liquibase migration image
+        run: docker build -f docker/liquibase.Dockerfile -t floweysales-migrate:ci .

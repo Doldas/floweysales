@@ -13,17 +13,18 @@ import (
 // QuarterlyFinancial is one reported company quarter. Missing values are
 // omitted so the frontend can render "—" instead of a misleading zero.
 type QuarterlyFinancial struct {
-	Period          string   `json:"period"`                 // Calendar quarter for Yahoo, fiscal quarter for Finnhub
-	PeriodBasis     string   `json:"period_basis,omitempty"` // calendar | fiscal
-	PeriodEnd       string   `json:"period_end"`             // "2026-06-30"
-	Revenue         *float64 `json:"revenue,omitempty"`
-	GrossProfit     *float64 `json:"gross_profit,omitempty"`
-	OperatingIncome *float64 `json:"operating_income,omitempty"`
-	NetIncome       *float64 `json:"net_income,omitempty"`
-	EPS             *float64 `json:"eps,omitempty"`
-	FreeCashFlow    *float64 `json:"free_cash_flow,omitempty"`
-	Currency        string   `json:"currency,omitempty"`
-	Form            string   `json:"form,omitempty"` // "10-Q" etc (SEC filings)
+	Period              string   `json:"period"`                 // Calendar quarter for Yahoo, fiscal quarter for Finnhub
+	PeriodBasis         string   `json:"period_basis,omitempty"` // calendar | fiscal
+	PeriodEnd           string   `json:"period_end"`             // "2026-06-30"
+	Revenue             *float64 `json:"revenue,omitempty"`
+	GrossProfit         *float64 `json:"gross_profit,omitempty"`
+	OperatingIncome     *float64 `json:"operating_income,omitempty"`
+	NetIncome           *float64 `json:"net_income,omitempty"`
+	EPS                 *float64 `json:"eps,omitempty"`
+	DataQualityWarnings []string `json:"data_quality_warnings,omitempty"`
+	FreeCashFlow        *float64 `json:"free_cash_flow,omitempty"`
+	Currency            string   `json:"currency,omitempty"`
+	Form                string   `json:"form,omitempty"` // "10-Q" etc (SEC filings)
 }
 
 // FinancialsResponse is what GET /api/financials serves. Note is set when the
@@ -219,6 +220,16 @@ func fetchYahooFinancials(symbol string) (FinancialsResponse, error) {
 	reports := make([]QuarterlyFinancial, 0, len(byDate))
 	for _, row := range byDate {
 		reports = append(reports, *row)
+	}
+	// Some Yahoo company fundamentals map the same EBIT metric to both
+	// "quarterlyGrossProfit" and "quarterlyOperatingIncome" (e.g. CGI).
+	// Do not manufacture a gross margin from an indistinguishable value.
+	for i := range reports {
+		row := &reports[i]
+		if row.GrossProfit != nil && row.OperatingIncome != nil && *row.GrossProfit == *row.OperatingIncome && *row.GrossProfit != 0 {
+			row.GrossProfit = nil
+			row.DataQualityWarnings = append(row.DataQualityWarnings, "gross_profit omitted: provider reported exactly the same value as operating_income; verify official statements")
+		}
 	}
 	sortByPeriodDesc(reports)
 

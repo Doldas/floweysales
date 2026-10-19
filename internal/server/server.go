@@ -60,10 +60,12 @@ type Engine struct {
 	financialsMu    sync.Mutex
 	financialsCache map[string]financialsCacheEntry
 
-	aiMu      sync.Mutex
-	aiBaseURL string
-	aiAPIKey  string
-	aiModel   string
+	aiMu           sync.Mutex
+	aiBaseURL      string
+	aiAPIKey       string
+	aiModel        string
+	aiMaxSteps     int
+	aiMaxToolCalls int
 
 	// Order lifecycle: account settings and the match loop guard.
 	tradingMu  sync.Mutex
@@ -117,6 +119,37 @@ func (e *Engine) ConfigureAI(baseURL, apiKey, model string) {
 	e.aiModel = model
 }
 
+// ConfigureAgentLimits sets bounded server-side budgets.
+func (e *Engine) ConfigureAgentLimits(steps, calls int) {
+	if steps < 1 {
+		steps = 12
+	}
+	if steps > 32 {
+		steps = 32
+	}
+	if calls < 1 {
+		calls = 48
+	}
+	if calls > 128 {
+		calls = 128
+	}
+	e.aiMu.Lock()
+	e.aiMaxSteps, e.aiMaxToolCalls = steps, calls
+	e.aiMu.Unlock()
+}
+func (e *Engine) agentLimits() (int, int) {
+	e.aiMu.Lock()
+	defer e.aiMu.Unlock()
+	steps, calls := e.aiMaxSteps, e.aiMaxToolCalls
+	if steps == 0 {
+		steps = 12
+	}
+	if calls == 0 {
+		calls = 48
+	}
+	return steps, calls
+}
+
 // aiDefaults returns the configured endpoint without leaking the key.
 // RestoreAISettings reads the nonsecret configuration persisted by Liquibase.
 // Environment configuration is used if the administrator has not saved one.
@@ -131,6 +164,7 @@ func (e *Engine) RestoreAISettings() error {
 	if exists {
 		_, key, _ := e.aiDefaults()
 		e.ConfigureAI(cfg.BaseURL, key, cfg.Model)
+		e.ConfigureAgentLimits(cfg.MaxSteps, cfg.MaxToolCalls)
 	}
 	return nil
 }

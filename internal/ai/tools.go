@@ -50,6 +50,14 @@ func ToolDefs() []Tool {
 		{
 			Type: "function",
 			Function: ToolFunction{
+				Name:        "search_web",
+				Description: "Search the live public web for company identities, SEC filings, recent financial news, official sources, and dated links. Returns source URLs, titles and short snippets only (not verified financial statements). Cite sources and verify primary filings.",
+				Parameters:  obj(map[string]any{"query": str("Focused search terms, e.g. 'CGI Inc GIB NYSE investor relations Q3 2026 earnings'")}, "query"),
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
 				Name:        "search_symbols",
 				Description: "Search for tickers/companies by name or symbol so the user can pick a tradable asset.",
 				Parameters: obj(map[string]any{
@@ -106,13 +114,30 @@ func ToolDefs() []Tool {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "calculate_financial_ratios",
-				Description: "Calculate gross, operating and net margins, year-on-year revenue growth, P/E and P/FCF from explicitly supplied verified numerical inputs. Omitted metrics remain absent.",
+				Description: "Calculate operating/net/gross/FCF margins, year-on-year and separately quarter-on-quarter revenue growth. P/E and P/FCF require TTM or fiscal-year earnings/FCF, matching market cap/currency, not a single quarter. Omit unverifiable ratios.",
 				Parameters: obj(map[string]any{
 					"revenue": map[string]any{"type": "number"}, "prior_year_revenue": map[string]any{"type": "number"},
 					"gross_profit": map[string]any{"type": "number"}, "operating_income": map[string]any{"type": "number"},
 					"net_income": map[string]any{"type": "number"}, "free_cash_flow": map[string]any{"type": "number"},
 					"market_cap": map[string]any{"type": "number"}, "net_cash": map[string]any{"type": "number"},
-				}, "revenue"),
+					"prior_quarter_revenue": map[string]any{"type": "number"},
+					"period":                map[string]any{"type": "string", "enum": []string{"quarter", "ttm", "annual"}, "description": "Reporting period of all monetary inputs; valuation multiples ONLY calculated for ttm/annual."},
+					"currency":              str("ISO 4217 currency shared by ALL financial/market cap inputs. Required for valuation."),
+				}, "revenue", "period"),
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "calculate_ttm_valuation",
+				Description: "Deterministic TTM P/E from exactly four successive diluted quarterly EPS values and same-currency share price; P/FCF from market cap divided by sum of exactly four quarterly FCF values. Never divide share price by total company FCF. Incomplete quarters omit the ratio.",
+				Parameters: obj(map[string]any{
+					"share_price":  map[string]any{"type": "number"},
+					"eps_quarters": map[string]any{"type": "array", "items": map[string]any{"type": "number"}},
+					"market_cap":   map[string]any{"type": "number"},
+					"fcf_quarters": map[string]any{"type": "array", "items": map[string]any{"type": "number"}},
+					"currency":     str("Single ISO 4217 currency shared by share price, EPS, market cap, FCF. Ensure the share price and earnings are quoted in matching currency."),
+				}, "currency"),
 			},
 		},
 		{
@@ -169,6 +194,9 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 	}
 
 	switch name {
+	case "search_web":
+		query := strArg(args, "query")
+		return SearchWeb(ctx, query)
 	case "search_symbols":
 		query := strArg(args, "query")
 		if query == "" {
@@ -234,6 +262,8 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 
 	case "calculate_financial_ratios":
 		return calculateFinancialRatios(args)
+	case "calculate_ttm_valuation":
+		return calculateTTMValuation(args)
 
 	case "get_market_stats":
 		symbol := strArg(args, "symbol")
