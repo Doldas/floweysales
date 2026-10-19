@@ -1,7 +1,7 @@
 package server
 
 import (
- "context"
+	"context"
 	"encoding/json"
 	"floweysales/internal/identity"
 	"io"
@@ -29,8 +29,8 @@ func (s engineSource) History(symbol, provider, rng string) (market.HistorySerie
 	return s.e.GetHistory(symbol, market.ParseProvider(provider), market.ValidRange(rng))
 }
 
-func (s engineSource) ProviderResearch(provider,operation,symbol,from,to string)(market.ResearchResult,error){
- return market.FetchResearchOperation(context.Background(),provider,operation,symbol,from,to,s.e.finnhubAPIKey)
+func (s engineSource) ProviderResearch(provider, operation, symbol, from, to string) (market.ResearchResult, error) {
+	return market.FetchResearchOperation(context.Background(), provider, operation, symbol, from, to, s.e.finnhubAPIKey)
 }
 
 func (s engineSource) Financials(symbol, provider string) (market.FinancialsResponse, error) {
