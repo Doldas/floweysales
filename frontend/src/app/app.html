@@ -3,38 +3,43 @@
 } @else if (auth.enabled() && !auth.user()) {
   <fse-login></fse-login>
 } @else if (auth.enabled() && auth.user()?.role === 'USER') {
-  <div class="container">
+  <main class="container research-container">
     <h2>FloweySales Research</h2>
-    <p>Signed in as {{ auth.user()?.email }} · USER (read-only research access)</p>
+    <p class="research-account">Signed in as {{ auth.user()?.email }} · USER (read-only research access)</p>
     <button mat-stroked-button (click)="auth.logout()">Sign out</button>
     <fse-financials [symbol]="trackedSymbol()" [provider]="provider()"></fse-financials>
     <fse-ai-chat [contextSymbol]="trackedSymbol()" [contextProvider]="provider()" [contextRange]="historyRange()" [contextPrice]="livePrice() | number:'1.2-4'"></fse-ai-chat>
-  </div>
+  </main>
 } @else {
-<mat-toolbar class="topbar" color="primary">
-  <mat-icon class="logo-mark">query_stats</mat-icon>
-  <span class="brand">FLOWEYSALES <span class="brand-sub">TERMINAL</span></span>
-  <span class="sym-badge" [matTooltip]="trackedName()">[{{ trackedSymbol() || '---' }}]</span>
-  <span class="asset-name">{{ trackedName() }}</span>
-
-  <div class="spacer"></div>
-
-  <button class="status-badge" [class.live]="connected()" [class.down]="!connected()">
-    @if (connected()) {
-      <span class="pulse"></span>
+<mat-toolbar class="topbar" color="primary" aria-label="FloweySales terminal header">
+  <div class="topbar-identity">
+    <mat-icon class="logo-mark" aria-hidden="true">query_stats</mat-icon>
+    <span class="brand">FLOWEYSALES <span class="brand-sub">TERMINAL</span></span>
+  </div>
+  <div class="topbar-market">
+    <span class="sym-badge" [matTooltip]="trackedName()">[{{ trackedSymbol() || '---' }}]</span>
+    <span class="asset-name" [title]="trackedName()">{{ trackedName() }}</span>
+  </div>
+  <div class="topbar-actions">
+    <span class="status-badge" [class.live]="connected()" [class.down]="!connected()"
+          role="status" [attr.aria-label]="statusBadgeText()">
+      @if (connected()) { <span class="pulse" aria-hidden="true"></span> }
+      {{ statusBadgeText() }}
+    </span>
+    @if (auth.enabled()) {
+      <button mat-stroked-button class="sign-out-btn" (click)="auth.logout()" aria-label="Sign out">
+        <mat-icon aria-hidden="true">logout</mat-icon>
+        <span>Sign out</span>
+      </button>
     }
-    {{ statusBadgeText() }}
-  </button>
-  @if (auth.enabled()) {
-    <button mat-stroked-button (click)="auth.logout()" aria-label="Sign out">Sign out</button>
-  }
+  </div>
 </mat-toolbar>
 
 @if (connecting()) {
   <mat-progress-bar mode="indeterminate" class="top-progress"></mat-progress-bar>
 }
 
-<div class="container">
+<main class="container terminal-container" id="main-content">
 
   <!-- ASSET CONTROL BAR -->
   <mat-card class="glass control-card">
@@ -78,9 +83,8 @@
         <mat-icon>track_changes</mat-icon> Track Asset
       </button>
 
-      <div class="spacer"></div>
-
-      <button
+      <div class="control-actions">
+        <button
         mat-stroked-button
         class="clear-btn"
         [color]="askedClear() ? 'warn' : undefined"
@@ -99,6 +103,7 @@
           }
         </mat-select>
       </mat-form-field>
+      </div>
     </mat-card-content>
   </mat-card>
 
@@ -164,8 +169,8 @@
   <mat-card class="glass chart-card">
     <mat-card-header>
       <mat-card-title>Live Trading Chart</mat-card-title>
-      <div class="spacer"></div>
-      <mat-button-toggle-group
+      <div class="chart-range-scroll" role="region" aria-label="Scroll chart history ranges">
+        <mat-button-toggle-group
         [value]="historyRange()"
         (change)="setHistoryRange($event.value)"
         class="range-toggle"
@@ -174,7 +179,8 @@
         @for (r of historyRanges; track r) {
           <mat-button-toggle [value]="r">{{ r }}</mat-button-toggle>
         }
-      </mat-button-toggle-group>
+        </mat-button-toggle-group>
+      </div>
       <button mat-icon-button (click)="resetZoom()" matTooltip="Reset zoom" class="reset-btn">
         <mat-icon>zoom_out_map</mat-icon>
       </button>
@@ -185,6 +191,7 @@
     <div class="indicator-bar">
       <mat-icon class="indicator-icon">insights</mat-icon>
       <span class="indicator-label">Studies</span>
+      <div class="indicator-scroll" role="region" aria-label="Scroll chart studies">
       <mat-button-toggle-group
         multiple
         [value]="enabledIndicatorKeys()"
@@ -196,6 +203,7 @@
           <mat-button-toggle [value]="k">{{ indicatorLabels[k] }}</mat-button-toggle>
         }
       </mat-button-toggle-group>
+      </div>
     </div>
     <mat-card-content>
       <fse-trading-chart [epoch]="chartEpoch()" [flags]="indicators()"></fse-trading-chart>
@@ -237,6 +245,6 @@
   <footer class="footer">
     Welfory AB • FloweySales Quantum Trading Protocol • Go Engine + Angular Terminal
   </footer>
-</div>
+</main>
 
 }

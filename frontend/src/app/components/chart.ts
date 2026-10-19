@@ -126,9 +126,16 @@ interface PointMeta {
   styles: [
     `
       :host { display: block; }
-      .legend-hint { font-size: 0.85rem; opacity: 0.7; margin-bottom: 4px; }
-      .chart-container { height: 380px; position: relative; }
-      .subchart-container { height: 96px; position: relative; margin-top: 8px; }
+      :host { min-width: 0; }
+      .legend-hint { font-size: 0.8rem; opacity: 0.7; margin-bottom: 4px; }
+      .chart-container { height: 380px; position: relative; min-width: 0; width: 100%; }
+      .subchart-container { height: 96px; position: relative; min-width: 0; width: 100%; margin-top: 8px; }
+      @media (max-width: 700px) {
+        .chart-container { height: 270px; }
+        .subchart-container { height: 92px; }
+        .legend-hint { font-size: 0.7rem; }
+      }
+      @media (max-width: 390px) { .chart-container { height: 240px; } }
     `,
   ],
 })
