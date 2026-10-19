@@ -1,0 +1,179 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy:
+    name: policy
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test policy guardrails
+        run: bash scripts/test-pr-policy.sh
+      - name: Check branch naming and linked issue
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: bash scripts/check-pr-policy.sh
+
+  go:
+    name: go
+    needs: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-preview
+          path: www/browser
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Format check
+        run: |
+          unformatted="$(gofmt -l $(git ls-files '*.go'))"
+          if [ -n "$unformatted" ]; then
+            while IFS= read -r file; do
+              echo "===GOFMT_START:$file"
+              gofmt "$file" | base64 -w0
+              echo
+              echo "===GOFMT_END:$file"
+            done <<< "$unformatted"
+            exit 1
+          fi
+      - name: Resolve Go module checksums
+        run: |
+          go mod tidy
+          if ! git diff --exit-code -- go.mod go.sum; then
+            echo "::error::Commit the updated Go module metadata."
+            echo "===GO_MOD_SUM_START"
+            base64 -w0 go.sum
+            echo
+            echo "===GO_MOD_SUM_END"
+            exit 1
+          fi
+      - name: Vet
+        run: go vet ./...
+      - name: Unit tests (race detector)
+        run: go test -race -count=1 ./...
+      - name: Build backend and MCP
+        run: |
+          mkdir -p dist
+          go build -trimpath -o dist/floweysales_backend .
+          go build -trimpath -o dist/floweysales_mcp ./cmd/mcp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: go-linux-amd64
+          path: dist/
+          retention-days: 14
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frozen dependencies
+        run: npm ci --prefix frontend
+      - name: Production Angular build
+        run: npm run build --prefix frontend
+      - name: Install headless Chromium for responsive layout tests
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Test Samsung S24, phones, tablets and desktop in Chromium
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory www/browser >/tmp/floweysales-frontend-server.log 2>&1 &
+          web_pid=$!
+          trap 'kill "$web_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then break; fi
+            sleep 1
+          done
+          npm run smoke:responsive --prefix frontend
+      - name: Verify Pages API reference at phone/tablet/desktop widths
+        run: |
+          node --check site/api.js
+          python3 -m json.tool site/api-catalog.json > /dev/null
+          python3 -m http.server 4174 --bind 127.0.0.1 --directory site >/tmp/floweysales-pages-test.log 2>&1 &
+          pages_pid=$!
+          trap 'kill "$pages_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4174/api.html >/dev/null; then break; fi
+            sleep 1
+          done
+          npm run smoke:api-pages --prefix frontend
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-preview
+          path: www/browser/
+          if-no-files-found: error
+          retention-days: 14
+
+  identity-schema:
+    name: identity-schema
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate and apply MySQL identity schema
+        env:
+          MYSQL_PASSWORD: ci-only-identity-password
+          MYSQL_ROOT_PASSWORD: ci-only-root-password
+        run: |
+          docker compose -f compose.identity.yml up -d mysql
+          docker compose -f compose.identity.yml --profile migration run --build --rm migrate validate
+          docker compose -f compose.identity.yml --profile migration run --rm migrate update
+          docker compose -f compose.identity.yml --profile migration run --rm migrate status --verbose
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test login, session and API authorization on MySQL
+        env:
+          AUTH_TEST_MYSQL_DSN: 'flowey_auth:ci-only-identity-password@tcp(127.0.0.1:3306)/floweysales_auth?parseTime=true&loc=UTC&tls=false'
+        run: go test ./internal/server -run TestMySQLAuthGate -count=1
+      - name: Remove disposable CI database
+        if: always()
+        env:
+          MYSQL_PASSWORD: ci-only-identity-password
+          MYSQL_ROOT_PASSWORD: ci-only-root-password
+        run: docker compose -f compose.identity.yml down -v
+
+  container-image:
+    name: container-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose model (no committed secrets)
+        env:
+          MYSQL_PASSWORD: ci-only-mysql-pass
+          MYSQL_ROOT_PASSWORD: ci-only-root-pass
+          AUTH_BOOTSTRAP_EMAIL: admin@example.test
+          AUTH_BOOTSTRAP_PASSWORD: ci-only-long-bootstrap-password
+        run: |
+          docker compose -f compose.yml config --quiet
+          docker compose -f compose.deploy.yml config --quiet
+          bash -n scripts/auto-update.sh scripts/install-auto-update.sh
+      - name: Build production application image
+        run: docker build -t floweysales:ci .
+      - name: Build packaged Liquibase migration image
+        run: docker build -f docker/liquibase.Dockerfile -t floweysales-migrate:ci .
