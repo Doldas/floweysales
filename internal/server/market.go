@@ -27,15 +27,21 @@ func netListen(addr string) (net.Listener, error) {
 
 // registerMarketRoutes wires prices, stats, symbols and the SSE stream.
 func (e *Engine) registerMarketRoutes() {
- e.mux.HandleFunc("GET /api/sec/section",func(w http.ResponseWriter,r *http.Request){
-  ticker:=r.URL.Query().Get("symbol")
-  form:=r.URL.Query().Get("form")
-  item:=r.URL.Query().Get("item")
-  if ticker==""{writeJSON(w,400,map[string]any{"error":"symbol required"});return}
-  result,err:=sec.Production().FilingSection(r.Context(),ticker,form,item)
-  if err!=nil{writeJSON(w,422,map[string]any{"error":err.Error()});return}
-  writeJSON(w,200,result)
- })
+	e.mux.HandleFunc("GET /api/sec/section", func(w http.ResponseWriter, r *http.Request) {
+		ticker := r.URL.Query().Get("symbol")
+		form := r.URL.Query().Get("form")
+		item := r.URL.Query().Get("item")
+		if ticker == "" {
+			writeJSON(w, 400, map[string]any{"error": "symbol required"})
+			return
+		}
+		result, err := sec.Production().FilingSection(r.Context(), ticker, form, item)
+		if err != nil {
+			writeJSON(w, 422, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, result)
+	})
 	e.mux.HandleFunc("GET /api/providers", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, market.ProviderCapabilities())
 	})
