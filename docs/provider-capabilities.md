@@ -32,3 +32,12 @@ accounting/reporting currency.
 Further hardening/backoff/retry policy is future work; provider capability
 declarations are deliberately conservative rather than claiming
 real-time access we cannot substantiate.
+
+## Bounded retries
+
+Idempotent provider HTTP GET calls retry HTTP 429, 502, 503 and 504
+at most twice with bounded backoff (three total attempts). 401/403 and
+other hard failures are not retried or bypassed. Avanza throttling
+still applies to each attempt. Search POST calls are not automatically
+retried, to avoid assuming a non-idempotent endpoint is safe. Verify
+licensing independently; retries do not confer authorization.

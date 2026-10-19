@@ -33,7 +33,24 @@ func throttleAvanza(endpoint string) {
 	}
 	avanzaLast = time.Now()
 }
-func httpGet(endpoint string, headers map[string]string) ([]byte, error) {
+// Retry only bounded, transient failures for idempotent read requests.
+// Auth failures and undocumented provider rejections are never bypassed.
+func httpGet(endpoint string, headers map[string]string)([]byte,error){
+ var last error
+ for attempt:=0;attempt<3;attempt++{
+  body,err:=httpGetOnce(endpoint,headers)
+  if err==nil{return body,nil}
+  last=err
+  msg:=err.Error()
+  if !strings.Contains(msg,"HTTP 429") && !strings.Contains(msg,"HTTP 502") &&
+     !strings.Contains(msg,"HTTP 503") && !strings.Contains(msg,"HTTP 504"){
+     return nil,err
+  }
+  if attempt<2{time.Sleep(time.Duration(attempt+1)*300*time.Millisecond)}
+ }
+ return nil,fmt.Errorf("transient provider failures after 3 attempts: %w",last)
+}
+func httpGetOnce(endpoint string, headers map[string]string) ([]byte, error) {
 	throttleAvanza(endpoint)
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
