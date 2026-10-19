@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"floweysales/internal/market"
- "floweysales/internal/sec"
+	"floweysales/internal/sec"
 	"floweysales/internal/storage"
 )
 
@@ -48,14 +48,14 @@ func ToolDefs() []Tool {
 	}
 
 	return []Tool{
-  {Type:"function",Function:ToolFunction{
-   Name:"get_sec_filings",Description:"Search official SEC EDGAR submissions for a US-listed company ticker. Returns true 10-K, 10-Q, 8-K, accession IDs, fiscal reporting dates and filing URLs. SEC_USER_AGENT with contact required.",
-   Parameters:obj(map[string]any{"symbol":str("US SEC ticker, e.g. NVDA, MSFT"),"limit":map[string]any{"type":"integer","description":"1-30, default 8"}},"symbol"),
-  }},
-  {Type:"function",Function:ToolFunction{
-   Name:"get_sec_facts",Description:"Fetch official SEC companyfacts XBRL for a ticker. Returns financial facts with exact start/end, quarter/annual/instant classification, unit, form, SEC accession, fiscal year/quarter, filed date and official archive link. Does not silently convert year-to-date figures.",
-   Parameters:obj(map[string]any{"symbol":str("US SEC ticker, e.g. NVDA")},"symbol"),
-  }},
+		{Type: "function", Function: ToolFunction{
+			Name: "get_sec_filings", Description: "Search official SEC EDGAR submissions for a US-listed company ticker. Returns true 10-K, 10-Q, 8-K, accession IDs, fiscal reporting dates and filing URLs. SEC_USER_AGENT with contact required.",
+			Parameters: obj(map[string]any{"symbol": str("US SEC ticker, e.g. NVDA, MSFT"), "limit": map[string]any{"type": "integer", "description": "1-30, default 8"}}, "symbol"),
+		}},
+		{Type: "function", Function: ToolFunction{
+			Name: "get_sec_facts", Description: "Fetch official SEC companyfacts XBRL for a ticker. Returns financial facts with exact start/end, quarter/annual/instant classification, unit, form, SEC accession, fiscal year/quarter, filed date and official archive link. Does not silently convert year-to-date figures.",
+			Parameters: obj(map[string]any{"symbol": str("US SEC ticker, e.g. NVDA")}, "symbol"),
+		}},
 		{
 			Type: "function",
 			Function: ToolFunction{
@@ -203,18 +203,26 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 	}
 
 	switch name {
- case "get_sec_filings":
-  ticker:=strArg(args,"symbol")
-  if ticker==""{return "",fmt.Errorf("symbol required")}
-  out,err:=sec.Production().Filings(ctx,ticker,intArg(args,"limit",8))
-  if err!=nil{return "",err}
-  return toJSON(out)
- case "get_sec_facts":
-  ticker:=strArg(args,"symbol")
-  if ticker==""{return "",fmt.Errorf("symbol required")}
-  out,err:=sec.Production().CompanyFacts(ctx,ticker)
-  if err!=nil{return "",err}
-  return toJSON(out)
+	case "get_sec_filings":
+		ticker := strArg(args, "symbol")
+		if ticker == "" {
+			return "", fmt.Errorf("symbol required")
+		}
+		out, err := sec.Production().Filings(ctx, ticker, intArg(args, "limit", 8))
+		if err != nil {
+			return "", err
+		}
+		return toJSON(out)
+	case "get_sec_facts":
+		ticker := strArg(args, "symbol")
+		if ticker == "" {
+			return "", fmt.Errorf("symbol required")
+		}
+		out, err := sec.Production().CompanyFacts(ctx, ticker)
+		if err != nil {
+			return "", err
+		}
+		return toJSON(out)
 	case "search_web":
 		query := strArg(args, "query")
 		return SearchWeb(ctx, query)
