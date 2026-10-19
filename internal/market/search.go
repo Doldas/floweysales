@@ -270,7 +270,8 @@ func SearchAssets(query string, provider Provider, finnhubAPIKey string) []Searc
 	case ProviderFinnhub:
 		return SearchFinnhub(query, finnhubAPIKey)
 	case ProviderAvanza:
-		return SearchAvanza(query)
+  if !AvanzaEnabled(){return []SearchResult{}}
+  return SearchAvanza(query)
 	default:
 		return SearchYahoo(query)
 	}

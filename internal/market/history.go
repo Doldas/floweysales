@@ -79,7 +79,8 @@ func FetchHistory(symbol string, provider Provider, rng string, finnhubKey strin
 	case ProviderFinnhub:
 		return fetchFinnhubHistory(symbol, rng, finnhubKey)
 	case ProviderAvanza:
-		return fetchAvanzaHistory(symbol, rng)
+  if !AvanzaEnabled(){return HistorySeries{},fmt.Errorf("Avanza unofficial adapter disabled: explicitly set AVANZA_UNOFFICIAL_ENABLED=true after reviewing usage terms")}
+  return fetchAvanzaHistory(symbol,rng)
 	default:
 		return HistorySeries{}, fmt.Errorf("[History] no engine for provider %s", provider)
 	}
