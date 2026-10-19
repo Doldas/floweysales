@@ -10,6 +10,36 @@ import (
 	"time"
 )
 
+// FinancialYearRange selects inclusive calendar years of the actual report end date.
+// An empty (zero,zero) range preserves legacy recent-quarter behaviour.
+type FinancialYearRange struct {
+ FromYear int `json:"from_year,omitempty"`
+ ToYear int `json:"to_year,omitempty"`
+}
+
+func (r FinancialYearRange) Enabled() bool { return r.FromYear != 0 || r.ToYear != 0 }
+func (r FinancialYearRange) Validate() error {
+ if !r.Enabled() { return nil }
+ current := time.Now().UTC().Year()
+ if r.FromYear < 1990 || r.ToYear < 1990 || r.ToYear > current+1 || r.FromYear > r.ToYear {
+  return fmt.Errorf("from_year and to_year must be an inclusive valid range between 1990 and %d",current+1)
+ }
+ if r.ToYear-r.FromYear+1 > 20 { return fmt.Errorf("year range cannot exceed 20 calendar years") }
+ return nil
+}
+
+// FilterFinancialYears is inclusive and uses period_end (not fiscal-year labels).
+// Return an empty slice rather than a null JSON reports value.
+func FilterFinancialYears(reports []QuarterlyFinancial, r FinancialYearRange) []QuarterlyFinancial {
+ if !r.Enabled() { return reports }
+ out := make([]QuarterlyFinancial,0,len(reports))
+ for _,row := range reports {
+  t,err:=time.Parse("2006-01-02",row.PeriodEnd)
+  if err==nil && t.Year()>=r.FromYear && t.Year()<=r.ToYear {out=append(out,row)}
+ }
+ return out
+}
+
 // QuarterlyFinancial is one reported company quarter. Missing values are
 // omitted so the frontend can render "—" instead of a misleading zero.
 type QuarterlyFinancial struct {
@@ -30,6 +60,8 @@ type QuarterlyFinancial struct {
 // FinancialsResponse is what GET /api/financials serves. Note is set when the
 // provider/asset combination legitimately has no reports (e.g. crypto).
 type FinancialsResponse struct {
+ FromYear int `json:"from_year,omitempty"`
+ ToYear int `json:"to_year,omitempty"`
 	Symbol   string               `json:"symbol"`
 	Provider string               `json:"provider"`
 	Source   string               `json:"source"` // "yahoo" | "finnhub" | "none"
@@ -44,6 +76,11 @@ type FinancialsResponse struct {
 //   - Finnhub → financials-reported (last ~8 quarters)
 //   - Binance → crypto has no financial statements
 func FetchQuarterlyFinancials(symbol string, provider Provider, finnhubKey string) (FinancialsResponse, error) {
+ return FetchQuarterlyFinancialsRange(symbol,provider,finnhubKey,FinancialYearRange{})
+}
+
+func FetchQuarterlyFinancialsRange(symbol string, provider Provider, finnhubKey string, years FinancialYearRange) (FinancialsResponse, error) {
+ if err:=years.Validate(); err!=nil {return FinancialsResponse{},err}
 	symbol = strings.TrimSpace(symbol)
 	if symbol == "" {
 		return FinancialsResponse{}, fmt.Errorf("[Financials] empty symbol")
@@ -51,7 +88,7 @@ func FetchQuarterlyFinancials(symbol string, provider Provider, finnhubKey strin
 
 	switch provider {
 	case ProviderYahoo:
-		return fetchYahooFinancials(symbol)
+		return fetchYahooFinancialsRange(symbol, years)
 	case ProviderAvanza:
 		if !AvanzaEnabled() {
 			return FinancialsResponse{}, fmt.Errorf("Avanza unofficial adapter disabled: opt-in required")
@@ -71,7 +108,7 @@ func FetchQuarterlyFinancials(symbol string, provider Provider, finnhubKey strin
 		if err != nil {
 			return FinancialsResponse{}, fmt.Errorf("[Financials] Avanza: %w", err)
 		}
-		res, err := fetchYahooFinancials(ticker)
+		res, err := fetchYahooFinancialsRange(ticker, years)
 		if err != nil {
 			return FinancialsResponse{}, err
 		}
@@ -82,12 +119,13 @@ func FetchQuarterlyFinancials(symbol string, provider Provider, finnhubKey strin
 		if finnhubKey == "" {
 			return FinancialsResponse{}, fmt.Errorf("[Financials] Finnhub financials require FINNHUB_API_KEY")
 		}
-		return fetchFinnhubFinancials(symbol, finnhubKey)
+		return fetchFinnhubFinancialsRange(symbol, finnhubKey, years)
 	case ProviderBinance:
 		return FinancialsResponse{
 			Symbol:   symbol,
 			Provider: "BINANCE",
 			Source:   "none",
+            FromYear:years.FromYear,ToYear:years.ToYear,
 			Reports:  []QuarterlyFinancial{},
 			Note:     "Crypto pairs have no quarterly financial reports.",
 		}, nil
@@ -128,7 +166,10 @@ func quarterLabel(iso string) string {
 // Yahoo Finance — fundamentals-timeseries API
 // ---------------------------------------------------------------------------
 
-func fetchYahooFinancials(symbol string) (FinancialsResponse, error) {
+func fetchYahooFinancials(symbol string) (FinancialsResponse,error) {
+ return fetchYahooFinancialsRange(symbol,FinancialYearRange{})
+}
+func fetchYahooFinancialsRange(symbol string, years FinancialYearRange) (FinancialsResponse, error) {
 	formatted := strings.ToUpper(symbol)
 	now := time.Now()
 	params := url.Values{}
@@ -141,8 +182,13 @@ func fetchYahooFinancials(symbol string) (FinancialsResponse, error) {
 		"quarterlyDilutedEPS",
 		"quarterlyFreeCashFlow",
 	}, ","))
-	params.Set("period1", fmt.Sprintf("%d", now.AddDate(-5, 0, 0).Unix()))
-	params.Set("period2", fmt.Sprintf("%d", now.AddDate(0, 0, 1).Unix()))
+	start,end:=now.AddDate(-5,0,0),now.AddDate(0,0,1)
+ if years.Enabled(){
+  start=time.Date(years.FromYear,time.January,1,0,0,0,0,time.UTC)
+  end=time.Date(years.ToYear+1,time.January,1,0,0,0,0,time.UTC)
+ }
+ params.Set("period1",fmt.Sprintf("%d",start.Unix()))
+ params.Set("period2",fmt.Sprintf("%d",end.Unix()))
 	params.Set("merge", "false")
 
 	endpoint := "https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/" +
@@ -235,15 +281,17 @@ func fetchYahooFinancials(symbol string) (FinancialsResponse, error) {
 		}
 	}
 	sortByPeriodDesc(reports)
+ reports=FilterFinancialYears(reports,years)
 
 	res := FinancialsResponse{
+ FromYear:years.FromYear,ToYear:years.ToYear,
 		Symbol:   formatted,
 		Provider: "YAHOO",
 		Source:   "yahoo",
 		Reports:  reports,
 	}
 	if len(reports) == 0 {
-		res.Note = "No quarterly statements published for this instrument."
+		res.Note = "No quarterly statements available for this instrument and requested reporting period."
 	}
 	return res, nil
 }
@@ -258,7 +306,10 @@ func sortByPeriodDesc(reports []QuarterlyFinancial) {
 // Finnhub — financials-reported (SEC filings, income statement concepts)
 // ---------------------------------------------------------------------------
 
-func fetchFinnhubFinancials(symbol, apiKey string) (FinancialsResponse, error) {
+func fetchFinnhubFinancials(symbol, apiKey string) (FinancialsResponse,error) {
+ return fetchFinnhubFinancialsRange(symbol,apiKey,FinancialYearRange{})
+}
+func fetchFinnhubFinancialsRange(symbol, apiKey string, years FinancialYearRange) (FinancialsResponse, error) {
 	formatted := strings.ToUpper(symbol)
 	endpoint := fmt.Sprintf(
 		"https://finnhub.io/api/v1/stock/financials-reported?symbol=%s&freq=quarterly&token=%s",
@@ -372,7 +423,8 @@ func fetchFinnhubFinancials(symbol, apiKey string) (FinancialsResponse, error) {
 		reports = append(reports, row)
 	}
 	sortByPeriodDesc(reports)
-	if len(reports) > 8 {
+ reports=FilterFinancialYears(reports,years)
+	if !years.Enabled() && len(reports) > 8 {
 		reports = reports[:8]
 	}
 
@@ -380,10 +432,11 @@ func fetchFinnhubFinancials(symbol, apiKey string) (FinancialsResponse, error) {
 		Symbol:   formatted,
 		Provider: "FINNHUB",
 		Source:   "finnhub",
+        FromYear:years.FromYear,ToYear:years.ToYear,
 		Reports:  reports,
 	}
 	if len(reports) == 0 {
-		res.Note = "No quarterly SEC filings returned by Finnhub for this instrument."
+		res.Note = "No quarterly SEC filings available from Finnhub for this instrument and requested reporting period."
 	}
 	return res, nil
 }
