@@ -33,6 +33,8 @@ var researchEndpoints=[]ResearchEndpoint{
  {"BINANCE","ticker_24h","/api/v3/ticker/24hr","Rolling 24h trading statistics",true,false},
  {"BINANCE","last_price","/api/v3/ticker/price","Latest published price (not guaranteed execution)",true,false},
  {"BINANCE","best_bid_ask","/api/v3/ticker/bookTicker","Best bid and ask snapshot",true,false},
+ {"YAHOO","market_news","/v1/finance/search","Yahoo public market news search (unofficial; ticker query)",true,false},
+ {"AVANZA","instrument_snapshot","existing FetchAvanza adapter","Public fund/stock instrument snapshot (unofficial, opt-in)",true,false},
  {"FINNHUB","company_profile","/stock/profile2","Company profile",true,false},
  {"FINNHUB","company_peers","/stock/peers","Peer ticker symbols",true,false},
  {"FINNHUB","recommendations","/stock/recommendation","Analyst recommendation aggregates",true,false},
@@ -80,6 +82,9 @@ func validateResearchArguments(op ResearchEndpoint,symbol,from,to string)(url.Va
   }
  }
  if op.Operation=="basic_financials"{q.Set("metric","all")}
+ if op.Provider=="YAHOO" && op.Operation=="market_news"{
+  q.Del("symbol");q.Set("q",symbol);q.Set("quotesCount","0");q.Set("newsCount","8")
+ }
  return q,nil
 }
 type ResearchResult struct{
@@ -103,7 +108,17 @@ func fetchResearchWithClient(ctx context.Context,client *http.Client,baseOverrid
  if !ok{return ResearchResult{},fmt.Errorf("unsupported read-only provider operation %s/%s",provider,operation)}
  query,err:=validateResearchArguments(op,symbol,from,to)
  if err!=nil{return ResearchResult{},err}
+ if provider=="AVANZA"{
+  if !AvanzaEnabled(){return ResearchResult{},errors.New("unofficial Avanza API disabled; explicitly set AVANZA_UNOFFICIAL_ENABLED=true")}
+  asset,err:=FetchAvanza(symbol)
+  if err!=nil{return ResearchResult{},err}
+  return ResearchResult{Provider:"AVANZA",Operation:operation,UpstreamPath:op.Path,
+   Symbol:strings.ToUpper(strings.TrimSpace(symbol)),RetrievedAt:time.Now().UTC().Format(time.RFC3339),
+   Source:"unofficial Avanza public instrument endpoint",Data:asset.ToJSON(),
+   Note:"Unofficial read-only Avanza data; may be delayed/incomplete; opt-in and provider usage conditions apply."},nil
+ }
  base:="https://data-api.binance.vision"
+ if provider=="YAHOO"{base="https://query1.finance.yahoo.com"}
  if provider=="FINNHUB" {
   if strings.TrimSpace(apiKey)==""{return ResearchResult{},errors.New("FINNHUB_API_KEY must be configured on backend")}
   base="https://finnhub.io/api/v1"
