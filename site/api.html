@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b1424">
+  <meta name="description" content="FloweySales API-hjälp: se implementerade REST-API:er, MCP-verktyg, externa dataleverantörer och vilka endpoints som ännu inte stöds.">
+  <title>API-hjälp &amp; providerkatalog – FloweySales</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="api.css">
+</head>
+<body>
+  <a class="skip" href="#main">Hoppa till innehållet</a>
+  <header class="topbar wrap">
+    <a class="brand" href="./"><span class="mark">F<span class="dot">.</span></span> FloweySales</a>
+    <nav aria-label="Huvudnavigation"><a href="./">Start</a><a href="api.html" aria-current="page">API-hjälp</a><a href="https://github.com/Doldas/floweysales">GitHub ↗</a></nav>
+  </header>
+  <main class="wrap api-main" id="main">
+    <div class="eyebrow">REFERENCE / API SURFACES</div>
+    <h1>API &amp; <em>providerkatalog.</em></h1>
+    <p class="lead">Vilka endpoints fungerar i <strong>FloweySales-applikationen</strong>, vilka finns som <strong>MCP-verktyg</strong> och vilka är bara dokumenterade hos den externa dataleverantören?</p>
+    <p class="fine">Katalogen är en inventering av verifierade kodytor och kända publika forskningsendpoints, <strong>inte</strong> en komplett export av leverantörernas alla privata, betalda eller orderrelaterade API:er. En implementerad endpoint är inte en garanti för att leverantören svarar för varje symbol eller abonnemang.</p>
+    <div class="legend" aria-label="Statusförklaring">
+      <span class="status status-implemented">✓ Tillgänglig i FloweySales</span>
+      <span class="status status-upstream">○ Endast hos leverantör</span>
+      <span class="status status-experimental">! Inofficiell / opt-in</span>
+    </div>
+    <div class="api-metrics" id="metrics" aria-live="polite"></div>
+    <section class="api-controls" aria-label="Filtrera endpointkatalog">
+      <label>Sök endpoint, verktyg eller provider
+        <input id="filter-search" type="search" placeholder="Exempel: financials, Binance, sentiment, DCF" autocomplete="off">
+      </label>
+      <label>Yta
+        <select id="filter-surface">
+          <option value="all">Alla</option>
+          <option value="rest">FloweySales REST</option>
+          <option value="mcp">MCP-verktyg</option>
+          <option value="providers">Externa providers</option>
+        </select>
+      </label>
+      <label>Status
+        <select id="filter-status">
+          <option value="all">Alla statusar</option>
+          <option value="implemented">Tillgänglig nu</option>
+          <option value="upstream">Inte implementerad</option>
+        </select>
+      </label>
+    </section>
+    <div id="catalog-error" role="alert" hidden>Katalogen kunde inte laddas. Se <a href="https://github.com/Doldas/floweysales/tree/main/docs">docs i GitHub</a> och <a href="api-catalog.json">rå JSON-katalog</a>.</div>
+    <section class="api-section" id="rest">
+      <div class="api-heading"><div><div class="eyebrow">01 / APPLICATION</div><h2>REST-API:er i applikationen</h2></div><a class="inline" href="api-catalog.json">Katalog som JSON ↗</a></div>
+      <p>Exempel bas-URL: <code>http://localhost:8080</code>. Med inloggning används session cookie. Öppna inte backend mot internet utan HTTPS, accesskontroll och härdning.</p>
+      <div id="rest-results" class="endpoint-grid"></div>
+    </section>
+    <section class="api-section" id="mcp">
+      <div class="api-heading"><div><div class="eyebrow">02 / AI TOOLS</div><h2>MCP-serverns verktyg</h2></div><span class="eyebrow">JSON-RPC / tools/list</span></div>
+      <p>MCP-servern annonserar samma verktyg som AI-agenten via <code>tools/list</code>; det som faktiskt kan anropas begränsas av backend-åtkomst, rättigheter och leverantörsnycklar. Se även <code>GET /api/ai/tools</code> för scheman.</p>
+      <div id="mcp-results" class="endpoint-grid"></div>
+    </section>
+    <section class="api-section" id="providers">
+      <div class="api-heading"><div><div class="eyebrow">03 / PROVIDERS</div><h2>Externa leverantörers endpoints</h2></div><span class="eyebrow">OFFICIAL / UNOFFICIAL</span></div>
+      <p>De nya whitelistade läsoperationerna kan anropas genom både <code>GET /api/provider/research</code> och MCP-verktyget <code>get_provider_research</code>. Ingen godtycklig URL-forwarding, API-nyckel i webbläsaren eller privata order-API:er ingår.</p>
+      <div id="provider-results"></div>
+    </section>
+    <section class="api-section" id="examples">
+      <div class="eyebrow">04 / QUICK START</div><h2>Exempel på anrop</h2>
+      <p>Exemplen gäller den egna FloweySales-backenden och förutsätter korrekt inloggning/behörighet. API-nycklar som <code>FINNHUB_API_KEY</code> konfigureras bara på servern.</p>
+      <div class="code-examples">
+        <article class="card"><h3>Historiska kvartal</h3><pre><code>GET /api/financials?symbol=NVDA&amp;provider=YAHOO&amp;from_year=2020&amp;to_year=2025</code></pre></article>
+        <article class="card"><h3>Finnhub bolagsprofil (NY)</h3><pre><code>GET /api/provider/research?provider=FINNHUB&amp;operation=company_profile&amp;symbol=NVDA</code></pre></article>
+        <article class="card"><h3>Binance orderdjup (NY)</h3><pre><code>GET /api/provider/research?provider=BINANCE&amp;operation=order_book&amp;symbol=BTCUSDT</code></pre></article>
+        <article class="card"><h3>MCP-verktygsanrop (JSON-RPC)</h3><pre><code>{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_provider_research","arguments":{"provider":"FINNHUB","operation":"company_peers","symbol":"NVDA"}}}</code></pre></article>
+      </div>
+    </section>
+    <section class="api-section" id="sources">
+      <div class="eyebrow">05 / SOURCES &amp; SÄKERHET</div><h2>Dokumentation och begränsningar</h2>
+      <p>Leverantörslistorna är sammanställda från officiella dokument där sådana finns och tydligt utmärkta tredjepartskällor annars. Kontrollera alltid aktuell licens, rate limits, historik, valuta och abonnemang före produktionsanvändning. Flöden för depåinloggning, BankID, orderläggning och kontouppgifter är inte del av den nya provider-gatewayen.</p>
+      <div id="source-results" class="source-links"></div>
+      <p class="fine">Senast inventerad: <time datetime="2026-10-19">19 oktober 2026</time> · Ändringar granskas och testas i GitHub Actions.</p>
+    </section>
+  </main>
+  <footer class="wrap"><span>© FloweySales contributors · Open source</span><span>Hjälp för API och MCP · <a href="https://github.com/Doldas/floweysales">Källkod</a></span></footer>
+  <script src="api.js" defer></script>
+</body>
+</html>

@@ -30,6 +30,25 @@ func netListen(addr string) (net.Listener, error) {
 
 // registerMarketRoutes wires prices, stats, symbols and the SSE stream.
 func (e *Engine) registerMarketRoutes() {
+	e.mux.HandleFunc("GET /api/provider/endpoints", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, market.ResearchOperations())
+	})
+	e.mux.HandleFunc("GET /api/provider/research", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		result, err := market.FetchResearchOperation(r.Context(), q.Get("provider"), q.Get("operation"),
+			q.Get("symbol"), q.Get("from"), q.Get("to"), e.finnhubAPIKey)
+		if err != nil {
+			code := http.StatusBadRequest
+			if strings.Contains(err.Error(), "FINNHUB_API_KEY") {
+				code = http.StatusServiceUnavailable
+			} else if strings.Contains(err.Error(), "returned HTTP") || strings.Contains(err.Error(), "provider request failed") || strings.Contains(err.Error(), "did not return") {
+				code = http.StatusBadGateway
+			}
+			writeJSON(w, code, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	})
 	e.mux.HandleFunc("GET /api/sec/section", func(w http.ResponseWriter, r *http.Request) {
 		ticker := r.URL.Query().Get("symbol")
 		form := r.URL.Query().Get("form")
