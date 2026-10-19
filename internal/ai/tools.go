@@ -56,9 +56,9 @@ func ToolDefs() []Tool {
  }},
  {Type:"function",Function:ToolFunction{
   Name:"get_provider_research",
-  Description:"Call a strictly whitelisted Binance public or Finnhub key-backed read-only endpoint from get_provider_endpoints. No arbitrary URL proxy, private accounts or orders.",
+  Description:"Call a strictly whitelisted provider research operation from get_provider_endpoints: official Binance/Finnhub, unofficial Yahoo news search, or opt-in Avanza public instrument. No arbitrary URL proxy, private accounts or orders.",
   Parameters:obj(map[string]any{
-   "provider":map[string]any{"type":"string","enum":[]string{"BINANCE","FINNHUB"}},
+   "provider":map[string]any{"type":"string","enum":[]string{"BINANCE","FINNHUB","YAHOO","AVANZA"}},
    "operation":str("Whitelisted operation e.g. company_profile, ticker_24h, order_book"),
    "symbol":str("NVDA for Finnhub or BTCUSDT for Binance (not needed for server_time)"),
    "from":str("For company_news only: YYYY-MM-DD"),

@@ -284,7 +284,7 @@
       "name": "get_provider_research",
       "status": "implemented",
       "surface": "MCP tools/list",
-      "note": "NYT – gemensam whitelist"
+      "note": "NYT – strikt whitelist för Binance, Finnhub, inofficiell Yahoo-nyhetssökning och opt-in Avanza"
     },
     {
       "name": "get_sec_section",
@@ -695,6 +695,12 @@
       "note": "Inofficiella gränssnitt, inga garantier om kontrakt eller kommersiella rättigheter.",
       "endpoints": [
         {
+          "operation": "market_news",
+          "path": "GET /v1/finance/search (newsCount=8)",
+          "status": "implemented",
+          "via": "MCP get_provider_research / REST /api/provider/research (inofficiell)"
+        },
+        {
           "operation": "",
           "path": "GET /v1/finance/search",
           "status": "implemented",
@@ -776,6 +782,12 @@
       "auth": "AVANZA_UNOFFICIAL_ENABLED=true krävs; inga privata sessionsflöden",
       "note": "Avanza har inget stabilt publikt dokumenterat API. Endpoints från tredjeparts-SDK är vägledande, inte officiellt kontrakt; inga BankID- eller order-API:er exponerade.",
       "endpoints": [
+        {
+          "operation": "instrument_snapshot",
+          "path": "FetchAvanza public instrument adapter",
+          "status": "implemented",
+          "via": "MCP get_provider_research / REST /api/provider/research (kräver opt-in)"
+        },
         {
           "operation": "",
           "path": "Public instrument search",
