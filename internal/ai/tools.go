@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+ "os"
 	"sort"
 	"strings"
 
@@ -48,6 +49,14 @@ func ToolDefs() []Tool {
 	}
 
 	return []Tool{
+ {Type:"function",Function:ToolFunction{
+  Name:"get_provider_capabilities",Description:"Get each market data provider's documented capabilities, API official/unofficial status, configuration requirements, cached TTL and quote interpretation.",
+  Parameters:obj(map[string]any{}),
+ }},
+ {Type:"function",Function:ToolFunction{
+  Name:"get_provider_quote",Description:"Get provider OHLC last close with accurate timestamp, currency, requested versus actual source, age, stale status; NOT a live bid/ask.",
+  Parameters:obj(map[string]any{"symbol":str("Ticker symbol"),"provider":providerProp},"symbol"),
+ }},
 		{Type: "function", Function: ToolFunction{
 			Name: "get_sec_filings", Description: "Search official SEC EDGAR submissions for a US-listed company ticker. Returns true 10-K, 10-Q, 8-K, accession IDs, fiscal reporting dates and filing URLs. SEC_USER_AGENT with contact required.",
 			Parameters: obj(map[string]any{"symbol": str("US SEC ticker, e.g. NVDA, MSFT"), "limit": map[string]any{"type": "integer", "description": "1-30, default 8"}}, "symbol"),
@@ -203,6 +212,13 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 	}
 
 	switch name {
+ case "get_provider_capabilities":
+  return toJSON(market.ProviderCapabilities())
+ case "get_provider_quote":
+  s:=strArg(args,"symbol");if s==""{return "",fmt.Errorf("symbol required")}
+  result,err:=market.LatestSnapshot(s,market.ParseProvider(providerArg(args)),os.Getenv("FINNHUB_API_KEY"))
+  if err!=nil{return "",err}
+  return toJSON(result)
 	case "get_sec_filings":
 		ticker := strArg(args, "symbol")
 		if ticker == "" {
