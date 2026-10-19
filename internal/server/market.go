@@ -1,6 +1,8 @@
 package server
 
 import (
+	"encoding/json"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -9,6 +11,7 @@ import (
 	"floweysales/internal/market"
 	"floweysales/internal/sec"
 	"floweysales/internal/tracker"
+	"floweysales/internal/valuation"
 )
 
 // historyCacheTTL is how long provider OHLC series are reused.
@@ -24,6 +27,29 @@ func netListen(addr string) (net.Listener, error) {
 
 // registerMarketRoutes wires prices, stats, symbols and the SSE stream.
 func (e *Engine) registerMarketRoutes() {
+	// Pure calculator; never creates orders or changes shared portfolio.
+	e.mux.HandleFunc("POST /api/valuation/dcf", func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+		defer r.Body.Close()
+		var in valuation.Input
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&in); err != nil {
+			writeJSON(w, 400, map[string]any{"error": "invalid DCF input"})
+			return
+		}
+		var extra any
+		if dec.Decode(&extra) != io.EOF {
+			writeJSON(w, 400, map[string]any{"error": "trailing JSON payload"})
+			return
+		}
+		out, err := valuation.Calculate(in)
+		if err != nil {
+			writeJSON(w, 422, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, out)
+	})
 	e.mux.HandleFunc("GET /api/sec/filings", func(w http.ResponseWriter, r *http.Request) {
 		ticker := r.URL.Query().Get("symbol")
 		if ticker == "" {
