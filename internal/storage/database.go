@@ -480,9 +480,9 @@ func (d *Database) UpdateOrderStatus(orderID int, newStatus, reason string) bool
 	var err error
 	var res sql.Result
 	if reason == "" {
-		res, err = d.db.Exec("UPDATE orders SET status = ? WHERE id = ?", newStatus, orderID)
+		res, err = d.db.Exec("UPDATE orders SET status = ? WHERE id = ? AND status = 'OPEN' AND ? IN ('CANCELLED','REJECTED')", newStatus, orderID, newStatus)
 	} else {
-		res, err = d.db.Exec("UPDATE orders SET status = ?, reason = ? WHERE id = ?", newStatus, reason, orderID)
+		res, err = d.db.Exec("UPDATE orders SET status = ?, reason = ? WHERE id = ? AND status = 'OPEN' AND ? IN ('CANCELLED','REJECTED')", newStatus, reason, orderID, newStatus)
 	}
 	if err != nil {
 		log.Printf("[Database] Update order status failed: %v", err)
