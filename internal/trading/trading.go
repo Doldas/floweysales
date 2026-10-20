@@ -50,9 +50,10 @@ const qtyEpsilon = 1e-9
 
 // Config is the account level configuration used for risk checks and costs.
 type Config struct {
-	BaseCash   float64    `json:"base_cash"`
-	Commission Commission `json:"commission"`
-	AllowShort bool       `json:"allow_short"`
+	BaseCash         float64    `json:"base_cash"`
+	Commission       Commission `json:"commission"`
+	AllowShort       bool       `json:"allow_short"`
+	MaxOrderNotional float64    `json:"max_order_notional"`
 }
 
 // DefaultConfig returns a plain cash account with no commissions.
@@ -203,6 +204,16 @@ func NewOrder(req SubmitRequest) (storage.Order, error) {
 	}
 
 	notional := round2(qty * worst)
+	if math.IsNaN(req.Cfg.MaxOrderNotional) || math.IsInf(req.Cfg.MaxOrderNotional, 0) || req.Cfg.MaxOrderNotional < 0 {
+		return storage.Order{}, fmt.Errorf("invalid paper-trading notional limit")
+	}
+	if math.IsNaN(notional) || math.IsInf(notional, 0) || notional <= 0 {
+		return storage.Order{}, fmt.Errorf("invalid order notional")
+	}
+	if req.Cfg.MaxOrderNotional > 0 && notional > req.Cfg.MaxOrderNotional {
+		return storage.Order{}, fmt.Errorf("order notional %s exceeds configured paper-trading limit %s",
+			formatMoney(notional), formatMoney(req.Cfg.MaxOrderNotional))
+	}
 	fee := req.Cfg.Commission.Fee(notional)
 
 	if side == SideSell {

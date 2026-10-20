@@ -150,3 +150,16 @@ Incomplete quarters do not produce invented numbers.
 
 See [automatic Docker/Podman updates](auto-updates.md). The updater preserves
 MySQL identities, sessions, persisted AI settings, local `.env` and SQLite data.
+
+
+## Optional paper-trading order-size guard
+
+Set `PAPER_MAX_ORDER_NOTIONAL=1000` in the backend environment to reject
+simulated orders whose worst-case quantity × execution/reference price exceeds
+1000 units of that instrument's quote currency. The default `0` disables this
+new guard to preserve existing behavior. Negative or non-finite values are
+invalid. This is **paper trading only**, not a broker risk engine. No currency
+conversion is performed, so the cap is per-order in the symbol's quote currency,
+**not** a portfolio-wide USD or SEK limit. Existing orders are not altered.
+This guard is a first incremental portion of issue #7; it does not yet
+implement portfolio drawdown limits, exposure concentration or a kill switch.

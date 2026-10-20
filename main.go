@@ -107,6 +107,10 @@ func main() {
 
 	portfolio := trading.DefaultConfig()
 	portfolio.BaseCash = parseFloat(app.ResolveConfig("PORTFOLIO_CASH", "100000", defaults), portfolio.BaseCash)
+	portfolio.MaxOrderNotional = parseFloat(app.ResolveConfig("PAPER_MAX_ORDER_NOTIONAL", "0", defaults), 0)
+	if portfolio.MaxOrderNotional < 0 {
+		log.Fatal("PAPER_MAX_ORDER_NOTIONAL must be non-negative")
+	}
 	portfolio.Commission.Pct = parseFloat(app.ResolveConfig("TRADE_COMMISSION_PCT", "0", defaults), 0)
 	portfolio.Commission.Fixed = parseFloat(app.ResolveConfig("TRADE_COMMISSION_FIXED", "0", defaults), 0)
 	portfolio.AllowShort = strings.EqualFold(
