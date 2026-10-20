@@ -20,7 +20,9 @@ func TestTrackerStatusLastPersistedTick(t *testing.T) {
 		t.Skip("requires disposable Liquibase-migrated MySQL")
 	}
 	db, err := storage.Open(dsn)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer db.Close()
 	symbol := fmt.Sprintf("STATUS%d", time.Now().UnixNano())
 	emptySymbol := fmt.Sprintf("EMPTY%d", time.Now().UnixNano())
@@ -30,26 +32,30 @@ func TestTrackerStatusLastPersistedTick(t *testing.T) {
 	}
 	engine := NewEngine(db, cfg, nil, "", tracker.DefaultConfig())
 	check := func() []struct {
-		Symbol string `json:"symbol"`
-		Provider string `json:"provider"`
-		HasTick bool `json:"has_tick"`
+		Symbol            string `json:"symbol"`
+		Provider          string `json:"provider"`
+		HasTick           bool   `json:"has_tick"`
 		LastTickTimestamp *int64 `json:"last_tick_timestamp"`
-		AgeSeconds *int64 `json:"age_seconds"`
+		AgeSeconds        *int64 `json:"age_seconds"`
 	} {
 		t.Helper()
 		r := httptest.NewRecorder()
 		engine.Handler().ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/api/trackers/status", nil))
-		if r.Code != http.StatusOK { t.Fatalf("status %d: %s", r.Code, r.Body.String()) }
+		if r.Code != http.StatusOK {
+			t.Fatalf("status %d: %s", r.Code, r.Body.String())
+		}
 		var response struct {
 			Trackers []struct {
-				Symbol string `json:"symbol"`
-				Provider string `json:"provider"`
-				HasTick bool `json:"has_tick"`
+				Symbol            string `json:"symbol"`
+				Provider          string `json:"provider"`
+				HasTick           bool   `json:"has_tick"`
 				LastTickTimestamp *int64 `json:"last_tick_timestamp"`
-				AgeSeconds *int64 `json:"age_seconds"`
+				AgeSeconds        *int64 `json:"age_seconds"`
 			} `json:"trackers"`
 		}
-		if err := json.Unmarshal(r.Body.Bytes(), &response); err != nil { t.Fatal(err) }
+		if err := json.Unmarshal(r.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
 		return response.Trackers
 	}
 	initial := check()
