@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"floweysales/internal/market"
 )
@@ -13,6 +15,38 @@ import (
 func (e *Engine) registerConfigRoutes() {
 	e.mux.HandleFunc("GET /api/trackers", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"trackers": e.config.Targets(), "max_trackers": MaxActiveTrackers})
+	})
+	e.mux.HandleFunc("GET /api/trackers/status", func(w http.ResponseWriter, r *http.Request) {
+		targets := e.config.Targets()
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		now := time.Now().Unix()
+		type trackerStatus struct {
+			Symbol            string `json:"symbol"`
+			Provider          string `json:"provider"`
+			HasTick           bool   `json:"has_tick"`
+			LastTickTimestamp *int64 `json:"last_tick_timestamp"`
+			AgeSeconds        *int64 `json:"age_seconds"`
+		}
+		out := make([]trackerStatus, 0, len(targets))
+		for _, target := range targets {
+			timestamp, found, err := e.db.LatestTrackerTick(ctx, target.Symbol, target.ProviderID)
+			if err != nil {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "tracker history unavailable"})
+				return
+			}
+			status := trackerStatus{Symbol: target.Symbol, Provider: target.ProviderID, HasTick: found}
+			if found {
+				age := now - timestamp
+				if age < 0 {
+					age = 0
+				}
+				status.LastTickTimestamp = &timestamp
+				status.AgeSeconds = &age
+			}
+			out = append(out, status)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"trackers": out, "checked_at": now})
 	})
 	e.mux.HandleFunc("POST /api/trackers", func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 8*1024)

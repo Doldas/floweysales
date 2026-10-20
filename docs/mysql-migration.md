@@ -134,3 +134,14 @@ jämföra minnesanvändning över tid. Den skriver inte tracking-loggar.
 `GET /api/orders` har nu en skyddad sidstorlek på 500 (högst 2000)
 och stöder `limit` samt `offset`; den fullständiga orderhistoriken
 behålls i MySQL och i beräkningarna av positioner och saldon.
+
+### Trackerstatus utan extra provider-anrop
+
+`GET /api/trackers/status` (SYS_ADMIN när inloggning är aktiverad)
+returnerar de högst 16 aktiva symbol/provider-strömmarna med
+`has_tick`, senaste sparade `last_tick_timestamp` och
+`age_seconds` från MySQL. Nya trackers utan lagrade observationer har
+`has_tick: false` och null för tid/ålder. Databasfel ger HTTP 503.
+Detta anropar inga externa marknadsleverantörer och startar ingen tracker.
+Åldern är en observationsålder, inte en garanti för att en leverantör är
+nere: stängda marknader kan naturligt sakna färska ticks.

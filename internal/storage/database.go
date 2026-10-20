@@ -311,6 +311,22 @@ func (d *Database) GetLatestRecordsByProvider(limit int, symbolFilter, providerF
 	return records
 }
 
+// LatestTrackerTick reports the most recent persisted observation for one
+// symbol/provider pair. No tick is different from a database failure.
+func (d *Database) LatestTrackerTick(ctx context.Context, symbol, provider string) (int64, bool, error) {
+	var timestamp int64
+	err := d.db.QueryRowContext(ctx,
+		"SELECT timestamp FROM trading_history WHERE symbol = ? AND provider = ? ORDER BY id DESC LIMIT 1",
+		symbol, provider).Scan(&timestamp)
+	if err == sql.ErrNoRows {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return timestamp, true, nil
+}
+
 // ClearHistory wipes trading history and resets the autoincrement counter.
 func (d *Database) ClearHistory() {
 	d.mu.Lock()
