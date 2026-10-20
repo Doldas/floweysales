@@ -177,57 +177,75 @@ func (e *Engine) registerOrderRoutes() {
 		}
 
 		peak := summary.Equity
-		if cfg.MaxDrawdownPct>0 {
+		if cfg.MaxDrawdownPct > 0 {
 			var err error
-			peak,err=e.db.ObservePaperPeak(summary.Equity)
-			if err!=nil {
-				writeOrderError(w,http.StatusServiceUnavailable,"paper drawdown risk state unavailable")
+			peak, err = e.db.ObservePaperPeak(summary.Equity)
+			if err != nil {
+				writeOrderError(w, http.StatusServiceUnavailable, "paper drawdown risk state unavailable")
 				return
 			}
 		}
 		sectorExposure := 0.0
 		sectorKnown := true
-		if cfg.MaxSectorAllocationPct>0 {
+		if cfg.MaxSectorAllocationPct > 0 {
 			targetSector := strings.TrimSpace(cfg.SymbolSectors[symbol])
-			if targetSector=="" { sectorKnown=false }
-			for _,position := range positions {
-				if position.MarketValue<=0 {continue}
-				sector := strings.TrimSpace(cfg.SymbolSectors[position.Symbol])
-				if sector=="" {sectorKnown=false;continue}
-				if strings.EqualFold(sector,targetSector) {sectorExposure+=position.MarketValue}
+			if targetSector == "" {
+				sectorKnown = false
 			}
-			for _,pending := range working {
-				if pending.Side!=trading.SideBuy {continue}
-				sector:=strings.TrimSpace(cfg.SymbolSectors[pending.Symbol])
-				if sector=="" {sectorKnown=false;continue}
-				if strings.EqualFold(sector,targetSector) {
-					worst:=pending.Price
-					if pending.LimitPrice>worst {worst=pending.LimitPrice}
-					if pending.StopPrice>worst {worst=pending.StopPrice}
-					sectorExposure+=pending.Quantity*worst
+			for _, position := range positions {
+				if position.MarketValue <= 0 {
+					continue
+				}
+				sector := strings.TrimSpace(cfg.SymbolSectors[position.Symbol])
+				if sector == "" {
+					sectorKnown = false
+					continue
+				}
+				if strings.EqualFold(sector, targetSector) {
+					sectorExposure += position.MarketValue
+				}
+			}
+			for _, pending := range working {
+				if pending.Side != trading.SideBuy {
+					continue
+				}
+				sector := strings.TrimSpace(cfg.SymbolSectors[pending.Symbol])
+				if sector == "" {
+					sectorKnown = false
+					continue
+				}
+				if strings.EqualFold(sector, targetSector) {
+					worst := pending.Price
+					if pending.LimitPrice > worst {
+						worst = pending.LimitPrice
+					}
+					if pending.StopPrice > worst {
+						worst = pending.StopPrice
+					}
+					sectorExposure += pending.Quantity * worst
 				}
 			}
 		}
 		req := trading.SubmitRequest{
-			Symbol:          symbol,
-			Side:            stringField(j, "side"),
-			Type:            stringFieldOr(j, "type", trading.TypeMarket),
-			TIF:             stringFieldOr(j, "tif", trading.TIFGTC),
-			Quantity:        floatField(j, "quantity"),
-			LimitPrice:      floatField(j, "limit_price"),
-			StopPrice:       floatField(j, "stop_price"),
-			ReferencePrice:  reference,
-			HeldQuantity:    trading.HeldQuantity(orders, symbol),
-			BuyingPower:     summary.BuyingPower,
-			PortfolioEquity: summary.Equity,
-			SymbolExposure:  symbolExposure,
-			PeakEquity: peak,
-			SectorExposure: sectorExposure,
-			SectorKnown: sectorKnown,
+			Symbol:              symbol,
+			Side:                stringField(j, "side"),
+			Type:                stringFieldOr(j, "type", trading.TypeMarket),
+			TIF:                 stringFieldOr(j, "tif", trading.TIFGTC),
+			Quantity:            floatField(j, "quantity"),
+			LimitPrice:          floatField(j, "limit_price"),
+			StopPrice:           floatField(j, "stop_price"),
+			ReferencePrice:      reference,
+			HeldQuantity:        trading.HeldQuantity(orders, symbol),
+			BuyingPower:         summary.BuyingPower,
+			PortfolioEquity:     summary.Equity,
+			SymbolExposure:      symbolExposure,
+			PeakEquity:          peak,
+			SectorExposure:      sectorExposure,
+			SectorKnown:         sectorKnown,
 			DailyTradedNotional: cfg.DailyTradedNotional[symbol],
-			ClientID:        stringField(j, "client_order_id"),
-			Now:             now,
-			Cfg:             e.tradingConfig(),
+			ClientID:            stringField(j, "client_order_id"),
+			Now:                 now,
+			Cfg:                 e.tradingConfig(),
 		}
 		// Legacy callers send the share count as `amount`.
 		if req.Quantity <= 0 {
