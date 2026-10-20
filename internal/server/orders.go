@@ -138,7 +138,23 @@ func (e *Engine) registerOrderRoutes() {
 			reference = e.db.GetSymbolStats(symbol).LatestPrice
 		}
 
-		orders, _, _, summary := e.portfolioState()
+		orders, working, positions, summary := e.portfolioState()
+		symbolExposure := 0.0
+		for _, position := range positions {
+			if position.Symbol == symbol && position.MarketValue > 0 {
+				symbolExposure += position.MarketValue
+			}
+		}
+		for _, pending := range working {
+			if pending.Symbol != symbol || pending.Side != trading.SideBuy {
+				continue
+			}
+			worst := pending.Price
+			if pending.LimitPrice > worst { worst = pending.LimitPrice }
+			if pending.StopPrice > worst { worst = pending.StopPrice }
+			symbolExposure += pending.Quantity * worst
+		}
+
 
 		req := trading.SubmitRequest{
 			Symbol:         symbol,
@@ -151,6 +167,8 @@ func (e *Engine) registerOrderRoutes() {
 			ReferencePrice: reference,
 			HeldQuantity:   trading.HeldQuantity(orders, symbol),
 			BuyingPower:    summary.BuyingPower,
+			PortfolioEquity: summary.Equity,
+			SymbolExposure: symbolExposure,
 			ClientID:       stringField(j, "client_order_id"),
 			Now:            now,
 			Cfg:            e.tradingConfig(),
