@@ -487,8 +487,8 @@ func TestPaperApprovalSingleUseAndExactPayload(t *testing.T) {
 	payload := map[string]any{"symbol": "GIB", "side": "BUY", "quantity": 1, "client_order_id": "approval-once"}
 	key, digest, err := paperApprovalDigest(payload)
 	if err != nil { t.Fatal(err) }
-	if err := env.db.RequestPaperApproval(context.Background(), key, digest, 12); err != nil { t.Fatal(err) }
-	if err := env.db.RequestPaperApproval(context.Background(), key, "other-digest", 12); err == nil {
+	if err := env.db.RequestPaperApproval(context.Background(), key, digest, `{"symbol":"GIB"}`, 12); err != nil { t.Fatal(err) }
+	if err := env.db.RequestPaperApproval(context.Background(), key, "other-digest", `{"symbol":"GIB"}`, 12); err == nil {
 		t.Fatal("approval proposal must not change immutable request")
 	}
 	order := storage.Order{Symbol: "GIB", Side: "BUY", Type: "MARKET", TIF: "GTC", Quantity: 1, Price: 100, Status: "FILLED", FillPrice: 100, Timestamp: time.Now().Unix()}
