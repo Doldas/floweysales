@@ -50,12 +50,12 @@ const qtyEpsilon = 1e-9
 
 // Config is the account level configuration used for risk checks and costs.
 type Config struct {
-	BaseCash         float64    `json:"base_cash"`
-	Commission       Commission `json:"commission"`
-	AllowShort       bool       `json:"allow_short"`
-	MaxOrderNotional float64    `json:"max_order_notional"`
-	MaxSymbolAllocationPct float64 `json:"max_symbol_allocation_pct"`
-	HaltNewOrders    bool       `json:"halt_new_orders"`
+	BaseCash               float64    `json:"base_cash"`
+	Commission             Commission `json:"commission"`
+	AllowShort             bool       `json:"allow_short"`
+	MaxOrderNotional       float64    `json:"max_order_notional"`
+	MaxSymbolAllocationPct float64    `json:"max_symbol_allocation_pct"`
+	HaltNewOrders          bool       `json:"halt_new_orders"`
 }
 
 // DefaultConfig returns a plain cash account with no commissions.
@@ -125,21 +125,21 @@ func CanTransition(from, to string) bool {
 // SubmitRequest is a validated inbound order request plus the account state
 // required to run the pre-trade risk checks.
 type SubmitRequest struct {
-	Symbol         string
-	Side           string
-	Type           string
-	TIF            string
-	Quantity       float64
-	LimitPrice     float64
-	StopPrice      float64
-	ReferencePrice float64
-	HeldQuantity   float64
-	BuyingPower    float64
+	Symbol          string
+	Side            string
+	Type            string
+	TIF             string
+	Quantity        float64
+	LimitPrice      float64
+	StopPrice       float64
+	ReferencePrice  float64
+	HeldQuantity    float64
+	BuyingPower     float64
 	PortfolioEquity float64
-	SymbolExposure float64
-	ClientID       string
-	Now            int64
-	Cfg            Config
+	SymbolExposure  float64
+	ClientID        string
+	Now             int64
+	Cfg             Config
 }
 
 // NewOrder validates a submission, executes it straight away when it is
