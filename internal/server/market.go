@@ -143,6 +143,7 @@ func (e *Engine) registerMarketRoutes() {
 			jList = append(jList, map[string]any{
 				"timestamp": rec.Timestamp,
 				"symbol":    rec.Symbol,
+                "provider":rec.Provider,
 				"price":     rec.Price,
 				"stop_loss": rec.StopLoss,
 				"fast_ema":  rec.FastEMA,

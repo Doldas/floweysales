@@ -14,6 +14,16 @@ import {
   TradingRecord,
 } from './models';
 
+export interface TrackerInfo {
+  symbol:string;
+  provider:string;
+  last_price:number;
+  last_updated:number;
+  currency?:string;
+  status:string;
+  error?:string;
+}
+
 export interface SharedConfig {
   symbol: string;
   provider: string;
@@ -23,6 +33,15 @@ export interface SharedConfig {
 export class MarketService {
   private readonly http = inject(HttpClient);
 
+  getTrackers():Observable<TrackerInfo[]> {
+    return this.http.get<TrackerInfo[]>('/api/trackers');
+  }
+  addTracker(symbol:string,provider:string):Observable<TrackerInfo[]> {
+    return this.http.post<TrackerInfo[]>('/api/trackers',{symbol,provider});
+  }
+  removeTracker(symbol:string,provider:string):Observable<TrackerInfo[]> {
+    return this.http.delete<TrackerInfo[]>('/api/trackers',{params:{symbol,provider}});
+  }
   getConfig(): Observable<SharedConfig> {
     return this.http.get<SharedConfig>('/api/config');
   }

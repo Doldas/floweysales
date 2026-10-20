@@ -15,8 +15,8 @@ export class LiveSseService {
   readonly attempted = signal(false);
 
   /** (Re)connects for the given symbol. Reopening the source is cheap. */
-  connectFor(symbol: string): void {
-    const key = symbol || '__all__';
+  connectFor(symbol: string, provider = ''): void {
+    const key = (symbol || '__all__') + '|' + provider;
     if (this.currentConfigKey === key && this.source) {
       return;
     }
@@ -33,6 +33,8 @@ export class LiveSseService {
       es.onmessage = (ev) => {
         try {
           const record: TradingRecord = JSON.parse(ev.data);
+          if (symbol && record.symbol !== symbol) return;
+          if (provider && record.provider && record.provider !== provider) return;
           this.latestTick.set(record);
           this.connected.set(true);
         } catch (err) {

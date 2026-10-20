@@ -44,6 +44,7 @@ import { FinancialsComponent } from './components/financials';
 import { TradingChartComponent } from './components/chart';
 import { LedgerComponent } from './components/ledger';
 import { ForumComponent } from './components/forum';
+import type {TrackerInfo} from './services';
 import {
   HISTORY_RANGES,
   PROVIDERS,
@@ -120,6 +121,8 @@ export class App {
   readonly provider = signal<ProviderId>('YAHOO');
   readonly chartEpoch = signal(0);
   readonly connecting = signal(false);
+  readonly trackers = signal<TrackerInfo[]>([]);
+  readonly removingTracker = signal<string | null>(null);
 
   /** History range shown by the chart; shared with the range toggles. */
   readonly historyRange = signal<HistoryRange>('1M');
@@ -220,13 +223,17 @@ export class App {
         }
         this.symbolCtl.setValue(symbol, { emitEvent: false });
         this.launchTracking(symbol);
+        this.refreshTrackers();
       },
       error: () => {
         this.showSnack('Cannot reach the trading engine — is the backend running?', true);
       },
     });
 
-    this.destroyRef.onDestroy(() => this.stream.close());
+    this.destroyRef.onDestroy(() => {
+      this.stream.close();
+      if (this.firstTickTimer) clearTimeout(this.firstTickTimer);
+    });
   }
 
   displayOption = (value: SymbolInfo | string): string =>
@@ -250,6 +257,34 @@ export class App {
     this.themeService.set(themeId as never);
   }
 
+  refreshTrackers():void {
+    this.api.getTrackers().subscribe({
+      next: list => this.trackers.set(list??[]),
+      error: () => {},
+    });
+  }
+  selectTracker(tracker:TrackerInfo):void{
+    this.provider.set(tracker.provider as ProviderId);
+    this.symbolCtl.setValue(tracker.symbol,{emitEvent:false});
+    this.launchTracking(tracker.symbol);
+  }
+  removeTracker(tracker:TrackerInfo):void{
+    this.removingTracker.set(tracker.provider+'|'+tracker.symbol);
+    this.api.removeTracker(tracker.symbol,tracker.provider).subscribe({
+      next: list=>{
+        this.trackers.set(list);
+        this.removingTracker.set(null);
+        if (this.trackedSymbol()===tracker.symbol &&
+            this.provider()===tracker.provider && list.length) {
+          this.selectTracker(list[0]);
+        }
+      },
+      error:err=>{
+        this.removingTracker.set(null);
+        this.showSnack('Unable to remove tracker: '+describeHttpError(err),true);
+      }
+    });
+  }
   /** "Track Asset" button handler. */
   trackAsset(): void {
     const raw = typeof this.symbolCtl.value === 'string'
@@ -337,11 +372,14 @@ export class App {
     this.chartsReset();
     this.historySeed.set(null);
     this.marketSeries.set(null);
-    this.stream.connectFor(symbol);
+    this.stream.connectFor(symbol,provider);
     this.ordersState.loadFor(symbol);
 
     this.api.applyConfig(symbol, provider).subscribe({
-      next: () => this.loadMarketHistory(symbol, provider),
+      next: () => {
+        this.loadMarketHistory(symbol, provider);
+        this.refreshTrackers();
+      },
       error: (err) => {
         this.connecting.set(false);
         this.showSnack('Failed to switch asset: ' + describeHttpError(err), true);

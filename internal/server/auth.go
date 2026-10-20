@@ -96,7 +96,7 @@ func (e *Engine) Handler() http.Handler {
 }
 
 // USER accounts are restricted to public-market research while the
-// SQLite orderbook and portfolio remain global. No accidental cross-user
+// MySQL orders and portfolio are still shared; tenant isolation is future work. No accidental cross-user
 // access is allowed before the tenant-scoped storage migration.
 func allowedAPI(role, method, path string) bool {
 	if role == identity.RoleSysAdmin {

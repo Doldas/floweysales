@@ -107,6 +107,35 @@
     </mat-card-content>
   </mat-card>
 
+  <!-- Active trackers: one polling scheduler, multiple independent instruments. -->
+  <section class="tracker-watchlist" aria-label="Active market trackers">
+    <div class="tracker-header">
+      <strong>Active trackers</strong>
+      <span class="tracker-summary">{{ trackers().length }} / 12 · one shared poll scheduler</span>
+    </div>
+    <div class="tracker-items">
+      @for (item of trackers(); track item.provider + ':' + item.symbol) {
+        <div class="tracker-chip" [class.selected]="item.symbol === trackedSymbol() && item.provider === provider()">
+          <button mat-button type="button" class="tracker-select" (click)="selectTracker(item)"
+                  [attr.aria-label]="'View ' + item.symbol + ' using ' + item.provider">
+            <span class="tracker-symbol">{{ item.symbol }}</span>
+            <span class="tracker-provider">{{ item.provider }}</span>
+            @if (item.last_price > 0) {
+              <span class="tracker-value">{{ item.last_price | number:'1.2-4' }}</span>
+            }
+            <span class="tracker-state">{{ item.status }}</span>
+          </button>
+          <button mat-icon-button type="button" (click)="removeTracker(item)"
+                  [disabled]="trackers().length <= 1 || removingTracker() !== null"
+                  [attr.aria-label]="'Stop tracking ' + item.symbol">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      }
+    </div>
+    <p class="tracker-hint">Track Asset adds the symbol without stopping the others. Select a chip to view its chart.</p>
+  </section>
+
   <!-- KPI CARDS -->
   <div class="grid">
     <mat-card class="glass kpi">
