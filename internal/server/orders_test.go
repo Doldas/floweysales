@@ -1,8 +1,8 @@
 package server
 
 import (
-	"context"
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -486,8 +486,12 @@ func TestPaperApprovalSingleUseAndExactPayload(t *testing.T) {
 	env := newTestEnv(t)
 	payload := map[string]any{"symbol": "GIB", "side": "BUY", "quantity": 1, "client_order_id": "approval-once"}
 	key, digest, err := paperApprovalDigest(payload)
-	if err != nil { t.Fatal(err) }
-	if err := env.db.RequestPaperApproval(context.Background(), key, digest, `{"symbol":"GIB"}`, 12); err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := env.db.RequestPaperApproval(context.Background(), key, digest, `{"symbol":"GIB"}`, 12); err != nil {
+		t.Fatal(err)
+	}
 	if err := env.db.RequestPaperApproval(context.Background(), key, "other-digest", `{"symbol":"GIB"}`, 12); err == nil {
 		t.Fatal("approval proposal must not change immutable request")
 	}
@@ -496,12 +500,16 @@ func TestPaperApprovalSingleUseAndExactPayload(t *testing.T) {
 		t.Fatal("unapproved request must not persist order")
 	}
 	ok, err := env.db.ApprovePaperOrder(context.Background(), key, 99)
-	if err != nil || !ok { t.Fatalf("approval failed: %v %v", ok, err) }
+	if err != nil || !ok {
+		t.Fatalf("approval failed: %v %v", ok, err)
+	}
 	if _, _, err := env.db.CreateApprovedPaperOrderOnce(order, key, "different-digest"); err == nil {
 		t.Fatal("different parameters must not consume approval")
 	}
 	created, replayed, err := env.db.CreateApprovedPaperOrderOnce(order, key, digest)
-	if err != nil || replayed || created.ID <= 0 { t.Fatalf("approved create: %v %v %+v", err, replayed, created) }
+	if err != nil || replayed || created.ID <= 0 {
+		t.Fatalf("approved create: %v %v %+v", err, replayed, created)
+	}
 	a, found, err := env.db.GetPaperApproval(context.Background(), key)
 	if err != nil || !found || a.ApprovedBy == nil || *a.ApprovedBy != 99 || a.ConsumedOrderID == nil || *a.ConsumedOrderID != int64(created.ID) {
 		t.Fatalf("approval audit incorrect: %+v %v", a, err)
@@ -510,5 +518,7 @@ func TestPaperApprovalSingleUseAndExactPayload(t *testing.T) {
 		t.Fatalf("consumed approval was re-approved: %v %v", ok, err)
 	}
 	again, replayed, err := env.db.CreateApprovedPaperOrderOnce(order, key, digest)
-	if err != nil || !replayed || again.ID != created.ID { t.Fatalf("retry duplicated order: %+v %v %v", again, replayed, err) }
+	if err != nil || !replayed || again.ID != created.ID {
+		t.Fatalf("retry duplicated order: %+v %v %v", again, replayed, err)
+	}
 }
