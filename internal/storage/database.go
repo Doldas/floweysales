@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // TradingRecord is one tick of the trading history.
@@ -69,71 +69,31 @@ type MarketStats struct {
 // OnRecordInsertedFunc is invoked after every inserted TradingRecord.
 type OnRecordInsertedFunc func(TradingRecord)
 
-// Database wraps the SQLite storage (thread-safe).
+// Database wraps the Liquibase-managed MySQL trading schema (thread-safe).
 type Database struct {
 	db               *sql.DB
 	mu               sync.Mutex
 	onRecordInserted OnRecordInsertedFunc
 }
 
-// Open initializes the database and its tables.
-func Open(dbPath string) (*Database, error) {
-	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)", dbPath)
-	if dbPath == ":memory:" {
-		dsn = "file::memory:?cache=shared"
-	}
-
-	handle, err := sql.Open("sqlite", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("[Database] Initialization error: %w", err)
-	}
-	handle.SetMaxOpenConns(4)
-
-	_, err = handle.Exec(`CREATE TABLE IF NOT EXISTS trading_history (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		timestamp INTEGER,
-		symbol TEXT,
-		price REAL,
-		stop_loss REAL,
-		fast_ema REAL,
-		slow_ema REAL,
-		currency TEXT,
-		status TEXT,
-		rawJson TEXT)`)
-
-	if err == nil {
-		_, err = handle.Exec(`CREATE TABLE IF NOT EXISTS orders (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			symbol TEXT NOT NULL,
-			side TEXT NOT NULL,
-			amount REAL NOT NULL,
-			price REAL NOT NULL,
-			timestamp INTEGER NOT NULL,
-			status TEXT DEFAULT 'OPEN')`)
-	}
-
-	if err == nil {
-		err = migrateOrders(handle)
-	}
-
-	if err == nil {
-		_, err = handle.Exec(`CREATE TABLE IF NOT EXISTS forum_posts (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			author TEXT NOT NULL,
-			title TEXT NOT NULL,
-			content TEXT NOT NULL,
-			symbol TEXT,
-			timestamp INTEGER NOT NULL,
-			upvotes INTEGER DEFAULT 0)`)
-	}
-
-	if err != nil {
-		handle.Close()
-		return nil, fmt.Errorf("[Database] Initialization error: %w", err)
-	}
-
-	log.Printf("[Database] SQLite initialized with extended tables successfully: %s", dbPath)
-	return &Database{db: handle}, nil
+// Open requires the same MySQL database/DSN used for authenticated identity.
+// The schema MUST be applied by Liquibase before starting the application.
+func Open(dsn string) (*Database,error){
+ if strings.TrimSpace(dsn)==""{return nil,fmt.Errorf("MYSQL_DSN is required; SQLite is no longer supported for live storage")}
+ handle,err:=sql.Open("mysql",dsn)
+ if err!=nil{return nil,fmt.Errorf("open MySQL: %w",err)}
+ handle.SetMaxOpenConns(10)
+ handle.SetMaxIdleConns(4)
+ handle.SetConnMaxLifetime(10*time.Minute)
+ if err:=handle.Ping();err!=nil{handle.Close();return nil,fmt.Errorf("MySQL is unreachable: %w",err)}
+ for _,table:=range []string{"trading_history","orders","forum_posts"}{
+  var count int
+  if err:=handle.QueryRow("SELECT COUNT(*) FROM "+table).Scan(&count);err!=nil {
+    handle.Close()
+    return nil,fmt.Errorf("MySQL table %s missing; run Liquibase migration: %w",table,err)
+  }
+ }
+ return &Database{db:handle},nil
 }
 
 // Close closes the underlying database handle.
@@ -190,8 +150,7 @@ func (d *Database) GetLatestRecords(limit int, symbolFilter string) []TradingRec
 
 	rows, err := d.db.Query(query, args...)
 	if err != nil {
-		log.Printf("[Database] Filtered search failed: %v", err)
-		return records
+				return records
 	}
 	defer rows.Close()
 
@@ -199,8 +158,7 @@ func (d *Database) GetLatestRecords(limit int, symbolFilter string) []TradingRec
 		var rec TradingRecord
 		if err := rows.Scan(&rec.Timestamp, &rec.Symbol, &rec.Price, &rec.StopLoss,
 			&rec.FastEMA, &rec.SlowEMA, &rec.Currency, &rec.Status); err != nil {
-			log.Printf("[Database] Row scan failed: %v", err)
-			continue
+						continue
 		}
 		records = append(records, rec)
 	}
@@ -213,45 +171,9 @@ func (d *Database) ClearHistory() {
 	defer d.mu.Unlock()
 
 	if _, err := d.db.Exec("DELETE FROM trading_history"); err != nil {
-		log.Printf("[Database] Failed to clear database: %v", err)
-		return
+				return
 	}
-	if _, err := d.db.Exec("DELETE FROM sqlite_sequence WHERE name='trading_history'"); err != nil {
-		log.Printf("[Database] Failed to reset sequence: %v", err)
-	}
-	log.Printf("[Database] Database cleared successfully.")
-}
-
-// migrateOrders adds the execution lifecycle columns to a legacy orders table
-// and backfills the quantity column from the retired amount column.
-func migrateOrders(handle *sql.DB) error {
-	columns := []struct {
-		name string
-		ddl  string
-	}{
-		{"type", "TEXT DEFAULT 'MARKET'"},
-		{"tif", "TEXT DEFAULT 'GTC'"},
-		{"quantity", "REAL NOT NULL DEFAULT 0"},
-		{"limit_price", "REAL DEFAULT 0"},
-		{"stop_price", "REAL DEFAULT 0"},
-		{"fill_price", "REAL DEFAULT 0"},
-		{"fee", "REAL DEFAULT 0"},
-		{"filled_at", "INTEGER DEFAULT 0"},
-		{"reason", "TEXT DEFAULT ''"},
-	}
-	for _, col := range columns {
-		if _, err := handle.Exec(`ALTER TABLE orders ADD COLUMN ` + col.name + ` ` + col.ddl); err != nil {
-			if !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
-				return fmt.Errorf("[Database] order migration failed: %w", err)
-			}
-		}
-	}
-
-	// Legacy rows keep their shares in `amount`.
-	if _, err := handle.Exec(`UPDATE orders SET quantity = amount WHERE quantity = 0 AND amount != 0`); err != nil {
-		return fmt.Errorf("[Database] order backfill failed: %w", err)
-	}
-	return nil
+	// AUTO_INCREMENT is intentionally not reset; history IDs remain monotonically increasing.
 }
 
 // CreateOrder stores a new order and returns its ID (-1 on failure).
@@ -322,16 +244,14 @@ func (d *Database) GetOrders(symbolFilter, statusFilter string) []Order {
 
 	rows, err := d.db.Query(query, args...)
 	if err != nil {
-		log.Printf("[Database] Get orders failed: %v", err)
-		return orders
+				return orders
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		o, err := scanOrder(rows.Scan)
 		if err != nil {
-			log.Printf("[Database] Order row scan failed: %v", err)
-			continue
+						continue
 		}
 		orders = append(orders, o)
 	}
@@ -448,16 +368,14 @@ func (d *Database) GetForumPosts(symbolFilter string, limit int) []ForumPost {
 
 	rows, err := d.db.Query(query, args...)
 	if err != nil {
-		log.Printf("[Database] Get forum posts failed: %v", err)
-		return posts
+				return posts
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var p ForumPost
 		if err := rows.Scan(&p.ID, &p.Author, &p.Title, &p.Content, &p.Symbol, &p.Timestamp, &p.Upvotes); err != nil {
-			log.Printf("[Database] Forum row scan failed: %v", err)
-			continue
+						continue
 		}
 		posts = append(posts, p)
 	}
@@ -490,8 +408,7 @@ func (d *Database) GetSymbolStats(symbol string) MarketStats {
 	row := d.db.QueryRow(
 		"SELECT MIN(price), MAX(price), AVG(price), COUNT(id) FROM trading_history WHERE symbol = ?", symbol)
 	if err := row.Scan(&minP, &maxP, &avgP, &stats.RecordCount); err != nil {
-		log.Printf("[Database] Get stats failed: %v", err)
-	} else {
+			} else {
 		stats.MinPrice = nullOr(minP)
 		stats.MaxPrice = nullOr(maxP)
 		stats.AvgPrice = nullOr(avgP)
@@ -501,8 +418,7 @@ func (d *Database) GetSymbolStats(symbol string) MarketStats {
 		"SELECT price FROM trading_history WHERE symbol = ? ORDER BY id DESC LIMIT 1", symbol)
 	if err := latestRow.Scan(&stats.LatestPrice); err != nil && err != sql.ErrNoRows {
 		stats.LatestPrice = 0
-		log.Printf("[Database] Get stats failed: %v", err)
-	}
+			}
 
 	return stats
 }
@@ -522,8 +438,7 @@ func (d *Database) GetDistinctSymbols() []string {
 	symbols := []string{}
 	rows, err := d.db.Query("SELECT DISTINCT symbol FROM trading_history")
 	if err != nil {
-		log.Printf("[Database] Get symbols failed: %v", err)
-		return symbols
+				return symbols
 	}
 	defer rows.Close()
 
