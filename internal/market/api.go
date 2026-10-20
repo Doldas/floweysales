@@ -2,7 +2,6 @@ package market
 
 import (
 	"fmt"
-	"log"
 	"os"
 )
 
@@ -42,11 +41,9 @@ func (api *MarketApi) FetchAsset(query string, provider Provider) (MarketAsset, 
 func (api *MarketApi) GetLivePrice(symbol string, provider Provider) float64 {
 	asset, err := api.FetchAsset(symbol, provider)
 	if err != nil {
-		log.Printf("Could not fetch price for '%s' via %s: %v", symbol, provider, err)
 		return -1.0
 	}
 	if asset.Price() <= 0 {
-		log.Printf("Could not fetch price for '%s' via %s (price <= 0)", symbol, provider)
 		return -1.0
 	}
 	return asset.Price()
@@ -83,7 +80,6 @@ func (api *MarketApi) GetTopMarkets(provider Provider) []Market {
 		}
 	default:
 		topStocks := []string{"AAPL", "MSFT", "NVDA", "AMZN", "META", "TSLA", "GIB", "GOOGL", "NFLX", "AMD"}
-		log.Printf("[MarketApi] Fetching stock prices sequentially via %s...", provider)
 		for _, sym := range topStocks {
 			if p := api.GetLivePrice(sym, provider); p > 0 {
 				results = append(results, Market{Symbol: sym, Price: p})
