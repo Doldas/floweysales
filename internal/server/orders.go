@@ -1,6 +1,10 @@
 package server
 
 import (
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"regexp"
 	"io"
 	"log"
 	"net/http"
@@ -95,6 +99,137 @@ func (e *Engine) registerOrderRoutes() {
 			return
 		}
 
+		key := stringField(j, "client_order_id")
+		digest := ""
+		if key != "" {
+			if len(key) > 128 || !regexp.MustCompile(`^[A-Za-z0-9._:-]+package server
+
+import (
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"io"
+	"log"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"floweysales/internal/storage"
+	"floweysales/internal/trading"
+)
+
+// ConfigureTrading stores the account settings used by the order routes and
+// the match loop. It is called once at boot, before any tick is broadcast.
+func (e *Engine) ConfigureTrading(cfg trading.Config) {
+	e.tradingMu.Lock()
+	defer e.tradingMu.Unlock()
+	e.tradingCfg = cfg
+}
+
+// tradingConfig returns the current account settings.
+func (e *Engine) tradingConfig() trading.Config {
+	e.tradingMu.Lock()
+	defer e.tradingMu.Unlock()
+	return e.tradingCfg
+}
+
+// portfolioState loads every order plus the derived positions and summary.
+func (e *Engine) portfolioState() (orders, working []storage.Order, positions []trading.Position, summary trading.Summary) {
+	cfg := e.tradingConfig()
+	orders = e.db.GetOrders("", "")
+	working = e.db.GetOpenOrders("")
+
+	marks := map[string]float64{}
+	for _, symbol := range e.db.GetDistinctSymbols() {
+		marks[symbol] = e.db.GetSymbolStats(symbol).LatestPrice
+	}
+
+	positions, summary = trading.BuildPositions(orders, working, marks, cfg)
+	return orders, working, positions, summary
+}
+
+// matchOrders runs the execution engine against a fresh tick and persists
+// anything that fills or triggers.
+func (e *Engine) matchOrders(symbol string, price float64) {
+	if e.tradingConfig().HaltNewOrders {
+		return // Do not fill existing working orders while the kill switch is set.
+	}
+	if symbol == "" || price <= 0 {
+		return
+	}
+
+	e.matchMu.Lock()
+	defer e.matchMu.Unlock()
+
+	working := e.db.GetOpenOrders(symbol)
+	if len(working) == 0 {
+		return
+	}
+
+	cfg := e.tradingConfig()
+	filled, triggered := trading.Match(working, symbol, price, cfg.Commission, time.Now().Unix())
+
+	for _, order := range filled {
+		if e.db.FillOrder(order) {
+			log.Printf("[API] Order #%d filled: %s %.8g %s @ %.8g (fee %.2f)",
+				order.ID, order.Side, order.Quantity, order.Symbol, order.FillPrice, order.Fee)
+		}
+	}
+	for _, order := range triggered {
+		if e.db.SetOrderType(order.ID, order.Type, order.LimitPrice) {
+			log.Printf("[API] Order #%d stop triggered, working as %s at %.8g",
+				order.ID, order.Type, order.LimitPrice)
+		}
+	}
+}
+
+// registerOrderRoutes wires the order ticket, lifecycle and portfolio views.
+func (e *Engine) registerOrderRoutes() {
+	// --- SUBMIT ---
+
+	e.mux.HandleFunc("POST /api/orders", func(w http.ResponseWriter, r *http.Request) {
+		corsHeader(w)
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeOrderError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		var j map[string]any
+		if err := jsonUnmarshal(body, &j); err != nil {
+			writeOrderError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+).MatchString(key) {
+				writeOrderError(w, http.StatusBadRequest, "client_order_id must be 1-128 ASCII letters, digits, dots, colons, underscores or hyphens")
+				return
+			}
+			canonical := make(map[string]any, len(j))
+			for name, value := range j {
+				if name != "client_order_id" {
+					canonical[name] = value
+				}
+			}
+			bytes, err := json.Marshal(canonical)
+			if err != nil {
+				writeOrderError(w, http.StatusBadRequest, "invalid order parameters")
+				return
+			}
+			digest = fmt.Sprintf("%x", sha256.Sum256(bytes))
+			existing, found, err := e.db.FindPaperOrderRequest(key, digest)
+			if err != nil {
+				writeOrderError(w, http.StatusConflict, err.Error())
+				return
+			}
+			if found {
+				writeJSON(w, http.StatusOK, map[string]any{"status": "success", "order_id": existing.ID, "order": existing, "replayed": true})
+				return
+			}
+		}
+
 		symbol := strings.ToUpper(strings.TrimSpace(stringField(j, "symbol")))
 		now := time.Now().Unix()
 
@@ -133,12 +268,25 @@ func (e *Engine) registerOrderRoutes() {
 			return
 		}
 
-		id := e.db.CreateOrder(order)
-		if id <= 0 {
-			writeOrderError(w, http.StatusInternalServerError, "failed to store order")
+		replayed := false
+		if key != "" {
+			order, replayed, err = e.db.CreatePaperOrderOnce(order, key, digest)
+			if err != nil {
+				writeOrderError(w, http.StatusConflict, err.Error())
+				return
+			}
+		} else {
+			order.ID = e.db.CreateOrder(order)
+			if order.ID <= 0 {
+				writeOrderError(w, http.StatusInternalServerError, "failed to store order")
+				return
+			}
+		}
+		id := order.ID
+		if replayed {
+			writeJSON(w, http.StatusOK, map[string]any{"status": "success", "order_id": id, "order": order, "replayed": true})
 			return
 		}
-		order.ID = id
 
 		if order.Status == trading.StatusFilled {
 			log.Printf("[API] Order #%d executed: %s %.8g %s @ %.8g (fee %.2f)",
