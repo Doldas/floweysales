@@ -46,7 +46,7 @@ func (e *Engine) registerPaperApprovalRoutes() {
 		}
 		return user.ID, true
 	}
-	e.mux.HandleFunc("POST /api/orders/approval-requests", func(w http.ResponseWriter, r *http.Request) {
+	e.mux.HandleFunc("POST /api/paper-approvals", func(w http.ResponseWriter, r *http.Request) {
 		requester, ok := authenticate(w,r)
 		if !ok { return }
 		r.Body = http.MaxBytesReader(w,r.Body,8192)
@@ -65,7 +65,7 @@ func (e *Engine) registerPaperApprovalRoutes() {
 		}
 		writeJSON(w,http.StatusAccepted,map[string]any{"client_order_id":key,"request_hash":digest,"approval_status":"pending"})
 	})
-	e.mux.HandleFunc("POST /api/orders/approval-requests/{key}/approve",func(w http.ResponseWriter,r *http.Request){
+	e.mux.HandleFunc("POST /api/paper-approvals/{key}/approve",func(w http.ResponseWriter,r *http.Request){
 		approver,ok:=authenticate(w,r)
 		if !ok {return}
 		key:=r.PathValue("key")
@@ -75,7 +75,7 @@ func (e *Engine) registerPaperApprovalRoutes() {
 		if !approved {writeOrderError(w,http.StatusConflict,"request does not exist, is already approved or is consumed");return}
 		writeJSON(w,http.StatusOK,map[string]any{"client_order_id":key,"approval_status":"approved","approved_by":approver})
 	})
-	e.mux.HandleFunc("GET /api/orders/approval-requests/{key}",func(w http.ResponseWriter,r *http.Request){
+	e.mux.HandleFunc("GET /api/paper-approvals/{key}",func(w http.ResponseWriter,r *http.Request){
 		_,ok:=authenticate(w,r)
 		if !ok {return}
 		key:=r.PathValue("key")
