@@ -159,9 +159,9 @@ func (e *Engine) registerOrderRoutes() {
 		corsHeader(w)
 		symbol := queryParam(r, "symbol", "")
 		status := queryParam(r, "status", "")
-		limit,_:=strconv.Atoi(r.URL.Query().Get("limit"))
-  offset,_:=strconv.Atoi(r.URL.Query().Get("offset"))
-  writeJSON(w,http.StatusOK,e.db.GetOrdersPage(symbol,status,limit,offset))
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+		writeJSON(w, http.StatusOK, e.db.GetOrdersPage(symbol, status, limit, offset))
 	})
 
 	// --- LIFECYCLE ---

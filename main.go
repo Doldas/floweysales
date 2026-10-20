@@ -174,16 +174,18 @@ func main() {
 	}
 	db.SetOnRecordInserted(restAPI.BroadcastTick)
 
-	defaultSymbol,defaultProvider:=sharedConfig.Get()
- if err:=db.BootstrapDefaultTracker(defaultSymbol,defaultProvider.ID());err!=nil{log.Fatalf("initialize tracker registry: %v",err)}
- existing, err := db.GetActiveTrackers()
+	defaultSymbol, defaultProvider := sharedConfig.Get()
+	if err := db.BootstrapDefaultTracker(defaultSymbol, defaultProvider.ID()); err != nil {
+		log.Fatalf("initialize tracker registry: %v", err)
+	}
+	existing, err := db.GetActiveTrackers()
 	if err != nil {
 		log.Fatalf("load saved trackers: %v", err)
 	}
 	if len(existing) == 0 {
-  // Intentionally empty after explicitly stopping every tracker.
-  sharedConfig.ReplaceTargets(nil)
- } else {
+		// Intentionally empty after explicitly stopping every tracker.
+		sharedConfig.ReplaceTargets(nil)
+	} else {
 		targets := make([]server.MarketTarget, 0, len(existing))
 		for _, t := range existing {
 			targets = append(targets, server.MarketTarget{Symbol: t.Symbol, Provider: market.ParseProvider(t.Provider)})
