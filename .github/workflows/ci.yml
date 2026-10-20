@@ -70,8 +70,23 @@ jobs:
           fi
       - name: Vet
         run: go vet ./...
+      - name: Start disposable Liquibase-backed MySQL for storage tests
+        env:
+          MYSQL_PASSWORD: ci-only-identity-password
+          MYSQL_ROOT_PASSWORD: ci-only-root-password
+        run: |
+          docker compose -f compose.identity.yml up -d mysql
+          docker compose -f compose.identity.yml --profile migration run --build --rm migrate update
       - name: Unit tests (race detector)
+        env:
+          STORAGE_TEST_MYSQL_DSN: 'flowey_auth:ci-only-identity-password@tcp(127.0.0.1:3306)/floweysales_auth?parseTime=true&loc=UTC&tls=false'
         run: go test -race -count=1 ./...
+      - name: Stop disposable storage MySQL
+        if: always()
+        env:
+          MYSQL_PASSWORD: ci-only-identity-password
+          MYSQL_ROOT_PASSWORD: ci-only-root-password
+        run: docker compose -f compose.identity.yml down -v
       - name: Build backend and MCP
         run: |
           mkdir -p dist
