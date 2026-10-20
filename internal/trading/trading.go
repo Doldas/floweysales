@@ -53,6 +53,7 @@ type Config struct {
 	BaseCash   float64    `json:"base_cash"`
 	Commission Commission `json:"commission"`
 	AllowShort bool       `json:"allow_short"`
+	MaxOrderNotional float64 `json:"max_order_notional"`
 }
 
 // DefaultConfig returns a plain cash account with no commissions.
@@ -203,6 +204,10 @@ func NewOrder(req SubmitRequest) (storage.Order, error) {
 	}
 
 	notional := round2(qty * worst)
+	if req.Cfg.MaxOrderNotional > 0 && notional > req.Cfg.MaxOrderNotional {
+		return storage.Order{}, fmt.Errorf("order notional %s exceeds configured paper-trading limit %s",
+			formatMoney(notional), formatMoney(req.Cfg.MaxOrderNotional))
+	}
 	fee := req.Cfg.Commission.Fee(notional)
 
 	if side == SideSell {
