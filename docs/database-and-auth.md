@@ -212,12 +212,12 @@ sector/liquidity controls, drawdown gating and explicit approvals remain #7.
 
 ## Paper-order lifecycle audit trail (issue #7, partial)
 
-Liquibase change 006 adds `paper_order_events` and MySQL triggers that record
-order creation and every change to `orders.status` in the **same transaction**
-as the change. `GET /api/orders/{id}/events` returns the newest 100
+Liquibase change 006 adds `paper_order_events`. The application records
+order creation and status changes in the **same MySQL transaction** as the
+corresponding order write, without requiring privileged MySQL triggers. `GET /api/orders/{id}/events` returns the newest 100
 events for an existing order (404 if missing, 503 if audit storage is down).
 Events include old/new status and the stored cancellation reason. This also
-covers orders created via idempotent retries and matching-engine fills; replay
+covers orders created using idempotency keys and matching-engine fills; replay
 without a new order does not create a duplicate creation event.
 
 **Scope:** the audit shows persisted lifecycle changes, not who authorized
