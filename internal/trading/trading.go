@@ -60,6 +60,8 @@ type Config struct {
 	MaxDrawdownPct         float64    `json:"max_drawdown_pct"`
 	MaxSectorAllocationPct float64   `json:"max_sector_allocation_pct"`
 	MaxDailyVolumePct      float64   `json:"max_daily_volume_pct"`
+	SymbolSectors map[string]string `json:"symbol_sectors,omitempty"`
+	DailyTradedNotional map[string]float64 `json:"daily_traded_notional,omitempty"`
 }
 
 // DefaultConfig returns a plain cash account with no commissions.
