@@ -234,11 +234,11 @@ When enabled, requests to `POST /api/orders` fail closed without an
 authenticated administrator and a valid `client_order_id`. The workflow is:
 
 1. Authenticate as SYS_ADMIN. Send the intended **exact order JSON**, including
-   `client_order_id`, to `POST /api/orders/approval-requests`. The response
+   `client_order_id`, to `POST /api/paper-approvals`. The response
    gives a SHA-256 request hash. This stage creates no executable order.
 2. After explicitly reviewing the request, an authenticated SYS_ADMIN calls
-   `POST /api/orders/approval-requests/{client_order_id}/approve`. The actor ID
-   is durably stored. `GET /api/orders/approval-requests/{client_order_id}`
+   `POST /api/paper-approvals/{client_order_id}/approve`. The actor ID
+   is durably stored. `GET /api/paper-approvals/{client_order_id}`
    shows requester, approval actor and consumption status.
 3. Send **the identical JSON** to `POST /api/orders`. Risk validation runs
    against current portfolio and prices. MySQL atomically consumes the matching
