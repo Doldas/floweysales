@@ -15,24 +15,31 @@ export class LiveSseService {
   readonly attempted = signal(false);
 
   /** (Re)connects for the given symbol. Reopening the source is cheap. */
-  connectFor(symbol: string): void {
-    const key = symbol || '__all__';
+  connectFor(symbol: string,provider=''): void {
+    const key = (symbol || '__all__')+'|'+provider;
     if (this.currentConfigKey === key && this.source) {
       return;
     }
     this.close();
     this.currentConfigKey = key;
+    this.latestTick.set(null);
     this.attempted.set(true);
 
     const open = () => {
       if (this.currentConfigKey !== key) return;
-      const es = new EventSource('/api/prices/stream');
+      const query=new URLSearchParams();
+      if(symbol)query.set('symbol',symbol);
+      if(provider)query.set('provider',provider);
+      const es = new EventSource('/api/prices/stream?'+query.toString());
       this.source = es;
 
       es.onopen = () => this.connected.set(true);
       es.onmessage = (ev) => {
         try {
+          if(this.currentConfigKey!==key)return;
           const record: TradingRecord = JSON.parse(ev.data);
+          // Explicit client-side guard even when older backends do not filter SSE.
+          if(record.symbol!==symbol || (provider && record.provider && record.provider!==provider))return;
           this.latestTick.set(record);
           this.connected.set(true);
         } catch (err) {

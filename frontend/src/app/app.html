@@ -104,6 +104,24 @@
         </mat-select>
       </mat-form-field>
       </div>
+      <div class="active-trackers" aria-label="Active market trackers">
+        <span class="tracker-heading">Active trackers ({{ trackedAssets().length }}/16)</span>
+        <div class="tracker-chips">
+          @for (asset of trackedAssets(); track asset.symbol + '|' + asset.provider) {
+            <div class="tracker-chip" [class.selected]="asset.symbol === trackedSymbol() && asset.provider === provider()">
+              <button mat-button class="tracker-select" (click)="viewTracker(asset)"
+                      [attr.aria-label]="'View '+asset.symbol+' on '+asset.provider">
+                {{ asset.symbol }} <small>{{ asset.provider }}</small>
+              </button>
+              <button mat-icon-button class="tracker-remove" (click)="stopTracker(asset)"
+                      [attr.aria-label]="'Stop tracking '+asset.symbol+' on '+asset.provider"
+                      matTooltip="Stop this tracker without affecting the others">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+          }
+        </div>
+      </div>
     </mat-card-content>
   </mat-card>
 

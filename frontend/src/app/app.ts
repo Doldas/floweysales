@@ -32,7 +32,7 @@ import {
   timer,
 } from 'rxjs';
 
-import { MarketService, describeHttpError } from './services';
+import { MarketService, describeHttpError, type TrackedAsset } from './services';
 import { AuthState } from './auth.service';
 import { LoginComponent } from './components/login';
 import { LiveSseService } from './live.service';
@@ -114,6 +114,7 @@ export class App {
   readonly chart = viewChild(TradingChartComponent);
 
   // ---- tracked asset -------------------------------------------------------
+  readonly trackedAssets=signal<TrackedAsset[]>([]);
   readonly trackedSymbol = signal('');
   readonly trackedName = signal('');
   readonly currency = signal('USD');
@@ -206,6 +207,7 @@ export class App {
     this.api.getConfig().subscribe({
       next: (cfg) => {
         const symbol = (cfg?.symbol ?? localStorage.getItem('lastTrackedSymbol') ?? 'GIB').toUpperCase();
+        this.trackedAssets.set(cfg?.trackers ?? []);
         const provider = (cfg?.provider ?? localStorage.getItem('lastProvider') ?? 'YAHOO') as ProviderId;
         // Normalize to uppercase ID if backend returned a display name
         if (typeof provider === 'string') {
@@ -244,6 +246,31 @@ export class App {
     this.provider.set(pi);
     localStorage.setItem('lastProvider', pi);
     this.providerChanged.next();
+  }
+
+  refreshTrackers():void {
+    this.api.getTrackers().subscribe({
+      next: data=>this.trackedAssets.set(data.trackers??[]),
+      error:()=>{}
+    });
+  }
+  viewTracker(target:TrackedAsset):void{
+    this.provider.set(target.provider as ProviderId);
+    this.symbolCtl.setValue(target.symbol,{emitEvent:false});
+    this.launchTracking(target.symbol);
+  }
+  stopTracker(target:TrackedAsset):void{
+    this.api.stopTracker(target).subscribe({
+      next: response=>{
+        this.trackedAssets.set(response.trackers??[]);
+        if(this.trackedSymbol()===target.symbol && this.provider()===target.provider){
+          const next=this.trackedAssets()[0];
+          if(next)this.viewTracker(next);
+          else{this.stream.close();this.trackedSymbol.set('');this.marketSeries.set(null);}
+        }
+      },
+      error:err=>this.showSnack('Unable to stop tracker: '+describeHttpError(err),true)
+    });
   }
 
   changeTheme(themeId: string): void {
@@ -337,11 +364,11 @@ export class App {
     this.chartsReset();
     this.historySeed.set(null);
     this.marketSeries.set(null);
-    this.stream.connectFor(symbol);
+    this.stream.connectFor(symbol,provider);
     this.ordersState.loadFor(symbol);
 
     this.api.applyConfig(symbol, provider).subscribe({
-      next: () => this.loadMarketHistory(symbol, provider),
+      next: () => {this.refreshTrackers();this.loadMarketHistory(symbol, provider);},
       error: (err) => {
         this.connecting.set(false);
         this.showSnack('Failed to switch asset: ' + describeHttpError(err), true);

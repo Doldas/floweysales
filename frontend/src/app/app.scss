@@ -473,3 +473,13 @@
   .topbar-actions { margin-left: auto; }
   .top-progress { top: 0; }
 }
+
+.active-trackers{width:100%;padding:0 16px 13px;min-width:0}
+.tracker-heading{display:block;color:var(--text-muted, #a7b6c6);font-size:12px;font-weight:600;margin-bottom:9px}
+.tracker-chips{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+.tracker-chip{display:inline-flex;align-items:center;max-width:100%;min-width:0;border:1px solid rgba(150,170,200,.32);border-radius:12px;background:rgba(40,60,84,.4)}
+.tracker-chip.selected{border-color:#39cce0;background:rgba(12,126,155,.15)}
+.tracker-select{min-width:0;max-width:205px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:44px}
+.tracker-select small{font-size:10px;opacity:.7;margin-left:5px}
+.tracker-remove{width:44px;min-width:44px;height:44px;min-height:44px}
+@media(max-width:700px){.active-trackers{padding:0 12px 10px}.tracker-chips{gap:6px}.tracker-select{max-width:158px}}
