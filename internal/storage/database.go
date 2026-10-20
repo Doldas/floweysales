@@ -86,7 +86,7 @@ func Open(dsn string) (*Database,error){
  handle.SetMaxIdleConns(4)
  handle.SetConnMaxLifetime(10*time.Minute)
  if err:=handle.Ping();err!=nil{handle.Close();return nil,fmt.Errorf("MySQL is unreachable: %w",err)}
- for _,table:=range []string{"trading_history","orders","forum_posts"}{
+ for _,table:=range []string{"trading_history","orders","forum_posts","tracked_assets"}{
   var count int
   if err:=handle.QueryRow("SELECT COUNT(*) FROM "+table).Scan(&count);err!=nil {
     handle.Close()
@@ -103,6 +103,28 @@ func (d *Database) HasAnyData() bool {
   if err:=d.db.QueryRow("SELECT COUNT(*) FROM "+table).Scan(&n);err==nil&&n>0{return true}
  }
  return false
+}
+
+// ActiveTracker is an independently polled market stream persisted in MySQL.
+type ActiveTracker struct{
+ Symbol string `json:"symbol"`
+ Provider string `json:"provider"`
+}
+func (d *Database) GetActiveTrackers() ([]ActiveTracker,error){
+ rows,err:=d.db.Query("SELECT symbol,provider FROM tracked_assets ORDER BY symbol,provider")
+ if err!=nil{return nil,err}
+ defer rows.Close()
+ out:=[]ActiveTracker{}
+ for rows.Next(){var t ActiveTracker;if err:=rows.Scan(&t.Symbol,&t.Provider);err!=nil{return nil,err};out=append(out,t)}
+ return out,rows.Err()
+}
+func (d *Database) AddActiveTracker(symbol,provider string)error{
+ _,err:=d.db.Exec("INSERT IGNORE INTO tracked_assets (symbol,provider) VALUES (?,?)",symbol,provider)
+ return err
+}
+func (d *Database) DeleteActiveTracker(symbol,provider string)error{
+ _,err:=d.db.Exec("DELETE FROM tracked_assets WHERE symbol=? AND provider=?",symbol,provider)
+ return err
 }
 
 // Close closes the underlying database handle.
