@@ -353,7 +353,13 @@ func (d *Database) CreateOrder(order Order) int {
 		order.Status = "OPEN"
 	}
 
-	res, err := d.db.Exec(
+	tx, err := d.db.Begin()
+	if err != nil {
+		log.Printf("[Database] Begin order transaction: %v", err)
+		return -1
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec(
 		`INSERT INTO orders
 		 (symbol, side, type, tif, amount, quantity, price, limit_price, stop_price,
 		  fill_price, fee, timestamp, filled_at, status, reason)
@@ -368,6 +374,14 @@ func (d *Database) CreateOrder(order Order) int {
 	id, err := res.LastInsertId()
 	if err != nil {
 		log.Printf("[Database] Create order failed: %v", err)
+		return -1
+	}
+	if _, err := tx.Exec("INSERT INTO paper_order_events(order_id,event_type,new_status,reason) VALUES (?, 'CREATED', ?, ?)", id, order.Status, order.Reason); err != nil {
+		log.Printf("[Database] Audit order creation: %v", err)
+		return -1
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("[Database] Commit order: %v", err)
 		return -1
 	}
 	return int(id)
@@ -444,7 +458,12 @@ func (d *Database) FillOrder(order Order) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	res, err := d.db.Exec(
+	tx, err := d.db.Begin()
+	if err != nil {
+		return false
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec(
 		`UPDATE orders SET status = 'FILLED', fill_price = ?, filled_at = ?, fee = ?, reason = ?
 		 WHERE id = ? AND status = 'OPEN'`,
 		order.FillPrice, order.FilledAt, order.Fee, order.Reason, order.ID)
@@ -453,7 +472,18 @@ func (d *Database) FillOrder(order Order) bool {
 		return false
 	}
 	n, _ := res.RowsAffected()
-	return n > 0
+	if n == 0 {
+		return false
+	}
+	if _, err := tx.Exec("INSERT INTO paper_order_events(order_id,event_type,previous_status,new_status,reason) VALUES (?, 'STATUS_CHANGED', 'OPEN', 'FILLED', ?)", order.ID, order.Reason); err != nil {
+		log.Printf("[Database] Audit fill: %v", err)
+		return false
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("[Database] Commit fill: %v", err)
+		return false
+	}
+	return true
 }
 
 // SetOrderType restates a triggered STOP_LIMIT order as a plain limit order.
@@ -477,19 +507,34 @@ func (d *Database) UpdateOrderStatus(orderID int, newStatus, reason string) bool
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	var err error
+	tx, err := d.db.Begin()
+	if err != nil {
+		return false
+	}
+	defer tx.Rollback()
 	var res sql.Result
 	if reason == "" {
-		res, err = d.db.Exec("UPDATE orders SET status = ? WHERE id = ? AND status = 'OPEN' AND ? IN ('CANCELLED','REJECTED')", newStatus, orderID, newStatus)
+		res, err = tx.Exec("UPDATE orders SET status = ? WHERE id = ? AND status = 'OPEN' AND ? IN ('CANCELLED','REJECTED')", newStatus, orderID, newStatus)
 	} else {
-		res, err = d.db.Exec("UPDATE orders SET status = ?, reason = ? WHERE id = ? AND status = 'OPEN' AND ? IN ('CANCELLED','REJECTED')", newStatus, reason, orderID, newStatus)
+		res, err = tx.Exec("UPDATE orders SET status = ?, reason = ? WHERE id = ? AND status = 'OPEN' AND ? IN ('CANCELLED','REJECTED')", newStatus, reason, orderID, newStatus)
 	}
 	if err != nil {
 		log.Printf("[Database] Update order status failed: %v", err)
 		return false
 	}
 	n, _ := res.RowsAffected()
-	return n > 0
+	if n == 0 {
+		return false
+	}
+	if _, err := tx.Exec("INSERT INTO paper_order_events(order_id,event_type,previous_status,new_status,reason) VALUES (?, 'STATUS_CHANGED', 'OPEN', ?, ?)", orderID, newStatus, reason); err != nil {
+		log.Printf("[Database] Audit status change: %v", err)
+		return false
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("[Database] Commit status change: %v", err)
+		return false
+	}
+	return true
 }
 
 // CreateForumPost stores a forum post and returns its ID (-1 on failure).

@@ -79,6 +79,9 @@ func (d *Database) CreatePaperOrderOnce(order Order, key, digest string) (Order,
 	if _, err := tx.Exec("UPDATE paper_order_requests SET order_id = ? WHERE client_order_id = ?", id, key); err != nil {
 		return Order{}, false, err
 	}
+	if _, err := tx.Exec("INSERT INTO paper_order_events(order_id,event_type,new_status,reason) VALUES (?, 'CREATED', ?, ?)", id, order.Status, order.Reason); err != nil {
+		return Order{}, false, err
+	}
 	if err := tx.Commit(); err != nil {
 		return Order{}, false, err
 	}

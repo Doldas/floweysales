@@ -7,4 +7,5 @@
   <include file="003-agent-budgets.xml" relativeToChangelogFile="true"/>
   <include file="004-trading-storage.xml" relativeToChangelogFile="true"/>
   <include file="005-paper-order-idempotency.xml" relativeToChangelogFile="true"/>
+  <include file="006-paper-order-audit.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

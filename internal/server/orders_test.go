@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"io"
 	"net/http"
@@ -420,5 +421,44 @@ func TestPaperOrderIdempotentRetry(t *testing.T) {
 	_, all := env.do(t, "GET", "/api/orders", nil)
 	if got := len(listOf(t, all)); got != 1 {
 		t.Fatalf("want exactly one persisted order, got %d", got)
+	}
+}
+
+func TestPaperOrderEventsPersistAcrossTransitions(t *testing.T) {
+	env := newTestEnv(t)
+	env.seed("GIB", 100)
+	code, raw := env.do(t, "POST", "/api/orders", map[string]any{
+		"symbol": "GIB", "side": "BUY", "type": "LIMIT", "quantity": 1, "limit_price": 90,
+	})
+	if code != http.StatusOK {
+		t.Fatalf("create order: %d %v", code, raw)
+	}
+	id := int(orderOf(t, raw)["id"].(float64))
+	path := fmt.Sprintf("/api/orders/%d/events", id)
+	code, raw = env.do(t, "GET", path, nil)
+	if code != http.StatusOK {
+		t.Fatalf("read initial audit: %d %v", code, raw)
+	}
+	events := listOf(t, mapOf(t, raw)["events"])
+	if len(events) != 1 || events[0].(map[string]any)["event_type"] != "CREATED" {
+		t.Fatalf("expected persisted creation event: %v", events)
+	}
+	code, raw = env.do(t, "PATCH", "/api/orders", map[string]any{
+		"id": id, "status": "CANCELLED", "reason": "test cancellation",
+	})
+	if code != http.StatusOK {
+		t.Fatalf("cancel order: %d %v", code, raw)
+	}
+	code, raw = env.do(t, "GET", path, nil)
+	events = listOf(t, mapOf(t, raw)["events"])
+	if code != http.StatusOK || len(events) != 2 {
+		t.Fatalf("expected 2 events: %d %v", code, raw)
+	}
+	recent := events[0].(map[string]any)
+	if recent["previous_status"] != "OPEN" || recent["new_status"] != "CANCELLED" || recent["reason"] != "test cancellation" {
+		t.Fatalf("incorrect transition audit: %v", recent)
+	}
+	if code, _ := env.do(t, "GET", "/api/orders/999999/events", nil); code != http.StatusNotFound {
+		t.Fatalf("missing order audit = %d, want 404", code)
 	}
 }

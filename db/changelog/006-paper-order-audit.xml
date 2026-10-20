@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="010-paper-order-events" author="floweysales" dbms="mysql">
+  <createTable tableName="paper_order_events">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="order_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="event_type" type="VARCHAR(32)"><constraints nullable="false"/></column>
+   <column name="previous_status" type="VARCHAR(32)"/>
+   <column name="new_status" type="VARCHAR(32)"><constraints nullable="false"/></column>
+   <column name="reason" type="TEXT"/>
+   <column name="created_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"/>
+  </createTable>
+  <createIndex tableName="paper_order_events" indexName="idx_paper_order_events_order_id">
+   <column name="order_id"/><column name="id"/>
+  </createIndex>
+  <rollback>
+   <dropTable tableName="paper_order_events"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>
