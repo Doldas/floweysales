@@ -179,3 +179,18 @@ MySQL uses a conditional update (`WHERE status = 'OPEN'`) to prevent a
 late cancellation request from changing an order already filled by a tick.
 Clients receive HTTP 409 when their requested lifecycle transition is stale.
 This is not yet a complete audit trail or a durable idempotency protocol.
+
+## Idempotent paper-order retries (issue #7, partial)
+
+Send a stable `client_order_id` (1–128 ASCII letters/digits, `.`, `_`, `:`,
+or `-`) in `POST /api/orders`. The request is hashed excluding the key,
+and MySQL atomically commits the simulated order and the unique key in the
+same transaction. Repeating the same payload/key returns the original order's
+**current** lifecycle with `replayed: true`, without executing a second
+purchase. Reusing a key for different parameters returns HTTP 409. Keep the
+same key when retrying after a lost response, including after an app restart.
+Requests without a key retain legacy non-idempotent behavior; clients requiring
+retry safety **must** send one. Keys apply to the shared paper account, not per
+user. The migration is additive and requires Liquibase update before deploying
+the application. This is not an approval system or a replacement for
+transactional portfolio-wide buying-power reservation.
