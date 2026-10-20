@@ -1,50 +1,74 @@
 package server
 
 import (
+	"encoding/json"
 	"io"
- "encoding/json"
- "strings"
-		"net/http"
+	"net/http"
+	"strings"
 
 	"floweysales/internal/market"
 )
 
 // registerConfigRoutes wires GET/POST /api/config and DELETE /api/history.
 func (e *Engine) registerConfigRoutes() {
- e.mux.HandleFunc("GET /api/trackers",func(w http.ResponseWriter,r *http.Request){
-  if e.manager==nil {writeJSON(w,200,[]any{});return}
-  writeJSON(w,200,e.manager.Snapshots())
- })
- e.mux.HandleFunc("POST /api/trackers",func(w http.ResponseWriter,r *http.Request){
-  if e.manager==nil{writeJSON(w,503,map[string]any{"error":"Tracker scheduler unavailable"});return}
-  r.Body=http.MaxBytesReader(w,r.Body,4096)
-  var payload struct{Symbol string `json:"symbol"`;Provider string `json:"provider"`}
-  dec:=json.NewDecoder(r.Body);dec.DisallowUnknownFields()
-  if err:=dec.Decode(&payload);err!=nil{writeJSON(w,400,map[string]any{"error":"invalid tracker request"});return}
-  if !validTrackerProvider(strings.ToUpper(strings.TrimSpace(payload.Provider))){
-   writeJSON(w,400,map[string]any{"error":"unknown provider"});return
-  }
-  if err:=e.manager.Add(payload.Symbol,market.ParseProvider(payload.Provider));err!=nil{
-   writeJSON(w,400,map[string]any{"error":err.Error()});return
-  }
-  writeJSON(w,200,e.manager.Snapshots())
- })
- e.mux.HandleFunc("DELETE /api/trackers",func(w http.ResponseWriter,r *http.Request){
-  if e.manager==nil{writeJSON(w,503,map[string]any{"error":"Tracker scheduler unavailable"});return}
-  symbol:=r.URL.Query().Get("symbol")
-  providerID:=strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("provider")))
-  if !validTrackerProvider(providerID){writeJSON(w,400,map[string]any{"error":"unknown provider"});return}
-  provider:=market.ParseProvider(providerID)
-  if err:=e.manager.Remove(symbol,provider);err!=nil{
-   writeJSON(w,400,map[string]any{"error":err.Error()});return
-  }
-  currentSymbol,currentProvider:=e.config.Get()
-  if strings.EqualFold(symbol,currentSymbol)&&provider==currentProvider {
-   all:=e.manager.Snapshots()
-   if len(all)>0{e.config.Set(all[0].Symbol,market.ParseProvider(all[0].Provider))}
-  }
-  writeJSON(w,200,e.manager.Snapshots())
- })
+	e.mux.HandleFunc("GET /api/trackers", func(w http.ResponseWriter, r *http.Request) {
+		if e.manager == nil {
+			writeJSON(w, 200, []any{})
+			return
+		}
+		writeJSON(w, 200, e.manager.Snapshots())
+	})
+	e.mux.HandleFunc("POST /api/trackers", func(w http.ResponseWriter, r *http.Request) {
+		if e.manager == nil {
+			writeJSON(w, 503, map[string]any{"error": "Tracker scheduler unavailable"})
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 4096)
+		var payload struct {
+			Symbol   string `json:"symbol"`
+			Provider string `json:"provider"`
+		}
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&payload); err != nil {
+			writeJSON(w, 400, map[string]any{"error": "invalid tracker request"})
+			return
+		}
+		if !validTrackerProvider(strings.ToUpper(strings.TrimSpace(payload.Provider))) {
+			writeJSON(w, 400, map[string]any{"error": "unknown provider"})
+			return
+		}
+		if err := e.manager.Add(payload.Symbol, market.ParseProvider(payload.Provider)); err != nil {
+			writeJSON(w, 400, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, e.manager.Snapshots())
+	})
+	e.mux.HandleFunc("DELETE /api/trackers", func(w http.ResponseWriter, r *http.Request) {
+		if e.manager == nil {
+			writeJSON(w, 503, map[string]any{"error": "Tracker scheduler unavailable"})
+			return
+		}
+		symbol := r.URL.Query().Get("symbol")
+		providerID := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("provider")))
+		if !validTrackerProvider(providerID) {
+			writeJSON(w, 400, map[string]any{"error": "unknown provider"})
+			return
+		}
+		provider := market.ParseProvider(providerID)
+		if err := e.manager.Remove(symbol, provider); err != nil {
+			writeJSON(w, 400, map[string]any{"error": err.Error()})
+			return
+		}
+		currentSymbol, currentProvider := e.config.Get()
+		if strings.EqualFold(symbol, currentSymbol) && provider == currentProvider {
+			all := e.manager.Snapshots()
+			if len(all) > 0 {
+				e.config.Set(all[0].Symbol, market.ParseProvider(all[0].Provider))
+			}
+		}
+		writeJSON(w, 200, e.manager.Snapshots())
+	})
 	e.mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
 		corsHeader(w)
 		symbol, provider := e.config.Get()
@@ -80,12 +104,13 @@ func (e *Engine) registerConfigRoutes() {
 			provider = market.ParseProvider(provStr)
 		}
 
-		if e.manager!=nil{
-  if err:=e.manager.Add(symbol,provider);err!=nil{
-   writeJSON(w,http.StatusBadRequest,map[string]any{"error":err.Error()});return
-  }
- }
- e.config.Set(symbol,provider)
+		if e.manager != nil {
+			if err := e.manager.Add(symbol, provider); err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+				return
+			}
+		}
+		e.config.Set(symbol, provider)
 
 		writeJSON(w, http.StatusOK, map[string]any{"status": "success", "message": "Configuration updated"})
 	})
@@ -97,9 +122,11 @@ func (e *Engine) registerConfigRoutes() {
 	})
 }
 
-func validTrackerProvider(s string)bool{
- switch s {
- case "YAHOO","FINNHUB","BINANCE","AVANZA":return true
- default:return false
- }
+func validTrackerProvider(s string) bool {
+	switch s {
+	case "YAHOO", "FINNHUB", "BINANCE", "AVANZA":
+		return true
+	default:
+		return false
+	}
 }

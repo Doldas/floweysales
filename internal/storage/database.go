@@ -15,7 +15,7 @@ import (
 // TradingRecord is one market tick in MySQL trading_history.
 type TradingRecord struct {
 	Timestamp        int64           `json:"timestamp"`
- Provider string `json:"provider,omitempty"`
+	Provider         string          `json:"provider,omitempty"`
 	Symbol           string          `json:"symbol"`
 	Price            float64         `json:"price"`
 	StopLoss         float64         `json:"stop_loss"`
@@ -73,30 +73,36 @@ type OnRecordInsertedFunc func(TradingRecord)
 // Database contains the single MySQL storage pool used by the application.
 // All trading history, orders, forum and tracker configuration live in MySQL.
 type Database struct {
- db *sql.DB
- mu sync.Mutex
- onRecordInserted OnRecordInsertedFunc
+	db               *sql.DB
+	mu               sync.Mutex
+	onRecordInserted OnRecordInsertedFunc
 }
 
 // Open requires a Liquibase-migrated MySQL DSN. There is no SQLite fallback
 // or implicit schema creation; a failed migration must fail startup safely.
-func Open(dsn string)(*Database,error){
- if strings.TrimSpace(dsn)=="" || !strings.Contains(dsn,"@tcp(") {
-  return nil,fmt.Errorf("MYSQL_DSN must point to the Liquibase-migrated MySQL server")
- }
- handle,err:=sql.Open("mysql",dsn)
- if err!=nil{return nil,fmt.Errorf("MySQL open: %w",err)}
- handle.SetMaxOpenConns(12)
- handle.SetMaxIdleConns(4)
- handle.SetConnMaxIdleTime(2*time.Minute)
- handle.SetConnMaxLifetime(20*time.Minute)
- if err=handle.Ping();err!=nil{handle.Close();return nil,fmt.Errorf("MySQL connection failed: %w",err)}
- // Detect accidental boot against an unmigrated database before any writes.
- var table string
- if err=handle.QueryRow("SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='trading_history'").Scan(&table);err!=nil{
-  handle.Close();return nil,fmt.Errorf("MySQL trading schema missing: run Liquibase update before startup: %w",err)
- }
- return &Database{db:handle},nil
+func Open(dsn string) (*Database, error) {
+	if strings.TrimSpace(dsn) == "" || !strings.Contains(dsn, "@tcp(") {
+		return nil, fmt.Errorf("MYSQL_DSN must point to the Liquibase-migrated MySQL server")
+	}
+	handle, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("MySQL open: %w", err)
+	}
+	handle.SetMaxOpenConns(12)
+	handle.SetMaxIdleConns(4)
+	handle.SetConnMaxIdleTime(2 * time.Minute)
+	handle.SetConnMaxLifetime(20 * time.Minute)
+	if err = handle.Ping(); err != nil {
+		handle.Close()
+		return nil, fmt.Errorf("MySQL connection failed: %w", err)
+	}
+	// Detect accidental boot against an unmigrated database before any writes.
+	var table string
+	if err = handle.QueryRow("SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='trading_history'").Scan(&table); err != nil {
+		handle.Close()
+		return nil, fmt.Errorf("MySQL trading schema missing: run Liquibase update before startup: %w", err)
+	}
+	return &Database{db: handle}, nil
 }
 
 // Close closes the underlying database handle.
@@ -137,8 +143,12 @@ func (d *Database) InsertRecord(record TradingRecord) {
 
 // GetLatestRecords returns the most recent records, optionally filtered by symbol.
 func (d *Database) GetLatestRecords(limit int, symbolFilter string) []TradingRecord {
- if limit<1{limit=100}
- if limit>2000{limit=2000}
+	if limit < 1 {
+		limit = 100
+	}
+	if limit > 2000 {
+		limit = 2000
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -181,7 +191,7 @@ func (d *Database) ClearHistory() {
 		log.Printf("[Database] Failed to clear database: %v", err)
 		return
 	}
-		log.Printf("[Database] Database cleared successfully.")
+	log.Printf("[Database] Database cleared successfully.")
 }
 
 // CreateOrder stores a new order and returns its ID (-1 on failure).

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-		"net"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -143,7 +143,7 @@ func (e *Engine) registerMarketRoutes() {
 			jList = append(jList, map[string]any{
 				"timestamp": rec.Timestamp,
 				"symbol":    rec.Symbol,
-                "provider":rec.Provider,
+				"provider":  rec.Provider,
 				"price":     rec.Price,
 				"stop_loss": rec.StopLoss,
 				"fast_ema":  rec.FastEMA,
@@ -237,9 +237,11 @@ func (e *Engine) registerMarketRoutes() {
 		w.WriteHeader(http.StatusOK)
 		flusher.Flush()
 
-		ch:=e.hub.subscribe()
-  if ch==nil {return}
-  defer e.hub.unsubscribe(ch)
+		ch := e.hub.subscribe()
+		if ch == nil {
+			return
+		}
+		defer e.hub.unsubscribe(ch)
 
 		for {
 			select {
@@ -282,14 +284,17 @@ func (e *Engine) GetHistory(symbol string, provider market.Provider, rng string)
 
 	e.historyMu.Lock()
 	e.historyCache[key] = historyCacheEntry{fetched: time.Now(), series: series}
-	if len(e.historyCache)>16 {
-   var oldestKey string
-   var oldestTime time.Time
-   for k,entry:=range e.historyCache {
-     if oldestKey=="" || entry.fetched.Before(oldestTime){oldestKey=k;oldestTime=entry.fetched}
-   }
-   delete(e.historyCache,oldestKey)
-  }
+	if len(e.historyCache) > 16 {
+		var oldestKey string
+		var oldestTime time.Time
+		for k, entry := range e.historyCache {
+			if oldestKey == "" || entry.fetched.Before(oldestTime) {
+				oldestKey = k
+				oldestTime = entry.fetched
+			}
+		}
+		delete(e.historyCache, oldestKey)
+	}
 	e.historyMu.Unlock()
 	return series, nil
 }
@@ -347,14 +352,17 @@ func (e *Engine) GetFinancialsRange(symbol string, provider market.Provider, yea
 
 	e.financialsMu.Lock()
 	e.financialsCache[key] = financialsCacheEntry{fetched: time.Now(), res: res}
-	if len(e.financialsCache)>12 {
-   var oldestKey string
-   var oldestTime time.Time
-   for k,entry:=range e.financialsCache {
-     if oldestKey=="" || entry.fetched.Before(oldestTime){oldestKey=k;oldestTime=entry.fetched}
-   }
-   delete(e.financialsCache,oldestKey)
-  }
+	if len(e.financialsCache) > 12 {
+		var oldestKey string
+		var oldestTime time.Time
+		for k, entry := range e.financialsCache {
+			if oldestKey == "" || entry.fetched.Before(oldestTime) {
+				oldestKey = k
+				oldestTime = entry.fetched
+			}
+		}
+		delete(e.financialsCache, oldestKey)
+	}
 	e.financialsMu.Unlock()
 	return res, nil
 }

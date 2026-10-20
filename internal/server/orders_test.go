@@ -2,7 +2,7 @@ package server
 
 import (
 	"bytes"
- "database/sql"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -28,20 +28,26 @@ type testEnv struct {
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
 
-	dsn:=os.Getenv("STORAGE_TEST_MYSQL_DSN")
- if dsn==""{t.Skip("requires disposable Liquibase-migrated MySQL; STORAGE_TEST_MYSQL_DSN")}
- db, err := storage.Open(dsn)
+	dsn := os.Getenv("STORAGE_TEST_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("requires disposable Liquibase-migrated MySQL; STORAGE_TEST_MYSQL_DSN")
+	}
+	db, err := storage.Open(dsn)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
- // Disposable CI schema only; purge state to isolate independent cases.
- testConn,err:=sql.Open("mysql",dsn)
- if err!=nil{t.Fatal(err)}
- defer testConn.Close()
- for _,table:=range []string{"orders","forum_posts","trading_history","tracked_assets"}{
-  if _,err:=testConn.Exec("DELETE FROM "+table);err!=nil{t.Fatal(err)}
- }
+	// Disposable CI schema only; purge state to isolate independent cases.
+	testConn, err := sql.Open("mysql", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer testConn.Close()
+	for _, table := range []string{"orders", "forum_posts", "trading_history", "tracked_assets"} {
+		if _, err := testConn.Exec("DELETE FROM " + table); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	config := &SharedMarketConfig{Symbol: "GIB", Provider: market.ParseProvider("YAHOO")}
 	engine := NewEngine(db, config, nil, "", tracker.DefaultConfig())

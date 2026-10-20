@@ -1,8 +1,8 @@
 package main
 
 import (
- "fmt"
 	"embed"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -13,13 +13,13 @@ import (
 	"floweysales/internal/identity"
 	"floweysales/internal/market"
 	"floweysales/internal/notify"
- "floweysales/internal/tracking"
 	"floweysales/internal/server"
 	"floweysales/internal/storage"
 	"floweysales/internal/tracker"
- "os/signal"
- "syscall"
+	"floweysales/internal/tracking"
 	"floweysales/internal/trading"
+	"os/signal"
+	"syscall"
 )
 
 // The web dashboard is compiled into the binary so assets render regardless
@@ -97,8 +97,6 @@ func main() {
 	cfg.WarmupTicks = parseInt(app.ResolveConfig("DEFAULT_WARMUP_TICKS", "10", defaults), cfg.WarmupTicks)
 	cfg.TransitionTicks = parseInt(app.ResolveConfig("DEFAULT_TRANSITION_TICKS", "30", defaults), cfg.TransitionTicks)
 
-	databasePath := app.ResolveConfig("SQLITE_STORAGE_PATH", ":memory:", defaults)
-
 	portfolio := trading.DefaultConfig()
 	portfolio.BaseCash = parseFloat(app.ResolveConfig("PORTFOLIO_CASH", "100000", defaults), portfolio.BaseCash)
 	portfolio.Commission.Pct = parseFloat(app.ResolveConfig("TRADE_COMMISSION_PCT", "0", defaults), 0)
@@ -106,49 +104,67 @@ func main() {
 	portfolio.AllowShort = strings.EqualFold(
 		app.ResolveConfig("ALLOW_SHORT_SELLING", "false", defaults), "true")
 
-    // MySQL is the ONLY live data store; absent/unreachable DB is fatal.
-    mysqlDSN:=app.ResolveConfig("MYSQL_DSN",os.Getenv("AUTH_MYSQL_DSN"),defaults)
-    if mysqlDSN=="" {log.Fatal("[DB] MYSQL_DSN (or AUTH_MYSQL_DSN) is required. Run Liquibase before startup.")}
-    db,err:=storage.Open(mysqlDSN)
-    if err!=nil{log.Fatalf("[DB] %v",err)}
-    defer db.Close()
+	// MySQL is the ONLY live data store; absent/unreachable DB is fatal.
+	mysqlDSN := app.ResolveConfig("MYSQL_DSN", os.Getenv("AUTH_MYSQL_DSN"), defaults)
+	if mysqlDSN == "" {
+		log.Fatal("[DB] MYSQL_DSN (or AUTH_MYSQL_DSN) is required. Run Liquibase before startup.")
+	}
+	db, err := storage.Open(mysqlDSN)
+	if err != nil {
+		log.Fatalf("[DB] %v", err)
+	}
+	defer db.Close()
 
-    restAPI:=server.NewEngine(db,sharedConfig,wwwFS,
-        app.ResolveConfig("FINNHUB_API_KEY","",defaults),cfg)
-    if strings.EqualFold(app.ResolveConfig("AUTH_ENABLED","false",defaults),"true"){
-        identityDB,err:=identity.Open(mysqlDSN)
-        if err!=nil{log.Fatalf("[AUTH] %v",err)}
-        defer identityDB.Close()
-        email,password:=os.Getenv("AUTH_BOOTSTRAP_EMAIL"),os.Getenv("AUTH_BOOTSTRAP_PASSWORD")
-        if (email=="")!=(password==""){log.Fatal("[AUTH] Set both bootstrap credentials or neither")}
-        if email!=""{if err:=identityDB.BootstrapOwner(context.Background(),email,password);err!=nil{
-          log.Fatalf("[AUTH] Owner bootstrap failed: %v",err)
-        }}
-        exists,err:=identityDB.OwnerExists(context.Background())
-        if err!=nil||!exists{log.Fatal("[AUTH] No owner exists; bootstrap credentials required for first start")}
-        secureCookie:=!strings.EqualFold(app.ResolveConfig("AUTH_COOKIE_SECURE","true",defaults),"false")
-        restAPI.ConfigureAuth(identityDB,secureCookie)
-    }
-    restAPI.ConfigureAgentLimits(
-        parseInt(app.ResolveConfig("AI_MAX_STEPS","12",defaults),12),
-        parseInt(app.ResolveConfig("AI_MAX_TOOL_CALLS","48",defaults),48))
-    restAPI.ConfigureAI(
-        app.ResolveConfig("OPENAI_BASE_URL","",defaults),
-        app.ResolveConfig("OPENAI_API_KEY","",defaults),
-        app.ResolveConfig("OPENAI_MODEL","",defaults))
-    if err:=restAPI.RestoreAISettings();err!=nil{log.Fatalf("[AI] Restore settings: %v",err)}
-    restAPI.ConfigureTrading(portfolio)
-    api:=market.NewMarketApi(app.ResolveConfig("FINNHUB_API_KEY","",defaults))
-    engine,err:=tracking.NewManager(db,api,cfg,sharedConfig.Symbol,sharedConfig.Provider)
-    if err!=nil{log.Fatalf("[TRACKERS] Cannot restore tracked assets: %v",err)}
-    restAPI.SetTrackerManager(engine)
-    db.SetOnRecordInserted(restAPI.BroadcastTick)
-    notifier:=notify.NewEmailNotifier(appMail,appMailPassword,receiveAlertsAt)
-    engine.Alerts(func(subject,body string){notifier.SendEmail(subject,body)},emailCooldownDuration)
-    if err:=restAPI.Start(restApiHost,restApiPort);err!=nil{log.Fatalf("[API] Bind: %v",err)}
-    defer restAPI.Stop()
-    ctx,stop:=signal.NotifyContext(context.Background(),os.Interrupt,syscall.SIGTERM)
-    defer stop()
-    // Exactly one poll loop, regardless of tracker count. No per-tick logs.
-    engine.Run(ctx,updateRate)
+	restAPI := server.NewEngine(db, sharedConfig, wwwFS,
+		app.ResolveConfig("FINNHUB_API_KEY", "", defaults), cfg)
+	if strings.EqualFold(app.ResolveConfig("AUTH_ENABLED", "false", defaults), "true") {
+		identityDB, err := identity.Open(mysqlDSN)
+		if err != nil {
+			log.Fatalf("[AUTH] %v", err)
+		}
+		defer identityDB.Close()
+		email, password := os.Getenv("AUTH_BOOTSTRAP_EMAIL"), os.Getenv("AUTH_BOOTSTRAP_PASSWORD")
+		if (email == "") != (password == "") {
+			log.Fatal("[AUTH] Set both bootstrap credentials or neither")
+		}
+		if email != "" {
+			if err := identityDB.BootstrapOwner(context.Background(), email, password); err != nil {
+				log.Fatalf("[AUTH] Owner bootstrap failed: %v", err)
+			}
+		}
+		exists, err := identityDB.OwnerExists(context.Background())
+		if err != nil || !exists {
+			log.Fatal("[AUTH] No owner exists; bootstrap credentials required for first start")
+		}
+		secureCookie := !strings.EqualFold(app.ResolveConfig("AUTH_COOKIE_SECURE", "true", defaults), "false")
+		restAPI.ConfigureAuth(identityDB, secureCookie)
+	}
+	restAPI.ConfigureAgentLimits(
+		parseInt(app.ResolveConfig("AI_MAX_STEPS", "12", defaults), 12),
+		parseInt(app.ResolveConfig("AI_MAX_TOOL_CALLS", "48", defaults), 48))
+	restAPI.ConfigureAI(
+		app.ResolveConfig("OPENAI_BASE_URL", "", defaults),
+		app.ResolveConfig("OPENAI_API_KEY", "", defaults),
+		app.ResolveConfig("OPENAI_MODEL", "", defaults))
+	if err := restAPI.RestoreAISettings(); err != nil {
+		log.Fatalf("[AI] Restore settings: %v", err)
+	}
+	restAPI.ConfigureTrading(portfolio)
+	api := market.NewMarketApi(app.ResolveConfig("FINNHUB_API_KEY", "", defaults))
+	engine, err := tracking.NewManager(db, api, cfg, sharedConfig.Symbol, sharedConfig.Provider)
+	if err != nil {
+		log.Fatalf("[TRACKERS] Cannot restore tracked assets: %v", err)
+	}
+	restAPI.SetTrackerManager(engine)
+	db.SetOnRecordInserted(restAPI.BroadcastTick)
+	notifier := notify.NewEmailNotifier(appMail, appMailPassword, receiveAlertsAt)
+	engine.Alerts(func(subject, body string) { notifier.SendEmail(subject, body) }, emailCooldownDuration)
+	if err := restAPI.Start(restApiHost, restApiPort); err != nil {
+		log.Fatalf("[API] Bind: %v", err)
+	}
+	defer restAPI.Stop()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	// Exactly one poll loop, regardless of tracker count. No per-tick logs.
+	engine.Run(ctx, updateRate)
 }

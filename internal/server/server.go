@@ -13,8 +13,8 @@ import (
 	"floweysales/internal/market"
 	"floweysales/internal/storage"
 	"floweysales/internal/tracker"
+	"floweysales/internal/tracking"
 	"floweysales/internal/trading"
- "floweysales/internal/tracking"
 )
 
 // SharedMarketConfig is the live asset configuration that the tick loop polls
@@ -49,7 +49,7 @@ type Engine struct {
 	config           *SharedMarketConfig
 	finnhubAPIKey    string
 	trackerCfg       tracker.Config
- manager *tracking.Manager
+	manager          *tracking.Manager
 
 	webFS   fs.FS // optional embedded www/ filesystem (e.g. //go:embed www)
 	hub     *sseHub
@@ -112,7 +112,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, fi
 }
 
 // SetTrackerManager injects the bounded multi-asset scheduler. Test engines may leave it nil.
-func (e *Engine) SetTrackerManager(m *tracking.Manager){e.manager=m}
+func (e *Engine) SetTrackerManager(m *tracking.Manager) { e.manager = m }
 
 // ConfigureAI sets the default OpenAI-compatible endpoint used when a chat
 // request does not supply its own base URL/model/key.
@@ -184,11 +184,11 @@ func (e *Engine) aiDefaults() (baseURL, apiKey, model string) {
 func (e *Engine) Start(host, port string) error {
 	addr := host + ":" + port
 	e.httpSrv = &http.Server{
-		Addr: addr,
-        Handler: e.Handler(),
-        ReadHeaderTimeout: 8*time.Second,
-        ReadTimeout: 15*time.Second,
-        IdleTimeout: 45*time.Second,
+		Addr:              addr,
+		Handler:           e.Handler(),
+		ReadHeaderTimeout: 8 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		IdleTimeout:       45 * time.Second,
 	}
 
 	ln, err := netListen(addr)
@@ -227,9 +227,11 @@ func newSSEHub() *sseHub {
 func (h *sseHub) subscribe() chan []byte {
 	ch := make(chan []byte, 2)
 	h.mu.Lock()
- defer h.mu.Unlock()
- if len(h.clients)>=32 {return nil}
- h.clients[ch]=struct{}{}
+	defer h.mu.Unlock()
+	if len(h.clients) >= 32 {
+		return nil
+	}
+	h.clients[ch] = struct{}{}
 	return ch
 }
 
@@ -259,7 +261,7 @@ func (e *Engine) BroadcastTick(record storage.TradingRecord) {
 	payload := map[string]any{
 		"timestamp":  record.Timestamp,
 		"symbol":     record.Symbol,
-        "provider":record.Provider,
+		"provider":   record.Provider,
 		"price":      record.Price,
 		"stop_loss":  record.StopLoss,
 		"fast_ema":   record.FastEMA,
