@@ -50,10 +50,10 @@ const qtyEpsilon = 1e-9
 
 // Config is the account level configuration used for risk checks and costs.
 type Config struct {
-	BaseCash   float64    `json:"base_cash"`
-	Commission Commission `json:"commission"`
-	AllowShort bool       `json:"allow_short"`
-	MaxOrderNotional float64 `json:"max_order_notional"`
+	BaseCash         float64    `json:"base_cash"`
+	Commission       Commission `json:"commission"`
+	AllowShort       bool       `json:"allow_short"`
+	MaxOrderNotional float64    `json:"max_order_notional"`
 }
 
 // DefaultConfig returns a plain cash account with no commissions.
