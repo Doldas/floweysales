@@ -217,11 +217,12 @@ func newSSEHub() *sseHub {
 }
 
 func (h *sseHub) subscribe() chan []byte {
-	ch := make(chan []byte, 16)
+	ch := make(chan []byte, 4)
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.clients[ch] = struct{}{}
-	return ch
+	if len(h.clients)>=64{return nil}
+ h.clients[ch]=struct{}{}
+ return ch
 }
 
 func (h *sseHub) unsubscribe(ch chan []byte) {
