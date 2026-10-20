@@ -6,6 +6,7 @@
   <createTable tableName="paper_order_approval_requests">
    <column name="client_order_id" type="VARCHAR(128)"><constraints primaryKey="true" nullable="false"/></column>
    <column name="request_hash" type="CHAR(64)"><constraints nullable="false"/></column>
+   <column name="request_payload" type="LONGTEXT"><constraints nullable="false"/></column>
    <column name="requested_by" type="BIGINT"><constraints nullable="false"/></column>
    <column name="approved_by" type="BIGINT"/>
    <column name="approved_at" type="DATETIME(6)"/>
