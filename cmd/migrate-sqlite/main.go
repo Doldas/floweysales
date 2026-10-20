@@ -6,11 +6,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"os"
 	"time"
-	"flag"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "modernc.org/sqlite"
@@ -118,6 +118,7 @@ func migrate(ctx context.Context, sqlitePath, mysqlDSN string) (map[string]int, 
 	}
 	return counts, nil
 }
+
 // tableFingerprint checks inexpensive structural invariants without exporting
 // sensitive application rows. It does not prove byte-for-byte equivalence.
 type tableFingerprint struct {
@@ -145,25 +146,41 @@ func verifyMigration(ctx context.Context, sqlitePath, mysqlDSN string) error {
 		return errors.New("source SQLite path is a directory")
 	}
 	src, err := sql.Open("sqlite", "file:"+sqlitePath+"?mode=ro")
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer src.Close()
-	if err := src.PingContext(ctx); err != nil { return err }
+	if err := src.PingContext(ctx); err != nil {
+		return err
+	}
 	dst, err := sql.Open("mysql", mysqlDSN)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer dst.Close()
-	if err := dst.PingContext(ctx); err != nil { return err }
+	if err := dst.PingContext(ctx); err != nil {
+		return err
+	}
 	var mismatch bool
 	for _, tbl := range tables {
 		a, err := fingerprint(ctx, src, tbl.table)
-		if err != nil { return fmt.Errorf("SQLite %s: %w", tbl.table, err) }
+		if err != nil {
+			return fmt.Errorf("SQLite %s: %w", tbl.table, err)
+		}
 		b, err := fingerprint(ctx, dst, tbl.table)
-		if err != nil { return fmt.Errorf("MySQL %s: %w", tbl.table, err) }
+		if err != nil {
+			return fmt.Errorf("MySQL %s: %w", tbl.table, err)
+		}
 		ok := a == b
 		fmt.Printf("%s: SQLite count=%d ID=[%v,%v]; MySQL count=%d ID=[%v,%v]; match=%t\n",
 			tbl.table, a.Count, a.MinID, a.MaxID, b.Count, b.MinID, b.MaxID, ok)
-		if !ok { mismatch = true }
+		if !ok {
+			mismatch = true
+		}
 	}
-	if mismatch { return errors.New("verification failed: count or ID boundary mismatch; do not retire legacy volume") }
+	if mismatch {
+		return errors.New("verification failed: count or ID boundary mismatch; do not retire legacy volume")
+	}
 	fmt.Println("Structural verification passed. Compare order balances and sample records before retiring the legacy volume.")
 	return nil
 }
@@ -174,7 +191,9 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	if *verify {
-		if err := verifyMigration(ctx, os.Getenv("SQLITE_IMPORT_PATH"), os.Getenv("MYSQL_DSN")); err != nil { log.Fatal(err) }
+		if err := verifyMigration(ctx, os.Getenv("SQLITE_IMPORT_PATH"), os.Getenv("MYSQL_DSN")); err != nil {
+			log.Fatal(err)
+		}
 		return
 	}
 	counts, err := migrate(ctx, os.Getenv("SQLITE_IMPORT_PATH"), os.Getenv("MYSQL_DSN"))
