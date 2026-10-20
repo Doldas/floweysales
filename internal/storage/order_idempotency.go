@@ -39,6 +39,16 @@ func (d *Database) FindPaperOrderRequest(key, digest string) (Order, bool, error
 // CreatePaperOrderOnce atomically stores a key and its simulated order.
 // The MySQL primary key serializes concurrent requests across app replicas.
 func (d *Database) CreatePaperOrderOnce(order Order, key, digest string) (Order, bool, error) {
+	return d.createPaperOrderOnce(order, key, digest, false)
+}
+
+// CreateApprovedPaperOrderOnce requires a previously approved request and
+// atomically consumes its approval when the order is durably recorded.
+func (d *Database) CreateApprovedPaperOrderOnce(order Order, key, digest string) (Order, bool, error) {
+	return d.createPaperOrderOnce(order, key, digest, true)
+}
+
+func (d *Database) createPaperOrderOnce(order Order, key, digest string, requireApproval bool) (Order, bool, error) {
 	tx, err := d.db.Begin()
 	if err != nil {
 		return Order{}, false, err
@@ -61,6 +71,14 @@ func (d *Database) CreatePaperOrderOnce(order Order, key, digest string) (Order,
 		return Order{}, false, err
 	}
 
+	if requireApproval {
+		var approved int
+		err := tx.QueryRow(`SELECT COUNT(*) FROM paper_order_approval_requests
+			WHERE client_order_id=? AND request_hash=? AND approved_by IS NOT NULL AND consumed_order_id IS NULL`, key, digest).Scan(&approved)
+		if err != nil { return Order{}, false, err }
+		if approved != 1 { return Order{}, false, fmt.Errorf("paper order requires an unused human approval for its exact parameters") }
+	}
+
 	res, err := tx.Exec(
 		`INSERT INTO orders
 		 (symbol, side, type, tif, amount, quantity, price, limit_price, stop_price,
@@ -75,6 +93,13 @@ func (d *Database) CreatePaperOrderOnce(order Order, key, digest string) (Order,
 	id, err := res.LastInsertId()
 	if err != nil {
 		return Order{}, false, err
+	}
+	if requireApproval {
+		res, err := tx.Exec(`UPDATE paper_order_approval_requests SET consumed_order_id=?
+			WHERE client_order_id=? AND request_hash=? AND approved_by IS NOT NULL AND consumed_order_id IS NULL`, id, key, digest)
+		if err != nil { return Order{}, false, err }
+		affected, err := res.RowsAffected()
+		if err != nil || affected != 1 { return Order{}, false, fmt.Errorf("approval was already consumed or revoked") }
 	}
 	if _, err := tx.Exec("UPDATE paper_order_requests SET order_id = ? WHERE client_order_id = ?", id, key); err != nil {
 		return Order{}, false, err
