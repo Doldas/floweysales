@@ -363,3 +363,37 @@ func TestPaperTradingHaltStopsSubmissionAndRestingFills(t *testing.T) {
 		t.Fatalf("halt must allow cancellation: %d %v", code, raw)
 	}
 }
+
+func TestManualFillIsRejectedAndCancellationCannotBeReplayed(t *testing.T) {
+	env := newTestEnv(t)
+	env.seed("GIB", 100)
+	code, raw := env.do(t, "POST", "/api/orders", map[string]any{
+		"symbol": "GIB", "side": "BUY", "type": "LIMIT", "quantity": 2, "limit_price": 90,
+	})
+	if code != http.StatusOK {
+		t.Fatalf("resting order: %d %v", code, raw)
+	}
+	id := orderOf(t, raw)["id"]
+	code, raw = env.do(t, "PATCH", "/api/orders", map[string]any{
+		"id": id, "status": "FILLED", "fill_price": 10,
+	})
+	if code != http.StatusConflict {
+		t.Fatalf("manual fill must fail: %d %v", code, raw)
+	}
+	code, raw = env.do(t, "GET", "/api/orders?status=OPEN", nil)
+	if code != http.StatusOK || len(listOf(t, raw)) != 1 {
+		t.Fatalf("manual fill modified the ledger: %d %v", code, raw)
+	}
+	code, raw = env.do(t, "PATCH", "/api/orders", map[string]any{
+		"id": id, "status": "CANCELLED",
+	})
+	if code != http.StatusOK {
+		t.Fatalf("cancel: %d %v", code, raw)
+	}
+	code, raw = env.do(t, "PATCH", "/api/orders", map[string]any{
+		"id": id, "status": "REJECTED",
+	})
+	if code != http.StatusConflict {
+		t.Fatalf("terminal transition must fail: %d %v", code, raw)
+	}
+}
