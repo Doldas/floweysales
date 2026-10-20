@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -233,6 +234,27 @@ func (e *Engine) registerOrderRoutes() {
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 		writeJSON(w, http.StatusOK, e.db.GetOrdersPage(symbol, status, limit, offset))
+	})
+
+	// The database owns this immutable lifecycle trail via INSERT/UPDATE triggers.
+	e.mux.HandleFunc("GET /api/orders/{id}/events", func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || id <= 0 {
+			writeOrderError(w, http.StatusBadRequest, "invalid order id")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		events, found, err := e.db.GetPaperOrderEvents(ctx, id)
+		if err != nil {
+			writeOrderError(w, http.StatusServiceUnavailable, "order audit history unavailable")
+			return
+		}
+		if !found {
+			writeOrderError(w, http.StatusNotFound, "order not found")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"events": events})
 	})
 
 	// --- LIFECYCLE ---
