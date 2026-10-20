@@ -191,7 +191,7 @@ func main() {
 		sharedConfig.SelectPrimary(targets[0].Symbol, targets[0].Provider)
 	}
 
-if err := restAPI.Start(restApiHost, restApiPort); err != nil {
+	if err := restAPI.Start(restApiHost, restApiPort); err != nil {
 		log.Fatalf("bind %s:%s: %v", restApiHost, restApiPort, err)
 	}
 	var notifier *notify.EmailNotifier
