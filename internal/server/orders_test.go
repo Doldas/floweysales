@@ -397,3 +397,28 @@ func TestManualFillIsRejectedAndCancellationCannotBeReplayed(t *testing.T) {
 		t.Fatalf("terminal transition must fail: %d %v", code, raw)
 	}
 }
+
+func TestPaperOrderIdempotentRetry(t *testing.T) {
+	env := newTestEnv(t)
+	env.seed("GIB", 100)
+	payload := map[string]any{"symbol": "GIB", "side": "BUY", "quantity": 1, "client_order_id": "test-retry-1"}
+	code, first := env.do(t, "POST", "/api/orders", payload)
+	if code != http.StatusOK {
+		t.Fatalf("initial order: %d %v", code, first)
+	}
+	code, second := env.do(t, "POST", "/api/orders", payload)
+	if code != http.StatusOK || mapOf(t, second)["replayed"] != true {
+		t.Fatalf("retry: %d %v", code, second)
+	}
+	if orderOf(t, first)["id"] != orderOf(t, second)["id"] {
+		t.Fatalf("retry duplicated order: %v %v", first, second)
+	}
+	payload["quantity"] = 2
+	if code, _ := env.do(t, "POST", "/api/orders", payload); code != http.StatusConflict {
+		t.Fatalf("key reuse with changed parameters = %d, want conflict", code)
+	}
+	_, all := env.do(t, "GET", "/api/orders", nil)
+	if got := len(listOf(t, all)); got != 1 {
+		t.Fatalf("want exactly one persisted order, got %d", got)
+	}
+}
