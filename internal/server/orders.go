@@ -205,19 +205,20 @@ func (e *Engine) registerOrderRoutes() {
 			return
 		}
 
+		cashRisk := storage.PaperCashRisk{StartingCash: cfg.BaseCash, CommissionPct: cfg.Commission.Pct, CommissionFixed: cfg.Commission.Fixed}
 		replayed := false
 		if key != "" {
 			if cfg.RequirePaperApproval {
-				order, replayed, err = e.db.CreateApprovedPaperOrderOnce(order, key, digest)
+				order, replayed, err = e.db.CreateApprovedPaperOrderOnce(order, key, digest, cashRisk)
 			} else {
-				order, replayed, err = e.db.CreatePaperOrderOnce(order, key, digest)
+				order, replayed, err = e.db.CreatePaperOrderOnce(order, key, digest, cashRisk)
 			}
 			if err != nil {
 				writeOrderError(w, http.StatusConflict, err.Error())
 				return
 			}
 		} else {
-			order.ID = e.db.CreateOrder(order)
+			order.ID = e.db.CreateOrder(order, cashRisk)
 			if order.ID <= 0 {
 				writeOrderError(w, http.StatusInternalServerError, "failed to store order")
 				return
