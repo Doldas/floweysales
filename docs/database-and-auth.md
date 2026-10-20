@@ -169,3 +169,13 @@ implement portfolio drawdown limits, exposure concentration or a kill switch.
 Set `PAPER_TRADING_HALT=true` in the app environment and **restart/recreate the app** to stop all new simulated order submissions and prevent resting simulated orders from matching subsequent ticks. Reading existing orders and manually cancelling OPEN orders remain available. Set back to `false` and restart only after investigating the problem. The toggle is read at startup; changing a Compose env file alone does **not** affect a running process.
 
 This is a software-only safety stop for paper trading. It does **not** cancel existing orders automatically, stop external market data polling, or provide broker-side controls. Do not use it to authorize real-money execution. The issue also requires persisted approvals, request idempotency, risk concentration/drawdown controls and failure testing before it can be closed.
+
+## Order lifecycle safety (issue #7, incremental)
+
+`PATCH /api/orders` permits cancellation and rejection of *OPEN* simulated
+orders only. Manual transitions to `FILLED` are blocked: marketable execution
+must come from the paper trading match engine, including fill price and fees.
+MySQL uses a conditional update (`WHERE status = 'OPEN'`) to prevent a
+late cancellation request from changing an order already filled by a tick.
+Clients receive HTTP 409 when their requested lifecycle transition is stale.
+This is not yet a complete audit trail or a durable idempotency protocol.
