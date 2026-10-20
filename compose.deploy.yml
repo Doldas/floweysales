@@ -25,6 +25,8 @@ services:
         condition: service_healthy
     environment:
       LIQUIBASE_COMMAND_URL: jdbc:mysql://mysql:3306/floweysales_auth
+      LIQUIBASE_COMMAND_DRIVER: com.mysql.cj.jdbc.Driver
+      LIQUIBASE_COMMAND_CLASSPATH: /liquibase/internal/lib/mysql-connector-j-9.5.0.jar
       LIQUIBASE_COMMAND_USERNAME: flowey_auth
       LIQUIBASE_COMMAND_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
       LIQUIBASE_COMMAND_CHANGELOG_FILE: db.changelog-master.xml
