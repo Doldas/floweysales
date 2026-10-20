@@ -15,20 +15,7 @@
   <createIndex tableName="paper_order_events" indexName="idx_paper_order_events_order_id">
    <column name="order_id"/><column name="id"/>
   </createIndex>
-  <sql splitStatements="false" stripComments="false"><![CDATA[
-CREATE TRIGGER paper_order_audit_insert AFTER INSERT ON orders FOR EACH ROW
-INSERT INTO paper_order_events(order_id,event_type,previous_status,new_status,reason)
-VALUES (NEW.id,'CREATED',NULL,NEW.status,NEW.reason)
-]]></sql>
-  <sql splitStatements="false" stripComments="false"><![CDATA[
-CREATE TRIGGER paper_order_audit_update AFTER UPDATE ON orders FOR EACH ROW
-INSERT INTO paper_order_events(order_id,event_type,previous_status,new_status,reason)
-SELECT NEW.id,'STATUS_CHANGED',OLD.status,NEW.status,NEW.reason
-WHERE NOT (OLD.status <=> NEW.status)
-]]></sql>
   <rollback>
-   <sql>DROP TRIGGER IF EXISTS paper_order_audit_update</sql>
-   <sql>DROP TRIGGER IF EXISTS paper_order_audit_insert</sql>
    <dropTable tableName="paper_order_events"/>
   </rollback>
  </changeSet>
