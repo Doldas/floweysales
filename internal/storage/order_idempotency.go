@@ -71,8 +71,10 @@ func (d *Database) createPaperOrderOnce(order Order, key, digest string, require
 		return Order{}, false, err
 	}
 
-	if len(risk)>0 {
-		if err:=lockPaperCash(tx,order,risk[0]); err!=nil { return Order{},false,err }
+	if len(risk) > 0 {
+		if err := lockPaperCash(tx, order, risk[0]); err != nil {
+			return Order{}, false, err
+		}
 	}
 
 	if requireApproval {
