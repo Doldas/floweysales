@@ -54,6 +54,7 @@ type Config struct {
 	Commission       Commission `json:"commission"`
 	AllowShort       bool       `json:"allow_short"`
 	MaxOrderNotional float64    `json:"max_order_notional"`
+	HaltNewOrders bool `json:"halt_new_orders"`
 }
 
 // DefaultConfig returns a plain cash account with no commissions.
@@ -142,6 +143,9 @@ type SubmitRequest struct {
 // marketable and returns the normalised order ready for persistence.
 // Working orders come back with status OPEN.
 func NewOrder(req SubmitRequest) (storage.Order, error) {
+	if req.Cfg.HaltNewOrders {
+		return storage.Order{}, fmt.Errorf("paper trading is halted; new orders are disabled")
+	}
 	symbol := strings.ToUpper(strings.TrimSpace(req.Symbol))
 	if symbol == "" {
 		return storage.Order{}, fmt.Errorf("symbol is required")
