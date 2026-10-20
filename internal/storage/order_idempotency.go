@@ -75,8 +75,12 @@ func (d *Database) createPaperOrderOnce(order Order, key, digest string, require
 		var approved int
 		err := tx.QueryRow(`SELECT COUNT(*) FROM paper_order_approval_requests
 			WHERE client_order_id=? AND request_hash=? AND approved_by IS NOT NULL AND consumed_order_id IS NULL`, key, digest).Scan(&approved)
-		if err != nil { return Order{}, false, err }
-		if approved != 1 { return Order{}, false, fmt.Errorf("paper order requires an unused human approval for its exact parameters") }
+		if err != nil {
+			return Order{}, false, err
+		}
+		if approved != 1 {
+			return Order{}, false, fmt.Errorf("paper order requires an unused human approval for its exact parameters")
+		}
 	}
 
 	res, err := tx.Exec(
@@ -97,9 +101,13 @@ func (d *Database) createPaperOrderOnce(order Order, key, digest string, require
 	if requireApproval {
 		res, err := tx.Exec(`UPDATE paper_order_approval_requests SET consumed_order_id=?
 			WHERE client_order_id=? AND request_hash=? AND approved_by IS NOT NULL AND consumed_order_id IS NULL`, id, key, digest)
-		if err != nil { return Order{}, false, err }
+		if err != nil {
+			return Order{}, false, err
+		}
 		affected, err := res.RowsAffected()
-		if err != nil || affected != 1 { return Order{}, false, fmt.Errorf("approval was already consumed or revoked") }
+		if err != nil || affected != 1 {
+			return Order{}, false, fmt.Errorf("approval was already consumed or revoked")
+		}
 	}
 	if _, err := tx.Exec("UPDATE paper_order_requests SET order_id = ? WHERE client_order_id = ?", id, key); err != nil {
 		return Order{}, false, err
