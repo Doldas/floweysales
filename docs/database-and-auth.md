@@ -194,3 +194,17 @@ retry safety **must** send one. Keys apply to the shared paper account, not per
 user. The migration is additive and requires Liquibase update before deploying
 the application. This is not an approval system or a replacement for
 transactional portfolio-wide buying-power reservation.
+
+## Per-symbol paper portfolio allocation cap
+
+Set `PAPER_MAX_SYMBOL_ALLOCATION_PCT=20` to reject new **BUY** paper orders
+whose worst-case notional, added to existing long symbol market value and
+other OPEN BUY orders for the same symbol, exceeds 20% of current paper
+portfolio equity. The default is `0` (disabled). Valid enabled range is
+greater than 0 through 100. Sell orders remain permitted so users can reduce
+risk. This is a *best-effort application-layer* guard. It does not provide
+atomic buying-power reservation for different simultaneous requests, and
+assumes portfolio values have comparable currencies; it is **not** a safe
+cross-currency consolidated portfolio limit. Set only when instrument and
+portfolio currencies are comparable. Further portfolio-wide atomic limits,
+sector/liquidity controls, drawdown gating and explicit approvals remain #7.
