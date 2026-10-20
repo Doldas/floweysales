@@ -221,7 +221,17 @@ export class App {
           this.provider.set('YAHOO');
         }
         this.symbolCtl.setValue(symbol, { emitEvent: false });
-        this.launchTracking(symbol);
+        if (this.trackedAssets().length > 0) {
+          const active=this.trackedAssets().find(t=>t.symbol===symbol && t.provider===this.provider()) ?? this.trackedAssets()[0];
+          this.provider.set(active.provider as ProviderId);
+          this.symbolCtl.setValue(active.symbol,{emitEvent:false});
+          this.launchTracking(active.symbol);
+        } else {
+          // A deliberately empty registry must remain stopped after reload.
+          this.stream.close();
+          this.trackedSymbol.set('');
+          this.connecting.set(false);
+        }
       },
       error: () => {
         this.showSnack('Cannot reach the trading engine — is the backend running?', true);
