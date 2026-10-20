@@ -1,7 +1,8 @@
 package storage
 
 import (
-	"database/sql"
+	"context"
+ "database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -166,6 +167,29 @@ func (d *Database) AddActiveTracker(symbol, provider string) error {
 func (d *Database) DeleteActiveTracker(symbol, provider string) error {
 	_, err := d.db.Exec("DELETE FROM tracked_assets WHERE symbol=? AND provider=?", symbol, provider)
 	return err
+}
+
+// Ping tests MySQL readiness; data is persisted only in this database.
+func (d *Database) Ping(ctx context.Context)error{return d.db.PingContext(ctx)}
+func (d *Database) PoolStats()sql.DBStats{return d.db.Stats()}
+
+// GetOrdersPage caps only the HTTP representation; portfolio accounting still
+// sees the complete order ledger so balances remain exact.
+func (d *Database) GetOrdersPage(symbolFilter,statusFilter string,limit,offset int)[]Order{
+ if limit<1{limit=500};if limit>2000{limit=2000}
+ if offset<0{offset=0};if offset>1000000{offset=1000000}
+ query:="SELECT "+orderColumns+" FROM orders WHERE 1=1"
+ args:=[]any{}
+ if symbolFilter!=""{query+=" AND symbol = ?";args=append(args,strings.ToUpper(symbolFilter))}
+ if statusFilter!=""{query+=" AND status = ?";args=append(args,strings.ToUpper(statusFilter))}
+ query+=" ORDER BY timestamp DESC,id DESC LIMIT ? OFFSET ?"
+ args=append(args,limit,offset)
+ rows,err:=d.db.Query(query,args...)
+ if err!=nil{return []Order{}}
+ defer rows.Close()
+ out:=[]Order{}
+ for rows.Next(){order,err:=scanOrder(rows.Scan);if err==nil{out=append(out,order)}}
+ return out
 }
 
 // Close closes the underlying database handle.

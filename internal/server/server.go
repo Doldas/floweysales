@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io/fs"
+ "runtime"
 	"log"
 	"net/http"
 	"sort"
@@ -175,6 +176,29 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, fi
 	}
 
 	e.registerMarketRoutes()
+ e.mux.HandleFunc("GET /healthz",func(w http.ResponseWriter,r *http.Request){
+  ctx,cancel:=context.WithTimeout(r.Context(),2*time.Second)
+  defer cancel()
+  if err:=e.db.Ping(ctx);err!=nil{http.Error(w,"database unavailable",http.StatusServiceUnavailable);return}
+  w.Header().Set("Content-Type","text/plain; charset=utf-8")
+  _,_=w.Write([]byte("ok"))
+ })
+ e.mux.HandleFunc("GET /api/admin/runtime",func(w http.ResponseWriter,r *http.Request){
+  var stats runtime.MemStats
+  runtime.ReadMemStats(&stats)
+  e.historyMu.Lock();h:=len(e.historyCache);e.historyMu.Unlock()
+  e.financialsMu.Lock();f:=len(e.financialsCache);e.financialsMu.Unlock()
+  e.hub.mu.Lock();sseClients:=len(e.hub.clients);e.hub.mu.Unlock()
+  pool:=e.db.PoolStats()
+  writeJSON(w,http.StatusOK,map[string]any{
+   "heap_alloc_bytes":stats.HeapAlloc,"heap_sys_bytes":stats.HeapSys,
+   "goroutines":runtime.NumGoroutine(),"gc_cycles":stats.NumGC,
+   "cache_history_keys":h,"cache_financials_keys":f,
+   "sse_clients":sseClients,"active_trackers":len(e.config.Targets()),
+   "mysql_open_connections":pool.OpenConnections,
+   "mysql_in_use_connections":pool.InUse,
+  })
+ })
 	e.registerOrderRoutes()
 	e.registerConfigRoutes()
 	e.registerForumRoutes()
