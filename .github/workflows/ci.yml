@@ -154,6 +154,10 @@ jobs:
         env:
           AUTH_TEST_MYSQL_DSN: 'flowey_auth:ci-only-identity-password@tcp(127.0.0.1:3306)/floweysales_auth?parseTime=true&loc=UTC&tls=false'
         run: go test ./internal/server -run TestMySQLAuthGate -count=1
+      - name: Test non-destructive SQLite to MySQL import
+        env:
+          MIGRATION_TEST_MYSQL_DSN: 'flowey_auth:ci-only-identity-password@tcp(127.0.0.1:3306)/floweysales_auth?parseTime=true&loc=UTC&tls=false'
+        run: go test ./cmd/migrate-sqlite -run TestSQLiteImportTransactionalAndNonDestructive -count=1
       - name: Remove disposable CI database
         if: always()
         env:
