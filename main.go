@@ -110,14 +110,14 @@ func main() {
 	portfolio.RequirePaperApproval = strings.EqualFold(app.ResolveConfig("PAPER_REQUIRE_APPROVAL", "false", defaults), "true")
 	portfolio.HaltNewOrders = strings.EqualFold(app.ResolveConfig("PAPER_TRADING_HALT", "false", defaults), "true")
 	portfolio.MaxSymbolAllocationPct = parseFloat(app.ResolveConfig("PAPER_MAX_SYMBOL_ALLOCATION_PCT", "0", defaults), 0)
-	portfolio.MaxDrawdownPct = parseFloat(app.ResolveConfig("PAPER_MAX_DRAWDOWN_PCT","0",defaults),0)
-	portfolio.MaxSectorAllocationPct = parseFloat(app.ResolveConfig("PAPER_MAX_SECTOR_ALLOCATION_PCT","0",defaults),0)
-	portfolio.MaxDailyVolumePct = parseFloat(app.ResolveConfig("PAPER_MAX_DAILY_VOLUME_PCT","0",defaults),0)
-	if err := json.Unmarshal([]byte(app.ResolveConfig("PAPER_SYMBOL_SECTORS","{}",defaults)),&portfolio.SymbolSectors);err!=nil {
-		log.Fatalf("invalid PAPER_SYMBOL_SECTORS: %v",err)
+	portfolio.MaxDrawdownPct = parseFloat(app.ResolveConfig("PAPER_MAX_DRAWDOWN_PCT", "0", defaults), 0)
+	portfolio.MaxSectorAllocationPct = parseFloat(app.ResolveConfig("PAPER_MAX_SECTOR_ALLOCATION_PCT", "0", defaults), 0)
+	portfolio.MaxDailyVolumePct = parseFloat(app.ResolveConfig("PAPER_MAX_DAILY_VOLUME_PCT", "0", defaults), 0)
+	if err := json.Unmarshal([]byte(app.ResolveConfig("PAPER_SYMBOL_SECTORS", "{}", defaults)), &portfolio.SymbolSectors); err != nil {
+		log.Fatalf("invalid PAPER_SYMBOL_SECTORS: %v", err)
 	}
-	if err := json.Unmarshal([]byte(app.ResolveConfig("PAPER_DAILY_TRADED_NOTIONAL","{}",defaults)),&portfolio.DailyTradedNotional);err!=nil {
-		log.Fatalf("invalid PAPER_DAILY_TRADED_NOTIONAL: %v",err)
+	if err := json.Unmarshal([]byte(app.ResolveConfig("PAPER_DAILY_TRADED_NOTIONAL", "{}", defaults)), &portfolio.DailyTradedNotional); err != nil {
+		log.Fatalf("invalid PAPER_DAILY_TRADED_NOTIONAL: %v", err)
 	}
 	portfolio.MaxOrderNotional = parseFloat(app.ResolveConfig("PAPER_MAX_ORDER_NOTIONAL", "0", defaults), 0)
 	if portfolio.MaxOrderNotional < 0 {
