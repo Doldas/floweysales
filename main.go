@@ -191,9 +191,9 @@ func main() {
 		sharedConfig.SelectPrimary(targets[0].Symbol, targets[0].Provider)
 	}
 
- if err:=restAPI.Start(restApiHost,restApiPort);err!=nil{
-  log.Fatalf("bind %s:%s: %v",restApiHost,restApiPort,err)
- }
+if err := restAPI.Start(restApiHost, restApiPort); err != nil {
+		log.Fatalf("bind %s:%s: %v", restApiHost, restApiPort, err)
+	}
 	var notifier *notify.EmailNotifier
 	if strings.EqualFold(os.Getenv("ENABLE_TRACK_ALERT_EMAIL"), "true") {
 		notifier = notify.NewEmailNotifier(appMail, appMailPassword, receiveAlertsAt)
