@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,8 +22,10 @@ func TestTrackerStatusLastPersistedTick(t *testing.T) {
 	db, err := storage.Open(dsn)
 	if err != nil { t.Fatal(err) }
 	defer db.Close()
+	symbol := fmt.Sprintf("STATUS%d", time.Now().UnixNano())
+	emptySymbol := fmt.Sprintf("EMPTY%d", time.Now().UnixNano())
 	cfg := &SharedMarketConfig{}
-	if !cfg.Add("TESTSTATUS", market.ProviderYahoo) || !cfg.Add("TESTEMPTY", market.ProviderFinnhub) {
+	if !cfg.Add(symbol, market.ProviderYahoo) || !cfg.Add(emptySymbol, market.ProviderFinnhub) {
 		t.Fatal("could not register fixtures")
 	}
 	engine := NewEngine(db, cfg, nil, "", tracker.DefaultConfig())
@@ -54,8 +57,7 @@ func TestTrackerStatusLastPersistedTick(t *testing.T) {
 		t.Fatalf("expected two streams with no ticks, got %+v", initial)
 	}
 	now := time.Now().Unix()
-	db.InsertRecord(storage.TradingRecord{Timestamp: now, Symbol: "TESTSTATUS", Provider: "YAHOO", Price: 10, Status: "ACTIVE", Currency: "USD"})
-	defer db.ClearHistory()
+	db.InsertRecord(storage.TradingRecord{Timestamp: now, Symbol: symbol, Provider: "YAHOO", Price: 10, Status: "ACTIVE", Currency: "USD"})
 	after := check()
 	if len(after) != 2 || !after[1].HasTick || after[1].LastTickTimestamp == nil || *after[1].LastTickTimestamp != now {
 		// The status list is lexically sorted by provider and symbol.
