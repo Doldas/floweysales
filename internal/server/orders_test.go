@@ -1,10 +1,10 @@
 package server
 
 import (
-	"fmt"
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"io"
 	"net/http"
