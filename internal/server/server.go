@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"io/fs"
+ "sort"
+ "strings"
 	"log"
 	"net/http"
 	"sync"
@@ -18,10 +20,49 @@ import (
 
 // SharedMarketConfig is the live asset configuration that the tick loop polls
 // and that the frontend can swap via POST /api/config.
+type MarketTarget struct {
+ Symbol string `json:"symbol"`
+ Provider market.Provider `json:"-"`
+ ProviderID string `json:"provider"`
+}
 type SharedMarketConfig struct {
-	mu       sync.Mutex
-	Symbol   string
-	Provider market.Provider
+ mu sync.Mutex
+ Symbol string
+ Provider market.Provider
+ targets map[string]MarketTarget
+}
+const MaxActiveTrackers=16
+func marketTargetKey(symbol string,p market.Provider)string{
+ return p.ID()+"|"+strings.ToUpper(strings.TrimSpace(symbol))
+}
+// Add keeps existing market streams alive. It never replaces another tracker.
+func (c *SharedMarketConfig) Add(symbol string,p market.Provider)bool{
+ c.mu.Lock();defer c.mu.Unlock()
+ if c.targets==nil{c.targets=map[string]MarketTarget{}}
+ key:=marketTargetKey(symbol,p)
+ if _,ok:=c.targets[key];ok{return true}
+ if len(c.targets)>=MaxActiveTrackers{return false}
+ c.targets[key]=MarketTarget{Symbol:strings.ToUpper(strings.TrimSpace(symbol)),Provider:p,ProviderID:p.ID()}
+ return true
+}
+func (c *SharedMarketConfig) Remove(symbol string,p market.Provider){
+ c.mu.Lock();defer c.mu.Unlock()
+ delete(c.targets,marketTargetKey(symbol,p))
+}
+func (c *SharedMarketConfig) ReplaceTargets(values []MarketTarget){
+ c.mu.Lock();defer c.mu.Unlock()
+ c.targets=make(map[string]MarketTarget,len(values))
+ for _,v:=range values{
+  if len(c.targets)>=MaxActiveTrackers{break}
+  c.targets[marketTargetKey(v.Symbol,v.Provider)]=MarketTarget{Symbol:strings.ToUpper(v.Symbol),Provider:v.Provider,ProviderID:v.Provider.ID()}
+ }
+}
+func (c *SharedMarketConfig) Targets()[]MarketTarget{
+ c.mu.Lock();defer c.mu.Unlock()
+ result:=make([]MarketTarget,0,len(c.targets))
+ for _,v:=range c.targets{result=append(result,v)}
+ sort.Slice(result,func(i,j int)bool{return marketTargetKey(result[i].Symbol,result[i].Provider)<marketTargetKey(result[j].Symbol,result[j].Provider)})
+ return result
 }
 
 // Get returns the current target symbol and provider.
@@ -36,7 +77,12 @@ func (c *SharedMarketConfig) Set(symbol string, provider market.Provider) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Symbol = symbol
-	c.Provider = provider
+ c.Provider=provider
+ if c.targets==nil{c.targets=map[string]MarketTarget{}}
+ key:=marketTargetKey(symbol,provider)
+ if _,ok:=c.targets[key];!ok && len(c.targets)<MaxActiveTrackers{
+ c.targets[key]=MarketTarget{Symbol:strings.ToUpper(strings.TrimSpace(symbol)),Provider:provider,ProviderID:provider.ID()}
+ }
 }
 
 // Engine owns the HTTP mux and wires every endpoint group.
