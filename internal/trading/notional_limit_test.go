@@ -40,13 +40,21 @@ func TestPaperOrderNotionalLimit(t *testing.T) {
 
 func TestPaperSymbolAllocationLimit(t *testing.T) {
 	req := SubmitRequest{Symbol: "TEST", Side: SideBuy, Type: TypeMarket, Quantity: 10, ReferencePrice: 100, BuyingPower: 100000, PortfolioEquity: 10000, SymbolExposure: 1000, Cfg: Config{MaxSymbolAllocationPct: 20}}
-	if _, err := NewOrder(req); err != nil { t.Fatalf("exactly at cap must pass: %v", err) }
+	if _, err := NewOrder(req); err != nil {
+		t.Fatalf("exactly at cap must pass: %v", err)
+	}
 	req.Quantity = 10.01
-	if _, err := NewOrder(req); err == nil { t.Fatal("above 20 percent must be rejected") }
+	if _, err := NewOrder(req); err == nil {
+		t.Fatal("above 20 percent must be rejected")
+	}
 	req.Cfg.MaxSymbolAllocationPct = 0
-	if _, err := NewOrder(req); err != nil { t.Fatalf("disabled cap must pass: %v", err) }
+	if _, err := NewOrder(req); err != nil {
+		t.Fatalf("disabled cap must pass: %v", err)
+	}
 	for _, bad := range []float64{-1, 101, math.NaN()} {
 		req.Cfg.MaxSymbolAllocationPct = bad
-		if _, err := NewOrder(req); err == nil { t.Fatalf("invalid allocation cap %v accepted", bad) }
+		if _, err := NewOrder(req); err == nil {
+			t.Fatalf("invalid allocation cap %v accepted", bad)
+		}
 	}
 }
