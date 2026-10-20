@@ -54,6 +54,7 @@ type Config struct {
 	Commission       Commission `json:"commission"`
 	AllowShort       bool       `json:"allow_short"`
 	MaxOrderNotional float64    `json:"max_order_notional"`
+	MaxSymbolAllocationPct float64 `json:"max_symbol_allocation_pct"`
 	HaltNewOrders    bool       `json:"halt_new_orders"`
 }
 
@@ -134,6 +135,8 @@ type SubmitRequest struct {
 	ReferencePrice float64
 	HeldQuantity   float64
 	BuyingPower    float64
+	PortfolioEquity float64
+	SymbolExposure float64
 	ClientID       string
 	Now            int64
 	Cfg            Config
@@ -217,6 +220,18 @@ func NewOrder(req SubmitRequest) (storage.Order, error) {
 	if req.Cfg.MaxOrderNotional > 0 && notional > req.Cfg.MaxOrderNotional {
 		return storage.Order{}, fmt.Errorf("order notional %s exceeds configured paper-trading limit %s",
 			formatMoney(notional), formatMoney(req.Cfg.MaxOrderNotional))
+	}
+	if math.IsNaN(req.Cfg.MaxSymbolAllocationPct) || math.IsInf(req.Cfg.MaxSymbolAllocationPct, 0) || req.Cfg.MaxSymbolAllocationPct < 0 || req.Cfg.MaxSymbolAllocationPct > 100 {
+		return storage.Order{}, fmt.Errorf("invalid maximum symbol allocation percentage")
+	}
+	if side == SideBuy && req.Cfg.MaxSymbolAllocationPct > 0 {
+		if math.IsNaN(req.PortfolioEquity) || math.IsInf(req.PortfolioEquity, 0) || req.PortfolioEquity <= 0 || math.IsNaN(req.SymbolExposure) || math.IsInf(req.SymbolExposure, 0) || req.SymbolExposure < 0 {
+			return storage.Order{}, fmt.Errorf("invalid portfolio equity or symbol exposure for allocation limit")
+		}
+		cap := req.PortfolioEquity * req.Cfg.MaxSymbolAllocationPct / 100
+		if req.SymbolExposure+notional > cap+qtyEpsilon {
+			return storage.Order{}, fmt.Errorf("symbol allocation would exceed configured %.2f%% limit", req.Cfg.MaxSymbolAllocationPct)
+		}
 	}
 	fee := req.Cfg.Commission.Fee(notional)
 
