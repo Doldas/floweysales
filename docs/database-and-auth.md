@@ -208,3 +208,20 @@ assumes portfolio values have comparable currencies; it is **not** a safe
 cross-currency consolidated portfolio limit. Set only when instrument and
 portfolio currencies are comparable. Further portfolio-wide atomic limits,
 sector/liquidity controls, drawdown gating and explicit approvals remain #7.
+
+
+## Paper-order lifecycle audit trail (issue #7, partial)
+
+Liquibase change 006 adds `paper_order_events` and MySQL triggers that record
+order creation and every change to `orders.status` in the **same transaction**
+as the change. `GET /api/orders/{id}/events` returns the newest 100
+events for an existing order (404 if missing, 503 if audit storage is down).
+Events include old/new status and the stored cancellation reason. This also
+covers orders created via idempotent retries and matching-engine fills; replay
+without a new order does not create a duplicate creation event.
+
+**Scope:** the audit shows persisted lifecycle changes, not who authorized
+them, nor a complete decision-to-recommendation-to-approval chain. No
+human-approval workflow or real-money execution is introduced. Events from
+before deployment of this additive migration cannot be reconstructed
+automatically. Do not edit/delete the audit table manually.
