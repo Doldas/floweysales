@@ -232,6 +232,13 @@ func (e *Engine) registerMarketRoutes() {
 			return
 		}
 		cancel := r.Context().Done()
+        ch:=e.hub.subscribe()
+        if ch==nil{
+         w.Header().Set("Retry-After","10")
+         http.Error(w,"Too many live stream clients",http.StatusServiceUnavailable)
+         return
+        }
+        defer e.hub.unsubscribe(ch)
 
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
@@ -239,12 +246,6 @@ func (e *Engine) registerMarketRoutes() {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.WriteHeader(http.StatusOK)
 		flusher.Flush()
-
-		ch := e.hub.subscribe()
-		if ch == nil {
-			return
-		}
-		defer e.hub.unsubscribe(ch)
 
 		for {
 			select {
