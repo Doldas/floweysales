@@ -137,6 +137,8 @@ func (d *Database) InsertRecord(record TradingRecord) {
 
 // GetLatestRecords returns the most recent records, optionally filtered by symbol.
 func (d *Database) GetLatestRecords(limit int, symbolFilter string) []TradingRecord {
+ if limit<1{limit=100}
+ if limit>2000{limit=2000}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 

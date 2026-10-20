@@ -4,8 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
-	"net"
+		"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -237,8 +236,9 @@ func (e *Engine) registerMarketRoutes() {
 		w.WriteHeader(http.StatusOK)
 		flusher.Flush()
 
-		ch := e.hub.subscribe()
-		defer e.hub.unsubscribe(ch)
+		ch:=e.hub.subscribe()
+  if ch==nil {return}
+  defer e.hub.unsubscribe(ch)
 
 		for {
 			select {
@@ -281,16 +281,15 @@ func (e *Engine) GetHistory(symbol string, provider market.Provider, rng string)
 
 	e.historyMu.Lock()
 	e.historyCache[key] = historyCacheEntry{fetched: time.Now(), series: series}
-	if len(e.historyCache) > 128 {
-		for k, entry := range e.historyCache {
-			if time.Since(entry.fetched) > 10*time.Minute {
-				delete(e.historyCache, k)
-			}
-		}
-	}
+	if len(e.historyCache)>16 {
+   var oldestKey string
+   var oldestTime time.Time
+   for k,entry:=range e.historyCache {
+     if oldestKey=="" || entry.fetched.Before(oldestTime){oldestKey=k;oldestTime=entry.fetched}
+   }
+   delete(e.historyCache,oldestKey)
+  }
 	e.historyMu.Unlock()
-
-	log.Printf("[History] %s/%s %s: %d bars", symbol, provider, rng, len(series.Points))
 	return series, nil
 }
 
@@ -347,16 +346,15 @@ func (e *Engine) GetFinancialsRange(symbol string, provider market.Provider, yea
 
 	e.financialsMu.Lock()
 	e.financialsCache[key] = financialsCacheEntry{fetched: time.Now(), res: res}
-	if len(e.financialsCache) > 128 {
-		for k, entry := range e.financialsCache {
-			if time.Since(entry.fetched) > 24*time.Hour {
-				delete(e.financialsCache, k)
-			}
-		}
-	}
+	if len(e.financialsCache)>12 {
+   var oldestKey string
+   var oldestTime time.Time
+   for k,entry:=range e.financialsCache {
+     if oldestKey=="" || entry.fetched.Before(oldestTime){oldestKey=k;oldestTime=entry.fetched}
+   }
+   delete(e.financialsCache,oldestKey)
+  }
 	e.financialsMu.Unlock()
-
-	log.Printf("[Financials] %s/%s: %d quarters (source %s)", symbol, provider, len(res.Reports), res.Source)
 	return res, nil
 }
 

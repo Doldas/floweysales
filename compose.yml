@@ -51,7 +51,9 @@ services:
       AUTH_BOOTSTRAP_EMAIL: ${AUTH_BOOTSTRAP_EMAIL:-}
       AUTH_BOOTSTRAP_PASSWORD: ${AUTH_BOOTSTRAP_PASSWORD:-}
       AUTH_COOKIE_SECURE: "false" # loopback-only HTTP development; TLS required for remote access
-      SQLITE_STORAGE_PATH: /data/floweysales.db
+      MYSQL_DSN: 'flowey_auth:${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}@tcp(mysql:3306)/floweysales_auth?parseTime=true&loc=UTC&tls=false'
+      GOMEMLIMIT: ${GO_MEM_LIMIT:-384MiB}
+      GOGC: ${GO_GC_PERCENT:-75}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -63,8 +65,8 @@ services:
       AI_MAX_TOOL_CALLS: ${AI_MAX_TOOL_CALLS:-48}
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:8080"
-    volumes:
-      - trading_data:/data
+    mem_limit: ${APP_MEMORY_LIMIT:-768m}
+    pids_limit: 128
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -79,4 +81,3 @@ networks:
 
 volumes:
   mysql_data:
-  trading_data:

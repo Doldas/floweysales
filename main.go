@@ -1,6 +1,7 @@
 package main
 
 import (
+ "fmt"
 	"embed"
 	"log"
 	"os"

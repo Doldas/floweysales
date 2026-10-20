@@ -180,7 +180,7 @@ func (m *Manager) PollOnce(){
  state.snapshot.Error=""
  notify:=m.onAlert
  m.mu.Unlock()
- if alertSubject!="" && notify!=nil{go notify(alertSubject,alertBody)}
+ if alertSubject!="" && notify!=nil{notify(alertSubject,alertBody)}
  raw,err:=json.Marshal(asset.ToJSON())
  if err!=nil||len(raw)>MaxRawMarketBytes{raw=[]byte("{}")}
  m.store.InsertRecord(storage.TradingRecord{
