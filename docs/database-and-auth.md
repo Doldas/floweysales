@@ -274,3 +274,14 @@ allocation percentage remains an application-layer check and must not be
 considered transactionally enforced by this cash guard. The default paper
 starting-cash setting must be consistent across API instances. No real-money
 execution is authorized.
+
+## Paper drawdown, sector and liquidity buy gates (#7)
+
+Optional settings, **disabled by default**:
+- `PAPER_MAX_DRAWDOWN_PCT=10`: blocks new BUYs once the observed peak-to-current paper equity drawdown reaches 10%. The high-water mark is persisted in `paper_equity_peak`, sampled on market ticks and new order requests after activation. Earlier peaks before enabling this feature are not reconstructable; mark freshness remains subject to the market feed.
+- `PAPER_MAX_SECTOR_ALLOCATION_PCT=25`: rejects BUYs when existing marked long exposure plus other OPEN BUY commitments in the requested sector and the candidate notional exceed 25% of current paper equity. Requires complete mappings `PAPER_SYMBOL_SECTORS='{"AAPL":"Technology","MSFT":"Technology"}'` for all held/pending/new symbols. Missing mapping **rejects** BUYs.
+- `PAPER_MAX_DAILY_VOLUME_PCT=1`: caps a single BUY's conservative estimated notional at 1% of independently verified **daily traded notional** in the same portfolio currency. Provide `PAPER_DAILY_TRADED_NOTIONAL='{"AAPL":2500000000}'`. Unknown/nonpositive values reject new BUYs. These values are operator-maintained, **not** automatically refreshed by a market-data feed. Validate their source, currency, freshness and unit before enabling the gate.
+
+SELLs are left available to reduce exposure, subject to ordinary held-position and short-sale rules. All risk thresholds are percentages between 0 and 100; 0 disables them. Restart the app after changing environment variables.
+
+Limitations: peak observations are not continuous; missing/unpriced market ticks can distort paper equity. Sector and liquidity inputs are static and potentially stale. These checks currently occur before the transactional account cash lock rather than inside its database transaction: simultaneous buys can still race on **sector concentration**. Do not claim multi-currency conversion, institutional-grade sector limits, broker-side limits or suitability for real-money execution. Atomic cash reservations from PR #54 remain separately enforced.
