@@ -57,4 +57,11 @@
   </createTable>
   <rollback><dropTable tableName="tracked_assets"/></rollback>
  </changeSet>
+ <changeSet id="008-tracker-bootstrap-marker" author="floweysales" dbms="mysql">
+  <createTable tableName="tracker_runtime_meta">
+   <column name="id" type="TINYINT"><constraints nullable="false" primaryKey="true"/></column>
+   <column name="initialized_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP"/>
+  </createTable>
+  <rollback><dropTable tableName="tracker_runtime_meta"/></rollback>
+ </changeSet>
 </databaseChangeLog>

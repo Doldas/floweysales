@@ -94,7 +94,7 @@ func Open(dsn string) (*Database, error) {
 		handle.Close()
 		return nil, fmt.Errorf("MySQL is unreachable: %w", err)
 	}
-	for _, table := range []string{"trading_history", "orders", "forum_posts", "tracked_assets"} {
+	for _, table := range []string{"trading_history", "orders", "forum_posts", "tracked_assets", "tracker_runtime_meta"} {
 		var present int
 		// Query only one row: COUNT(*) would scan potentially millions of ticks.
 		err := handle.QueryRow("SELECT 1 FROM " + table + " LIMIT 1").Scan(&present)
@@ -115,6 +115,26 @@ func (d *Database) HasAnyData() bool {
 		}
 	}
 	return false
+}
+
+// BootstrapDefaultTracker enables the first configured asset once, on a
+// genuinely fresh deployment. A persistent metadata row remembers that users
+// explicitly stopped ALL trackers; an empty set must remain empty on restart.
+func (d *Database) BootstrapDefaultTracker(symbol, provider string) error {
+ tx, err := d.db.Begin()
+ if err != nil { return err }
+ defer tx.Rollback()
+ var initialized int
+ if err := tx.QueryRow("SELECT COUNT(*) FROM tracker_runtime_meta").Scan(&initialized);err != nil{return err}
+ if initialized==0 {
+  var existing int
+  if err:=tx.QueryRow("SELECT COUNT(*) FROM tracked_assets").Scan(&existing);err!=nil{return err}
+  if existing==0{
+   if _,err:=tx.Exec("INSERT INTO tracked_assets(symbol,provider) VALUES (?,?)",symbol,provider);err!=nil{return err}
+  }
+  if _,err:=tx.Exec("INSERT INTO tracker_runtime_meta(id) VALUES (1)");err!=nil{return err}
+ }
+ return tx.Commit()
 }
 
 // ActiveTracker is an independently polled market stream persisted in MySQL.
