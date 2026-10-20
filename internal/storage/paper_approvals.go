@@ -9,11 +9,11 @@ import (
 
 // PaperApproval binds a human action to one immutable order request hash.
 type PaperApproval struct {
-	ClientOrderID string `json:"client_order_id"`
-	RequestHash string `json:"request_hash"`
-	RequestPayload string `json:"request_payload"`
-	RequestedBy int64 `json:"requested_by"`
-	ApprovedBy *int64 `json:"approved_by"`
+	ClientOrderID   string `json:"client_order_id"`
+	RequestHash     string `json:"request_hash"`
+	RequestPayload  string `json:"request_payload"`
+	RequestedBy     int64  `json:"requested_by"`
+	ApprovedBy      *int64 `json:"approved_by"`
 	ConsumedOrderID *int64 `json:"consumed_order_id"`
 }
 
@@ -41,7 +41,9 @@ func (d *Database) ApprovePaperOrder(ctx context.Context, key string, approver i
 	res, err := d.db.ExecContext(ctx, `UPDATE paper_order_approval_requests
 		SET approved_by=?, approved_at=UTC_TIMESTAMP(6)
 		WHERE client_order_id=? AND approved_by IS NULL AND consumed_order_id IS NULL`, approver, key)
-	if err != nil { return false, err }
+	if err != nil {
+		return false, err
+	}
 	n, err := res.RowsAffected()
 	return n == 1, err
 }
@@ -52,9 +54,17 @@ func (d *Database) GetPaperApproval(ctx context.Context, key string) (PaperAppro
 	err := d.db.QueryRowContext(ctx, `SELECT client_order_id,request_hash,request_payload,requested_by,approved_by,consumed_order_id
 		FROM paper_order_approval_requests WHERE client_order_id=?`, key).
 		Scan(&a.ClientOrderID, &a.RequestHash, &a.RequestPayload, &a.RequestedBy, &approved, &consumed)
-	if errors.Is(err, sql.ErrNoRows) { return a, false, nil }
-	if err != nil { return a, false, err }
-	if approved.Valid { a.ApprovedBy=&approved.Int64 }
-	if consumed.Valid { a.ConsumedOrderID=&consumed.Int64 }
+	if errors.Is(err, sql.ErrNoRows) {
+		return a, false, nil
+	}
+	if err != nil {
+		return a, false, err
+	}
+	if approved.Valid {
+		a.ApprovedBy = &approved.Int64
+	}
+	if consumed.Valid {
+		a.ConsumedOrderID = &consumed.Int64
+	}
 	return a, true, nil
 }
