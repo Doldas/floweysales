@@ -1,7 +1,6 @@
 package server
 
 import (
-	"sync"
 	"bytes"
 	"context"
 	"database/sql"
@@ -12,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -545,7 +545,9 @@ func TestConcurrentPaperBuysCannotOverspendAccount(t *testing.T) {
 	wg.Wait()
 	accepted := 0
 	for _, status := range codes {
-		if status == http.StatusOK { accepted++ }
+		if status == http.StatusOK {
+			accepted++
+		}
 	}
 	if accepted != 1 {
 		t.Fatalf("expected exactly one accepted 600-unit purchase from 1000 cash, statuses=%v responses=%v", codes, results)
@@ -562,11 +564,15 @@ func TestRestingPaperBuyReservesCash(t *testing.T) {
 	cfg.BaseCash = 1000
 	env.engine.ConfigureTrading(cfg)
 	status, response := env.do(t, "POST", "/api/orders", map[string]any{
-		"symbol": "GIB", "side": "BUY", "type":"LIMIT", "limit_price":90, "quantity":6, "client_order_id":"cash-reservation-1",
+		"symbol": "GIB", "side": "BUY", "type": "LIMIT", "limit_price": 90, "quantity": 6, "client_order_id": "cash-reservation-1",
 	})
-	if status != http.StatusOK {t.Fatalf("resting order: %d %v", status, response)}
+	if status != http.StatusOK {
+		t.Fatalf("resting order: %d %v", status, response)
+	}
 	status, response = env.do(t, "POST", "/api/orders", map[string]any{
-		"symbol": "GIB", "side": "BUY", "quantity":6, "client_order_id":"cash-reservation-2",
+		"symbol": "GIB", "side": "BUY", "quantity": 6, "client_order_id": "cash-reservation-2",
 	})
-	if status != http.StatusConflict {t.Fatalf("reservation did not protect cash: %d %v", status, response)}
+	if status != http.StatusConflict {
+		t.Fatalf("reservation did not protect cash: %d %v", status, response)
+	}
 }
