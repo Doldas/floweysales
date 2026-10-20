@@ -219,3 +219,7 @@ environment variable of the same name.
 - Optional `search_web` tool uses the Brave Search API with a server-side `BRAVE_SEARCH_API_KEY`; returned public URLs should be independently verified.
 - P/E uses matching TTM per-share EPS and share price or market cap and TTM earnings; P/FCF requires market cap divided by TTM total FCF.
 - For unattended Docker / Podman updates from **successful CI-published GHCR images**, see [auto-updates](docs/auto-updates.md). The scheduled updater preserves `.env`, MySQL and SQLite volumes and does not auto-upgrade MySQL.
+
+### Memory-bounded multiple trackers and MySQL storage
+
+FloweySales now tracks up to 12 distinct symbols with one round-robin poller (no per-tick stdout logs). Liquibase-managed MySQL is the only runtime database. For the offline migration from the previous SQLite installation, volume preservation and container memory limits, see [MySQL-only runtime](docs/mysql-tracking-runtime.md).

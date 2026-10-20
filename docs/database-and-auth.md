@@ -150,3 +150,7 @@ Incomplete quarters do not produce invented numbers.
 
 See [automatic Docker/Podman updates](auto-updates.md). The updater preserves
 MySQL identities, sessions, persisted AI settings, local `.env` and SQLite data.
+
+## Current MySQL-only storage
+
+The former split MySQL/SQLite configuration is superseded by [the MySQL-only runtime](mysql-tracking-runtime.md). Identity, sessions, AI settings, trading history, orders, forum and active tracker configuration now all use MySQL. The legacy SQLite volume is not mounted by the app. Import historical records before deleting an old volume.

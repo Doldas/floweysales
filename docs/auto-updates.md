@@ -36,8 +36,8 @@ The script `scripts/auto-update.sh`:
 2. Runs the new image's **additive Liquibase migrations** before restarting
    the app. On failure it exits, leaving the current app running.
 3. Runs `compose up -d --no-deps app`. Compose detects changed images and
-   recreates app as needed. It does **not** destroy the MySQL/SQLite volumes.
-4. Preserves `.env` (on the host), `mysql_data`, `trading_data`, existing
+   recreates app as needed. It does **not** destroy the MySQL volume.
+4. Preserves `.env` (on the host), `mysql_data`, existing
    sessions/users and persisted `ai_configuration` values.
 
 Never use `down -v` when preserving data. Image updates do not overwrite
@@ -47,7 +47,7 @@ configured and authenticated, do not re-bootstrap the owner credentials.
 ### Important limits
 
 Unattended software updates still carry migration and downtime risk. Perform
-regular tested backups (MySQL dump plus SQLite backup). SQL migrations in
+regular tested backups (MySQL dump; on first upgrade additionally archive the legacy SQLite database). SQL migrations in
 automatic releases **must** be backward-compatible and additive. A migration
 can be irreversible; rolling back the container does not roll back schema.
 Review release notes and set a fixed `FLOWEYSALES_TAG` to freeze updates.

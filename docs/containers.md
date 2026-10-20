@@ -1,9 +1,8 @@
 # Docker and Podman development stack
 
 The repository root `compose.yml` is shared by Docker Compose and Podman Compose:
-a Go/Angular app image (multi-stage build), MySQL 8.4 for identity, and a one-shot
-Liquibase migration service. The existing SQLite trading database is still
-persisted separately in the `trading_data` volume. No portfolio migration occurs.
+a Go/Angular app image (multi-stage build), MySQL 8.4 for all application data, and a one-shot
+Liquibase migration service. All runtime data is in MySQL; the old SQLite volume is no longer mounted. For existing installations, follow the one-time backup/import instructions in [MySQL tracking migration](mysql-tracking-runtime.md).
 
 ## Docker Compose
 
@@ -45,7 +44,7 @@ containers or disable SELinux as a workaround.
 docker compose -f compose.yml logs -f app
 docker compose -f compose.yml --profile migration run --rm migrate status --verbose
 docker compose -f compose.yml down             # preserves named volumes
-# Destructive: docker compose -f compose.yml down -v (deletes trading and identity data)
+# Destructive: docker compose -f compose.yml down -v (deletes ALL MySQL application data)
 ```
 
 `make stack-up` and `make stack-down` accept `COMPOSE='podman compose'`.
