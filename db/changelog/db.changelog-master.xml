@@ -9,4 +9,5 @@
   <include file="005-paper-order-idempotency.xml" relativeToChangelogFile="true"/>
   <include file="006-paper-order-audit.xml" relativeToChangelogFile="true"/>
   <include file="007-paper-approvals.xml" relativeToChangelogFile="true"/>
+  <include file="008-paper-account-lock.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
