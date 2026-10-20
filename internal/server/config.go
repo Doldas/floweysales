@@ -21,6 +21,9 @@ func (e *Engine) registerConfigRoutes() {
   var payload struct{Symbol string `json:"symbol"`;Provider string `json:"provider"`}
   dec:=json.NewDecoder(r.Body);dec.DisallowUnknownFields()
   if err:=dec.Decode(&payload);err!=nil{writeJSON(w,400,map[string]any{"error":"invalid tracker request"});return}
+  if !validTrackerProvider(strings.ToUpper(strings.TrimSpace(payload.Provider))){
+   writeJSON(w,400,map[string]any{"error":"unknown provider"});return
+  }
   if err:=e.manager.Add(payload.Symbol,market.ParseProvider(payload.Provider));err!=nil{
    writeJSON(w,400,map[string]any{"error":err.Error()});return
   }
@@ -29,7 +32,9 @@ func (e *Engine) registerConfigRoutes() {
  e.mux.HandleFunc("DELETE /api/trackers",func(w http.ResponseWriter,r *http.Request){
   if e.manager==nil{writeJSON(w,503,map[string]any{"error":"Tracker scheduler unavailable"});return}
   symbol:=r.URL.Query().Get("symbol")
-  provider:=market.ParseProvider(r.URL.Query().Get("provider"))
+  providerID:=strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("provider")))
+  if !validTrackerProvider(providerID){writeJSON(w,400,map[string]any{"error":"unknown provider"});return}
+  provider:=market.ParseProvider(providerID)
   if err:=e.manager.Remove(symbol,provider);err!=nil{
    writeJSON(w,400,map[string]any{"error":err.Error()});return
   }
@@ -90,4 +95,11 @@ func (e *Engine) registerConfigRoutes() {
 		e.db.ClearHistory()
 		writeRawJSON(w, http.StatusOK, `{"status":"success","message":"History cleared"}`)
 	})
+}
+
+func validTrackerProvider(s string)bool{
+ switch s {
+ case "YAHOO","FINNHUB","BINANCE","AVANZA":return true
+ default:return false
+ }
 }

@@ -5,13 +5,6 @@ import (
  "testing"
  "time"
 )
-func (d *Database) TruncateForTests(table string)error{
- switch table{
- case "orders","forum_posts","trading_history","tracked_assets":
-   _,err:=d.db.Exec("DELETE FROM "+table);return err
- default:return os.ErrPermission
- }
-}
 func TestOpenRequiresMySQL(t *testing.T){
  if _,err:=Open("");err==nil{t.Fatal("must reject empty DSN")}
  if _,err:=Open("file::memory:?cache=shared");err==nil{t.Fatal("SQLite DSN must not be accepted")}
@@ -21,7 +14,7 @@ func TestMySQLStorageRecordsAndWatchlist(t *testing.T){
  if dsn==""{t.Skip("requires disposable migrated MySQL")}
  db,err:=Open(dsn);if err!=nil{t.Fatal(err)}
  defer db.Close()
- for _,name:=range []string{"tracked_assets","trading_history"}{if err:=db.TruncateForTests(name);err!=nil{t.Fatal(err)}}
+ for _,name:=range []string{"tracked_assets","trading_history"}{if _,err:=db.db.Exec("DELETE FROM "+name);err!=nil{t.Fatal(err)}}
  if err:=db.AddTrackedAsset("NVDA","YAHOO");err!=nil{t.Fatal(err)}
  if err:=db.AddTrackedAsset("GIB","YAHOO");err!=nil{t.Fatal(err)}
  tracked,err:=db.ListTrackedAssets()

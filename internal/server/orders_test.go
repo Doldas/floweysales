@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+ "database/sql"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -35,8 +36,11 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 	t.Cleanup(func() { db.Close() })
  // Disposable CI schema only; purge state to isolate independent cases.
+ testConn,err:=sql.Open("mysql",dsn)
+ if err!=nil{t.Fatal(err)}
+ defer testConn.Close()
  for _,table:=range []string{"orders","forum_posts","trading_history","tracked_assets"}{
-  if err:=db.TruncateForTests(table);err!=nil{t.Fatal(err)}
+  if _,err:=testConn.Exec("DELETE FROM "+table);err!=nil{t.Fatal(err)}
  }
 
 	config := &SharedMarketConfig{Symbol: "GIB", Provider: market.ParseProvider("YAHOO")}
