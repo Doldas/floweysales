@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"log"
+ "runtime"
 	"net/http"
 	"sync"
 	"time"
@@ -113,6 +114,30 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, fi
 
 // SetTrackerManager injects the bounded multi-asset scheduler. Test engines may leave it nil.
 func (e *Engine) SetTrackerManager(m *tracking.Manager) { e.manager = m }
+
+// RuntimeStats supplies bounded, on-demand diagnostics without tick logging.
+// Go heap stats are NOT container RSS or a guarantee about OOM root cause.
+func (e *Engine) RuntimeStats() map[string]any{
+ var mem runtime.MemStats
+ runtime.ReadMemStats(&mem)
+ e.historyMu.Lock();historyCount:=len(e.historyCache);e.historyMu.Unlock()
+ e.financialsMu.Lock();financialCount:=len(e.financialsCache);e.financialsMu.Unlock()
+ e.hub.mu.Lock();subscribers:=len(e.hub.clients);e.hub.mu.Unlock()
+ trackerCount:=0
+ if e.manager!=nil{trackerCount=len(e.manager.Snapshots())}
+ return map[string]any{
+  "heap_alloc_bytes":mem.HeapAlloc,
+  "heap_sys_bytes":mem.HeapSys,
+  "heap_inuse_bytes":mem.HeapInuse,
+  "goroutines":runtime.NumGoroutine(),
+  "gc_cycles":mem.NumGC,
+  "cache_history_entries":historyCount,
+  "cache_financial_entries":financialCount,
+  "sse_subscribers":subscribers,
+  "active_trackers":trackerCount,
+  "note":"Go heap metrics, not container RSS. Check docker/podman stats and OOMKilled separately.",
+ }
+}
 
 // ConfigureAI sets the default OpenAI-compatible endpoint used when a chat
 // request does not supply its own base URL/model/key.

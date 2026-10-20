@@ -65,3 +65,14 @@ Back it up before changing versions and avoid `down -v`.
 data implicitly if granted trading permissions in the future; tenant isolation
 is a separate change. Current USER restrictions remain enforced. No automatic
 external brokerage orders are implemented.
+
+## On-demand diagnostics (SYS_ADMIN)
+
+`GET /api/runtime` reports Go heap allocation, Go heap sys/in-use bytes,
+number of goroutines, GC cycles, in-memory history and financial cache sizes,
+active SSE subscriptions and number of active trackers. The endpoint is not
+available to research USER accounts. It exposes no user financial data and
+does not write or retain any tracking log. **These values are Go heap metrics,
+not full container RSS**; use `docker inspect` or `podman inspect` and
+`docker stats` / `podman stats` to determine whether the container was
+OOMKilled. 

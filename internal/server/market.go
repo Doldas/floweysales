@@ -29,6 +29,9 @@ func netListen(addr string) (net.Listener, error) {
 
 // registerMarketRoutes wires prices, stats, symbols and the SSE stream.
 func (e *Engine) registerMarketRoutes() {
+ e.mux.HandleFunc("GET /api/runtime",func(w http.ResponseWriter,r *http.Request){
+  writeJSON(w,http.StatusOK,e.RuntimeStats())
+ })
 	e.mux.HandleFunc("GET /api/provider/endpoints", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, market.ResearchOperations())
 	})

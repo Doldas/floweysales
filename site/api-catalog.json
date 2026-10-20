@@ -295,6 +295,14 @@
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/runtime",
+      "description": "SYS_ADMIN Go heap, goroutines, bounded caches, SSE subscriptions and tracker counts",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
     }
   ],
   "mcp": [
