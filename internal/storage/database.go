@@ -96,6 +96,15 @@ func Open(dsn string) (*Database,error){
  return &Database{db:handle},nil
 }
 
+// HasAnyData reports whether MySQL already contains rows in any trading table.
+func (d *Database) HasAnyData() bool {
+ for _,table:=range []string{"trading_history","orders","forum_posts"} {
+  var n int
+  if err:=d.db.QueryRow("SELECT COUNT(*) FROM "+table).Scan(&n);err==nil&&n>0{return true}
+ }
+ return false
+}
+
 // Close closes the underlying database handle.
 func (d *Database) Close() error { return d.db.Close() }
 
