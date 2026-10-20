@@ -252,3 +252,25 @@ enabled without authentication, order creation fails closed rather than
 bypassing approval. This first workflow does not enforce a second distinct
 approver, expiry windows, or transaction-wide cash/exposure reservations;
 those are required before issue #7 can be considered fully complete.
+
+
+## Serialized paper cash reservations (issue #7)
+
+All API-created simulated orders now lock a single `paper_account_lock` row in
+MySQL with `SELECT ... FOR UPDATE` while checking remaining cash. The check
+subtracts filled BUY executions and fees, adds filled SELL proceeds net of
+fees, and reserves the conservative worst-case notional plus estimated fees
+for all OPEN BUY orders. The new order is committed under the same row lock,
+including orders with idempotency keys or human approval. Competing requests
+for the same shared paper account serialize, rather than each relying on the
+same stale portfolio snapshot. Cancelled and rejected orders release their
+reservation when no longer OPEN. A market BUY at a price below its maximum
+reserved worst-case price may consume less cash than reserved.
+
+This is **paper-only, single-account, single-quote-currency** accounting; it
+does not perform currency conversions, prevent different quote currencies from
+being mixed, or provide guaranteed broker-side capital. The separate symbol
+allocation percentage remains an application-layer check and must not be
+considered transactionally enforced by this cash guard. The default paper
+starting-cash setting must be consistent across API instances. No real-money
+execution is authorized.
