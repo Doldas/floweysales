@@ -57,6 +57,9 @@ type Config struct {
 	MaxSymbolAllocationPct float64    `json:"max_symbol_allocation_pct"`
 	HaltNewOrders          bool       `json:"halt_new_orders"`
 	RequirePaperApproval   bool       `json:"require_paper_approval"`
+	MaxDrawdownPct         float64    `json:"max_drawdown_pct"`
+	MaxSectorAllocationPct float64   `json:"max_sector_allocation_pct"`
+	MaxDailyVolumePct      float64   `json:"max_daily_volume_pct"`
 }
 
 // DefaultConfig returns a plain cash account with no commissions.
@@ -138,6 +141,10 @@ type SubmitRequest struct {
 	BuyingPower     float64
 	PortfolioEquity float64
 	SymbolExposure  float64
+	PeakEquity float64
+	SectorExposure float64
+	SectorKnown bool
+	DailyTradedNotional float64
 	ClientID        string
 	Now             int64
 	Cfg             Config
@@ -232,6 +239,38 @@ func NewOrder(req SubmitRequest) (storage.Order, error) {
 		cap := req.PortfolioEquity * req.Cfg.MaxSymbolAllocationPct / 100
 		if req.SymbolExposure+notional > cap+qtyEpsilon {
 			return storage.Order{}, fmt.Errorf("symbol allocation would exceed configured %.2f%% limit", req.Cfg.MaxSymbolAllocationPct)
+		}
+	}
+	if side == SideBuy {
+		for _, limit := range []float64{req.Cfg.MaxDrawdownPct, req.Cfg.MaxSectorAllocationPct, req.Cfg.MaxDailyVolumePct} {
+			if math.IsNaN(limit) || math.IsInf(limit,0) || limit<0 || limit>100 {
+				return storage.Order{}, fmt.Errorf("invalid paper risk percentage")
+			}
+		}
+		if req.Cfg.MaxDrawdownPct>0 {
+			if req.PortfolioEquity<=0 || req.PeakEquity<=0 || math.IsNaN(req.PeakEquity) || math.IsInf(req.PeakEquity,0) {
+				return storage.Order{}, fmt.Errorf("drawdown risk requires valid current and peak equity")
+			}
+			drawdown := 100*math.Max(0,req.PeakEquity-req.PortfolioEquity)/req.PeakEquity
+			if drawdown>=req.Cfg.MaxDrawdownPct {
+				return storage.Order{},fmt.Errorf("drawdown %.2f%% reached paper risk limit %.2f%%",drawdown,req.Cfg.MaxDrawdownPct)
+			}
+		}
+		if req.Cfg.MaxSectorAllocationPct>0 {
+			if !req.SectorKnown || req.PortfolioEquity<=0 || math.IsNaN(req.SectorExposure) || math.IsInf(req.SectorExposure,0) || req.SectorExposure<0 {
+				return storage.Order{},fmt.Errorf("sector risk requires verified sector exposure")
+			}
+			if req.SectorExposure+notional>req.PortfolioEquity*req.Cfg.MaxSectorAllocationPct/100+qtyEpsilon {
+				return storage.Order{},fmt.Errorf("sector allocation exceeds configured %.2f%% limit",req.Cfg.MaxSectorAllocationPct)
+			}
+		}
+		if req.Cfg.MaxDailyVolumePct>0 {
+			if req.DailyTradedNotional<=0 || math.IsNaN(req.DailyTradedNotional) || math.IsInf(req.DailyTradedNotional,0) {
+				return storage.Order{},fmt.Errorf("liquidity risk requires verified daily traded notional")
+			}
+			if notional>req.DailyTradedNotional*req.Cfg.MaxDailyVolumePct/100+qtyEpsilon {
+				return storage.Order{},fmt.Errorf("order exceeds configured daily liquidity participation limit")
+			}
 		}
 	}
 	fee := req.Cfg.Commission.Fee(notional)
