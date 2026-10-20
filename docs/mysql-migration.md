@@ -20,6 +20,33 @@ SQLite is used **only** by the offline one-time import tool.
 6. Confirm row counts in MySQL `trading_history`, `orders` and
    `forum_posts`, orders and positions, then start the new application.
 
+### Verify the SQLite-to-MySQL import (read-only)
+
+Before starting the new app, while the old app is stopped and no process is
+writing to either database, run the importer in **verification mode**:
+
+```sh
+# Uses the same read-only SQLite volume mapping and MySQL connection.
+docker compose -f compose.deploy.yml --profile legacy-import \
+  run --build --rm import-legacy --verify
+```
+
+When running the CLI directly:
+
+```sh
+SQLITE_IMPORT_PATH=/path/to/floweysales.db MYSQL_DSN='...' \
+  go run ./cmd/migrate-sqlite --verify
+```
+
+This mode **does not import or modify** anything. It compares record counts,
+minimum ID and maximum ID in `trading_history`, `orders` and `forum_posts`
+and exits unsuccessfully on any mismatch or database error. It is a
+**structural check, not a full row-by-row or financial reconciliation**:
+values can differ even when counts and ID bounds match. Independently inspect
+sample prices, orders, timestamps, positions and balances before retiring the
+legacy volume, and retain verified backups. Avoid running verification while
+trackers are adding new MySQL ticks, since counts would legitimately differ.
+
 The importer operates in one MySQL transaction, preserves original IDs,
 checks that all three MySQL target tables are empty first, and uses a
 **read-only SQLite connection**. If any target contains data, it refuses
