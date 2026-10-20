@@ -38,17 +38,17 @@ func (d *Database) FindPaperOrderRequest(key, digest string) (Order, bool, error
 
 // CreatePaperOrderOnce atomically stores a key and its simulated order.
 // The MySQL primary key serializes concurrent requests across app replicas.
-func (d *Database) CreatePaperOrderOnce(order Order, key, digest string) (Order, bool, error) {
-	return d.createPaperOrderOnce(order, key, digest, false)
+func (d *Database) CreatePaperOrderOnce(order Order, key, digest string, risk ...PaperCashRisk) (Order, bool, error) {
+	return d.createPaperOrderOnce(order, key, digest, false, risk...)
 }
 
 // CreateApprovedPaperOrderOnce requires a previously approved request and
 // atomically consumes its approval when the order is durably recorded.
-func (d *Database) CreateApprovedPaperOrderOnce(order Order, key, digest string) (Order, bool, error) {
-	return d.createPaperOrderOnce(order, key, digest, true)
+func (d *Database) CreateApprovedPaperOrderOnce(order Order, key, digest string, risk ...PaperCashRisk) (Order, bool, error) {
+	return d.createPaperOrderOnce(order, key, digest, true, risk...)
 }
 
-func (d *Database) createPaperOrderOnce(order Order, key, digest string, requireApproval bool) (Order, bool, error) {
+func (d *Database) createPaperOrderOnce(order Order, key, digest string, requireApproval bool, risk ...PaperCashRisk) (Order, bool, error) {
 	tx, err := d.db.Begin()
 	if err != nil {
 		return Order{}, false, err
@@ -69,6 +69,10 @@ func (d *Database) createPaperOrderOnce(order Order, key, digest string, require
 			return existing, true, nil
 		}
 		return Order{}, false, err
+	}
+
+	if len(risk)>0 {
+		if err:=lockPaperCash(tx,order,risk[0]); err!=nil { return Order{},false,err }
 	}
 
 	if requireApproval {
