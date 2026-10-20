@@ -56,6 +56,7 @@ func (c *SharedMarketConfig) Add(symbol string, p market.Provider) bool {
 	c.targets[key] = MarketTarget{Symbol: strings.ToUpper(strings.TrimSpace(symbol)), Provider: p, ProviderID: p.ID()}
 	return true
 }
+
 // CanAdd checks the cap without changing the active registry. Lifecycle writes
 // are serialized by Engine.trackerMutationMu, so persistence can happen first.
 func (c *SharedMarketConfig) CanAdd(symbol string, p market.Provider) bool {
