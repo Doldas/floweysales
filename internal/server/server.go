@@ -56,6 +56,15 @@ func (c *SharedMarketConfig) Add(symbol string, p market.Provider) bool {
 	c.targets[key] = MarketTarget{Symbol: strings.ToUpper(strings.TrimSpace(symbol)), Provider: p, ProviderID: p.ID()}
 	return true
 }
+// CanAdd checks the cap without changing the active registry. Lifecycle writes
+// are serialized by Engine.trackerMutationMu, so persistence can happen first.
+func (c *SharedMarketConfig) CanAdd(symbol string, p market.Provider) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, exists := c.targets[marketTargetKey(symbol, p)]
+	return exists || len(c.targets) < MaxActiveTrackers
+}
+
 func (c *SharedMarketConfig) Remove(symbol string, p market.Provider) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -124,6 +133,7 @@ type Engine struct {
 	config           *SharedMarketConfig
 	finnhubAPIKey    string
 	trackerCfg       tracker.Config
+	trackerMutationMu sync.Mutex // serialize MySQL and in-memory tracker lifecycle writes
 
 	webFS   fs.FS // optional embedded www/ filesystem (e.g. //go:embed www)
 	hub     *sseHub
