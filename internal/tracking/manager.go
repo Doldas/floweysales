@@ -108,8 +108,21 @@ func (m *Manager) installLocked(symbol string, provider market.Provider) {
 	if _, ok := m.active[key]; ok {
 		return
 	}
-	m.active[key] = &active{snapshot: Snapshot{Symbol: symbol, Provider: provider.ID(), Status: "WAITING"}, algorithm: tracker.NewTracker(m.config)}
-	m.keys = append(m.keys, key)
+	algorithm := tracker.NewTracker(m.config)
+ // Warm restart from a bounded, provider-matched sample of MySQL records.
+ // No full historical report allocation or extra provider request at startup.
+ if history,ok:=m.store.(interface{GetLatestRecords(int,string)[]storage.TradingRecord});ok{
+  rows:=history.GetLatestRecords(120,symbol)
+  closes:=make([]float64,0,len(rows))
+  for i:=len(rows)-1;i>=0;i--{
+   if rows[i].Provider==provider.ID()&&rows[i].Price>0{
+    closes=append(closes,rows[i].Price)
+   }
+  }
+  algorithm.Seed(closes)
+ }
+ m.active[key]=&active{snapshot:Snapshot{Symbol:symbol,Provider:provider.ID(),Status:"WAITING"},algorithm:algorithm}
+ m.keys=append(m.keys,key)
 }
 func (m *Manager) Alerts(fn func(subject, body string), cooldown time.Duration) {
 	m.mu.Lock()
