@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -460,5 +461,64 @@ func TestPaperOrderEventsPersistAcrossTransitions(t *testing.T) {
 	}
 	if code, _ := env.do(t, "GET", "/api/orders/999999/events", nil); code != http.StatusNotFound {
 		t.Fatalf("missing order audit = %d, want 404", code)
+	}
+}
+
+func TestPaperApprovalRequiresAuthenticatedOperator(t *testing.T) {
+	env := newTestEnv(t)
+	env.seed("GIB", 100)
+	cfg := env.engine.tradingConfig()
+	cfg.RequirePaperApproval = true
+	env.engine.ConfigureTrading(cfg)
+	code, raw := env.do(t, "POST", "/api/orders", map[string]any{
+		"symbol": "GIB", "side": "BUY", "quantity": 1, "client_order_id": "must-approve",
+	})
+	if code != http.StatusServiceUnavailable {
+		t.Fatalf("auth-disabled deployment must fail closed: %d %v", code, raw)
+	}
+	_, all := env.do(t, "GET", "/api/orders", nil)
+	if len(listOf(t, all)) != 0 {
+		t.Fatalf("order persisted without authentication: %v", all)
+	}
+}
+
+func TestPaperApprovalSingleUseAndExactPayload(t *testing.T) {
+	env := newTestEnv(t)
+	payload := map[string]any{"symbol": "GIB", "side": "BUY", "quantity": 1, "client_order_id": "approval-once"}
+	key, digest, err := paperApprovalDigest(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := env.db.RequestPaperApproval(context.Background(), key, digest, `{"symbol":"GIB"}`, 12); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.db.RequestPaperApproval(context.Background(), key, "other-digest", `{"symbol":"GIB"}`, 12); err == nil {
+		t.Fatal("approval proposal must not change immutable request")
+	}
+	order := storage.Order{Symbol: "GIB", Side: "BUY", Type: "MARKET", TIF: "GTC", Quantity: 1, Price: 100, Status: "FILLED", FillPrice: 100, Timestamp: time.Now().Unix()}
+	if _, _, err := env.db.CreateApprovedPaperOrderOnce(order, key, digest); err == nil {
+		t.Fatal("unapproved request must not persist order")
+	}
+	ok, err := env.db.ApprovePaperOrder(context.Background(), key, 99)
+	if err != nil || !ok {
+		t.Fatalf("approval failed: %v %v", ok, err)
+	}
+	if _, _, err := env.db.CreateApprovedPaperOrderOnce(order, key, "different-digest"); err == nil {
+		t.Fatal("different parameters must not consume approval")
+	}
+	created, replayed, err := env.db.CreateApprovedPaperOrderOnce(order, key, digest)
+	if err != nil || replayed || created.ID <= 0 {
+		t.Fatalf("approved create: %v %v %+v", err, replayed, created)
+	}
+	a, found, err := env.db.GetPaperApproval(context.Background(), key)
+	if err != nil || !found || a.ApprovedBy == nil || *a.ApprovedBy != 99 || a.ConsumedOrderID == nil || *a.ConsumedOrderID != int64(created.ID) {
+		t.Fatalf("approval audit incorrect: %+v %v", a, err)
+	}
+	if ok, err := env.db.ApprovePaperOrder(context.Background(), key, 100); err != nil || ok {
+		t.Fatalf("consumed approval was re-approved: %v %v", ok, err)
+	}
+	again, replayed, err := env.db.CreateApprovedPaperOrderOnce(order, key, digest)
+	if err != nil || !replayed || again.ID != created.ID {
+		t.Fatalf("retry duplicated order: %+v %v %v", again, replayed, err)
 	}
 }

@@ -107,6 +107,7 @@ func main() {
 
 	portfolio := trading.DefaultConfig()
 	portfolio.BaseCash = parseFloat(app.ResolveConfig("PORTFOLIO_CASH", "100000", defaults), portfolio.BaseCash)
+	portfolio.RequirePaperApproval = strings.EqualFold(app.ResolveConfig("PAPER_REQUIRE_APPROVAL", "false", defaults), "true")
 	portfolio.HaltNewOrders = strings.EqualFold(app.ResolveConfig("PAPER_TRADING_HALT", "false", defaults), "true")
 	portfolio.MaxSymbolAllocationPct = parseFloat(app.ResolveConfig("PAPER_MAX_SYMBOL_ALLOCATION_PCT", "0", defaults), 0)
 	portfolio.MaxOrderNotional = parseFloat(app.ResolveConfig("PAPER_MAX_ORDER_NOTIONAL", "0", defaults), 0)

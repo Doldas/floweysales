@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"floweysales/internal/identity"
 	"floweysales/internal/storage"
 	"floweysales/internal/trading"
 )
@@ -100,7 +101,22 @@ func (e *Engine) registerOrderRoutes() {
 			return
 		}
 
+		cfg := e.tradingConfig()
+		if cfg.RequirePaperApproval {
+			if e.authService == nil {
+				writeOrderError(w, http.StatusServiceUnavailable, "paper approval requires enabled authentication")
+				return
+			}
+			if user, ok := e.currentUser(r); !ok || user.Role != identity.RoleSysAdmin {
+				writeOrderError(w, http.StatusUnauthorized, "authentication required for approved paper trading")
+				return
+			}
+		}
 		key := stringField(j, "client_order_id")
+		if cfg.RequirePaperApproval && key == "" {
+			writeOrderError(w, http.StatusBadRequest, "client_order_id is required for human-approved paper orders")
+			return
+		}
 		digest := ""
 		if key != "" {
 			if len(key) > 128 || !regexp.MustCompile("^[A-Za-z0-9._:-]+$").MatchString(key) {
@@ -191,7 +207,11 @@ func (e *Engine) registerOrderRoutes() {
 
 		replayed := false
 		if key != "" {
-			order, replayed, err = e.db.CreatePaperOrderOnce(order, key, digest)
+			if cfg.RequirePaperApproval {
+				order, replayed, err = e.db.CreateApprovedPaperOrderOnce(order, key, digest)
+			} else {
+				order, replayed, err = e.db.CreatePaperOrderOnce(order, key, digest)
+			}
 			if err != nil {
 				writeOrderError(w, http.StatusConflict, err.Error())
 				return
@@ -224,6 +244,8 @@ func (e *Engine) registerOrderRoutes() {
 			"summary":  summary,
 		})
 	})
+
+	e.registerPaperApprovalRoutes()
 
 	// --- QUERY ---
 

@@ -225,3 +225,30 @@ them, nor a complete decision-to-recommendation-to-approval chain. No
 human-approval workflow or real-money execution is introduced. Events from
 before deployment of this additive migration cannot be reconstructed
 automatically. Do not edit/delete the audit table manually.
+
+
+## Opt-in paper order approval gate (#7)
+
+Set `PAPER_REQUIRE_APPROVAL=true` and **enable authenticated SYS_ADMIN sessions**.
+When enabled, requests to `POST /api/orders` fail closed without an
+authenticated administrator and a valid `client_order_id`. The workflow is:
+
+1. Authenticate as SYS_ADMIN. Send the intended **exact order JSON**, including
+   `client_order_id`, to `POST /api/paper-approvals`. The response
+   gives a SHA-256 request hash. This stage creates no executable order.
+2. After explicitly reviewing the request, an authenticated SYS_ADMIN calls
+   `POST /api/paper-approvals/{client_order_id}/approve`. The actor ID
+   is durably stored. `GET /api/paper-approvals/{client_order_id}`
+   shows requester, approval actor and consumption status.
+3. Send **the identical JSON** to `POST /api/orders`. Risk validation runs
+   against current portfolio and prices. MySQL atomically consumes the matching
+   unused approval and inserts the idempotent paper order. Replays with the
+   same key return the existing order without another execution.
+
+Changing any field after approval invalidates the request hash. A failed risk
+check does not consume approval. There is **no live broker integration**.
+The default is disabled to retain the legacy paper-ticket behavior. When
+enabled without authentication, order creation fails closed rather than
+bypassing approval. This first workflow does not enforce a second distinct
+approver, expiry windows, or transaction-wide cash/exposure reservations;
+those are required before issue #7 can be considered fully complete.
