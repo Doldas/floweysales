@@ -14,14 +14,26 @@ import {
   TradingRecord,
 } from './models';
 
+export interface TrackedAsset{
+ symbol:string;
+ provider:string;
+}
 export interface SharedConfig {
-  symbol: string;
-  provider: string;
+ symbol:string;
+ provider:string;
+ trackers?:TrackedAsset[];
 }
 
 @Injectable({ providedIn: 'root' })
 export class MarketService {
   private readonly http = inject(HttpClient);
+
+  getTrackers():Observable<{trackers:TrackedAsset[];max_trackers:number}>{
+    return this.http.get<{trackers:TrackedAsset[];max_trackers:number}>('/api/trackers');
+  }
+  stopTracker(t:TrackedAsset):Observable<{trackers:TrackedAsset[]}>{
+    return this.http.delete<{trackers:TrackedAsset[]}>('/api/trackers',{params:{symbol:t.symbol,provider:t.provider}});
+  }
 
   getConfig(): Observable<SharedConfig> {
     return this.http.get<SharedConfig>('/api/config');

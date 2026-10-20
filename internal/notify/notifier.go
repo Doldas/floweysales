@@ -40,17 +40,20 @@ func NewEmailNotifier(username, password, receiver string) *EmailNotifier {
 	}
 }
 
-// SendEmail spawns a goroutine that delivers the message, mirroring the
-// detached mail thread of the C++ implementation.
+// A bounded mail queue avoids accumulating goroutines when SMTP is slow.
+var emailSlots = make(chan struct{}, 2)
+
 func (n *EmailNotifier) SendEmail(subject, body string) {
-	go func() {
-		if err := n.deliver(subject, body); err != nil {
-			log.Printf("[Email Thread] Error: Failed to send email: %v", err)
-			return
-		}
-		log.Printf("[Email Thread] Alert sent successfully to %s!", n.TargetEmail)
-	}()
-	log.Printf("[Email] Delivery process spawned successfully.")
+	select {
+	case emailSlots <- struct{}{}:
+		go func() {
+			defer func() { <-emailSlots }()
+			if err := n.deliver(subject, body); err != nil {
+				log.Printf("[SMTP] delivery failed: %v", err)
+			}
+		}()
+	default: // Drop alerts rather than exhausting container memory.
+	}
 }
 
 // buildMessage renders a plain-text RFC 822 message.
@@ -71,11 +74,17 @@ func (n *EmailNotifier) buildMessage(subject, body string) string {
 // deliver performs a plaintext dial, upgrades with STARTTLS (port 587 style),
 // authenticates and transmits the message.
 func (n *EmailNotifier) deliver(subject, body string) error {
-	addr := fmt.Sprintf("%s:%d", n.SMTPHost, n.SMTPPort)
+	addr := net.JoinHostPort(n.SMTPHost, fmt.Sprintf("%d", n.SMTPPort))
 
-	client, err := smtp.Dial(addr)
+	connection, err := net.DialTimeout("tcp", addr, 8*time.Second)
 	if err != nil {
-		return fmt.Errorf("dial %s failed: %w", addr, err)
+		return fmt.Errorf("smtp dial failed: %w", err)
+	}
+	_ = connection.SetDeadline(time.Now().Add(20 * time.Second))
+	client, err := smtp.NewClient(connection, n.SMTPHost)
+	if err != nil {
+		connection.Close()
+		return err
 	}
 	defer client.Close()
 

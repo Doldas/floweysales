@@ -582,7 +582,6 @@ func resolveAvanzaID(query string, searchSize int) (string, string, error) {
 		// default prefix ("fund" + "FUND" -> "fundfund").
 		instrumentType += strings.ToLower(t)
 	}
-	log.Printf("[AvanzaProvider] Resolved query '%s' to ID: %s (%s)", query, id, instrumentType)
 	return id, instrumentType, nil
 }
 

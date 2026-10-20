@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -9,13 +10,14 @@ import (
 	"sync"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // TradingRecord is one tick of the trading history.
 type TradingRecord struct {
 	Timestamp        int64           `json:"timestamp"`
 	Symbol           string          `json:"symbol"`
+	Provider         string          `json:"provider,omitempty"`
 	Price            float64         `json:"price"`
 	StopLoss         float64         `json:"stop_loss"`
 	FastEMA          float64         `json:"fast_ema"`
@@ -69,71 +71,158 @@ type MarketStats struct {
 // OnRecordInsertedFunc is invoked after every inserted TradingRecord.
 type OnRecordInsertedFunc func(TradingRecord)
 
-// Database wraps the SQLite storage (thread-safe).
+// Database wraps the Liquibase-managed MySQL trading schema (thread-safe).
 type Database struct {
 	db               *sql.DB
 	mu               sync.Mutex
 	onRecordInserted OnRecordInsertedFunc
 }
 
-// Open initializes the database and its tables.
-func Open(dbPath string) (*Database, error) {
-	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)", dbPath)
-	if dbPath == ":memory:" {
-		dsn = "file::memory:?cache=shared"
+// Open requires the same MySQL database/DSN used for authenticated identity.
+// The schema MUST be applied by Liquibase before starting the application.
+func Open(dsn string) (*Database, error) {
+	if strings.TrimSpace(dsn) == "" {
+		return nil, fmt.Errorf("MYSQL_DSN is required; SQLite is no longer supported for live storage")
 	}
-
-	handle, err := sql.Open("sqlite", dsn)
+	handle, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("[Database] Initialization error: %w", err)
+		return nil, fmt.Errorf("open MySQL: %w", err)
 	}
-	handle.SetMaxOpenConns(4)
-
-	_, err = handle.Exec(`CREATE TABLE IF NOT EXISTS trading_history (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		timestamp INTEGER,
-		symbol TEXT,
-		price REAL,
-		stop_loss REAL,
-		fast_ema REAL,
-		slow_ema REAL,
-		currency TEXT,
-		status TEXT,
-		rawJson TEXT)`)
-
-	if err == nil {
-		_, err = handle.Exec(`CREATE TABLE IF NOT EXISTS orders (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			symbol TEXT NOT NULL,
-			side TEXT NOT NULL,
-			amount REAL NOT NULL,
-			price REAL NOT NULL,
-			timestamp INTEGER NOT NULL,
-			status TEXT DEFAULT 'OPEN')`)
-	}
-
-	if err == nil {
-		err = migrateOrders(handle)
-	}
-
-	if err == nil {
-		_, err = handle.Exec(`CREATE TABLE IF NOT EXISTS forum_posts (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			author TEXT NOT NULL,
-			title TEXT NOT NULL,
-			content TEXT NOT NULL,
-			symbol TEXT,
-			timestamp INTEGER NOT NULL,
-			upvotes INTEGER DEFAULT 0)`)
-	}
-
-	if err != nil {
+	handle.SetMaxOpenConns(10)
+	handle.SetMaxIdleConns(4)
+	handle.SetConnMaxLifetime(10 * time.Minute)
+	if err := handle.Ping(); err != nil {
 		handle.Close()
-		return nil, fmt.Errorf("[Database] Initialization error: %w", err)
+		return nil, fmt.Errorf("MySQL is unreachable: %w", err)
 	}
-
-	log.Printf("[Database] SQLite initialized with extended tables successfully: %s", dbPath)
+	for _, table := range []string{"trading_history", "orders", "forum_posts", "tracked_assets", "tracker_runtime_meta"} {
+		var present int
+		// Query only one row: COUNT(*) would scan potentially millions of ticks.
+		err := handle.QueryRow("SELECT 1 FROM " + table + " LIMIT 1").Scan(&present)
+		if err != nil && err != sql.ErrNoRows {
+			handle.Close()
+			return nil, fmt.Errorf("MySQL table %s missing; run Liquibase migration: %w", table, err)
+		}
+	}
 	return &Database{db: handle}, nil
+}
+
+// HasAnyData reports whether MySQL already contains rows in any trading table.
+func (d *Database) HasAnyData() bool {
+	for _, table := range []string{"trading_history", "orders", "forum_posts"} {
+		var n int
+		if err := d.db.QueryRow("SELECT EXISTS(SELECT 1 FROM " + table + " LIMIT 1)").Scan(&n); err == nil && n > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// BootstrapDefaultTracker enables the first configured asset once, on a
+// genuinely fresh deployment. A persistent metadata row remembers that users
+// explicitly stopped ALL trackers; an empty set must remain empty on restart.
+func (d *Database) BootstrapDefaultTracker(symbol, provider string) error {
+	tx, err := d.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var initialized int
+	if err := tx.QueryRow("SELECT COUNT(*) FROM tracker_runtime_meta").Scan(&initialized); err != nil {
+		return err
+	}
+	if initialized == 0 {
+		var existing int
+		if err := tx.QueryRow("SELECT COUNT(*) FROM tracked_assets").Scan(&existing); err != nil {
+			return err
+		}
+		if existing == 0 {
+			if _, err := tx.Exec("INSERT INTO tracked_assets(symbol,provider) VALUES (?,?)", symbol, provider); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.Exec("INSERT INTO tracker_runtime_meta(id) VALUES (1)"); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// ActiveTracker is an independently polled market stream persisted in MySQL.
+type ActiveTracker struct {
+	Symbol   string `json:"symbol"`
+	Provider string `json:"provider"`
+}
+
+func (d *Database) GetActiveTrackers() ([]ActiveTracker, error) {
+	rows, err := d.db.Query("SELECT symbol,provider FROM tracked_assets ORDER BY symbol,provider")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []ActiveTracker{}
+	for rows.Next() {
+		var t ActiveTracker
+		if err := rows.Scan(&t.Symbol, &t.Provider); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+func (d *Database) AddActiveTracker(symbol, provider string) error {
+	_, err := d.db.Exec("INSERT IGNORE INTO tracked_assets (symbol,provider) VALUES (?,?)", symbol, provider)
+	return err
+}
+func (d *Database) DeleteActiveTracker(symbol, provider string) error {
+	_, err := d.db.Exec("DELETE FROM tracked_assets WHERE symbol=? AND provider=?", symbol, provider)
+	return err
+}
+
+// Ping tests MySQL readiness; data is persisted only in this database.
+func (d *Database) Ping(ctx context.Context) error { return d.db.PingContext(ctx) }
+func (d *Database) PoolStats() sql.DBStats         { return d.db.Stats() }
+
+// GetOrdersPage caps only the HTTP representation; portfolio accounting still
+// sees the complete order ledger so balances remain exact.
+func (d *Database) GetOrdersPage(symbolFilter, statusFilter string, limit, offset int) []Order {
+	if limit < 1 {
+		limit = 500
+	}
+	if limit > 2000 {
+		limit = 2000
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > 1000000 {
+		offset = 1000000
+	}
+	query := "SELECT " + orderColumns + " FROM orders WHERE 1=1"
+	args := []any{}
+	if symbolFilter != "" {
+		query += " AND symbol = ?"
+		args = append(args, strings.ToUpper(symbolFilter))
+	}
+	if statusFilter != "" {
+		query += " AND status = ?"
+		args = append(args, strings.ToUpper(statusFilter))
+	}
+	query += " ORDER BY timestamp DESC,id DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+	rows, err := d.db.Query(query, args...)
+	if err != nil {
+		return []Order{}
+	}
+	defer rows.Close()
+	out := []Order{}
+	for rows.Next() {
+		order, err := scanOrder(rows.Scan)
+		if err == nil {
+			out = append(out, order)
+		}
+	}
+	return out
 }
 
 // Close closes the underlying database handle.
@@ -155,9 +244,9 @@ func (d *Database) InsertRecord(record TradingRecord) {
 	}
 
 	_, err := d.db.Exec(
-		`INSERT INTO trading_history (timestamp, symbol, price, stop_loss, fast_ema, slow_ema, currency, status, rawJson)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		record.Timestamp, record.Symbol, record.Price, record.StopLoss,
+		`INSERT INTO trading_history (timestamp, symbol, provider, price, stop_loss, fast_ema, slow_ema, currency, status, rawJson)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		record.Timestamp, record.Symbol, record.Provider, record.Price, record.StopLoss,
 		record.FastEMA, record.SlowEMA, record.Currency, record.Status, string(raw))
 	cb := d.onRecordInserted
 	d.mu.Unlock()
@@ -174,32 +263,47 @@ func (d *Database) InsertRecord(record TradingRecord) {
 
 // GetLatestRecords returns the most recent records, optionally filtered by symbol.
 func (d *Database) GetLatestRecords(limit int, symbolFilter string) []TradingRecord {
+	return d.GetLatestRecordsByProvider(limit, symbolFilter, "")
+}
+func (d *Database) GetLatestRecordsByProvider(limit int, symbolFilter, providerFilter string) []TradingRecord {
+	if limit < 1 {
+		limit = 100
+	}
+	if limit > 2000 {
+		limit = 2000
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	records := []TradingRecord{}
 
-	query := `SELECT timestamp, symbol, price, stop_loss, fast_ema, slow_ema, currency, status FROM trading_history `
+	query := `SELECT timestamp, symbol, provider, price, stop_loss, fast_ema, slow_ema, currency, status FROM trading_history `
 	var args []any
 	if symbolFilter != "" {
 		query += "WHERE symbol = ? "
 		args = append(args, symbolFilter)
+	}
+	if providerFilter != "" {
+		if symbolFilter != "" {
+			query += "AND provider = ? "
+		} else {
+			query += "WHERE provider = ? "
+		}
+		args = append(args, providerFilter)
 	}
 	query += "ORDER BY id DESC LIMIT ?"
 	args = append(args, limit)
 
 	rows, err := d.db.Query(query, args...)
 	if err != nil {
-		log.Printf("[Database] Filtered search failed: %v", err)
 		return records
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var rec TradingRecord
-		if err := rows.Scan(&rec.Timestamp, &rec.Symbol, &rec.Price, &rec.StopLoss,
+		if err := rows.Scan(&rec.Timestamp, &rec.Symbol, &rec.Provider, &rec.Price, &rec.StopLoss,
 			&rec.FastEMA, &rec.SlowEMA, &rec.Currency, &rec.Status); err != nil {
-			log.Printf("[Database] Row scan failed: %v", err)
 			continue
 		}
 		records = append(records, rec)
@@ -213,45 +317,9 @@ func (d *Database) ClearHistory() {
 	defer d.mu.Unlock()
 
 	if _, err := d.db.Exec("DELETE FROM trading_history"); err != nil {
-		log.Printf("[Database] Failed to clear database: %v", err)
 		return
 	}
-	if _, err := d.db.Exec("DELETE FROM sqlite_sequence WHERE name='trading_history'"); err != nil {
-		log.Printf("[Database] Failed to reset sequence: %v", err)
-	}
-	log.Printf("[Database] Database cleared successfully.")
-}
-
-// migrateOrders adds the execution lifecycle columns to a legacy orders table
-// and backfills the quantity column from the retired amount column.
-func migrateOrders(handle *sql.DB) error {
-	columns := []struct {
-		name string
-		ddl  string
-	}{
-		{"type", "TEXT DEFAULT 'MARKET'"},
-		{"tif", "TEXT DEFAULT 'GTC'"},
-		{"quantity", "REAL NOT NULL DEFAULT 0"},
-		{"limit_price", "REAL DEFAULT 0"},
-		{"stop_price", "REAL DEFAULT 0"},
-		{"fill_price", "REAL DEFAULT 0"},
-		{"fee", "REAL DEFAULT 0"},
-		{"filled_at", "INTEGER DEFAULT 0"},
-		{"reason", "TEXT DEFAULT ''"},
-	}
-	for _, col := range columns {
-		if _, err := handle.Exec(`ALTER TABLE orders ADD COLUMN ` + col.name + ` ` + col.ddl); err != nil {
-			if !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
-				return fmt.Errorf("[Database] order migration failed: %w", err)
-			}
-		}
-	}
-
-	// Legacy rows keep their shares in `amount`.
-	if _, err := handle.Exec(`UPDATE orders SET quantity = amount WHERE quantity = 0 AND amount != 0`); err != nil {
-		return fmt.Errorf("[Database] order backfill failed: %w", err)
-	}
-	return nil
+	// AUTO_INCREMENT is intentionally not reset; history IDs remain monotonically increasing.
 }
 
 // CreateOrder stores a new order and returns its ID (-1 on failure).
@@ -322,7 +390,6 @@ func (d *Database) GetOrders(symbolFilter, statusFilter string) []Order {
 
 	rows, err := d.db.Query(query, args...)
 	if err != nil {
-		log.Printf("[Database] Get orders failed: %v", err)
 		return orders
 	}
 	defer rows.Close()
@@ -330,7 +397,6 @@ func (d *Database) GetOrders(symbolFilter, statusFilter string) []Order {
 	for rows.Next() {
 		o, err := scanOrder(rows.Scan)
 		if err != nil {
-			log.Printf("[Database] Order row scan failed: %v", err)
 			continue
 		}
 		orders = append(orders, o)
@@ -448,7 +514,6 @@ func (d *Database) GetForumPosts(symbolFilter string, limit int) []ForumPost {
 
 	rows, err := d.db.Query(query, args...)
 	if err != nil {
-		log.Printf("[Database] Get forum posts failed: %v", err)
 		return posts
 	}
 	defer rows.Close()
@@ -456,7 +521,6 @@ func (d *Database) GetForumPosts(symbolFilter string, limit int) []ForumPost {
 	for rows.Next() {
 		var p ForumPost
 		if err := rows.Scan(&p.ID, &p.Author, &p.Title, &p.Content, &p.Symbol, &p.Timestamp, &p.Upvotes); err != nil {
-			log.Printf("[Database] Forum row scan failed: %v", err)
 			continue
 		}
 		posts = append(posts, p)
@@ -490,7 +554,6 @@ func (d *Database) GetSymbolStats(symbol string) MarketStats {
 	row := d.db.QueryRow(
 		"SELECT MIN(price), MAX(price), AVG(price), COUNT(id) FROM trading_history WHERE symbol = ?", symbol)
 	if err := row.Scan(&minP, &maxP, &avgP, &stats.RecordCount); err != nil {
-		log.Printf("[Database] Get stats failed: %v", err)
 	} else {
 		stats.MinPrice = nullOr(minP)
 		stats.MaxPrice = nullOr(maxP)
@@ -501,7 +564,6 @@ func (d *Database) GetSymbolStats(symbol string) MarketStats {
 		"SELECT price FROM trading_history WHERE symbol = ? ORDER BY id DESC LIMIT 1", symbol)
 	if err := latestRow.Scan(&stats.LatestPrice); err != nil && err != sql.ErrNoRows {
 		stats.LatestPrice = 0
-		log.Printf("[Database] Get stats failed: %v", err)
 	}
 
 	return stats
@@ -522,7 +584,6 @@ func (d *Database) GetDistinctSymbols() []string {
 	symbols := []string{}
 	rows, err := d.db.Query("SELECT DISTINCT symbol FROM trading_history")
 	if err != nil {
-		log.Printf("[Database] Get symbols failed: %v", err)
 		return symbols
 	}
 	defer rows.Close()

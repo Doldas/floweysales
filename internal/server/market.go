@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"strconv"
@@ -138,12 +137,13 @@ func (e *Engine) registerMarketRoutes() {
 		}
 		symbolFilter := queryParam(r, "symbol", "")
 
-		records := e.db.GetLatestRecords(limit, symbolFilter)
+		records := e.db.GetLatestRecordsByProvider(limit, symbolFilter, r.URL.Query().Get("provider"))
 		jList := make([]map[string]any, 0, len(records))
 		for _, rec := range records {
 			jList = append(jList, map[string]any{
 				"timestamp": rec.Timestamp,
 				"symbol":    rec.Symbol,
+				"provider":  rec.Provider,
 				"price":     rec.Price,
 				"stop_loss": rec.StopLoss,
 				"fast_ema":  rec.FastEMA,
@@ -230,6 +230,12 @@ func (e *Engine) registerMarketRoutes() {
 		}
 		cancel := r.Context().Done()
 
+		ch := e.hub.subscribeFor(strings.ToUpper(r.URL.Query().Get("symbol")), strings.ToUpper(r.URL.Query().Get("provider")))
+		if ch == nil {
+			http.Error(w, "too many stream clients", http.StatusServiceUnavailable)
+			return
+		}
+		defer e.hub.unsubscribe(ch)
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
@@ -237,8 +243,7 @@ func (e *Engine) registerMarketRoutes() {
 		w.WriteHeader(http.StatusOK)
 		flusher.Flush()
 
-		ch := e.hub.subscribe()
-		defer e.hub.unsubscribe(ch)
+		// Client is registered before headers, so overloads return HTTP 503.
 
 		for {
 			select {
@@ -281,16 +286,22 @@ func (e *Engine) GetHistory(symbol string, provider market.Provider, rng string)
 
 	e.historyMu.Lock()
 	e.historyCache[key] = historyCacheEntry{fetched: time.Now(), series: series}
-	if len(e.historyCache) > 128 {
+	for len(e.historyCache) > 32 {
+		oldestKey := ""
+		oldest := time.Now()
 		for k, entry := range e.historyCache {
-			if time.Since(entry.fetched) > 10*time.Minute {
-				delete(e.historyCache, k)
+			if !entry.fetched.After(oldest) {
+				oldest = entry.fetched
+				oldestKey = k
 			}
 		}
+		if oldestKey == "" {
+			break
+		}
+		delete(e.historyCache, oldestKey)
 	}
 	e.historyMu.Unlock()
 
-	log.Printf("[History] %s/%s %s: %d bars", symbol, provider, rng, len(series.Points))
 	return series, nil
 }
 
@@ -347,16 +358,22 @@ func (e *Engine) GetFinancialsRange(symbol string, provider market.Provider, yea
 
 	e.financialsMu.Lock()
 	e.financialsCache[key] = financialsCacheEntry{fetched: time.Now(), res: res}
-	if len(e.financialsCache) > 128 {
+	for len(e.financialsCache) > 48 {
+		oldestKey := ""
+		oldest := time.Now()
 		for k, entry := range e.financialsCache {
-			if time.Since(entry.fetched) > 24*time.Hour {
-				delete(e.financialsCache, k)
+			if !entry.fetched.After(oldest) {
+				oldest = entry.fetched
+				oldestKey = k
 			}
 		}
+		if oldestKey == "" {
+			break
+		}
+		delete(e.financialsCache, oldestKey)
 	}
 	e.financialsMu.Unlock()
 
-	log.Printf("[Financials] %s/%s: %d quarters (source %s)", symbol, provider, len(res.Reports), res.Source)
 	return res, nil
 }
 

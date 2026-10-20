@@ -35,7 +35,7 @@ async function testViewport(name, width, height, role = 'SYS_ADMIN') {
     if (pathname === '/api/auth/me') {
       body = JSON.stringify({ enabled: true, user: { id: 1, email: 'responsive@example.test', role } });
     } else if (pathname === '/api/config') {
-      body = JSON.stringify({ symbol: 'NVDA', provider: 'YAHOO' });
+      body = JSON.stringify({ symbol: 'NVDA', provider: 'YAHOO', trackers: [{ symbol:'NVDA', provider:'YAHOO' }] });
     } else if (pathname === '/api/financials') {
       const params = new URL(route.request().url()).searchParams;
       financialRangeRequests.push({ from: params.get('from_year'), to: params.get('to_year') });

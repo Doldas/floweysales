@@ -58,6 +58,7 @@ export interface SymbolInfo {
 export interface TradingRecord {
   timestamp: number;
   symbol: string;
+  provider?: string;
   price: number;
   stop_loss: number;
   fast_ema: number;

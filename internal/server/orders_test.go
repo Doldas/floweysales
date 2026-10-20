@@ -2,11 +2,13 @@ package server
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
+	_ "github.com/go-sql-driver/mysql"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
+	"os"
 	"testing"
 	"time"
 
@@ -27,7 +29,23 @@ type testEnv struct {
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
 
-	db, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	dsn := os.Getenv("STORAGE_TEST_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("requires disposable Liquibase-migrated MySQL")
+	}
+	// Each test starts with a clean isolated CI schema.
+	raw, err := sql.Open("mysql", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"trading_history", "orders", "forum_posts"} {
+		if _, err := raw.Exec("DELETE FROM " + table); err != nil {
+			raw.Close()
+			t.Fatal(err)
+		}
+	}
+	raw.Close()
+	db, err := storage.Open(dsn)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}

@@ -70,8 +70,23 @@ jobs:
           fi
       - name: Vet
         run: go vet ./...
+      - name: Start disposable Liquibase-backed MySQL for storage tests
+        env:
+          MYSQL_PASSWORD: ci-only-identity-password
+          MYSQL_ROOT_PASSWORD: ci-only-root-password
+        run: |
+          docker compose -f compose.identity.yml up -d mysql
+          docker compose -f compose.identity.yml --profile migration run --build --rm migrate update
       - name: Unit tests (race detector)
+        env:
+          STORAGE_TEST_MYSQL_DSN: 'flowey_auth:ci-only-identity-password@tcp(127.0.0.1:3306)/floweysales_auth?parseTime=true&loc=UTC&tls=false'
         run: go test -race -count=1 ./...
+      - name: Stop disposable storage MySQL
+        if: always()
+        env:
+          MYSQL_PASSWORD: ci-only-identity-password
+          MYSQL_ROOT_PASSWORD: ci-only-root-password
+        run: docker compose -f compose.identity.yml down -v
       - name: Build backend and MCP
         run: |
           mkdir -p dist
@@ -139,6 +154,10 @@ jobs:
         env:
           AUTH_TEST_MYSQL_DSN: 'flowey_auth:ci-only-identity-password@tcp(127.0.0.1:3306)/floweysales_auth?parseTime=true&loc=UTC&tls=false'
         run: go test ./internal/server -run TestMySQLAuthGate -count=1
+      - name: Test non-destructive SQLite to MySQL import
+        env:
+          MIGRATION_TEST_MYSQL_DSN: 'flowey_auth:ci-only-identity-password@tcp(127.0.0.1:3306)/floweysales_auth?parseTime=true&loc=UTC&tls=false'
+        run: go test ./cmd/migrate-sqlite -run TestSQLiteImportTransactionalAndNonDestructive -count=1
       - name: Remove disposable CI database
         if: always()
         env:
@@ -165,3 +184,5 @@ jobs:
         run: docker build -t floweysales:ci .
       - name: Build packaged Liquibase migration image
         run: docker build -f docker/liquibase.Dockerfile -t floweysales-migrate:ci .
+      - name: Build opt-in read-only legacy importer
+        run: docker build --target legacy-importer -t floweysales-legacy-import:ci .

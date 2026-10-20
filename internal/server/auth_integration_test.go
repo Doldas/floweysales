@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
+
 	"testing"
 
 	"floweysales/internal/identity"
@@ -31,7 +31,7 @@ func TestMySQLAuthGate(t *testing.T) {
 	if err := auth.BootstrapOwner(t.Context(), email, password); err != nil {
 		t.Fatal(err)
 	}
-	store, err := storage.Open(filepath.Join(t.TempDir(), "market.db"))
+	store, err := storage.Open(dsn)
 	if err != nil {
 		t.Fatal(err)
 	}

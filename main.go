@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"context"
@@ -95,7 +97,13 @@ func main() {
 	cfg.WarmupTicks = parseInt(app.ResolveConfig("DEFAULT_WARMUP_TICKS", "10", defaults), cfg.WarmupTicks)
 	cfg.TransitionTicks = parseInt(app.ResolveConfig("DEFAULT_TRANSITION_TICKS", "30", defaults), cfg.TransitionTicks)
 
-	databasePath := app.ResolveConfig("SQLITE_STORAGE_PATH", ":memory:", defaults)
+	mysqlDSN := os.Getenv("MYSQL_DSN")
+	if mysqlDSN == "" {
+		mysqlDSN = os.Getenv("AUTH_MYSQL_DSN")
+	}
+	if mysqlDSN == "" {
+		log.Fatal("MYSQL_DSN (or AUTH_MYSQL_DSN) must be set; SQLite runtime storage has been removed")
+	}
 
 	portfolio := trading.DefaultConfig()
 	portfolio.BaseCash = parseFloat(app.ResolveConfig("PORTFOLIO_CASH", "100000", defaults), portfolio.BaseCash)
@@ -104,28 +112,28 @@ func main() {
 	portfolio.AllowShort = strings.EqualFold(
 		app.ResolveConfig("ALLOW_SHORT_SELLING", "false", defaults), "true")
 
-	fmt.Println("==================================================")
-	fmt.Println("         FLOWEYSALES ENGINE CONFIGURATION         ")
-	fmt.Printf("EMA Periods:      Fast: %.1fs | Slow: %.1fs\n", cfg.FastPeriod, cfg.SlowPeriod)
-	fmt.Printf("Ticker Interval:  %s\n", updateRate)
-	fmt.Printf("Portfolio:        Cash %.0f | Commission %.2f%% + %.2f | Short %v\n",
-		portfolio.BaseCash, portfolio.Commission.Pct, portfolio.Commission.Fixed, portfolio.AllowShort)
-	fmt.Println("==================================================")
-
 	api := market.NewMarketApi(app.ResolveConfig("FINNHUB_API_KEY", "", defaults))
 	finnhubAPIKey := app.ResolveConfig("FINNHUB_API_KEY", "", defaults)
 
-	db, err := storage.Open(databasePath)
+	db, err := storage.Open(mysqlDSN)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 	defer db.Close()
+	// Preserve legacy data: fail closed if an old SQLite file exists but the new
+	// database has not received an explicit migration. Never auto-delete it.
+	legacyPath := os.Getenv("LEGACY_SQLITE_PATH")
+	if legacyPath != "" {
+		if fi, err := os.Stat(legacyPath); err == nil && fi.Size() > 0 && !db.HasAnyData() {
+			log.Fatalf("Legacy SQLite file %s still contains potential data while MySQL trading tables are empty. Stop and run cmd/migrate-sqlite; file will not be deleted automatically.", legacyPath)
+		}
+	}
 
 	restAPI := server.NewEngine(db, sharedConfig, wwwFS, finnhubAPIKey, cfg)
 	if strings.EqualFold(app.ResolveConfig("AUTH_ENABLED", "false", defaults), "true") {
 		// Auth credentials are deliberately environment-only, never committed properties.
-		identityDB, err := identity.Open(os.Getenv("AUTH_MYSQL_DSN"))
+		identityDB, err := identity.Open(mysqlDSN)
 		if err != nil {
 			log.Fatalf("[AUTH] %v", err)
 		}
@@ -161,158 +169,39 @@ func main() {
 		log.Fatalf("[AUTH] Could not load AI configuration: %v", err)
 	}
 	restAPI.ConfigureTrading(portfolio)
-	if err := restAPI.Start(restApiHost, restApiPort); err != nil {
-		log.Fatalf("[FATAL ERROR] Could not bind to %s:%s - Port in use! (%v)", restApiHost, restApiPort, err)
-	}
 	db.SetOnRecordInserted(restAPI.BroadcastTick)
 
-	notifier := notify.NewEmailNotifier(appMail, appMailPassword, receiveAlertsAt)
-
-	// Active state to catch runtime configuration switches.
-	activeSymbol, activeProvider := sharedConfig.Get()
-
-	tkr := tracker.NewTracker(cfg)
-	seedTrackerFromHistory(tkr, activeSymbol, activeProvider, finnhubAPIKey)
-	tickCounter := 0
-	lastEmailSentTime := time.Time{}
-	hasSentFirstEmail := false
-	previousEMARelation := 0
-
-	initialPrice := api.GetLivePrice(activeSymbol, activeProvider)
-
-	for {
-		tickCounter++
-
-		// 1. Reset trigger: check if the user swapped symbol/provider via REST API
-		currentSymbol, currentProvider := sharedConfig.Get()
-		if currentSymbol != activeSymbol || currentProvider != activeProvider {
-			fmt.Printf("\n🔄 [CONFIG CHANGED] Asset swapped from %s (%s) to %s (%s)\n",
-				activeSymbol, activeProvider, currentSymbol, currentProvider)
-
-			activeSymbol = currentSymbol
-			activeProvider = currentProvider
-
-			// Clear trend memory completely to prevent ghost email triggers.
-			previousEMARelation = 0
-			tkr = tracker.NewTracker(cfg)
-			seedTrackerFromHistory(tkr, activeSymbol, activeProvider, finnhubAPIKey)
-			initialPrice = 0.0
-
-			time.Sleep(updateRate)
-			continue
-		}
-
-		liveAsset, err := api.FetchAsset(activeSymbol, activeProvider)
-		if err != nil {
-			log.Printf("[Tick] fetch failed for %s via %s: %v", activeSymbol, activeProvider, err)
-			time.Sleep(time.Second)
-			continue
-		}
-
-		currentPrice := liveAsset.Price()
-		if currentPrice <= 0.0 {
-			log.Printf("[Tick] Price not available yet: %s via %s", activeSymbol, activeProvider)
-			time.Sleep(time.Second)
-			continue
-		}
-
-		decision := tkr.Update(currentPrice)
-		currentFastEMA, currentSlowEMA := tkr.EMAs()
-		currentStop := tkr.StopLoss()
-		timestamp := time.Now().Unix()
-
-		visualStatus := "🟢 ACTIVE (Tracking)"
-
-		// 2. Evaluate crossovers safely.
-		if currentFastEMA > 0.0 && currentSlowEMA > 0.0 {
-			currentEMARelation := 1
-			if currentFastEMA > currentSlowEMA {
-				currentEMARelation = 2
-			}
-
-			if previousEMARelation != 0 {
-				currentTime := time.Now()
-				cooldownActive := hasSentFirstEmail && currentTime.Sub(lastEmailSentTime) < emailCooldownDuration
-
-				if previousEMARelation == 1 && currentEMARelation == 2 {
-					visualStatus = "🔶 GOLDEN CROSS (Buy Momentum)"
-					fmt.Printf("\n🔶 [TREND] Golden Cross detected for %s!\n", activeSymbol)
-
-					if !cooldownActive {
-						notifier.SendEmail(
-							"🔶 GOLDEN CROSS: Bullish Trend Reversal for "+activeSymbol,
-							fmt.Sprintf("Your trading bot has detected a Golden Cross for %s.\nFast EMA (%s:%f) crossed above Slow EMA (%s:%f).",
-								activeSymbol, liveAsset.Currency(), currentFastEMA, liveAsset.Currency(), currentSlowEMA))
-						lastEmailSentTime = currentTime
-						hasSentFirstEmail = true
-					}
-				} else if previousEMARelation == 2 && currentEMARelation == 1 {
-					visualStatus = "📉 DEATH CROSS (Bearish Reversal)"
-					fmt.Printf("\n📉 [TREND] Death Cross detected for %s!\n", activeSymbol)
-
-					if !cooldownActive {
-						notifier.SendEmail(
-							"📉 DEATH CROSS WARNING: Bearish Trend Reversal for "+activeSymbol,
-							fmt.Sprintf("Your trading bot has detected a Death Cross for %s.\nFast EMA (%s:%f) fell below Slow EMA (%s:%f).",
-								activeSymbol, liveAsset.Currency(), currentFastEMA, liveAsset.Currency(), currentSlowEMA))
-						lastEmailSentTime = currentTime
-						hasSentFirstEmail = true
-					}
-				}
-			}
-			previousEMARelation = currentEMARelation
-		}
-
-		record := storage.TradingRecord{
-			Timestamp:     timestamp,
-			Symbol:        activeSymbol,
-			Price:         currentPrice,
-			StopLoss:      currentStop,
-			FastEMA:       currentFastEMA,
-			SlowEMA:       currentSlowEMA,
-			Currency:      liveAsset.Currency(),
-			Status:        visualStatus,
-			RawMarketJSON: mustJSON(liveAsset.ToJSON()),
-		}
-
-		// 3. Stop-loss triggered.
-		if decision == tracker.Sell {
-			actualExitPrice := tkr.StopLoss()
-			visualStatus = "🔴 TERMINATED (Stop-Loss)"
-			record.Status = visualStatus
-
-			fmt.Printf("\n⚠️ [ALERT] Stop-Loss triggered for %s at %s:%f!\n",
-				activeSymbol, liveAsset.Currency(), actualExitPrice)
-
-			currentTime := time.Now()
-			cooldownActive := hasSentFirstEmail && currentTime.Sub(lastEmailSentTime) < emailCooldownDuration
-
-			if !cooldownActive {
-				notifier.SendEmail(
-					"⚠️ SELL ALERT: Stop-Loss Triggered for "+activeSymbol,
-					fmt.Sprintf("Dynamic stop-loss breached.\n\nAsset: %s\nEntry Price: %s:%f\nExit Price: %s:%f",
-						activeSymbol, liveAsset.Currency(), initialPrice, liveAsset.Currency(), actualExitPrice))
-				lastEmailSentTime = currentTime
-				hasSentFirstEmail = true
-			}
-
-			db.InsertRecord(record)
-
-			// Reset execution step.
-			fmt.Printf("🔄 Resetting tracker parameters for %s...\n\n", activeSymbol)
-			tkr = tracker.NewTracker(cfg)
-			initialPrice = currentPrice
-			previousEMARelation = 0
-
-			time.Sleep(updateRate)
-			continue
-		}
-
-		// 4. Standard tick preservation.
-		db.InsertRecord(record)
-
-		time.Sleep(updateRate)
+	defaultSymbol, defaultProvider := sharedConfig.Get()
+	if err := db.BootstrapDefaultTracker(defaultSymbol, defaultProvider.ID()); err != nil {
+		log.Fatalf("initialize tracker registry: %v", err)
 	}
+	existing, err := db.GetActiveTrackers()
+	if err != nil {
+		log.Fatalf("load saved trackers: %v", err)
+	}
+	if len(existing) == 0 {
+		// Intentionally empty after explicitly stopping every tracker.
+		sharedConfig.ReplaceTargets(nil)
+	} else {
+		targets := make([]server.MarketTarget, 0, len(existing))
+		for _, t := range existing {
+			targets = append(targets, server.MarketTarget{Symbol: t.Symbol, Provider: market.ParseProvider(t.Provider)})
+		}
+		sharedConfig.ReplaceTargets(targets)
+		sharedConfig.SelectPrimary(targets[0].Symbol, targets[0].Provider)
+	}
+
+	if err := restAPI.Start(restApiHost, restApiPort); err != nil {
+		log.Fatalf("bind %s:%s: %v", restApiHost, restApiPort, err)
+	}
+	var notifier *notify.EmailNotifier
+	if strings.EqualFold(os.Getenv("ENABLE_TRACK_ALERT_EMAIL"), "true") {
+		notifier = notify.NewEmailNotifier(appMail, appMailPassword, receiveAlertsAt)
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	runActiveTrackers(ctx, sharedConfig, db, api, notifier, cfg, updateRate, emailCooldownDuration, finnhubAPIKey)
+	restAPI.Stop()
 }
 
 // mustJSON marshals an asset payload; on failure an empty object is stored.
@@ -330,7 +219,7 @@ func mustJSON(v any) []byte {
 func seedTrackerFromHistory(tkr *tracker.Tracker, symbol string, provider market.Provider, finnhubKey string) {
 	series, err := market.FetchHistory(symbol, provider, market.Range1M, finnhubKey)
 	if err != nil {
-		log.Printf("[SEED] No historical data for %s (%s): %v — cold start", symbol, provider, err)
+		_ = err
 		return
 	}
 	closes := series.Closes()
@@ -338,7 +227,5 @@ func seedTrackerFromHistory(tkr *tracker.Tracker, symbol string, provider market
 		return
 	}
 	tkr.Seed(closes)
-	fast, slow := tkr.EMAs()
-	log.Printf("[SEED] Warmed tracker for %s from %d historical bars (FastEMA=%.4f SlowEMA=%.4f Stop=%.4f)",
-		symbol, len(closes), fast, slow, tkr.StopLoss())
+
 }
