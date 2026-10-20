@@ -45,6 +45,9 @@ func (e *Engine) portfolioState() (orders, working []storage.Order, positions []
 // matchOrders runs the execution engine against a fresh tick and persists
 // anything that fills or triggers.
 func (e *Engine) matchOrders(symbol string, price float64) {
+	if e.tradingConfig().HaltNewOrders {
+		return // Do not fill existing working orders while the kill switch is set.
+	}
 	if symbol == "" || price <= 0 {
 		return
 	}
