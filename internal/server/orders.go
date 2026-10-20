@@ -176,6 +176,38 @@ func (e *Engine) registerOrderRoutes() {
 			symbolExposure += pending.Quantity * worst
 		}
 
+		peak := summary.Equity
+		if cfg.MaxDrawdownPct>0 {
+			var err error
+			peak,err=e.db.ObservePaperPeak(summary.Equity)
+			if err!=nil {
+				writeOrderError(w,http.StatusServiceUnavailable,"paper drawdown risk state unavailable")
+				return
+			}
+		}
+		sectorExposure := 0.0
+		sectorKnown := true
+		if cfg.MaxSectorAllocationPct>0 {
+			targetSector := strings.TrimSpace(cfg.SymbolSectors[symbol])
+			if targetSector=="" { sectorKnown=false }
+			for _,position := range positions {
+				if position.MarketValue<=0 {continue}
+				sector := strings.TrimSpace(cfg.SymbolSectors[position.Symbol])
+				if sector=="" {sectorKnown=false;continue}
+				if strings.EqualFold(sector,targetSector) {sectorExposure+=position.MarketValue}
+			}
+			for _,pending := range working {
+				if pending.Side!=trading.SideBuy {continue}
+				sector:=strings.TrimSpace(cfg.SymbolSectors[pending.Symbol])
+				if sector=="" {sectorKnown=false;continue}
+				if strings.EqualFold(sector,targetSector) {
+					worst:=pending.Price
+					if pending.LimitPrice>worst {worst=pending.LimitPrice}
+					if pending.StopPrice>worst {worst=pending.StopPrice}
+					sectorExposure+=pending.Quantity*worst
+				}
+			}
+		}
 		req := trading.SubmitRequest{
 			Symbol:          symbol,
 			Side:            stringField(j, "side"),
@@ -189,6 +221,10 @@ func (e *Engine) registerOrderRoutes() {
 			BuyingPower:     summary.BuyingPower,
 			PortfolioEquity: summary.Equity,
 			SymbolExposure:  symbolExposure,
+			PeakEquity: peak,
+			SectorExposure: sectorExposure,
+			SectorKnown: sectorKnown,
+			DailyTradedNotional: cfg.DailyTradedNotional[symbol],
 			ClientID:        stringField(j, "client_order_id"),
 			Now:             now,
 			Cfg:             e.tradingConfig(),
