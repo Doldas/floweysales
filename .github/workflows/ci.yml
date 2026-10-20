@@ -184,3 +184,5 @@ jobs:
         run: docker build -t floweysales:ci .
       - name: Build packaged Liquibase migration image
         run: docker build -f docker/liquibase.Dockerfile -t floweysales-migrate:ci .
+      - name: Build opt-in read-only legacy importer
+        run: docker build --target legacy-importer -t floweysales-legacy-import:ci .

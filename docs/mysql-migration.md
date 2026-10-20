@@ -14,7 +14,7 @@ SQLite is used **only** by the offline one-time import tool.
    `docker compose -f compose.deploy.yml --profile migration run --rm migrate update`
 4. Obtain the old file from the existing `trading_data` named volume without
    deleting or recreating the volume. Map it **read-only** to the importer.
-5. Run `MYSQL_DSN=... SQLITE_IMPORT_PATH=/path/floweysales.db go run ./cmd/migrate-sqlite`
+5. Run `docker compose -f compose.deploy.yml --profile legacy-import run --build --rm import-legacy` (or `MYSQL_DSN=... SQLITE_IMPORT_PATH=/path/floweysales.db go run ./cmd/migrate-sqlite`)
    on a host with database access, or build the command as an explicit
    one-time container. Do not run it while the old app is writing.
 6. Confirm row counts in MySQL `trading_history`, `orders` and
@@ -71,3 +71,25 @@ work are managed and tested independently in the same change series.
   so enabled symbols survive restarts. Existing `POST /api/config`
   selects the primary dashboard asset **and adds it to the active set**
   instead of stopping other trackers.
+
+## Docker / Podman import commands
+
+Use the same `.env`, `mysql_data`, and `trading_data` volumes as the
+existing installation. The importer is explicitly opt-in, built from
+`Dockerfile --target legacy-importer`, and its source SQLite volume is
+mounted **read-only**. It does not start automatically in Compose.
+
+```sh
+# Stop writers and take verified backups first.
+docker compose -f compose.deploy.yml stop app
+docker compose -f compose.deploy.yml --profile migration run --rm migrate update
+docker compose -f compose.deploy.yml --profile legacy-import run --build --rm import-legacy
+# Check rows and portfolio results; only then restart.
+docker compose -f compose.deploy.yml up -d app
+```
+
+Replace `docker` with `podman` on hosts supporting `podman compose`.
+If you no longer have the old SQLite database, **do not manufacture an
+empty placeholder**: fresh MySQL installation seeds the default tracker.
+The legacy `trading_data` volume is retained until explicitly retired
+after successful import and backups.
