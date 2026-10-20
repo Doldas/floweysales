@@ -47,3 +47,27 @@ There is no required SQLite volume for fresh installations.
 **Caution:** migrating the storage schema alone does not eliminate all
 possible pod memory pressure: the application cache and multi-tracker
 work are managed and tested independently in the same change series.
+
+## Memory, email and concurrency
+
+- REST history cache has a hard 32-key limit; financial cache 48 keys.
+  SSE subscribers are capped at 64 and their channel buffers at four ticks.
+- Each symbol+provider has independent EMA/stop state, bounded to 16 active
+  streams. Polling is clamped by provider quota to avoid a single
+  configuration storm after a pod restart (Finnhub at least 20s,
+  Avanza 10s, Yahoo 5s, Binance 2s).
+- Console per-tick/tracking debug logs are removed. Market ticks and
+  simulated orders remain persisted in MySQL.
+- Optional SMTP alerts are disabled by default. Set
+  `ENABLE_TRACK_ALERT_EMAIL=true` with real SMTP credentials to enable.
+  SMTP connections are time-bounded; at most two delivery goroutines.
+- The backend Compose service defaults to `GOMEMLIMIT=256MiB` and a
+  512 MiB container memory limit. Tune for your workload; production
+  Kubernetes manifests should set resource requests/limits separately.
+- Tracker lifecycle: `GET /api/trackers`, `POST /api/trackers`
+  with `{"symbol":"NVDA","provider":"YAHOO"}`,
+  `DELETE /api/trackers?symbol=NVDA&provider=YAHOO`.
+  These administrative operations update the MySQL `tracked_assets` table,
+  so enabled symbols survive restarts. Existing `POST /api/config`
+  selects the primary dashboard asset **and adds it to the active set**
+  instead of stopping other trackers.

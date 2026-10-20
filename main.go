@@ -186,7 +186,10 @@ func main() {
     sharedConfig.SelectPrimary(targets[0].Symbol,targets[0].Provider)
   }
 
-  notifier:=notify.NewEmailNotifier(appMail,appMailPassword,receiveAlertsAt)
+  var notifier *notify.EmailNotifier
+  if strings.EqualFold(os.Getenv("ENABLE_TRACK_ALERT_EMAIL"),"true"){
+    notifier=notify.NewEmailNotifier(appMail,appMailPassword,receiveAlertsAt)
+  }
   ctx,stop:=signal.NotifyContext(context.Background(),os.Interrupt,syscall.SIGTERM)
   defer stop()
   runActiveTrackers(ctx,sharedConfig,db,api,notifier,cfg,updateRate,emailCooldownDuration,finnhubAPIKey)

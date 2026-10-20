@@ -56,6 +56,9 @@ services:
       BRAVE_SEARCH_API_KEY: ${BRAVE_SEARCH_API_KEY:-}
       AI_MAX_STEPS: ${AI_MAX_STEPS:-12}
       AI_MAX_TOOL_CALLS: ${AI_MAX_TOOL_CALLS:-48}
+      GOMEMLIMIT: ${GOMEMLIMIT:-256MiB}
+      GOGC: ${GOGC:-80}
+      ENABLE_TRACK_ALERT_EMAIL: ${ENABLE_TRACK_ALERT_EMAIL:-false}
 
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:8080"
@@ -65,6 +68,7 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    mem_limit: 512m
     read_only: true
     tmpfs:
       - /tmp
