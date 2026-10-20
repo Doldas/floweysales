@@ -133,6 +133,7 @@ type Engine struct {
 	config           *SharedMarketConfig
 	finnhubAPIKey    string
 	trackerCfg       tracker.Config
+
 	trackerMutationMu sync.Mutex // serialize MySQL and in-memory tracker lifecycle writes
 
 	webFS   fs.FS // optional embedded www/ filesystem (e.g. //go:embed www)
