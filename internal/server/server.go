@@ -65,6 +65,11 @@ func (c *SharedMarketConfig) Targets()[]MarketTarget{
  return result
 }
 
+// SelectPrimary updates dashboard selection without registering an additional stream.
+func (c *SharedMarketConfig) SelectPrimary(symbol string,p market.Provider){
+ c.mu.Lock();c.Symbol=symbol;c.Provider=p;c.mu.Unlock()
+}
+
 // Get returns the current target symbol and provider.
 func (c *SharedMarketConfig) Get() (string, market.Provider) {
 	c.mu.Lock()
