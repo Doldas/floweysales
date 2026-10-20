@@ -150,28 +150,31 @@ func (e *Engine) registerOrderRoutes() {
 				continue
 			}
 			worst := pending.Price
-			if pending.LimitPrice > worst { worst = pending.LimitPrice }
-			if pending.StopPrice > worst { worst = pending.StopPrice }
+			if pending.LimitPrice > worst {
+				worst = pending.LimitPrice
+			}
+			if pending.StopPrice > worst {
+				worst = pending.StopPrice
+			}
 			symbolExposure += pending.Quantity * worst
 		}
 
-
 		req := trading.SubmitRequest{
-			Symbol:         symbol,
-			Side:           stringField(j, "side"),
-			Type:           stringFieldOr(j, "type", trading.TypeMarket),
-			TIF:            stringFieldOr(j, "tif", trading.TIFGTC),
-			Quantity:       floatField(j, "quantity"),
-			LimitPrice:     floatField(j, "limit_price"),
-			StopPrice:      floatField(j, "stop_price"),
-			ReferencePrice: reference,
-			HeldQuantity:   trading.HeldQuantity(orders, symbol),
-			BuyingPower:    summary.BuyingPower,
+			Symbol:          symbol,
+			Side:            stringField(j, "side"),
+			Type:            stringFieldOr(j, "type", trading.TypeMarket),
+			TIF:             stringFieldOr(j, "tif", trading.TIFGTC),
+			Quantity:        floatField(j, "quantity"),
+			LimitPrice:      floatField(j, "limit_price"),
+			StopPrice:       floatField(j, "stop_price"),
+			ReferencePrice:  reference,
+			HeldQuantity:    trading.HeldQuantity(orders, symbol),
+			BuyingPower:     summary.BuyingPower,
 			PortfolioEquity: summary.Equity,
-			SymbolExposure: symbolExposure,
-			ClientID:       stringField(j, "client_order_id"),
-			Now:            now,
-			Cfg:            e.tradingConfig(),
+			SymbolExposure:  symbolExposure,
+			ClientID:        stringField(j, "client_order_id"),
+			Now:             now,
+			Cfg:             e.tradingConfig(),
 		}
 		// Legacy callers send the share count as `amount`.
 		if req.Quantity <= 0 {
