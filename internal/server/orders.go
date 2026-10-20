@@ -208,14 +208,12 @@ func (e *Engine) registerOrderRoutes() {
 				reason = "rejected"
 			}
 		case trading.StatusFilled:
-			if floatField(j, "fill_price") <= 0 {
-				writeOrderError(w, http.StatusBadRequest, "fill_price is required to fill an order manually")
-				return
-			}
+			writeOrderError(w, http.StatusConflict, "manual fills are disabled; execution requires a market tick")
+			return
 		}
 
 		if !e.db.UpdateOrderStatus(orderID, newStatus, reason) {
-			writeOrderError(w, http.StatusNotFound, "order not found")
+			writeOrderError(w, http.StatusConflict, "order is no longer open; concurrent transition rejected")
 			return
 		}
 		log.Printf("[API] Order #%d %s (%s)", orderID, strings.ToLower(newStatus), reason)
