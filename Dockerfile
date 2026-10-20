@@ -23,5 +23,5 @@ WORKDIR /app
 COPY --from=go-builder /out/floweysales_backend /app/floweysales_backend
 USER flowey:flowey
 EXPOSE 8080
-ENV REST_API_HOST=0.0.0.0 REST_API_PORT=8080 SQLITE_STORAGE_PATH=/data/floweysales.db
+ENV REST_API_HOST=0.0.0.0 REST_API_PORT=8080 GOMEMLIMIT=256MiB GOGC=80
 CMD ["/app/floweysales_backend"]
