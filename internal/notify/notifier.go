@@ -74,7 +74,7 @@ func (n *EmailNotifier) buildMessage(subject, body string) string {
 // deliver performs a plaintext dial, upgrades with STARTTLS (port 587 style),
 // authenticates and transmits the message.
 func (n *EmailNotifier) deliver(subject, body string) error {
-	addr := fmt.Sprintf("%s:%d", n.SMTPHost, n.SMTPPort)
+	addr := net.JoinHostPort(n.SMTPHost, fmt.Sprintf("%d", n.SMTPPort))
 
 	connection, err := net.DialTimeout("tcp", addr, 8*time.Second)
 	if err != nil {
