@@ -56,6 +56,7 @@ type Config struct {
 	MaxOrderNotional       float64    `json:"max_order_notional"`
 	MaxSymbolAllocationPct float64    `json:"max_symbol_allocation_pct"`
 	HaltNewOrders          bool       `json:"halt_new_orders"`
+	RequirePaperApproval  bool       `json:"require_paper_approval"`
 }
 
 // DefaultConfig returns a plain cash account with no commissions.
