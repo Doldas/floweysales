@@ -54,7 +54,7 @@ type Config struct {
 	Commission       Commission `json:"commission"`
 	AllowShort       bool       `json:"allow_short"`
 	MaxOrderNotional float64    `json:"max_order_notional"`
-	HaltNewOrders bool `json:"halt_new_orders"`
+	HaltNewOrders    bool       `json:"halt_new_orders"`
 }
 
 // DefaultConfig returns a plain cash account with no commissions.
