@@ -101,7 +101,7 @@ func runOneTracker(ctx context.Context,target server.MarketTarget,db *storage.Da
       }
     }
     record:=storage.TradingRecord{
-     Timestamp:time.Now().Unix(),Symbol:target.Symbol,Price:price,
+     Timestamp:time.Now().Unix(),Symbol:target.Symbol,Provider:target.ProviderID,Price:price,
      StopLoss:t.StopLoss(),FastEMA:fast,SlowEMA:slow,
      Currency:asset.Currency(),Status:state,
      RawMarketJSON:mustJSON(asset.ToJSON()),

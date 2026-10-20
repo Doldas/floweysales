@@ -258,21 +258,18 @@ func (e *Engine) Stop() {
 }
 
 // sseHub fans out trading records to all connected SSE clients.
+type sseFilter struct{symbol,provider string}
 type sseHub struct {
-	mu      sync.Mutex
-	clients map[chan []byte]struct{}
+ mu sync.Mutex
+ clients map[chan []byte]sseFilter
 }
-
-func newSSEHub() *sseHub {
-	return &sseHub{clients: make(map[chan []byte]struct{})}
-}
-
-func (h *sseHub) subscribe() chan []byte {
-	ch := make(chan []byte, 4)
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if len(h.clients)>=64{return nil}
- h.clients[ch]=struct{}{}
+func newSSEHub()*sseHub{return &sseHub{clients:make(map[chan []byte]sseFilter)}}
+func (h *sseHub) subscribe()chan []byte{return h.subscribeFor("","")}
+func (h *sseHub) subscribeFor(symbol,provider string)chan []byte{
+ ch:=make(chan []byte,4)
+ h.mu.Lock();defer h.mu.Unlock()
+ if len(h.clients)>=64{return nil}
+ h.clients[ch]=sseFilter{symbol:symbol,provider:provider}
  return ch
 }
 
@@ -282,16 +279,14 @@ func (h *sseHub) unsubscribe(ch chan []byte) {
 	delete(h.clients, ch)
 }
 
-func (h *sseHub) broadcast(data []byte) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	for ch := range h.clients {
-		select {
-		case ch <- data:
-		default:
-			// Client too slow; drop the tick for it.
-		}
-	}
+func (h *sseHub) broadcast(data []byte){h.broadcastFor("","",data)}
+func (h *sseHub) broadcastFor(symbol,provider string,data []byte){
+ h.mu.Lock();defer h.mu.Unlock()
+ for ch,filter:=range h.clients{
+  if filter.symbol!="" && filter.symbol!=symbol{continue}
+  if filter.provider!="" && filter.provider!=provider{continue}
+  select{case ch<-data:default:}
+ }
 }
 
 // BroadcastTick is invoked by the database insert callback.
@@ -302,6 +297,7 @@ func (e *Engine) BroadcastTick(record storage.TradingRecord) {
 	payload := map[string]any{
 		"timestamp":  record.Timestamp,
 		"symbol":     record.Symbol,
+  "provider": record.Provider,
 		"price":      record.Price,
 		"stop_loss":  record.StopLoss,
 		"fast_ema":   record.FastEMA,
@@ -315,7 +311,7 @@ func (e *Engine) BroadcastTick(record storage.TradingRecord) {
 	if err != nil {
 		return
 	}
-	e.hub.broadcast([]byte("data: " + string(data) + "\n\n"))
+	e.hub.broadcastFor(record.Symbol,record.Provider,[]byte("data: " + string(data) + "\n\n"))
 }
 
 func corsHeader(w http.ResponseWriter) {

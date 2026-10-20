@@ -16,6 +16,7 @@ import (
 type TradingRecord struct {
 	Timestamp        int64           `json:"timestamp"`
 	Symbol           string          `json:"symbol"`
+ Provider string `json:"provider,omitempty"`
 	Price            float64         `json:"price"`
 	StopLoss         float64         `json:"stop_loss"`
 	FastEMA          float64         `json:"fast_ema"`
@@ -146,9 +147,9 @@ func (d *Database) InsertRecord(record TradingRecord) {
 	}
 
 	_, err := d.db.Exec(
-		`INSERT INTO trading_history (timestamp, symbol, price, stop_loss, fast_ema, slow_ema, currency, status, rawJson)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		record.Timestamp, record.Symbol, record.Price, record.StopLoss,
+		`INSERT INTO trading_history (timestamp, symbol, provider, price, stop_loss, fast_ema, slow_ema, currency, status, rawJson)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		record.Timestamp, record.Symbol, record.Provider, record.Price, record.StopLoss,
 		record.FastEMA, record.SlowEMA, record.Currency, record.Status, string(raw))
 	cb := d.onRecordInserted
 	d.mu.Unlock()
@@ -165,18 +166,26 @@ func (d *Database) InsertRecord(record TradingRecord) {
 
 // GetLatestRecords returns the most recent records, optionally filtered by symbol.
 func (d *Database) GetLatestRecords(limit int, symbolFilter string) []TradingRecord {
+ return d.GetLatestRecordsByProvider(limit,symbolFilter,"")
+}
+func (d *Database) GetLatestRecordsByProvider(limit int,symbolFilter,providerFilter string) []TradingRecord {
+ if limit<1{limit=100};if limit>2000{limit=2000}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	records := []TradingRecord{}
 
-	query := `SELECT timestamp, symbol, price, stop_loss, fast_ema, slow_ema, currency, status FROM trading_history `
+	query := `SELECT timestamp, symbol, provider, price, stop_loss, fast_ema, slow_ema, currency, status FROM trading_history `
 	var args []any
 	if symbolFilter != "" {
 		query += "WHERE symbol = ? "
 		args = append(args, symbolFilter)
 	}
-	query += "ORDER BY id DESC LIMIT ?"
+	if providerFilter!=""{
+  if symbolFilter!=""{query += "AND provider = ? "}else{query+="WHERE provider = ? "}
+  args=append(args,providerFilter)
+ }
+ query += "ORDER BY id DESC LIMIT ?"
 	args = append(args, limit)
 
 	rows, err := d.db.Query(query, args...)
@@ -187,7 +196,7 @@ func (d *Database) GetLatestRecords(limit int, symbolFilter string) []TradingRec
 
 	for rows.Next() {
 		var rec TradingRecord
-		if err := rows.Scan(&rec.Timestamp, &rec.Symbol, &rec.Price, &rec.StopLoss,
+		if err := rows.Scan(&rec.Timestamp, &rec.Symbol, &rec.Provider, &rec.Price, &rec.StopLoss,
 			&rec.FastEMA, &rec.SlowEMA, &rec.Currency, &rec.Status); err != nil {
 						continue
 		}

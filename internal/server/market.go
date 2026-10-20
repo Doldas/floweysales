@@ -137,12 +137,13 @@ func (e *Engine) registerMarketRoutes() {
 		}
 		symbolFilter := queryParam(r, "symbol", "")
 
-		records := e.db.GetLatestRecords(limit, symbolFilter)
+		records := e.db.GetLatestRecordsByProvider(limit,symbolFilter,r.URL.Query().Get("provider"))
 		jList := make([]map[string]any, 0, len(records))
 		for _, rec := range records {
 			jList = append(jList, map[string]any{
 				"timestamp": rec.Timestamp,
 				"symbol":    rec.Symbol,
+    "provider":rec.Provider,
 				"price":     rec.Price,
 				"stop_loss": rec.StopLoss,
 				"fast_ema":  rec.FastEMA,
@@ -229,16 +230,17 @@ func (e *Engine) registerMarketRoutes() {
 		}
 		cancel := r.Context().Done()
 
-		w.Header().Set("Content-Type", "text/event-stream")
+		ch:=e.hub.subscribeFor(strings.ToUpper(r.URL.Query().Get("symbol")),strings.ToUpper(r.URL.Query().Get("provider")))
+  if ch==nil{http.Error(w,"too many stream clients",http.StatusServiceUnavailable);return}
+  defer e.hub.unsubscribe(ch)
+  w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.WriteHeader(http.StatusOK)
 		flusher.Flush()
 
-		ch := e.hub.subscribe()
-  if ch==nil{return}
-		defer e.hub.unsubscribe(ch)
+		// Client is registered before headers, so overloads return HTTP 503.
 
 		for {
 			select {
