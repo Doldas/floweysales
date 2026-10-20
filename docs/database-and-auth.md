@@ -163,3 +163,9 @@ conversion is performed, so the cap is per-order in the symbol's quote currency,
 **not** a portfolio-wide USD or SEK limit. Existing orders are not altered.
 This guard is a first incremental portion of issue #7; it does not yet
 implement portfolio drawdown limits, exposure concentration or a kill switch.
+
+## Emergency paper-trading halt (issue #7, partial)
+
+Set `PAPER_TRADING_HALT=true` in the app environment and **restart/recreate the app** to stop all new simulated order submissions and prevent resting simulated orders from matching subsequent ticks. Reading existing orders and manually cancelling OPEN orders remain available. Set back to `false` and restart only after investigating the problem. The toggle is read at startup; changing a Compose env file alone does **not** affect a running process.
+
+This is a software-only safety stop for paper trading. It does **not** cancel existing orders automatically, stop external market data polling, or provide broker-side controls. Do not use it to authorize real-money execution. The issue also requires persisted approvals, request idempotency, risk concentration/drawdown controls and failure testing before it can be closed.

@@ -332,3 +332,34 @@ func TestPositionsEndpoint(t *testing.T) {
 		t.Fatalf("equity = %v, want 100100 (100000 + 100 unrealized)", summary["equity"])
 	}
 }
+
+func TestPaperTradingHaltStopsSubmissionAndRestingFills(t *testing.T) {
+	env := newTestEnv(t)
+	env.seed("GIB", 100)
+	code, raw := env.do(t, "POST", "/api/orders", map[string]any{
+		"symbol": "GIB", "side": "BUY", "type": "LIMIT", "quantity": 2, "limit_price": 90,
+	})
+	if code != http.StatusOK || orderOf(t, raw)["status"] != trading.StatusOpen {
+		t.Fatalf("could not create resting fixture: %d %v", code, raw)
+	}
+	cfg := env.engine.tradingConfig()
+	cfg.HaltNewOrders = true
+	env.engine.ConfigureTrading(cfg)
+	if code, _ := env.do(t, "POST", "/api/orders", map[string]any{
+		"symbol": "GIB", "side": "BUY", "quantity": 1,
+	}); code != http.StatusBadRequest {
+		t.Fatalf("halt must reject submissions: %d", code)
+	}
+	env.engine.BroadcastTick(storage.TradingRecord{Symbol: "GIB", Price: 80, Timestamp: time.Now().Unix()})
+	_, raw = env.do(t, "GET", "/api/orders?status=OPEN", nil)
+	if len(listOf(t, raw)) != 1 {
+		t.Fatalf("halt allowed resting fill: %v", raw)
+	}
+	// Cancelling an already working order remains available while halted.
+	_, open := env.do(t, "GET", "/api/orders?status=OPEN", nil)
+	id := listOf(t, open)[0].(map[string]any)["id"]
+	code, raw = env.do(t, "PATCH", "/api/orders", map[string]any{"id": id, "status": "CANCELLED"})
+	if code != http.StatusOK {
+		t.Fatalf("halt must allow cancellation: %d %v", code, raw)
+	}
+}
