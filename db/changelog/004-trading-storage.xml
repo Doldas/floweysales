@@ -48,4 +48,12 @@
   </createTable>
   <rollback><dropTable tableName="forum_posts"/><dropTable tableName="orders"/><dropTable tableName="trading_history"/></rollback>
  </changeSet>
+ <changeSet id="007-active-trackers" author="floweysales" dbms="mysql">
+  <createTable tableName="tracked_assets">
+   <column name="symbol" type="VARCHAR(64)"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_tracked_assets"/></column>
+   <column name="provider" type="VARCHAR(32)"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_tracked_assets"/></column>
+   <column name="created_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP"/>
+  </createTable>
+  <rollback><dropTable tableName="tracked_assets"/></rollback>
+ </changeSet>
 </databaseChangeLog>
