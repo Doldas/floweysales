@@ -22,11 +22,11 @@ func (e *Engine) registerConfigRoutes() {
 		defer cancel()
 		now := time.Now().Unix()
 		type trackerStatus struct {
-			Symbol string `json:"symbol"`
-			Provider string `json:"provider"`
-			HasTick bool `json:"has_tick"`
+			Symbol            string `json:"symbol"`
+			Provider          string `json:"provider"`
+			HasTick           bool   `json:"has_tick"`
 			LastTickTimestamp *int64 `json:"last_tick_timestamp"`
-			AgeSeconds *int64 `json:"age_seconds"`
+			AgeSeconds        *int64 `json:"age_seconds"`
 		}
 		out := make([]trackerStatus, 0, len(targets))
 		for _, target := range targets {
@@ -38,7 +38,9 @@ func (e *Engine) registerConfigRoutes() {
 			status := trackerStatus{Symbol: target.Symbol, Provider: target.ProviderID, HasTick: found}
 			if found {
 				age := now - timestamp
-				if age < 0 { age = 0 }
+				if age < 0 {
+					age = 0
+				}
 				status.LastTickTimestamp = &timestamp
 				status.AgeSeconds = &age
 			}
