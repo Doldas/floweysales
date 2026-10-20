@@ -58,3 +58,31 @@ func TestPaperSymbolAllocationLimit(t *testing.T) {
 		}
 	}
 }
+
+func TestPaperDrawdownSectorAndLiquidityBuyGates(t *testing.T) {
+	base:=SubmitRequest{Symbol:"TEST",Side:SideBuy,Type:TypeMarket,Quantity:2,ReferencePrice:100,BuyingPower:10000,PortfolioEquity:900,PeakEquity:1000,SectorKnown:true,SectorExposure:200,DailyTradedNotional:5000,Cfg:Config{BaseCash:10000}}
+	cases:=[]struct{name string;modify func(*SubmitRequest);reject bool}{
+		{"drawdown reached",func(r *SubmitRequest){r.Cfg.MaxDrawdownPct=10},true},
+		{"drawdown below threshold",func(r *SubmitRequest){r.Cfg.MaxDrawdownPct=11},false},
+		{"missing peak",func(r *SubmitRequest){r.Cfg.MaxDrawdownPct=15;r.PeakEquity=0},true},
+		{"sector exceeded",func(r *SubmitRequest){r.Cfg.MaxSectorAllocationPct=40},true},
+		{"sector allowed",func(r *SubmitRequest){r.Cfg.MaxSectorAllocationPct=50},false},
+		{"sector unknown",func(r *SubmitRequest){r.Cfg.MaxSectorAllocationPct=80;r.SectorKnown=false},true},
+		{"liquidity exceeded",func(r *SubmitRequest){r.Cfg.MaxDailyVolumePct=3},true},
+		{"liquidity allowed",func(r *SubmitRequest){r.Cfg.MaxDailyVolumePct=4},false},
+		{"missing volume",func(r *SubmitRequest){r.Cfg.MaxDailyVolumePct=10;r.DailyTradedNotional=0},true},
+		{"invalid threshold",func(r *SubmitRequest){r.Cfg.MaxDrawdownPct=101},true},
+	}
+	for _,tc:=range cases {
+		t.Run(tc.name,func(t *testing.T){
+			r:=base
+			tc.modify(&r)
+			_,err:=NewOrder(r)
+			if (err!=nil)!=tc.reject {t.Fatalf("reject=%v; got error %v",tc.reject,err)}
+		})
+	}
+	base.Side=SideSell
+	base.HeldQuantity=5
+	base.Cfg=Config{MaxDrawdownPct:10,MaxSectorAllocationPct:10,MaxDailyVolumePct:1}
+	if _,err:=NewOrder(base);err!=nil {t.Fatalf("risk reducing sell should remain allowed: %v",err)}
+}
