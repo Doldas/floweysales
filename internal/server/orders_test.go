@@ -6,7 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
+	"os"
 	"testing"
 	"time"
 
@@ -27,11 +27,17 @@ type testEnv struct {
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
 
-	db, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	dsn:=os.Getenv("STORAGE_TEST_MYSQL_DSN")
+ if dsn==""{t.Skip("requires disposable Liquibase-migrated MySQL; STORAGE_TEST_MYSQL_DSN")}
+ db, err := storage.Open(dsn)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
+ // Disposable CI schema only; purge state to isolate independent cases.
+ for _,table:=range []string{"orders","forum_posts","trading_history","tracked_assets"}{
+  if err:=db.TruncateForTests(table);err!=nil{t.Fatal(err)}
+ }
 
 	config := &SharedMarketConfig{Symbol: "GIB", Provider: market.ParseProvider("YAHOO")}
 	engine := NewEngine(db, config, nil, "", tracker.DefaultConfig())

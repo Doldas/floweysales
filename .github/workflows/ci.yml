@@ -135,10 +135,11 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Test login, session and API authorization on MySQL
+      - name: Test MySQL-only orders, authentication and tracker persistence
         env:
           AUTH_TEST_MYSQL_DSN: 'flowey_auth:ci-only-identity-password@tcp(127.0.0.1:3306)/floweysales_auth?parseTime=true&loc=UTC&tls=false'
-        run: go test ./internal/server -run TestMySQLAuthGate -count=1
+          STORAGE_TEST_MYSQL_DSN: 'flowey_auth:ci-only-identity-password@tcp(127.0.0.1:3306)/floweysales_auth?parseTime=true&loc=UTC&tls=false'
+        run: go test -count=1 ./internal/server ./internal/storage ./internal/tracking
       - name: Remove disposable CI database
         if: always()
         env:
