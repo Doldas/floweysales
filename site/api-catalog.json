@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19",
+  "updated_at": "2026-10-20",
   "scope": "Read-only research inventory: implemented FloweySales HTTP/MCP surfaces plus known external provider endpoints (not an exhaustive list of vendor-specific, private or trading APIs).",
   "status_legend": {
     "implemented": "Implementerad i FloweySales och exponerad via angiven yta (kräver normalt inloggning).",
@@ -10,25 +10,9 @@
   "rest": [
     {
       "method": "GET",
-      "path": "/api/auth/me",
-      "description": "Session och användarroll",
-      "access": "USER / SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "POST",
-      "path": "/api/auth/login",
-      "description": "Skapa autentiserad session",
-      "access": "Publik med rate limit",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "POST",
-      "path": "/api/auth/logout",
-      "description": "Avsluta session",
-      "access": "Session",
+      "path": "/api/admin/runtime",
+      "description": "Heap, goroutiner, databaspool, SSE och cache (ingen tick-loggning)",
+      "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
     },
@@ -41,97 +25,9 @@
       "surface": "APP REST"
     },
     {
-      "method": "GET",
-      "path": "/api/providers",
-      "description": "Providerförmågor och tillgänglighet",
-      "access": "USER / SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "GET",
-      "path": "/api/provider/endpoints",
-      "description": "Whitelistade externa operationer (NY)",
-      "access": "USER / SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "GET",
-      "path": "/api/provider/research",
-      "description": "Läs källmärkt Finnhub/Binance-resultat (NY)",
-      "access": "USER / SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "GET",
-      "path": "/api/search",
-      "description": "Sök symboler i vald provider",
-      "access": "USER / SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "GET",
-      "path": "/api/history",
-      "description": "OHLC-diagram per symbol och period",
-      "access": "USER / SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "GET",
-      "path": "/api/financials",
-      "description": "Kvartalsresultat med from_year/to_year",
-      "access": "USER / SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "GET",
-      "path": "/api/quote",
-      "description": "Källmärkt senast kända OHLC-stängning",
-      "access": "USER / SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "GET",
-      "path": "/api/sec/filings",
-      "description": "SEC-rapportindex med källa",
-      "access": "USER / SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "GET",
-      "path": "/api/sec/facts",
-      "description": "SEC XBRL-fakta med period/källa",
-      "access": "USER / SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "GET",
-      "path": "/api/sec/section",
-      "description": "SEC rapportavsnitt",
-      "access": "USER / SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
       "method": "POST",
-      "path": "/api/valuation/dcf",
-      "description": "Deterministisk DCF-värdering",
-      "access": "USER / SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "GET",
-      "path": "/api/ai/tools",
-      "description": "AI-/MCP-verktygsscheman",
+      "path": "/api/ai/chat",
+      "description": "AI-chatt med verktyg (SSE)",
       "access": "USER / SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -153,49 +49,41 @@
       "surface": "APP REST"
     },
     {
+      "method": "GET",
+      "path": "/api/ai/tools",
+      "description": "AI-/MCP-verktygsscheman",
+      "access": "USER / SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
       "method": "POST",
-      "path": "/api/ai/chat",
-      "description": "AI-chatt med verktyg (SSE)",
+      "path": "/api/auth/login",
+      "description": "Skapa autentiserad session",
+      "access": "Publik med rate limit",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "description": "Avsluta session",
+      "access": "Session",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me",
+      "description": "Session och användarroll",
       "access": "USER / SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
     },
     {
       "method": "GET",
-      "path": "/api/prices",
-      "description": "Sparad tickhistorik",
-      "access": "SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "GET",
-      "path": "/api/prices/stream",
-      "description": "SSE för serverns marknadsticks",
-      "access": "SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "GET",
-      "path": "/api/stats",
-      "description": "Sparad tickstatistik",
-      "access": "SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "GET",
-      "path": "/api/symbols",
-      "description": "Sparade symboler",
-      "access": "SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "GET",
       "path": "/api/config",
-      "description": "Tradingmotorns inställningar",
+      "description": "Primärt dashboardval samt MySQL-sparad lista över parallella trackers",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -203,48 +91,16 @@
     {
       "method": "POST",
       "path": "/api/config",
-      "description": "Uppdatera motorinställningar",
-      "access": "SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/history",
-      "description": "Radera motorhistorik",
+      "description": "Välj primärt instrument och lägg till tracker utan att stoppa andra",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
     },
     {
       "method": "GET",
-      "path": "/api/orders",
-      "description": "Ordrar i befintlig lokal motor",
-      "access": "SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "POST",
-      "path": "/api/orders",
-      "description": "Placera simulering/lokal order enligt motorläge",
-      "access": "SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "PATCH",
-      "path": "/api/orders",
-      "description": "Uppdatera order",
-      "access": "SYS_ADMIN",
-      "status": "implemented",
-      "surface": "APP REST"
-    },
-    {
-      "method": "GET",
-      "path": "/api/positions",
-      "description": "Positioner i delad motor",
-      "access": "SYS_ADMIN",
+      "path": "/api/financials",
+      "description": "Kvartalsresultat med from_year/to_year",
+      "access": "USER / SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
     },
@@ -269,6 +125,190 @@
       "path": "/api/forum/vote",
       "description": "Rösta i lokalt forum",
       "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/history",
+      "description": "Radera motorhistorik",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/history",
+      "description": "OHLC-diagram per symbol och period",
+      "access": "USER / SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/orders",
+      "description": "Paginerad ordersökning: limit=500 standard (max 2000), offset; fullständig portföljbokföring bibehålls",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/orders",
+      "description": "Uppdatera order",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders",
+      "description": "Placera simulering/lokal order enligt motorläge",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/positions",
+      "description": "Positioner i delad motor",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/prices",
+      "description": "MySQL-persistenta senaste ticks (max 2000), filtrera symbol och provider",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/prices/stream",
+      "description": "SSE för serverns marknadsticks",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/provider/endpoints",
+      "description": "Whitelistade externa operationer (NY)",
+      "access": "USER / SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/provider/research",
+      "description": "Läs källmärkt Finnhub/Binance-resultat (NY)",
+      "access": "USER / SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/providers",
+      "description": "Providerförmågor och tillgänglighet",
+      "access": "USER / SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/quote",
+      "description": "Källmärkt senast kända OHLC-stängning",
+      "access": "USER / SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/search",
+      "description": "Sök symboler i vald provider",
+      "access": "USER / SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sec/facts",
+      "description": "SEC XBRL-fakta med period/källa",
+      "access": "USER / SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sec/filings",
+      "description": "SEC-rapportindex med källa",
+      "access": "USER / SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sec/section",
+      "description": "SEC rapportavsnitt",
+      "access": "USER / SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats",
+      "description": "Sparad tickstatistik",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/symbols",
+      "description": "Sparade symboler",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/trackers",
+      "description": "Stoppa en tracker utan att påverka övriga",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/trackers",
+      "description": "Lista MySQL-sparade aktiva trackers (max 16)",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "POST",
+      "path": "/api/trackers",
+      "description": "Starta ytterligare symbol/provider parallellt",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "POST",
+      "path": "/api/valuation/dcf",
+      "description": "Deterministisk DCF-värdering",
+      "access": "USER / SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/healthz",
+      "description": "MySQL-liveness/readiness utan inloggning",
+      "access": "Publik, begränsad status",
       "status": "implemented",
       "surface": "APP REST"
     }

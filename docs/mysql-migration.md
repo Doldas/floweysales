@@ -93,3 +93,17 @@ If you no longer have the old SQLite database, **do not manufacture an
 empty placeholder**: fresh MySQL installation seeds the default tracker.
 The legacy `trading_data` volume is retained until explicitly retired
 after successful import and backups.
+
+## Driftstatus utan tracking-loggar
+
+`GET /healthz` svarar `200 ok` när MySQL går att nå eller `503` när
+anslutningen är nere. Den returnerar varken lösenord eller tickhistorik.
+
+`GET /api/admin/runtime` kräver `SYS_ADMIN` när autentisering är
+aktiverad och ger aktuell heap, antal goroutiner, MySQL-poolanslutningar,
+aktiva trackers, cachenycklar och SSE-klienter. Använd denna vy för att
+jämföra minnesanvändning över tid. Den skriver inte tracking-loggar.
+
+`GET /api/orders` har nu en skyddad sidstorlek på 500 (högst 2000)
+och stöder `limit` samt `offset`; den fullständiga orderhistoriken
+behålls i MySQL och i beräkningarna av positioner och saldon.
