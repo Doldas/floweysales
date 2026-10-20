@@ -35,13 +35,13 @@ func (e *Engine) registerConfigRoutes() {
 			writeJSON(w, 400, map[string]any{"error": "invalid provider"})
 			return
 		}
-		if !e.config.Add(symbol, provider) {
-			writeJSON(w, 409, map[string]any{"error": "maximum 16 active trackers"})
+		allowed, err := e.addPersistedTracker(symbol, provider)
+		if err != nil {
+			writeJSON(w, 500, map[string]any{"error": "could not persist tracker"})
 			return
 		}
-		if err := e.db.AddActiveTracker(symbol, provider.ID()); err != nil {
-			e.config.Remove(symbol, provider)
-			writeJSON(w, 500, map[string]any{"error": "could not persist tracker"})
+		if !allowed {
+			writeJSON(w, 409, map[string]any{"error": "maximum 16 active trackers"})
 			return
 		}
 		writeJSON(w, 200, map[string]any{"trackers": e.config.Targets()})
@@ -58,11 +58,10 @@ func (e *Engine) registerConfigRoutes() {
 			return
 		}
 		provider := market.ParseProvider(p)
-		if err := e.db.DeleteActiveTracker(symbol, provider.ID()); err != nil {
+		if err := e.removePersistedTracker(symbol, provider); err != nil {
 			writeJSON(w, 500, map[string]any{"error": "could not delete tracker"})
 			return
 		}
-		e.config.Remove(symbol, provider)
 		writeJSON(w, 200, map[string]any{"trackers": e.config.Targets()})
 	})
 	e.mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
@@ -80,6 +79,8 @@ func (e *Engine) registerConfigRoutes() {
 
 	e.mux.HandleFunc("POST /api/config", func(w http.ResponseWriter, r *http.Request) {
 		corsHeader(w)
+		r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
+		defer r.Body.Close()
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"status": "error", "message": err.Error()})
@@ -98,6 +99,10 @@ func (e *Engine) registerConfigRoutes() {
 			symbol = sym
 		}
 		if provStr, ok := j["provider"].(string); ok && provStr != "" {
+			if !validTrackerProvider(provStr) {
+				writeJSON(w, 400, map[string]any{"error": "invalid provider"})
+				return
+			}
 			provider = market.ParseProvider(provStr)
 		}
 
@@ -106,15 +111,16 @@ func (e *Engine) registerConfigRoutes() {
 			writeJSON(w, 400, map[string]any{"error": err.Error()})
 			return
 		}
-		if !e.config.Add(normalized, provider) {
-			writeJSON(w, 409, map[string]any{"error": "maximum 16 active trackers"})
-			return
-		}
-		if err := e.db.AddActiveTracker(normalized, provider.ID()); err != nil {
+		allowed, err := e.addPersistedTracker(normalized, provider)
+		if err != nil {
 			writeJSON(w, 500, map[string]any{"error": "could not save tracker"})
 			return
 		}
-		e.config.Set(normalized, provider)
+		if !allowed {
+			writeJSON(w, 409, map[string]any{"error": "maximum 16 active trackers"})
+			return
+		}
+		e.config.SelectPrimary(normalized, provider)
 
 		writeJSON(w, http.StatusOK, map[string]any{"status": "success", "message": "Configuration updated"})
 	})
@@ -133,4 +139,30 @@ func validTrackerProvider(value string) bool {
 	default:
 		return false
 	}
+}
+
+// addPersistedTracker writes MySQL before exposing a new active target to the
+// polling supervisor. A database failure must not remove an already active
+// tracker, and concurrent adds/deletes must not reorder storage and memory.
+func (e *Engine) addPersistedTracker(symbol string, provider market.Provider) (bool, error) {
+	e.trackerMutationMu.Lock()
+	defer e.trackerMutationMu.Unlock()
+	if !e.config.CanAdd(symbol, provider) {
+		return false, nil
+	}
+	if err := e.db.AddActiveTracker(symbol, provider.ID()); err != nil {
+		return true, err
+	}
+	// All API lifecycle writes hold trackerMutationMu until both sides agree.
+	return e.config.Add(symbol, provider), nil
+}
+
+func (e *Engine) removePersistedTracker(symbol string, provider market.Provider) error {
+	e.trackerMutationMu.Lock()
+	defer e.trackerMutationMu.Unlock()
+	if err := e.db.DeleteActiveTracker(symbol, provider.ID()); err != nil {
+		return err
+	}
+	e.config.Remove(symbol, provider)
+	return nil
 }
