@@ -1,9 +1,13 @@
 package server
 
 import (
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -95,6 +99,36 @@ func (e *Engine) registerOrderRoutes() {
 			return
 		}
 
+		key := stringField(j, "client_order_id")
+		digest := ""
+		if key != "" {
+			if len(key) > 128 || !regexp.MustCompile("^[A-Za-z0-9._:-]+$").MatchString(key) {
+				writeOrderError(w, http.StatusBadRequest, "invalid client_order_id")
+				return
+			}
+			canonical := make(map[string]any, len(j))
+			for name, value := range j {
+				if name != "client_order_id" {
+					canonical[name] = value
+				}
+			}
+			bytes, err := json.Marshal(canonical)
+			if err != nil {
+				writeOrderError(w, http.StatusBadRequest, "invalid order parameters")
+				return
+			}
+			digest = fmt.Sprintf("%x", sha256.Sum256(bytes))
+			existing, found, err := e.db.FindPaperOrderRequest(key, digest)
+			if err != nil {
+				writeOrderError(w, http.StatusConflict, err.Error())
+				return
+			}
+			if found {
+				writeJSON(w, http.StatusOK, map[string]any{"status": "success", "order_id": existing.ID, "order": existing, "replayed": true})
+				return
+			}
+		}
+
 		symbol := strings.ToUpper(strings.TrimSpace(stringField(j, "symbol")))
 		now := time.Now().Unix()
 
@@ -133,12 +167,25 @@ func (e *Engine) registerOrderRoutes() {
 			return
 		}
 
-		id := e.db.CreateOrder(order)
-		if id <= 0 {
-			writeOrderError(w, http.StatusInternalServerError, "failed to store order")
+		replayed := false
+		if key != "" {
+			order, replayed, err = e.db.CreatePaperOrderOnce(order, key, digest)
+			if err != nil {
+				writeOrderError(w, http.StatusConflict, err.Error())
+				return
+			}
+		} else {
+			order.ID = e.db.CreateOrder(order)
+			if order.ID <= 0 {
+				writeOrderError(w, http.StatusInternalServerError, "failed to store order")
+				return
+			}
+		}
+		id := order.ID
+		if replayed {
+			writeJSON(w, http.StatusOK, map[string]any{"status": "success", "order_id": id, "order": order, "replayed": true})
 			return
 		}
-		order.ID = id
 
 		if order.Status == trading.StatusFilled {
 			log.Printf("[API] Order #%d executed: %s %.8g %s @ %.8g (fee %.2f)",
