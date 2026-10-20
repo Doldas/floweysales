@@ -58,7 +58,9 @@ func (e *Engine) registerPaperApprovalRoutes() {
 		if decoder.Decode(&tail)!=io.EOF { writeOrderError(w,http.StatusBadRequest,"proposal must contain exactly one JSON object"); return }
 		key,digest,err:=paperApprovalDigest(payload)
 		if err!=nil { writeOrderError(w,http.StatusBadRequest,err.Error());return }
-		if err=e.db.RequestPaperApproval(r.Context(),key,digest,requester);err!=nil {
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil { writeOrderError(w,http.StatusBadRequest,"invalid approval payload"); return }
+		if err=e.db.RequestPaperApproval(r.Context(),key,digest,string(payloadBytes),requester);err!=nil {
 			writeOrderError(w,http.StatusConflict,"approval request conflict or storage unavailable");return
 		}
 		writeJSON(w,http.StatusAccepted,map[string]any{"client_order_id":key,"request_hash":digest,"approval_status":"pending"})
