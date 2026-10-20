@@ -48,9 +48,7 @@ func (n *EmailNotifier) SendEmail(subject, body string) {
 			log.Printf("[Email Thread] Error: Failed to send email: %v", err)
 			return
 		}
-		log.Printf("[Email Thread] Alert sent successfully to %s!", n.TargetEmail)
 	}()
-	log.Printf("[Email] Delivery process spawned successfully.")
 }
 
 // buildMessage renders a plain-text RFC 822 message.
