@@ -354,7 +354,10 @@ func (d *Database) CreateOrder(order Order) int {
 	}
 
 	tx, err := d.db.Begin()
-	if err != nil { log.Printf("[Database] Begin order transaction: %v", err); return -1 }
+	if err != nil {
+		log.Printf("[Database] Begin order transaction: %v", err)
+		return -1
+	}
 	defer tx.Rollback()
 	res, err := tx.Exec(
 		`INSERT INTO orders
@@ -373,8 +376,14 @@ func (d *Database) CreateOrder(order Order) int {
 		log.Printf("[Database] Create order failed: %v", err)
 		return -1
 	}
-	if _, err := tx.Exec("INSERT INTO paper_order_events(order_id,event_type,new_status,reason) VALUES (?, 'CREATED', ?, ?)", id, order.Status, order.Reason); err != nil { log.Printf("[Database] Audit order creation: %v", err); return -1 }
-	if err := tx.Commit(); err != nil { log.Printf("[Database] Commit order: %v", err); return -1 }
+	if _, err := tx.Exec("INSERT INTO paper_order_events(order_id,event_type,new_status,reason) VALUES (?, 'CREATED', ?, ?)", id, order.Status, order.Reason); err != nil {
+		log.Printf("[Database] Audit order creation: %v", err)
+		return -1
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("[Database] Commit order: %v", err)
+		return -1
+	}
 	return int(id)
 }
 
@@ -450,7 +459,9 @@ func (d *Database) FillOrder(order Order) bool {
 	defer d.mu.Unlock()
 
 	tx, err := d.db.Begin()
-	if err != nil { return false }
+	if err != nil {
+		return false
+	}
 	defer tx.Rollback()
 	res, err := tx.Exec(
 		`UPDATE orders SET status = 'FILLED', fill_price = ?, filled_at = ?, fee = ?, reason = ?
@@ -461,9 +472,17 @@ func (d *Database) FillOrder(order Order) bool {
 		return false
 	}
 	n, _ := res.RowsAffected()
-	if n == 0 { return false }
-	if _, err := tx.Exec("INSERT INTO paper_order_events(order_id,event_type,previous_status,new_status,reason) VALUES (?, 'STATUS_CHANGED', 'OPEN', 'FILLED', ?)", order.ID, order.Reason); err != nil { log.Printf("[Database] Audit fill: %v", err); return false }
-	if err := tx.Commit(); err != nil { log.Printf("[Database] Commit fill: %v", err); return false }
+	if n == 0 {
+		return false
+	}
+	if _, err := tx.Exec("INSERT INTO paper_order_events(order_id,event_type,previous_status,new_status,reason) VALUES (?, 'STATUS_CHANGED', 'OPEN', 'FILLED', ?)", order.ID, order.Reason); err != nil {
+		log.Printf("[Database] Audit fill: %v", err)
+		return false
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("[Database] Commit fill: %v", err)
+		return false
+	}
 	return true
 }
 
@@ -489,7 +508,9 @@ func (d *Database) UpdateOrderStatus(orderID int, newStatus, reason string) bool
 	defer d.mu.Unlock()
 
 	tx, err := d.db.Begin()
-	if err != nil { return false }
+	if err != nil {
+		return false
+	}
 	defer tx.Rollback()
 	var res sql.Result
 	if reason == "" {
@@ -502,9 +523,17 @@ func (d *Database) UpdateOrderStatus(orderID int, newStatus, reason string) bool
 		return false
 	}
 	n, _ := res.RowsAffected()
-	if n == 0 { return false }
-	if _, err := tx.Exec("INSERT INTO paper_order_events(order_id,event_type,previous_status,new_status,reason) VALUES (?, 'STATUS_CHANGED', 'OPEN', ?, ?)", orderID, newStatus, reason); err != nil { log.Printf("[Database] Audit status change: %v", err); return false }
-	if err := tx.Commit(); err != nil { log.Printf("[Database] Commit status change: %v", err); return false }
+	if n == 0 {
+		return false
+	}
+	if _, err := tx.Exec("INSERT INTO paper_order_events(order_id,event_type,previous_status,new_status,reason) VALUES (?, 'STATUS_CHANGED', 'OPEN', ?, ?)", orderID, newStatus, reason); err != nil {
+		log.Printf("[Database] Audit status change: %v", err)
+		return false
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("[Database] Commit status change: %v", err)
+		return false
+	}
 	return true
 }
 
