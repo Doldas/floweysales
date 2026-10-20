@@ -15,6 +15,7 @@ import (
 // TradingRecord is one market tick in MySQL trading_history.
 type TradingRecord struct {
 	Timestamp        int64           `json:"timestamp"`
+ Provider string `json:"provider,omitempty"`
 	Symbol           string          `json:"symbol"`
 	Price            float64         `json:"price"`
 	StopLoss         float64         `json:"stop_loss"`
@@ -117,9 +118,9 @@ func (d *Database) InsertRecord(record TradingRecord) {
 	}
 
 	_, err := d.db.Exec(
-		`INSERT INTO trading_history (timestamp, symbol, price, stop_loss, fast_ema, slow_ema, currency, status, rawJson)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		record.Timestamp, record.Symbol, record.Price, record.StopLoss,
+		`INSERT INTO trading_history (timestamp, symbol, provider, price, stop_loss, fast_ema, slow_ema, currency, status, rawJson)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		record.Timestamp, record.Symbol, record.Provider, record.Price, record.StopLoss,
 		record.FastEMA, record.SlowEMA, record.Currency, record.Status, string(raw))
 	cb := d.onRecordInserted
 	d.mu.Unlock()
@@ -141,7 +142,7 @@ func (d *Database) GetLatestRecords(limit int, symbolFilter string) []TradingRec
 
 	records := []TradingRecord{}
 
-	query := `SELECT timestamp, symbol, price, stop_loss, fast_ema, slow_ema, currency, status FROM trading_history `
+	query := `SELECT timestamp, symbol, provider, price, stop_loss, fast_ema, slow_ema, currency, status FROM trading_history `
 	var args []any
 	if symbolFilter != "" {
 		query += "WHERE symbol = ? "
@@ -159,7 +160,7 @@ func (d *Database) GetLatestRecords(limit int, symbolFilter string) []TradingRec
 
 	for rows.Next() {
 		var rec TradingRecord
-		if err := rows.Scan(&rec.Timestamp, &rec.Symbol, &rec.Price, &rec.StopLoss,
+		if err := rows.Scan(&rec.Timestamp, &rec.Symbol, &rec.Provider, &rec.Price, &rec.StopLoss,
 			&rec.FastEMA, &rec.SlowEMA, &rec.Currency, &rec.Status); err != nil {
 			log.Printf("[Database] Row scan failed: %v", err)
 			continue

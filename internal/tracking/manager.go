@@ -7,8 +7,7 @@ import(
  "encoding/json"
  "errors"
  "fmt"
- "strings"
- "sync"
+  "sync"
  "time"
 
  "floweysales/internal/market"
@@ -69,6 +68,8 @@ func NewManager(store Store,fetch Fetcher,cfg tracker.Config,defaultSymbol strin
   if err:=m.Add(defaultSymbol,defaultProvider);err!=nil{return nil,err}
  }else{
   if len(list)>MaxTrackers{return nil,fmt.Errorf("configured trackers exceed %d",MaxTrackers)}
+  seen:=map[string]bool{}
+  for _,entry:=range list{if seen[entry.Symbol]{return nil,fmt.Errorf("duplicate tracked symbol across providers: %s",entry.Symbol)};seen[entry.Symbol]=true}
   for _,a:=range list{
    provider:=market.ParseProvider(a.Provider)
    symbol,err:=ValidAsset(a.Symbol,provider)
@@ -95,6 +96,9 @@ func (m *Manager) Add(symbol string,provider market.Provider)error{
  m.mu.Lock();defer m.mu.Unlock()
  key:=assetKey(normalized,provider.ID())
  if _,ok:=m.active[key];ok{return nil}
+ for _,existing:=range m.active{if existing.snapshot.Symbol==normalized{
+  return errors.New("a symbol can only be tracked with one provider at a time to keep order valuation unambiguous")
+ }}
  if len(m.active)>=MaxTrackers{return fmt.Errorf("maximum %d active trackers",MaxTrackers)}
  if err:=m.store.AddTrackedAsset(normalized,provider.ID());err!=nil{return err}
  m.installLocked(normalized,provider)
@@ -154,14 +158,12 @@ func (m *Manager) PollOnce(){
  fast,slow:=state.algorithm.EMAs()
  stop:=state.algorithm.StopLoss()
  status:="ACTIVE"
- if fast>0 && slow>0{
+ var alertSubject,alertBody string
+ if fast>0 && slow>0 {
   relation:=1;if fast>slow{relation=2}
-  if state.prevRelation!=0 && state.prevRelation!=relation && now.Sub(state.lastAlert)>=m.cooldown{
-   if m.onAlert!=nil{
-    subject:="Death cross";if relation==2{subject="Golden cross"}
-    // Alert calls occur after releasing the manager lock.
-    _=subject
-   }
+  if state.prevRelation!=0 && state.prevRelation!=relation && now.Sub(state.lastAlert)>=m.cooldown {
+   if relation==2{alertSubject="Golden cross: "+symbol}else{alertSubject="Death cross: "+symbol}
+   alertBody=fmt.Sprintf("Trend crossover for %s (%s): fast EMA %.4f slow EMA %.4f",symbol,provider.ID(),fast,slow)
    state.lastAlert=now
   }
   state.prevRelation=relation
@@ -176,11 +178,13 @@ func (m *Manager) PollOnce(){
  state.snapshot.LastUpdated=now.Unix()
  state.snapshot.Currency=asset.Currency()
  state.snapshot.Error=""
+ notify:=m.onAlert
  m.mu.Unlock()
+ if alertSubject!="" && notify!=nil{go notify(alertSubject,alertBody)}
  raw,err:=json.Marshal(asset.ToJSON())
  if err!=nil||len(raw)>MaxRawMarketBytes{raw=[]byte("{}")}
  m.store.InsertRecord(storage.TradingRecord{
-  Timestamp:now.Unix(),Symbol:symbol,Price:price,StopLoss:stop,
+  Timestamp:now.Unix(),Symbol:symbol,Provider:provider.ID(),Price:price,StopLoss:stop,
   FastEMA:fast,SlowEMA:slow,Currency:asset.Currency(),Status:status,RawMarketJSON:raw,
  })
 }
@@ -196,4 +200,3 @@ func (m *Manager) Run(ctx context.Context,interval time.Duration){
   }
  }
 }
-var _=strings.TrimSpace
