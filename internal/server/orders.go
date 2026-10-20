@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"floweysales/internal/identity"
 	"floweysales/internal/storage"
 	"floweysales/internal/trading"
 )
@@ -106,7 +107,7 @@ func (e *Engine) registerOrderRoutes() {
 				writeOrderError(w, http.StatusServiceUnavailable, "paper approval requires enabled authentication")
 				return
 			}
-			if _, ok := e.currentUser(r); !ok {
+			if user, ok := e.currentUser(r); !ok || user.Role != identity.RoleSysAdmin {
 				writeOrderError(w, http.StatusUnauthorized, "authentication required for approved paper trading")
 				return
 			}
