@@ -339,7 +339,7 @@ func (d *Database) ClearHistory() {
 }
 
 // CreateOrder stores a new order and returns its ID (-1 on failure).
-func (d *Database) CreateOrder(order Order) int {
+func (d *Database) CreateOrder(order Order, risk ...PaperCashRisk) int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -359,6 +359,12 @@ func (d *Database) CreateOrder(order Order) int {
 		return -1
 	}
 	defer tx.Rollback()
+	if len(risk) > 0 {
+		if err := lockPaperCash(tx, order, risk[0]); err != nil {
+			log.Printf("[Database] Cash risk rejected order: %v", err)
+			return -1
+		}
+	}
 	res, err := tx.Exec(
 		`INSERT INTO orders
 		 (symbol, side, type, tif, amount, quantity, price, limit_price, stop_price,

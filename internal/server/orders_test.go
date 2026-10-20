@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -520,5 +521,58 @@ func TestPaperApprovalSingleUseAndExactPayload(t *testing.T) {
 	again, replayed, err := env.db.CreateApprovedPaperOrderOnce(order, key, digest)
 	if err != nil || !replayed || again.ID != created.ID {
 		t.Fatalf("retry duplicated order: %+v %v %v", again, replayed, err)
+	}
+}
+
+func TestConcurrentPaperBuysCannotOverspendAccount(t *testing.T) {
+	env := newTestEnv(t)
+	env.seed("GIB", 100)
+	cfg := env.engine.tradingConfig()
+	cfg.BaseCash = 1000
+	env.engine.ConfigureTrading(cfg)
+	var wg sync.WaitGroup
+	codes := make([]int, 2)
+	results := make([]any, 2)
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			codes[i], results[i] = env.do(t, "POST", "/api/orders", map[string]any{
+				"symbol": "GIB", "side": "BUY", "quantity": 6, "client_order_id": fmt.Sprintf("simultaneous-%d", i),
+			})
+		}(i)
+	}
+	wg.Wait()
+	accepted := 0
+	for _, status := range codes {
+		if status == http.StatusOK {
+			accepted++
+		}
+	}
+	if accepted != 1 {
+		t.Fatalf("expected exactly one accepted 600-unit purchase from 1000 cash, statuses=%v responses=%v", codes, results)
+	}
+	_, orders := env.do(t, "GET", "/api/orders", nil)
+	if len(listOf(t, orders)) != 1 {
+		t.Fatalf("failed to serialize concurrent buys: %v", orders)
+	}
+}
+func TestRestingPaperBuyReservesCash(t *testing.T) {
+	env := newTestEnv(t)
+	env.seed("GIB", 100)
+	cfg := env.engine.tradingConfig()
+	cfg.BaseCash = 1000
+	env.engine.ConfigureTrading(cfg)
+	status, response := env.do(t, "POST", "/api/orders", map[string]any{
+		"symbol": "GIB", "side": "BUY", "type": "LIMIT", "limit_price": 90, "quantity": 6, "client_order_id": "cash-reservation-1",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("resting order: %d %v", status, response)
+	}
+	status, response = env.do(t, "POST", "/api/orders", map[string]any{
+		"symbol": "GIB", "side": "BUY", "quantity": 6, "client_order_id": "cash-reservation-2",
+	})
+	if status != http.StatusConflict {
+		t.Fatalf("reservation did not protect cash: %d %v", status, response)
 	}
 }
