@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -117,9 +118,84 @@ func migrate(ctx context.Context, sqlitePath, mysqlDSN string) (map[string]int, 
 	}
 	return counts, nil
 }
+
+// tableFingerprint checks inexpensive structural invariants without exporting
+// sensitive application rows. It does not prove byte-for-byte equivalence.
+type tableFingerprint struct {
+	Count int64
+	MinID sql.NullInt64
+	MaxID sql.NullInt64
+}
+
+func fingerprint(ctx context.Context, db *sql.DB, table string) (tableFingerprint, error) {
+	var result tableFingerprint
+	err := db.QueryRowContext(ctx, "SELECT COUNT(*), MIN(id), MAX(id) FROM "+table).
+		Scan(&result.Count, &result.MinID, &result.MaxID)
+	return result, err
+}
+
+// verifyMigration never writes to either database. Source writers must be
+// stopped to avoid taking non-comparable snapshots across the two engines.
+func verifyMigration(ctx context.Context, sqlitePath, mysqlDSN string) error {
+	if sqlitePath == "" || mysqlDSN == "" {
+		return errors.New("verification requires SQLITE_IMPORT_PATH and MYSQL_DSN")
+	}
+	if fi, err := os.Stat(sqlitePath); err != nil {
+		return fmt.Errorf("source unavailable: %w", err)
+	} else if fi.IsDir() {
+		return errors.New("source SQLite path is a directory")
+	}
+	src, err := sql.Open("sqlite", "file:"+sqlitePath+"?mode=ro")
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	if err := src.PingContext(ctx); err != nil {
+		return err
+	}
+	dst, err := sql.Open("mysql", mysqlDSN)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+	if err := dst.PingContext(ctx); err != nil {
+		return err
+	}
+	var mismatch bool
+	for _, tbl := range tables {
+		a, err := fingerprint(ctx, src, tbl.table)
+		if err != nil {
+			return fmt.Errorf("SQLite %s: %w", tbl.table, err)
+		}
+		b, err := fingerprint(ctx, dst, tbl.table)
+		if err != nil {
+			return fmt.Errorf("MySQL %s: %w", tbl.table, err)
+		}
+		ok := a == b
+		fmt.Printf("%s: SQLite count=%d ID=[%v,%v]; MySQL count=%d ID=[%v,%v]; match=%t\n",
+			tbl.table, a.Count, a.MinID, a.MaxID, b.Count, b.MinID, b.MaxID, ok)
+		if !ok {
+			mismatch = true
+		}
+	}
+	if mismatch {
+		return errors.New("verification failed: count or ID boundary mismatch; do not retire legacy volume")
+	}
+	fmt.Println("Structural verification passed. Compare order balances and sample records before retiring the legacy volume.")
+	return nil
+}
+
 func main() {
+	verify := flag.Bool("verify", false, "read-only comparison of SQLite and MySQL row counts and ID boundaries")
+	flag.Parse()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
+	if *verify {
+		if err := verifyMigration(ctx, os.Getenv("SQLITE_IMPORT_PATH"), os.Getenv("MYSQL_DSN")); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	counts, err := migrate(ctx, os.Getenv("SQLITE_IMPORT_PATH"), os.Getenv("MYSQL_DSN"))
 	if err != nil {
 		log.Fatal(err)

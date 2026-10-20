@@ -68,6 +68,21 @@ func TestSQLiteImportTransactionalAndNonDestructive(t *testing.T) {
 	check("trading_history", 42)
 	check("orders", 99)
 	check("forum_posts", 11)
+	if err := verifyMigration(context.Background(), dbPath, dsn); err != nil {
+		t.Fatalf("imported database should verify: %v", err)
+	}
+	// Count and ID bounds must expose a partial or modified target without
+	// attempting to repair or modify either database.
+	if _, err := dst.Exec("DELETE FROM forum_posts WHERE id = 11"); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyMigration(context.Background(), dbPath, dsn); err == nil {
+		t.Fatal("verification must refuse missing target records")
+	}
+	// Restore fixture so the existing duplicate-import safety check remains valid.
+	if _, err := dst.Exec("INSERT INTO forum_posts(id,author,title,content,symbol,timestamp,upvotes) VALUES (11,'Trader','Hello','Legacy forum','NVDA',1710000000,3)"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := migrate(context.Background(), dbPath, dsn); err == nil {
 		t.Fatal("duplicate import must fail")
 	}
