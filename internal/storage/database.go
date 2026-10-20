@@ -88,8 +88,10 @@ func Open(dsn string) (*Database,error){
  handle.SetConnMaxLifetime(10*time.Minute)
  if err:=handle.Ping();err!=nil{handle.Close();return nil,fmt.Errorf("MySQL is unreachable: %w",err)}
  for _,table:=range []string{"trading_history","orders","forum_posts","tracked_assets"}{
-  var count int
-  if err:=handle.QueryRow("SELECT COUNT(*) FROM "+table).Scan(&count);err!=nil {
+  var present int
+  // Query only one row: COUNT(*) would scan potentially millions of ticks.
+  err:=handle.QueryRow("SELECT 1 FROM "+table+" LIMIT 1").Scan(&present)
+  if err!=nil && err!=sql.ErrNoRows{
     handle.Close()
     return nil,fmt.Errorf("MySQL table %s missing; run Liquibase migration: %w",table,err)
   }
@@ -101,7 +103,7 @@ func Open(dsn string) (*Database,error){
 func (d *Database) HasAnyData() bool {
  for _,table:=range []string{"trading_history","orders","forum_posts"} {
   var n int
-  if err:=d.db.QueryRow("SELECT COUNT(*) FROM "+table).Scan(&n);err==nil&&n>0{return true}
+  if err:=d.db.QueryRow("SELECT EXISTS(SELECT 1 FROM "+table+" LIMIT 1)").Scan(&n);err==nil&&n>0{return true}
  }
  return false
 }
