@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/go-sql-driver/mysql"
 )
 
-// TradingRecord is one tick of the trading history.
+// TradingRecord is one market tick in MySQL trading_history.
 type TradingRecord struct {
 	Timestamp        int64           `json:"timestamp"`
 	Symbol           string          `json:"symbol"`
@@ -69,71 +69,33 @@ type MarketStats struct {
 // OnRecordInsertedFunc is invoked after every inserted TradingRecord.
 type OnRecordInsertedFunc func(TradingRecord)
 
-// Database wraps the SQLite storage (thread-safe).
+// Database contains the single MySQL storage pool used by the application.
+// All trading history, orders, forum and tracker configuration live in MySQL.
 type Database struct {
-	db               *sql.DB
-	mu               sync.Mutex
-	onRecordInserted OnRecordInsertedFunc
+ db *sql.DB
+ mu sync.Mutex
+ onRecordInserted OnRecordInsertedFunc
 }
 
-// Open initializes the database and its tables.
-func Open(dbPath string) (*Database, error) {
-	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)", dbPath)
-	if dbPath == ":memory:" {
-		dsn = "file::memory:?cache=shared"
-	}
-
-	handle, err := sql.Open("sqlite", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("[Database] Initialization error: %w", err)
-	}
-	handle.SetMaxOpenConns(4)
-
-	_, err = handle.Exec(`CREATE TABLE IF NOT EXISTS trading_history (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		timestamp INTEGER,
-		symbol TEXT,
-		price REAL,
-		stop_loss REAL,
-		fast_ema REAL,
-		slow_ema REAL,
-		currency TEXT,
-		status TEXT,
-		rawJson TEXT)`)
-
-	if err == nil {
-		_, err = handle.Exec(`CREATE TABLE IF NOT EXISTS orders (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			symbol TEXT NOT NULL,
-			side TEXT NOT NULL,
-			amount REAL NOT NULL,
-			price REAL NOT NULL,
-			timestamp INTEGER NOT NULL,
-			status TEXT DEFAULT 'OPEN')`)
-	}
-
-	if err == nil {
-		err = migrateOrders(handle)
-	}
-
-	if err == nil {
-		_, err = handle.Exec(`CREATE TABLE IF NOT EXISTS forum_posts (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			author TEXT NOT NULL,
-			title TEXT NOT NULL,
-			content TEXT NOT NULL,
-			symbol TEXT,
-			timestamp INTEGER NOT NULL,
-			upvotes INTEGER DEFAULT 0)`)
-	}
-
-	if err != nil {
-		handle.Close()
-		return nil, fmt.Errorf("[Database] Initialization error: %w", err)
-	}
-
-	log.Printf("[Database] SQLite initialized with extended tables successfully: %s", dbPath)
-	return &Database{db: handle}, nil
+// Open requires a Liquibase-migrated MySQL DSN. There is no SQLite fallback
+// or implicit schema creation; a failed migration must fail startup safely.
+func Open(dsn string)(*Database,error){
+ if strings.TrimSpace(dsn)=="" || !strings.Contains(dsn,"@tcp(") {
+  return nil,fmt.Errorf("MYSQL_DSN must point to the Liquibase-migrated MySQL server")
+ }
+ handle,err:=sql.Open("mysql",dsn)
+ if err!=nil{return nil,fmt.Errorf("MySQL open: %w",err)}
+ handle.SetMaxOpenConns(12)
+ handle.SetMaxIdleConns(4)
+ handle.SetConnMaxIdleTime(2*time.Minute)
+ handle.SetConnMaxLifetime(20*time.Minute)
+ if err=handle.Ping();err!=nil{handle.Close();return nil,fmt.Errorf("MySQL connection failed: %w",err)}
+ // Detect accidental boot against an unmigrated database before any writes.
+ var table string
+ if err=handle.QueryRow("SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='trading_history'").Scan(&table);err!=nil{
+  handle.Close();return nil,fmt.Errorf("MySQL trading schema missing: run Liquibase update before startup: %w",err)
+ }
+ return &Database{db:handle},nil
 }
 
 // Close closes the underlying database handle.
@@ -216,42 +178,7 @@ func (d *Database) ClearHistory() {
 		log.Printf("[Database] Failed to clear database: %v", err)
 		return
 	}
-	if _, err := d.db.Exec("DELETE FROM sqlite_sequence WHERE name='trading_history'"); err != nil {
-		log.Printf("[Database] Failed to reset sequence: %v", err)
-	}
-	log.Printf("[Database] Database cleared successfully.")
-}
-
-// migrateOrders adds the execution lifecycle columns to a legacy orders table
-// and backfills the quantity column from the retired amount column.
-func migrateOrders(handle *sql.DB) error {
-	columns := []struct {
-		name string
-		ddl  string
-	}{
-		{"type", "TEXT DEFAULT 'MARKET'"},
-		{"tif", "TEXT DEFAULT 'GTC'"},
-		{"quantity", "REAL NOT NULL DEFAULT 0"},
-		{"limit_price", "REAL DEFAULT 0"},
-		{"stop_price", "REAL DEFAULT 0"},
-		{"fill_price", "REAL DEFAULT 0"},
-		{"fee", "REAL DEFAULT 0"},
-		{"filled_at", "INTEGER DEFAULT 0"},
-		{"reason", "TEXT DEFAULT ''"},
-	}
-	for _, col := range columns {
-		if _, err := handle.Exec(`ALTER TABLE orders ADD COLUMN ` + col.name + ` ` + col.ddl); err != nil {
-			if !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
-				return fmt.Errorf("[Database] order migration failed: %w", err)
-			}
-		}
-	}
-
-	// Legacy rows keep their shares in `amount`.
-	if _, err := handle.Exec(`UPDATE orders SET quantity = amount WHERE quantity = 0 AND amount != 0`); err != nil {
-		return fmt.Errorf("[Database] order backfill failed: %w", err)
-	}
-	return nil
+		log.Printf("[Database] Database cleared successfully.")
 }
 
 // CreateOrder stores a new order and returns its ID (-1 on failure).

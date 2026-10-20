@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+  <changeSet id="006-trading-history-mysql" author="floweysales" dbms="mysql">
+    <createTable tableName="trading_history">
+      <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" primaryKeyName="pk_trading_history" nullable="false"/></column>
+      <column name="timestamp" type="BIGINT"><constraints nullable="false"/></column>
+      <column name="symbol" type="VARCHAR(40)"><constraints nullable="false"/></column>
+      <column name="price" type="DOUBLE"/>
+      <column name="stop_loss" type="DOUBLE"/>
+      <column name="fast_ema" type="DOUBLE"/>
+      <column name="slow_ema" type="DOUBLE"/>
+      <column name="currency" type="VARCHAR(12)"/>
+      <column name="status" type="VARCHAR(160)"/>
+      <column name="rawJson" type="LONGTEXT"/>
+    </createTable>
+    <createIndex tableName="trading_history" indexName="idx_trading_history_symbol_id">
+      <column name="symbol"/><column name="id"/>
+    </createIndex>
+    <rollback><dropTable tableName="trading_history"/></rollback>
+  </changeSet>
+  <changeSet id="007-trading-orders-mysql" author="floweysales" dbms="mysql">
+    <createTable tableName="orders">
+      <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" primaryKeyName="pk_orders" nullable="false"/></column>
+      <column name="symbol" type="VARCHAR(40)"><constraints nullable="false"/></column>
+      <column name="side" type="VARCHAR(12)"><constraints nullable="false"/></column>
+      <column name="type" type="VARCHAR(24)" defaultValue="MARKET"/>
+      <column name="tif" type="VARCHAR(24)" defaultValue="GTC"/>
+      <column name="amount" type="DOUBLE" defaultValueNumeric="0"/>
+      <column name="quantity" type="DOUBLE" defaultValueNumeric="0"><constraints nullable="false"/></column>
+      <column name="price" type="DOUBLE" defaultValueNumeric="0"/>
+      <column name="limit_price" type="DOUBLE" defaultValueNumeric="0"/>
+      <column name="stop_price" type="DOUBLE" defaultValueNumeric="0"/>
+      <column name="fill_price" type="DOUBLE" defaultValueNumeric="0"/>
+      <column name="fee" type="DOUBLE" defaultValueNumeric="0"/>
+      <column name="timestamp" type="BIGINT" defaultValueNumeric="0"/>
+      <column name="filled_at" type="BIGINT" defaultValueNumeric="0"/>
+      <column name="status" type="VARCHAR(24)" defaultValue="OPEN"/>
+      <column name="reason" type="TEXT"/>
+    </createTable>
+    <createIndex tableName="orders" indexName="idx_orders_symbol_status">
+      <column name="symbol"/><column name="status"/>
+    </createIndex>
+    <rollback><dropTable tableName="orders"/></rollback>
+  </changeSet>
+  <changeSet id="008-trading-forum-mysql" author="floweysales" dbms="mysql">
+    <createTable tableName="forum_posts">
+      <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" primaryKeyName="pk_forum_posts" nullable="false"/></column>
+      <column name="author" type="VARCHAR(200)"><constraints nullable="false"/></column>
+      <column name="title" type="VARCHAR(500)"><constraints nullable="false"/></column>
+      <column name="content" type="TEXT"><constraints nullable="false"/></column>
+      <column name="symbol" type="VARCHAR(40)"/>
+      <column name="timestamp" type="BIGINT" defaultValueNumeric="0"/>
+      <column name="upvotes" type="INT" defaultValueNumeric="0"/>
+    </createTable>
+    <rollback><dropTable tableName="forum_posts"/></rollback>
+  </changeSet>
+  <changeSet id="009-tracked-assets-mysql" author="floweysales" dbms="mysql">
+    <createTable tableName="tracked_assets">
+      <column name="symbol" type="VARCHAR(40)"><constraints nullable="false"/></column>
+      <column name="provider" type="VARCHAR(24)"><constraints nullable="false"/></column>
+      <column name="created_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+    </createTable>
+    <addPrimaryKey tableName="tracked_assets" columnNames="symbol,provider" constraintName="pk_tracked_assets"/>
+    <rollback><dropTable tableName="tracked_assets"/></rollback>
+  </changeSet>
+</databaseChangeLog>
