@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"io/fs"
- "sort"
- "strings"
 	"log"
 	"net/http"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,53 +21,75 @@ import (
 // SharedMarketConfig is the live asset configuration that the tick loop polls
 // and that the frontend can swap via POST /api/config.
 type MarketTarget struct {
- Symbol string `json:"symbol"`
- Provider market.Provider `json:"-"`
- ProviderID string `json:"provider"`
+	Symbol     string          `json:"symbol"`
+	Provider   market.Provider `json:"-"`
+	ProviderID string          `json:"provider"`
 }
 type SharedMarketConfig struct {
- mu sync.Mutex
- Symbol string
- Provider market.Provider
- targets map[string]MarketTarget
+	mu       sync.Mutex
+	Symbol   string
+	Provider market.Provider
+	targets  map[string]MarketTarget
 }
-const MaxActiveTrackers=16
-func marketTargetKey(symbol string,p market.Provider)string{
- return p.ID()+"|"+strings.ToUpper(strings.TrimSpace(symbol))
+
+const MaxActiveTrackers = 16
+
+func marketTargetKey(symbol string, p market.Provider) string {
+	return p.ID() + "|" + strings.ToUpper(strings.TrimSpace(symbol))
 }
+
 // Add keeps existing market streams alive. It never replaces another tracker.
-func (c *SharedMarketConfig) Add(symbol string,p market.Provider)bool{
- c.mu.Lock();defer c.mu.Unlock()
- if c.targets==nil{c.targets=map[string]MarketTarget{}}
- key:=marketTargetKey(symbol,p)
- if _,ok:=c.targets[key];ok{return true}
- if len(c.targets)>=MaxActiveTrackers{return false}
- c.targets[key]=MarketTarget{Symbol:strings.ToUpper(strings.TrimSpace(symbol)),Provider:p,ProviderID:p.ID()}
- return true
+func (c *SharedMarketConfig) Add(symbol string, p market.Provider) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.targets == nil {
+		c.targets = map[string]MarketTarget{}
+	}
+	key := marketTargetKey(symbol, p)
+	if _, ok := c.targets[key]; ok {
+		return true
+	}
+	if len(c.targets) >= MaxActiveTrackers {
+		return false
+	}
+	c.targets[key] = MarketTarget{Symbol: strings.ToUpper(strings.TrimSpace(symbol)), Provider: p, ProviderID: p.ID()}
+	return true
 }
-func (c *SharedMarketConfig) Remove(symbol string,p market.Provider){
- c.mu.Lock();defer c.mu.Unlock()
- delete(c.targets,marketTargetKey(symbol,p))
+func (c *SharedMarketConfig) Remove(symbol string, p market.Provider) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.targets, marketTargetKey(symbol, p))
 }
-func (c *SharedMarketConfig) ReplaceTargets(values []MarketTarget){
- c.mu.Lock();defer c.mu.Unlock()
- c.targets=make(map[string]MarketTarget,len(values))
- for _,v:=range values{
-  if len(c.targets)>=MaxActiveTrackers{break}
-  c.targets[marketTargetKey(v.Symbol,v.Provider)]=MarketTarget{Symbol:strings.ToUpper(v.Symbol),Provider:v.Provider,ProviderID:v.Provider.ID()}
- }
+func (c *SharedMarketConfig) ReplaceTargets(values []MarketTarget) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.targets = make(map[string]MarketTarget, len(values))
+	for _, v := range values {
+		if len(c.targets) >= MaxActiveTrackers {
+			break
+		}
+		c.targets[marketTargetKey(v.Symbol, v.Provider)] = MarketTarget{Symbol: strings.ToUpper(v.Symbol), Provider: v.Provider, ProviderID: v.Provider.ID()}
+	}
 }
-func (c *SharedMarketConfig) Targets()[]MarketTarget{
- c.mu.Lock();defer c.mu.Unlock()
- result:=make([]MarketTarget,0,len(c.targets))
- for _,v:=range c.targets{result=append(result,v)}
- sort.Slice(result,func(i,j int)bool{return marketTargetKey(result[i].Symbol,result[i].Provider)<marketTargetKey(result[j].Symbol,result[j].Provider)})
- return result
+func (c *SharedMarketConfig) Targets() []MarketTarget {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	result := make([]MarketTarget, 0, len(c.targets))
+	for _, v := range c.targets {
+		result = append(result, v)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return marketTargetKey(result[i].Symbol, result[i].Provider) < marketTargetKey(result[j].Symbol, result[j].Provider)
+	})
+	return result
 }
 
 // SelectPrimary updates dashboard selection without registering an additional stream.
-func (c *SharedMarketConfig) SelectPrimary(symbol string,p market.Provider){
- c.mu.Lock();c.Symbol=symbol;c.Provider=p;c.mu.Unlock()
+func (c *SharedMarketConfig) SelectPrimary(symbol string, p market.Provider) {
+	c.mu.Lock()
+	c.Symbol = symbol
+	c.Provider = p
+	c.mu.Unlock()
 }
 
 // Get returns the current target symbol and provider.
@@ -82,12 +104,14 @@ func (c *SharedMarketConfig) Set(symbol string, provider market.Provider) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Symbol = symbol
- c.Provider=provider
- if c.targets==nil{c.targets=map[string]MarketTarget{}}
- key:=marketTargetKey(symbol,provider)
- if _,ok:=c.targets[key];!ok && len(c.targets)<MaxActiveTrackers{
- c.targets[key]=MarketTarget{Symbol:strings.ToUpper(strings.TrimSpace(symbol)),Provider:provider,ProviderID:provider.ID()}
- }
+	c.Provider = provider
+	if c.targets == nil {
+		c.targets = map[string]MarketTarget{}
+	}
+	key := marketTargetKey(symbol, provider)
+	if _, ok := c.targets[key]; !ok && len(c.targets) < MaxActiveTrackers {
+		c.targets[key] = MarketTarget{Symbol: strings.ToUpper(strings.TrimSpace(symbol)), Provider: provider, ProviderID: provider.ID()}
+	}
 }
 
 // Engine owns the HTTP mux and wires every endpoint group.
@@ -258,19 +282,23 @@ func (e *Engine) Stop() {
 }
 
 // sseHub fans out trading records to all connected SSE clients.
-type sseFilter struct{symbol,provider string}
+type sseFilter struct{ symbol, provider string }
 type sseHub struct {
- mu sync.Mutex
- clients map[chan []byte]sseFilter
+	mu      sync.Mutex
+	clients map[chan []byte]sseFilter
 }
-func newSSEHub()*sseHub{return &sseHub{clients:make(map[chan []byte]sseFilter)}}
-func (h *sseHub) subscribe()chan []byte{return h.subscribeFor("","")}
-func (h *sseHub) subscribeFor(symbol,provider string)chan []byte{
- ch:=make(chan []byte,4)
- h.mu.Lock();defer h.mu.Unlock()
- if len(h.clients)>=64{return nil}
- h.clients[ch]=sseFilter{symbol:symbol,provider:provider}
- return ch
+
+func newSSEHub() *sseHub                 { return &sseHub{clients: make(map[chan []byte]sseFilter)} }
+func (h *sseHub) subscribe() chan []byte { return h.subscribeFor("", "") }
+func (h *sseHub) subscribeFor(symbol, provider string) chan []byte {
+	ch := make(chan []byte, 4)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.clients) >= 64 {
+		return nil
+	}
+	h.clients[ch] = sseFilter{symbol: symbol, provider: provider}
+	return ch
 }
 
 func (h *sseHub) unsubscribe(ch chan []byte) {
@@ -279,14 +307,22 @@ func (h *sseHub) unsubscribe(ch chan []byte) {
 	delete(h.clients, ch)
 }
 
-func (h *sseHub) broadcast(data []byte){h.broadcastFor("","",data)}
-func (h *sseHub) broadcastFor(symbol,provider string,data []byte){
- h.mu.Lock();defer h.mu.Unlock()
- for ch,filter:=range h.clients{
-  if filter.symbol!="" && filter.symbol!=symbol{continue}
-  if filter.provider!="" && filter.provider!=provider{continue}
-  select{case ch<-data:default:}
- }
+func (h *sseHub) broadcast(data []byte) { h.broadcastFor("", "", data) }
+func (h *sseHub) broadcastFor(symbol, provider string, data []byte) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for ch, filter := range h.clients {
+		if filter.symbol != "" && filter.symbol != symbol {
+			continue
+		}
+		if filter.provider != "" && filter.provider != provider {
+			continue
+		}
+		select {
+		case ch <- data:
+		default:
+		}
+	}
 }
 
 // BroadcastTick is invoked by the database insert callback.
@@ -297,7 +333,7 @@ func (e *Engine) BroadcastTick(record storage.TradingRecord) {
 	payload := map[string]any{
 		"timestamp":  record.Timestamp,
 		"symbol":     record.Symbol,
-  "provider": record.Provider,
+		"provider":   record.Provider,
 		"price":      record.Price,
 		"stop_loss":  record.StopLoss,
 		"fast_ema":   record.FastEMA,
@@ -311,7 +347,7 @@ func (e *Engine) BroadcastTick(record storage.TradingRecord) {
 	if err != nil {
 		return
 	}
-	e.hub.broadcastFor(record.Symbol,record.Provider,[]byte("data: " + string(data) + "\n\n"))
+	e.hub.broadcastFor(record.Symbol, record.Provider, []byte("data: "+string(data)+"\n\n"))
 }
 
 func corsHeader(w http.ResponseWriter) {

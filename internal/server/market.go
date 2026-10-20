@@ -137,13 +137,13 @@ func (e *Engine) registerMarketRoutes() {
 		}
 		symbolFilter := queryParam(r, "symbol", "")
 
-		records := e.db.GetLatestRecordsByProvider(limit,symbolFilter,r.URL.Query().Get("provider"))
+		records := e.db.GetLatestRecordsByProvider(limit, symbolFilter, r.URL.Query().Get("provider"))
 		jList := make([]map[string]any, 0, len(records))
 		for _, rec := range records {
 			jList = append(jList, map[string]any{
 				"timestamp": rec.Timestamp,
 				"symbol":    rec.Symbol,
-    "provider":rec.Provider,
+				"provider":  rec.Provider,
 				"price":     rec.Price,
 				"stop_loss": rec.StopLoss,
 				"fast_ema":  rec.FastEMA,
@@ -230,10 +230,13 @@ func (e *Engine) registerMarketRoutes() {
 		}
 		cancel := r.Context().Done()
 
-		ch:=e.hub.subscribeFor(strings.ToUpper(r.URL.Query().Get("symbol")),strings.ToUpper(r.URL.Query().Get("provider")))
-  if ch==nil{http.Error(w,"too many stream clients",http.StatusServiceUnavailable);return}
-  defer e.hub.unsubscribe(ch)
-  w.Header().Set("Content-Type", "text/event-stream")
+		ch := e.hub.subscribeFor(strings.ToUpper(r.URL.Query().Get("symbol")), strings.ToUpper(r.URL.Query().Get("provider")))
+		if ch == nil {
+			http.Error(w, "too many stream clients", http.StatusServiceUnavailable)
+			return
+		}
+		defer e.hub.unsubscribe(ch)
+		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -283,15 +286,20 @@ func (e *Engine) GetHistory(symbol string, provider market.Provider, rng string)
 
 	e.historyMu.Lock()
 	e.historyCache[key] = historyCacheEntry{fetched: time.Now(), series: series}
-	for len(e.historyCache)>32{
-  oldestKey:=""
-  oldest:=time.Now()
-  for k,entry:=range e.historyCache{
-   if !entry.fetched.After(oldest){oldest=entry.fetched;oldestKey=k}
-  }
-  if oldestKey==""{break}
-  delete(e.historyCache,oldestKey)
- }
+	for len(e.historyCache) > 32 {
+		oldestKey := ""
+		oldest := time.Now()
+		for k, entry := range e.historyCache {
+			if !entry.fetched.After(oldest) {
+				oldest = entry.fetched
+				oldestKey = k
+			}
+		}
+		if oldestKey == "" {
+			break
+		}
+		delete(e.historyCache, oldestKey)
+	}
 	e.historyMu.Unlock()
 
 	return series, nil
@@ -350,15 +358,20 @@ func (e *Engine) GetFinancialsRange(symbol string, provider market.Provider, yea
 
 	e.financialsMu.Lock()
 	e.financialsCache[key] = financialsCacheEntry{fetched: time.Now(), res: res}
-	for len(e.financialsCache)>48{
-  oldestKey:=""
-  oldest:=time.Now()
-  for k,entry:=range e.financialsCache{
-   if !entry.fetched.After(oldest){oldest=entry.fetched;oldestKey=k}
-  }
-  if oldestKey==""{break}
-  delete(e.financialsCache,oldestKey)
- }
+	for len(e.financialsCache) > 48 {
+		oldestKey := ""
+		oldest := time.Now()
+		for k, entry := range e.financialsCache {
+			if !entry.fetched.After(oldest) {
+				oldest = entry.fetched
+				oldestKey = k
+			}
+		}
+		if oldestKey == "" {
+			break
+		}
+		delete(e.financialsCache, oldestKey)
+	}
 	e.financialsMu.Unlock()
 
 	return res, nil

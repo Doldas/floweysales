@@ -16,7 +16,7 @@ import (
 type TradingRecord struct {
 	Timestamp        int64           `json:"timestamp"`
 	Symbol           string          `json:"symbol"`
- Provider string `json:"provider,omitempty"`
+	Provider         string          `json:"provider,omitempty"`
 	Price            float64         `json:"price"`
 	StopLoss         float64         `json:"stop_loss"`
 	FastEMA          float64         `json:"fast_ema"`
@@ -79,55 +79,73 @@ type Database struct {
 
 // Open requires the same MySQL database/DSN used for authenticated identity.
 // The schema MUST be applied by Liquibase before starting the application.
-func Open(dsn string) (*Database,error){
- if strings.TrimSpace(dsn)==""{return nil,fmt.Errorf("MYSQL_DSN is required; SQLite is no longer supported for live storage")}
- handle,err:=sql.Open("mysql",dsn)
- if err!=nil{return nil,fmt.Errorf("open MySQL: %w",err)}
- handle.SetMaxOpenConns(10)
- handle.SetMaxIdleConns(4)
- handle.SetConnMaxLifetime(10*time.Minute)
- if err:=handle.Ping();err!=nil{handle.Close();return nil,fmt.Errorf("MySQL is unreachable: %w",err)}
- for _,table:=range []string{"trading_history","orders","forum_posts","tracked_assets"}{
-  var present int
-  // Query only one row: COUNT(*) would scan potentially millions of ticks.
-  err:=handle.QueryRow("SELECT 1 FROM "+table+" LIMIT 1").Scan(&present)
-  if err!=nil && err!=sql.ErrNoRows{
-    handle.Close()
-    return nil,fmt.Errorf("MySQL table %s missing; run Liquibase migration: %w",table,err)
-  }
- }
- return &Database{db:handle},nil
+func Open(dsn string) (*Database, error) {
+	if strings.TrimSpace(dsn) == "" {
+		return nil, fmt.Errorf("MYSQL_DSN is required; SQLite is no longer supported for live storage")
+	}
+	handle, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open MySQL: %w", err)
+	}
+	handle.SetMaxOpenConns(10)
+	handle.SetMaxIdleConns(4)
+	handle.SetConnMaxLifetime(10 * time.Minute)
+	if err := handle.Ping(); err != nil {
+		handle.Close()
+		return nil, fmt.Errorf("MySQL is unreachable: %w", err)
+	}
+	for _, table := range []string{"trading_history", "orders", "forum_posts", "tracked_assets"} {
+		var present int
+		// Query only one row: COUNT(*) would scan potentially millions of ticks.
+		err := handle.QueryRow("SELECT 1 FROM " + table + " LIMIT 1").Scan(&present)
+		if err != nil && err != sql.ErrNoRows {
+			handle.Close()
+			return nil, fmt.Errorf("MySQL table %s missing; run Liquibase migration: %w", table, err)
+		}
+	}
+	return &Database{db: handle}, nil
 }
 
 // HasAnyData reports whether MySQL already contains rows in any trading table.
 func (d *Database) HasAnyData() bool {
- for _,table:=range []string{"trading_history","orders","forum_posts"} {
-  var n int
-  if err:=d.db.QueryRow("SELECT EXISTS(SELECT 1 FROM "+table+" LIMIT 1)").Scan(&n);err==nil&&n>0{return true}
- }
- return false
+	for _, table := range []string{"trading_history", "orders", "forum_posts"} {
+		var n int
+		if err := d.db.QueryRow("SELECT EXISTS(SELECT 1 FROM " + table + " LIMIT 1)").Scan(&n); err == nil && n > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // ActiveTracker is an independently polled market stream persisted in MySQL.
-type ActiveTracker struct{
- Symbol string `json:"symbol"`
- Provider string `json:"provider"`
+type ActiveTracker struct {
+	Symbol   string `json:"symbol"`
+	Provider string `json:"provider"`
 }
-func (d *Database) GetActiveTrackers() ([]ActiveTracker,error){
- rows,err:=d.db.Query("SELECT symbol,provider FROM tracked_assets ORDER BY symbol,provider")
- if err!=nil{return nil,err}
- defer rows.Close()
- out:=[]ActiveTracker{}
- for rows.Next(){var t ActiveTracker;if err:=rows.Scan(&t.Symbol,&t.Provider);err!=nil{return nil,err};out=append(out,t)}
- return out,rows.Err()
+
+func (d *Database) GetActiveTrackers() ([]ActiveTracker, error) {
+	rows, err := d.db.Query("SELECT symbol,provider FROM tracked_assets ORDER BY symbol,provider")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []ActiveTracker{}
+	for rows.Next() {
+		var t ActiveTracker
+		if err := rows.Scan(&t.Symbol, &t.Provider); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
 }
-func (d *Database) AddActiveTracker(symbol,provider string)error{
- _,err:=d.db.Exec("INSERT IGNORE INTO tracked_assets (symbol,provider) VALUES (?,?)",symbol,provider)
- return err
+func (d *Database) AddActiveTracker(symbol, provider string) error {
+	_, err := d.db.Exec("INSERT IGNORE INTO tracked_assets (symbol,provider) VALUES (?,?)", symbol, provider)
+	return err
 }
-func (d *Database) DeleteActiveTracker(symbol,provider string)error{
- _,err:=d.db.Exec("DELETE FROM tracked_assets WHERE symbol=? AND provider=?",symbol,provider)
- return err
+func (d *Database) DeleteActiveTracker(symbol, provider string) error {
+	_, err := d.db.Exec("DELETE FROM tracked_assets WHERE symbol=? AND provider=?", symbol, provider)
+	return err
 }
 
 // Close closes the underlying database handle.
@@ -168,10 +186,15 @@ func (d *Database) InsertRecord(record TradingRecord) {
 
 // GetLatestRecords returns the most recent records, optionally filtered by symbol.
 func (d *Database) GetLatestRecords(limit int, symbolFilter string) []TradingRecord {
- return d.GetLatestRecordsByProvider(limit,symbolFilter,"")
+	return d.GetLatestRecordsByProvider(limit, symbolFilter, "")
 }
-func (d *Database) GetLatestRecordsByProvider(limit int,symbolFilter,providerFilter string) []TradingRecord {
- if limit<1{limit=100};if limit>2000{limit=2000}
+func (d *Database) GetLatestRecordsByProvider(limit int, symbolFilter, providerFilter string) []TradingRecord {
+	if limit < 1 {
+		limit = 100
+	}
+	if limit > 2000 {
+		limit = 2000
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -183,16 +206,20 @@ func (d *Database) GetLatestRecordsByProvider(limit int,symbolFilter,providerFil
 		query += "WHERE symbol = ? "
 		args = append(args, symbolFilter)
 	}
-	if providerFilter!=""{
-  if symbolFilter!=""{query += "AND provider = ? "}else{query+="WHERE provider = ? "}
-  args=append(args,providerFilter)
- }
- query += "ORDER BY id DESC LIMIT ?"
+	if providerFilter != "" {
+		if symbolFilter != "" {
+			query += "AND provider = ? "
+		} else {
+			query += "WHERE provider = ? "
+		}
+		args = append(args, providerFilter)
+	}
+	query += "ORDER BY id DESC LIMIT ?"
 	args = append(args, limit)
 
 	rows, err := d.db.Query(query, args...)
 	if err != nil {
-				return records
+		return records
 	}
 	defer rows.Close()
 
@@ -200,7 +227,7 @@ func (d *Database) GetLatestRecordsByProvider(limit int,symbolFilter,providerFil
 		var rec TradingRecord
 		if err := rows.Scan(&rec.Timestamp, &rec.Symbol, &rec.Provider, &rec.Price, &rec.StopLoss,
 			&rec.FastEMA, &rec.SlowEMA, &rec.Currency, &rec.Status); err != nil {
-						continue
+			continue
 		}
 		records = append(records, rec)
 	}
@@ -213,7 +240,7 @@ func (d *Database) ClearHistory() {
 	defer d.mu.Unlock()
 
 	if _, err := d.db.Exec("DELETE FROM trading_history"); err != nil {
-				return
+		return
 	}
 	// AUTO_INCREMENT is intentionally not reset; history IDs remain monotonically increasing.
 }
@@ -286,14 +313,14 @@ func (d *Database) GetOrders(symbolFilter, statusFilter string) []Order {
 
 	rows, err := d.db.Query(query, args...)
 	if err != nil {
-				return orders
+		return orders
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		o, err := scanOrder(rows.Scan)
 		if err != nil {
-						continue
+			continue
 		}
 		orders = append(orders, o)
 	}
@@ -410,14 +437,14 @@ func (d *Database) GetForumPosts(symbolFilter string, limit int) []ForumPost {
 
 	rows, err := d.db.Query(query, args...)
 	if err != nil {
-				return posts
+		return posts
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var p ForumPost
 		if err := rows.Scan(&p.ID, &p.Author, &p.Title, &p.Content, &p.Symbol, &p.Timestamp, &p.Upvotes); err != nil {
-						continue
+			continue
 		}
 		posts = append(posts, p)
 	}
@@ -450,7 +477,7 @@ func (d *Database) GetSymbolStats(symbol string) MarketStats {
 	row := d.db.QueryRow(
 		"SELECT MIN(price), MAX(price), AVG(price), COUNT(id) FROM trading_history WHERE symbol = ?", symbol)
 	if err := row.Scan(&minP, &maxP, &avgP, &stats.RecordCount); err != nil {
-			} else {
+	} else {
 		stats.MinPrice = nullOr(minP)
 		stats.MaxPrice = nullOr(maxP)
 		stats.AvgPrice = nullOr(avgP)
@@ -460,7 +487,7 @@ func (d *Database) GetSymbolStats(symbol string) MarketStats {
 		"SELECT price FROM trading_history WHERE symbol = ? ORDER BY id DESC LIMIT 1", symbol)
 	if err := latestRow.Scan(&stats.LatestPrice); err != nil && err != sql.ErrNoRows {
 		stats.LatestPrice = 0
-			}
+	}
 
 	return stats
 }
@@ -480,7 +507,7 @@ func (d *Database) GetDistinctSymbols() []string {
 	symbols := []string{}
 	rows, err := d.db.Query("SELECT DISTINCT symbol FROM trading_history")
 	if err != nil {
-				return symbols
+		return symbols
 	}
 	defer rows.Close()
 

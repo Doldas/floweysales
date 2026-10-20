@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log"
 	"os"
- "os/signal"
- "syscall"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"context"
@@ -97,9 +97,13 @@ func main() {
 	cfg.WarmupTicks = parseInt(app.ResolveConfig("DEFAULT_WARMUP_TICKS", "10", defaults), cfg.WarmupTicks)
 	cfg.TransitionTicks = parseInt(app.ResolveConfig("DEFAULT_TRANSITION_TICKS", "30", defaults), cfg.TransitionTicks)
 
-	mysqlDSN:=os.Getenv("MYSQL_DSN")
- if mysqlDSN==""{mysqlDSN=os.Getenv("AUTH_MYSQL_DSN")}
- if mysqlDSN==""{log.Fatal("MYSQL_DSN (or AUTH_MYSQL_DSN) must be set; SQLite runtime storage has been removed")}
+	mysqlDSN := os.Getenv("MYSQL_DSN")
+	if mysqlDSN == "" {
+		mysqlDSN = os.Getenv("AUTH_MYSQL_DSN")
+	}
+	if mysqlDSN == "" {
+		log.Fatal("MYSQL_DSN (or AUTH_MYSQL_DSN) must be set; SQLite runtime storage has been removed")
+	}
 
 	portfolio := trading.DefaultConfig()
 	portfolio.BaseCash = parseFloat(app.ResolveConfig("PORTFOLIO_CASH", "100000", defaults), portfolio.BaseCash)
@@ -107,7 +111,6 @@ func main() {
 	portfolio.Commission.Fixed = parseFloat(app.ResolveConfig("TRADE_COMMISSION_FIXED", "0", defaults), 0)
 	portfolio.AllowShort = strings.EqualFold(
 		app.ResolveConfig("ALLOW_SHORT_SELLING", "false", defaults), "true")
-
 
 	api := market.NewMarketApi(app.ResolveConfig("FINNHUB_API_KEY", "", defaults))
 	finnhubAPIKey := app.ResolveConfig("FINNHUB_API_KEY", "", defaults)
@@ -118,14 +121,14 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
- // Preserve legacy data: fail closed if an old SQLite file exists but the new
- // database has not received an explicit migration. Never auto-delete it.
- legacyPath:=os.Getenv("LEGACY_SQLITE_PATH")
- if legacyPath!=""{
-  if fi,err:=os.Stat(legacyPath);err==nil && fi.Size()>0 && !db.HasAnyData(){
-    log.Fatalf("Legacy SQLite file %s still contains potential data while MySQL trading tables are empty. Stop and run cmd/migrate-sqlite; file will not be deleted automatically.",legacyPath)
-  }
- }
+	// Preserve legacy data: fail closed if an old SQLite file exists but the new
+	// database has not received an explicit migration. Never auto-delete it.
+	legacyPath := os.Getenv("LEGACY_SQLITE_PATH")
+	if legacyPath != "" {
+		if fi, err := os.Stat(legacyPath); err == nil && fi.Size() > 0 && !db.HasAnyData() {
+			log.Fatalf("Legacy SQLite file %s still contains potential data while MySQL trading tables are empty. Stop and run cmd/migrate-sqlite; file will not be deleted automatically.", legacyPath)
+		}
+	}
 
 	restAPI := server.NewEngine(db, sharedConfig, wwwFS, finnhubAPIKey, cfg)
 	if strings.EqualFold(app.ResolveConfig("AUTH_ENABLED", "false", defaults), "true") {
@@ -171,29 +174,33 @@ func main() {
 	}
 	db.SetOnRecordInserted(restAPI.BroadcastTick)
 
-  existing,err:=db.GetActiveTrackers()
-  if err!=nil{log.Fatalf("load saved trackers: %v",err)}
-  if len(existing)==0 {
-    symbol,provider:=sharedConfig.Get()
-    if err:=db.AddActiveTracker(symbol,provider.ID());err!=nil{log.Fatalf("save default tracker: %v",err)}
-    sharedConfig.ReplaceTargets([]server.MarketTarget{{Symbol:symbol,Provider:provider}})
-  } else {
-    targets:=make([]server.MarketTarget,0,len(existing))
-    for _,t:=range existing {
-      targets=append(targets,server.MarketTarget{Symbol:t.Symbol,Provider:market.ParseProvider(t.Provider)})
-    }
-    sharedConfig.ReplaceTargets(targets)
-    sharedConfig.SelectPrimary(targets[0].Symbol,targets[0].Provider)
-  }
+	existing, err := db.GetActiveTrackers()
+	if err != nil {
+		log.Fatalf("load saved trackers: %v", err)
+	}
+	if len(existing) == 0 {
+		symbol, provider := sharedConfig.Get()
+		if err := db.AddActiveTracker(symbol, provider.ID()); err != nil {
+			log.Fatalf("save default tracker: %v", err)
+		}
+		sharedConfig.ReplaceTargets([]server.MarketTarget{{Symbol: symbol, Provider: provider}})
+	} else {
+		targets := make([]server.MarketTarget, 0, len(existing))
+		for _, t := range existing {
+			targets = append(targets, server.MarketTarget{Symbol: t.Symbol, Provider: market.ParseProvider(t.Provider)})
+		}
+		sharedConfig.ReplaceTargets(targets)
+		sharedConfig.SelectPrimary(targets[0].Symbol, targets[0].Provider)
+	}
 
-  var notifier *notify.EmailNotifier
-  if strings.EqualFold(os.Getenv("ENABLE_TRACK_ALERT_EMAIL"),"true"){
-    notifier=notify.NewEmailNotifier(appMail,appMailPassword,receiveAlertsAt)
-  }
-  ctx,stop:=signal.NotifyContext(context.Background(),os.Interrupt,syscall.SIGTERM)
-  defer stop()
-  runActiveTrackers(ctx,sharedConfig,db,api,notifier,cfg,updateRate,emailCooldownDuration,finnhubAPIKey)
-  restAPI.Stop()
+	var notifier *notify.EmailNotifier
+	if strings.EqualFold(os.Getenv("ENABLE_TRACK_ALERT_EMAIL"), "true") {
+		notifier = notify.NewEmailNotifier(appMail, appMailPassword, receiveAlertsAt)
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	runActiveTrackers(ctx, sharedConfig, db, api, notifier, cfg, updateRate, emailCooldownDuration, finnhubAPIKey)
+	restAPI.Stop()
 }
 
 // mustJSON marshals an asset payload; on failure an empty object is stored.
@@ -219,5 +226,5 @@ func seedTrackerFromHistory(tkr *tracker.Tracker, symbol string, provider market
 		return
 	}
 	tkr.Seed(closes)
-	
+
 }
