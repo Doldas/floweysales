@@ -169,9 +169,6 @@ func main() {
 		log.Fatalf("[AUTH] Could not load AI configuration: %v", err)
 	}
 	restAPI.ConfigureTrading(portfolio)
-	if err := restAPI.Start(restApiHost, restApiPort); err != nil {
-		log.Fatalf("[FATAL ERROR] Could not bind to %s:%s - Port in use! (%v)", restApiHost, restApiPort, err)
-	}
 	db.SetOnRecordInserted(restAPI.BroadcastTick)
 
 	defaultSymbol, defaultProvider := sharedConfig.Get()
@@ -194,6 +191,9 @@ func main() {
 		sharedConfig.SelectPrimary(targets[0].Symbol, targets[0].Provider)
 	}
 
+ if err:=restAPI.Start(restApiHost,restApiPort);err!=nil{
+  log.Fatalf("bind %s:%s: %v",restApiHost,restApiPort,err)
+ }
 	var notifier *notify.EmailNotifier
 	if strings.EqualFold(os.Getenv("ENABLE_TRACK_ALERT_EMAIL"), "true") {
 		notifier = notify.NewEmailNotifier(appMail, appMailPassword, receiveAlertsAt)
