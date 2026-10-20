@@ -107,6 +107,7 @@ func main() {
 
 	portfolio := trading.DefaultConfig()
 	portfolio.BaseCash = parseFloat(app.ResolveConfig("PORTFOLIO_CASH", "100000", defaults), portfolio.BaseCash)
+	portfolio.HaltNewOrders = strings.EqualFold(app.ResolveConfig("PAPER_TRADING_HALT", "false", defaults), "true")
 	portfolio.MaxOrderNotional = parseFloat(app.ResolveConfig("PAPER_MAX_ORDER_NOTIONAL", "0", defaults), 0)
 	if portfolio.MaxOrderNotional < 0 {
 		log.Fatal("PAPER_MAX_ORDER_NOTIONAL must be non-negative")
