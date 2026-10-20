@@ -95,7 +95,9 @@ func main() {
 	cfg.WarmupTicks = parseInt(app.ResolveConfig("DEFAULT_WARMUP_TICKS", "10", defaults), cfg.WarmupTicks)
 	cfg.TransitionTicks = parseInt(app.ResolveConfig("DEFAULT_TRANSITION_TICKS", "30", defaults), cfg.TransitionTicks)
 
-	databasePath := app.ResolveConfig("SQLITE_STORAGE_PATH", ":memory:", defaults)
+	mysqlDSN:=os.Getenv("MYSQL_DSN")
+ if mysqlDSN==""{mysqlDSN=os.Getenv("AUTH_MYSQL_DSN")}
+ if mysqlDSN==""{log.Fatal("MYSQL_DSN (or AUTH_MYSQL_DSN) must be set; SQLite runtime storage has been removed")}
 
 	portfolio := trading.DefaultConfig()
 	portfolio.BaseCash = parseFloat(app.ResolveConfig("PORTFOLIO_CASH", "100000", defaults), portfolio.BaseCash)
@@ -115,17 +117,25 @@ func main() {
 	api := market.NewMarketApi(app.ResolveConfig("FINNHUB_API_KEY", "", defaults))
 	finnhubAPIKey := app.ResolveConfig("FINNHUB_API_KEY", "", defaults)
 
-	db, err := storage.Open(databasePath)
+	db, err := storage.Open(mysqlDSN)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 	defer db.Close()
+ // Preserve legacy data: fail closed if an old SQLite file exists but the new
+ // database has not received an explicit migration. Never auto-delete it.
+ legacyPath:=os.Getenv("LEGACY_SQLITE_PATH")
+ if legacyPath!=""{
+  if fi,err:=os.Stat(legacyPath);err==nil && fi.Size()>0 && !db.HasAnyData(){
+    log.Fatalf("Legacy SQLite file %s still contains potential data while MySQL trading tables are empty. Stop and run cmd/migrate-sqlite; file will not be deleted automatically.",legacyPath)
+  }
+ }
 
 	restAPI := server.NewEngine(db, sharedConfig, wwwFS, finnhubAPIKey, cfg)
 	if strings.EqualFold(app.ResolveConfig("AUTH_ENABLED", "false", defaults), "true") {
 		// Auth credentials are deliberately environment-only, never committed properties.
-		identityDB, err := identity.Open(os.Getenv("AUTH_MYSQL_DSN"))
+		identityDB, err := identity.Open(mysqlDSN)
 		if err != nil {
 			log.Fatalf("[AUTH] %v", err)
 		}

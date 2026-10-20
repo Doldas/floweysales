@@ -45,7 +45,8 @@ services:
       AUTH_BOOTSTRAP_EMAIL: ${AUTH_BOOTSTRAP_EMAIL:-}
       AUTH_BOOTSTRAP_PASSWORD: ${AUTH_BOOTSTRAP_PASSWORD:-}
       AUTH_COOKIE_SECURE: "${AUTH_COOKIE_SECURE:-false}" # false ONLY for 127.0.0.1 HTTP; use HTTPS proxy for external deployment
-      SQLITE_STORAGE_PATH: /data/floweysales.db
+      MYSQL_DSN: 'flowey_auth:${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}@tcp(mysql:3306)/floweysales_auth?parseTime=true&loc=UTC&tls=false'
+      LEGACY_SQLITE_PATH: /data/floweysales.db
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -59,7 +60,7 @@ services:
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:8080"
     volumes:
-      - trading_data:/data
+      - trading_data:/data:ro
     security_opt:
       - no-new-privileges:true
     cap_drop:
