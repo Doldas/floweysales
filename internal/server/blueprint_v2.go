@@ -4,8 +4,6 @@ import (
  "encoding/json"
  "fmt"
  "regexp"
- "sort"
- "strings"
 
  "floweysales/internal/storage"
 )
@@ -187,8 +185,5 @@ func validateBlueprintV2(f storage.BlueprintFunction)error{
  // Avoid cycles in the combined graph and non-deterministic exec exits.
  count:=map[string]int{}
  for _,e:=range g.Edges{if e.Kind=="exec"{key:=e.From+"/"+e.FromPort;count[key]++;if count[key]>1{return fmt.Errorf("ambiguous execution edge")}}}
- // Stable ordering of output declarations has no semantic effect.
- names:=make([]string,0,len(g.Outputs));for _,p:=range g.Outputs{names=append(names,p.Name)};sort.Strings(names)
- _=strings.Join(names,",")
  return nil
 }
