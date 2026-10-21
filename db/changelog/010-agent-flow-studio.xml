@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="014-agent-flow-studio" author="floweysales" dbms="mysql">
+  <createTable tableName="agent_flows">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="name" type="VARCHAR(120)"><constraints nullable="false"/></column>
+   <column name="graph_json" type="LONGTEXT"><constraints nullable="false"/></column>
+   <column name="enabled" type="BOOLEAN" defaultValueBoolean="false"><constraints nullable="false"/></column>
+   <column name="interval_minutes" type="INT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+   <column name="event_key" type="VARCHAR(100)"/>
+   <column name="next_run_at" type="DATETIME(6)"/>
+   <column name="created_by" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="updated_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"/>
+  </createTable>
+  <createTable tableName="agent_flow_runs">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="flow_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="trigger_type" type="VARCHAR(24)"><constraints nullable="false"/></column>
+   <column name="status" type="VARCHAR(24)"><constraints nullable="false"/></column>
+   <column name="output_json" type="LONGTEXT"/>
+   <column name="error_message" type="TEXT"/>
+   <column name="started_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"/>
+   <column name="finished_at" type="DATETIME(6)"/>
+  </createTable>
+  <createIndex tableName="agent_flow_runs" indexName="idx_agent_flow_runs_flow"><column name="flow_id"/><column name="id"/></createIndex>
+  <rollback><dropTable tableName="agent_flow_runs"/><dropTable tableName="agent_flows"/></rollback>
+ </changeSet>
+</databaseChangeLog>

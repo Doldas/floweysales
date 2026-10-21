@@ -159,6 +159,8 @@ type Engine struct {
 	tradingMu  sync.Mutex
 	tradingCfg trading.Config
 	matchMu    sync.Mutex
+	flowSlots  chan struct{}
+	flowStop   context.CancelFunc
 }
 
 type historyCacheEntry struct {
@@ -182,6 +184,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, fi
 		trackerCfg:      trackerCfg,
 		webFS:           webFS,
 		hub:             newSSEHub(),
+		flowSlots:       make(chan struct{}, 2),
 		mux:             http.NewServeMux(),
 		historyCache:    make(map[string]historyCacheEntry),
 		financialsCache: make(map[string]financialsCacheEntry),
@@ -224,6 +227,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, fi
 	e.registerConfigRoutes()
 	e.registerForumRoutes()
 	e.registerAIRoutes()
+	e.registerFlowRoutes()
 	e.registerStaticRoutes()
 
 	return e
@@ -308,6 +312,9 @@ func (e *Engine) Start(host, port string) error {
 		return err
 	}
 	log.Printf("[API] REST API listening on http://%s", addr)
+	flowCtx, flowCancel := context.WithCancel(context.Background())
+	e.flowStop = flowCancel
+	go e.runFlowScheduler(flowCtx)
 
 	go func() {
 		if err := e.httpSrv.Serve(ln); err != nil && err != http.ErrServerClosed {
@@ -323,6 +330,9 @@ func (e *Engine) Stop() {
 		return
 	}
 	log.Printf("[API] Stopping REST API...")
+	if e.flowStop != nil {
+		e.flowStop()
+	}
 	_ = e.httpSrv.Close()
 }
 
