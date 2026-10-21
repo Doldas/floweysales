@@ -50,41 +50,65 @@ func lockPaperCash(tx *sql.Tx, order Order, risk PaperCashRisk) error {
 		if target == "" {
 			return fmt.Errorf("missing target symbol sector classification")
 		}
-		rows,err:=tx.Query(`SELECT symbol,side,status,quantity,fill_price,price,limit_price,stop_price
+		rows, err := tx.Query(`SELECT symbol,side,status,quantity,fill_price,price,limit_price,stop_price
 			FROM orders WHERE status IN ('OPEN','FILLED')`)
-		if err!=nil{return err}
-		exposure:=0.0
+		if err != nil {
+			return err
+		}
+		exposure := 0.0
 		type holding struct{ qty, highestFill float64 }
-		holdings:=map[string]holding{}
-		for rows.Next(){
-			var symbol,side,status string
-			var qty,fill,price,limit,stop float64
-			if err:=rows.Scan(&symbol,&side,&status,&qty,&fill,&price,&limit,&stop);err!=nil {rows.Close();return err}
-			sector:=strings.TrimSpace(risk.SymbolSectors[symbol])
-			if sector=="" {rows.Close();return fmt.Errorf("missing sector for existing paper order %s",symbol)}
-			if status=="FILLED" {
-				h:=holdings[symbol]
-				if side=="BUY" {h.qty+=qty} else if side=="SELL" {h.qty-=qty}
-				if fill>h.highestFill {h.highestFill=fill}
-				holdings[symbol]=h
-			} else if side=="BUY" && strings.EqualFold(sector,target) {
-				exposure+=qty*math.Max(price,math.Max(limit,stop))
+		holdings := map[string]holding{}
+		for rows.Next() {
+			var symbol, side, status string
+			var qty, fill, price, limit, stop float64
+			if err := rows.Scan(&symbol, &side, &status, &qty, &fill, &price, &limit, &stop); err != nil {
+				rows.Close()
+				return err
+			}
+			sector := strings.TrimSpace(risk.SymbolSectors[symbol])
+			if sector == "" {
+				rows.Close()
+				return fmt.Errorf("missing sector for existing paper order %s", symbol)
+			}
+			if status == "FILLED" {
+				h := holdings[symbol]
+				if side == "BUY" {
+					h.qty += qty
+				} else if side == "SELL" {
+					h.qty -= qty
+				}
+				if fill > h.highestFill {
+					h.highestFill = fill
+				}
+				holdings[symbol] = h
+			} else if side == "BUY" && strings.EqualFold(sector, target) {
+				exposure += qty * math.Max(price, math.Max(limit, stop))
 			}
 		}
-		readErr:=rows.Err()
+		readErr := rows.Err()
 		rows.Close()
-		if readErr!=nil{return readErr}
-		for symbol,h:=range holdings {
-			if h.qty<=0||!strings.EqualFold(strings.TrimSpace(risk.SymbolSectors[symbol]),target){continue}
+		if readErr != nil {
+			return readErr
+		}
+		for symbol, h := range holdings {
+			if h.qty <= 0 || !strings.EqualFold(strings.TrimSpace(risk.SymbolSectors[symbol]), target) {
+				continue
+			}
 			// Use the greater of the recent observed market mark and historical
 			// highest execution price to avoid understating a long holding.
-			valuation:=h.highestFill
+			valuation := h.highestFill
 			var marketPrice float64
-			err:=tx.QueryRow(`SELECT price FROM trading_history WHERE symbol=? ORDER BY timestamp DESC,id DESC LIMIT 1`,symbol).Scan(&marketPrice)
-			if err!=nil && err!=sql.ErrNoRows{return err}
-			if marketPrice>valuation{valuation=marketPrice}
-			if valuation<=0||math.IsNaN(valuation)||math.IsInf(valuation,0){return fmt.Errorf("missing valuation for sector holding %s",symbol)}
-			exposure+=h.qty*valuation
+			err := tx.QueryRow(`SELECT price FROM trading_history WHERE symbol=? ORDER BY timestamp DESC,id DESC LIMIT 1`, symbol).Scan(&marketPrice)
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+			if marketPrice > valuation {
+				valuation = marketPrice
+			}
+			if valuation <= 0 || math.IsNaN(valuation) || math.IsInf(valuation, 0) {
+				return fmt.Errorf("missing valuation for sector holding %s", symbol)
+			}
+			exposure += h.qty * valuation
 		}
 		worst := math.Max(order.Price, math.Max(order.LimitPrice, order.StopPrice))
 		if order.Status == "FILLED" && order.FillPrice > 0 {
