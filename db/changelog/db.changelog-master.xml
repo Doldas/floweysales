@@ -13,4 +13,5 @@
   <include file="009-paper-equity-peak.xml" relativeToChangelogFile="true"/>
   <include file="010-agent-flow-studio.xml" relativeToChangelogFile="true"/>
   <include file="011-blueprint-definitions.xml" relativeToChangelogFile="true"/>
+  <include file="012-userspace-files.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
