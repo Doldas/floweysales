@@ -260,20 +260,28 @@ func (e *Engine) registerOrderRoutes() {
 		}
 
 		heldSectorExposure := sectorExposure
-		if cfg.MaxSectorAllocationPct>0 {
-			for _,pending:=range working {
-				if pending.Side!=trading.SideBuy {continue}
-				if !strings.EqualFold(strings.TrimSpace(cfg.SymbolSectors[pending.Symbol]),strings.TrimSpace(cfg.SymbolSectors[symbol])) {continue}
-				worst:=pending.Price
-				if pending.LimitPrice>worst {worst=pending.LimitPrice}
-				if pending.StopPrice>worst {worst=pending.StopPrice}
-				heldSectorExposure-=pending.Quantity*worst
+		if cfg.MaxSectorAllocationPct > 0 {
+			for _, pending := range working {
+				if pending.Side != trading.SideBuy {
+					continue
+				}
+				if !strings.EqualFold(strings.TrimSpace(cfg.SymbolSectors[pending.Symbol]), strings.TrimSpace(cfg.SymbolSectors[symbol])) {
+					continue
+				}
+				worst := pending.Price
+				if pending.LimitPrice > worst {
+					worst = pending.LimitPrice
+				}
+				if pending.StopPrice > worst {
+					worst = pending.StopPrice
+				}
+				heldSectorExposure -= pending.Quantity * worst
 			}
 		}
 		cashRisk := storage.PaperCashRisk{
-			StartingCash:cfg.BaseCash,CommissionPct:cfg.Commission.Pct,CommissionFixed:cfg.Commission.Fixed,
-			SectorLimitPct:cfg.MaxSectorAllocationPct,PortfolioEquity:summary.Equity,
-			HeldSectorExposure:heldSectorExposure,SymbolSectors:cfg.SymbolSectors,
+			StartingCash: cfg.BaseCash, CommissionPct: cfg.Commission.Pct, CommissionFixed: cfg.Commission.Fixed,
+			SectorLimitPct: cfg.MaxSectorAllocationPct, PortfolioEquity: summary.Equity,
+			HeldSectorExposure: heldSectorExposure, SymbolSectors: cfg.SymbolSectors,
 		}
 		replayed := false
 		if key != "" {
