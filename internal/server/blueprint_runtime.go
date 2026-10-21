@@ -292,6 +292,18 @@ func evaluateBlueprintFunction(f storage.BlueprintFunction, input typedValue) (t
 	return result, nil
 }
 func validateBlueprintFunction(f storage.BlueprintFunction) error {
+	var version struct {
+		Version int `json:"version"`
+	}
+	if err := json.Unmarshal(f.Graph, &version); err != nil {
+		return err
+	}
+	if version.Version == 2 {
+		return validateBlueprintV2(f)
+	}
+	if version.Version != 0 {
+		return fmt.Errorf("unsupported blueprint graph version %d", version.Version)
+	}
 	// Validate wiring using a representative input; runtime validates again
 	// with the actual values. In particular, output and graph cycles fail here.
 	var g functionGraph
