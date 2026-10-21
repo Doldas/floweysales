@@ -11,6 +11,7 @@ interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string 
 interface FlowGraph { nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
 interface FlowRun { id:number; trigger:string; status:string; output:string; error:string }
+interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
 @Component({
  selector:'fse-flow-studio', standalone:true,
@@ -123,6 +124,7 @@ export class FlowStudioComponent {
  readonly interval=signal(0);
  readonly eventKey=signal('');
  readonly triggerValue=signal('');
+ readonly triggers=signal<TriggerDefinition[]>([]);
  readonly graph=signal<FlowGraph>(this.defaultGraph());
  readonly chosen=signal('');
  readonly selectedNode=()=>this.graph().nodes.find(n=>n.id===this.chosen());
@@ -164,11 +166,11 @@ export class FlowStudioComponent {
  }
  private async request(url:string,options?:RequestInit):Promise<any>{const r=await fetch(url,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...options?.headers}});
   const j=await r.json();if(!r.ok)throw new Error(j.error||('HTTP '+r.status));return j}
- async refresh(){try{const data=await this.request('/api/admin/flows');this.flows.set(data.flows||[])}catch(e){this.message.set(String(e))}}
+ async refresh(){try{const [data,definitions]=await Promise.all([this.request('/api/admin/flows'),this.request('/api/admin/blueprint-triggers')]);this.flows.set(data.flows||[]);this.triggers.set(definitions.triggers||[])}catch(e){this.message.set(String(e))}}
  async refreshRuns(){if(!this.selectedId())return;try{const d=await this.request('/api/admin/flows/'+this.selectedId()+'/runs');this.runs.set(d.runs||[])}catch(e){this.message.set(String(e))}}
  async save(){this.busy.set(true);try{const id=this.selectedId();const body={name:this.name(),graph:this.graph(),enabled:this.enabled(),interval_minutes:this.interval(),event_key:this.eventKey()};
    const flow:SavedFlow=await this.request(id?'/api/admin/flows/'+id:'/api/admin/flows',{method:id?'PUT':'POST',body:JSON.stringify(body)});
    this.selectedId.set(flow.id);this.message.set('Flow saved');await this.refresh()}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
  async run(){this.busy.set(true);try{await this.request('/api/admin/flows/'+this.selectedId()+'/run',{method:'POST'});this.message.set('Agent run queued; refresh history shortly');setTimeout(()=>void this.refreshRuns(),3000)}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
- async emitEvent(){this.busy.set(true);try{const data=await this.request('/api/admin/flow-events/'+encodeURIComponent(this.eventKey()),{method:'POST',body:JSON.stringify({value:this.triggerValue()})});this.message.set(data.started+' flow(s) triggered');}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
+ async emitEvent(){this.busy.set(true);try{const definition=this.triggers().find(t=>t.event_key===this.eventKey());if(!definition)throw Error('Create the custom trigger first');let value:string|number|boolean=this.triggerValue();if(definition.payload_type==='number'){value=Number(value);if(!Number.isFinite(value))throw Error('Event requires a finite number')}if(definition.payload_type==='boolean'){if(value!=='true'&&value!=='false')throw Error('Use true or false for a boolean event');value=value==='true'}const data=await this.request('/api/admin/flow-events/'+encodeURIComponent(this.eventKey()),{method:'POST',body:JSON.stringify({value})});this.message.set(data.started+' flow(s) triggered');}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
 }
