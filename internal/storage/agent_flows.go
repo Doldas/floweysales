@@ -4,9 +4,6 @@ import (
  "context"
  "database/sql"
  "encoding/json"
- "errors"
- "fmt"
- "time"
 )
 
 type AgentFlow struct {
@@ -104,6 +101,3 @@ func (d *Database) RecoverStalledAgentFlowRuns(ctx context.Context) error {
  _,err:=d.db.ExecContext(ctx,`UPDATE agent_flow_runs SET status='FAILED',error_message='Worker interrupted or timed out',finished_at=UTC_TIMESTAMP(6) WHERE status='RUNNING' AND started_at<DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 5 MINUTE)`)
  return err
 }
-var _ = errors.Is
-var _ = fmt.Errorf
-var _ = time.Now
