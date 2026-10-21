@@ -71,3 +71,9 @@ func (d *Database) DeleteUserspaceFile(ctx context.Context,owner int64,rawPath s
  if n==0{return sql.ErrNoRows}
  return nil
 }
+
+func (d *Database) FlowOwner(ctx context.Context, flowID int64)(int64,error){
+ var owner int64
+ err:=d.db.QueryRowContext(ctx,"SELECT created_by FROM agent_flows WHERE id=?",flowID).Scan(&owner)
+ return owner,err
+}
