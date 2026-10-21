@@ -22,6 +22,7 @@ type flowNode struct {
 	Type   string  `json:"type"`
 	Label  string  `json:"label"`
 	Prompt string  `json:"prompt,omitempty"`
+	FlowID int64   `json:"flow_id,omitempty"`
 	X      float64 `json:"x"`
 	Y      float64 `json:"y"`
 }
@@ -63,6 +64,7 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 	next := map[string][]string{}
 	starts := 0
 	agents := 0
+	calls := 0
 	for _, n := range g.Nodes {
 		if len(n.ID) < 1 || len(n.ID) > 48 || len(n.Label) > 100 {
 			return g, nil, fmt.Errorf("invalid node ID or label")
@@ -70,13 +72,19 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		if _, ok := nodes[n.ID]; ok {
 			return g, nil, fmt.Errorf("duplicate node")
 		}
-		if n.Type != "trigger" && n.Type != "agent" {
-			return g, nil, fmt.Errorf("only trigger and research agent nodes are allowed")
+		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" {
+			return g, nil, fmt.Errorf("only trigger, research agent and subflow nodes are allowed")
 		}
 		if n.Type == "trigger" {
 			starts++
 			if n.Prompt != "" {
 				return g, nil, fmt.Errorf("trigger cannot contain a prompt")
+			}
+		}
+		if n.Type == "flow" {
+			calls++
+			if n.FlowID <= 0 || n.Prompt != "" {
+				return g, nil, fmt.Errorf("subflow node needs a flow_id and no inline prompt")
 			}
 		}
 		if n.Type == "agent" {
@@ -87,8 +95,8 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		}
 		nodes[n.ID] = n
 	}
-	if starts != 1 || agents == 0 {
-		return g, nil, fmt.Errorf("flow needs exactly one trigger and at least one agent")
+	if starts != 1 || agents+calls == 0 {
+		return g, nil, fmt.Errorf("flow needs exactly one trigger and at least one agent or subflow")
 	}
 	for _, edge := range g.Edges {
 		from, okFrom := nodes[edge.From]
@@ -283,6 +291,18 @@ func (e *Engine) launchFlow(f storage.AgentFlow, trigger string) error {
 	return nil
 }
 func (e *Engine) executeFlow(ctx context.Context, f storage.AgentFlow) (string, error) {
+	return e.executeFlowNested(ctx, f, map[int64]bool{}, 0)
+}
+
+func (e *Engine) executeFlowNested(ctx context.Context, f storage.AgentFlow, parents map[int64]bool, depth int) (string, error) {
+	if depth >= 4 {
+		return "", fmt.Errorf("maximum subflow depth reached")
+	}
+	if parents[f.ID] {
+		return "", fmt.Errorf("recursive flow call blocked: %d", f.ID)
+	}
+	parents[f.ID] = true
+	defer delete(parents, f.ID)
 	g, order, err := validateFlow(f)
 	if err != nil {
 		return "", err
@@ -300,6 +320,22 @@ func (e *Engine) executeFlow(ctx context.Context, f storage.AgentFlow) (string, 
 	for _, id := range order {
 		n := nodes[id]
 		if n.Type == "trigger" {
+			continue
+		}
+		if n.Type == "flow" {
+			child, err := e.db.GetAgentFlow(ctx, n.FlowID)
+			if err != nil {
+				return "", fmt.Errorf("subflow %d unavailable: %w", n.FlowID, err)
+			}
+			output, err := e.executeFlowNested(ctx, child, parents, depth+1)
+			if err != nil {
+				return "", fmt.Errorf("subflow %d failed: %w", n.FlowID, err)
+			}
+			if len(output) > 6000 {
+				output = output[:6000]
+			}
+			previous = output
+			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": output})
 			continue
 		}
 		prompt := n.Prompt
