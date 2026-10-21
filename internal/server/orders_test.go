@@ -600,8 +600,16 @@ func TestConcurrentSectorBuysRespectCombinedCap(t *testing.T) {
 	}
 	wg.Wait()
 	success := 0
-	for _, code := range codes { if code == http.StatusOK { success++ } }
-	if success != 1 { t.Fatalf("sector cap allowed %d of two competing purchases, status=%v",success,codes) }
-	_, orders := env.do(t,"GET","/api/orders",nil)
-	if len(listOf(t,orders))!=1 { t.Fatalf("must store only one sector order: %v",orders) }
+	for _, code := range codes {
+		if code == http.StatusOK {
+			success++
+		}
+	}
+	if success != 1 {
+		t.Fatalf("sector cap allowed %d of two competing purchases, status=%v", success, codes)
+	}
+	_, orders := env.do(t, "GET", "/api/orders", nil)
+	if len(listOf(t, orders)) != 1 {
+		t.Fatalf("must store only one sector order: %v", orders)
+	}
 }
