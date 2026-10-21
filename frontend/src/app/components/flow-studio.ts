@@ -110,6 +110,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
       @if(run.output){<pre>{{run.output}}</pre>}
     </details>
    }
+   }
   </mat-card-content>
  </mat-card>`,
  styles:[`
