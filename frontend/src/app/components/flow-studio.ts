@@ -1,4 +1,5 @@
 import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
+import { MarkdownRunOutputComponent } from './markdown-run-output';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -6,7 +7,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { BlueprintLibraryComponent } from './blueprint-library';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'; label:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'; label:string; variable?:string; transform?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FlowGraph { nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
@@ -15,7 +16,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
 
 @Component({
  selector:'fse-flow-studio', standalone:true,
- imports:[CommonModule,FormsModule,MatButtonModule,MatCardModule,MatIconModule,BlueprintLibraryComponent],
+ imports:[CommonModule,FormsModule,MatButtonModule,MatCardModule,MatIconModule,BlueprintLibraryComponent,MarkdownRunOutputComponent],
  changeDetection:ChangeDetectionStrategy.Default,
  template:`
  <mat-card class="flow-studio glass">
@@ -35,6 +36,9 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
      <button mat-stroked-button (click)="addSubflow()">+ Call Flow</button>
      <button mat-stroked-button (click)="addConstant()">+ Value</button>
      <button mat-stroked-button (click)="addFunctionCall()">+ Function</button>
+     <button mat-stroked-button (click)="addUtility('save_result')">+ Save Result</button>
+     <button mat-stroked-button (click)="addUtility('load_result')">+ Load Result</button>
+     <button mat-stroked-button (click)="addUtility('transform')">+ Transform</button>
      <button mat-stroked-button (click)="linkSelected()" [disabled]="!selectedNode()||graph().nodes.length<3">Connect to…</button>
      <button mat-stroked-button (click)="removeSelected()" [disabled]="!selectedNode()||selectedNode()?.type==='trigger'">Remove node</button>
    </div>
@@ -70,7 +74,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
          <rect [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="12"
            [attr.fill]="n.id===selectedNode()?.id?'#244970':'#1c2a3b'"
            [attr.stroke]="n.id===selectedNode()?.id?'#94caff':'#607993'" stroke-width="2"/>
-         <text [attr.x]="n.x+12" [attr.y]="n.y+24" fill="#dceaf8" font-size="13">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':'✦ AGENT'}}</text>
+         <text [attr.x]="n.x+12" [attr.y]="n.y+24" fill="#dceaf8" font-size="13">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':'✦ AGENT'}}</text>
          <text [attr.x]="n.x+12" [attr.y]="n.y+48" fill="#dceaf8" font-size="12">{{n.label.slice(0,16)}}</text>
        </g>
      }
@@ -82,6 +86,9 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
      <button type="button" role="menuitem" (click)="addSubflow();closeCanvasMenu()">Call Flow</button>
      <button type="button" role="menuitem" (click)="addConstant();closeCanvasMenu()">Value</button>
      <button type="button" role="menuitem" (click)="addFunctionCall();closeCanvasMenu()">Function</button>
+     <button type="button" role="menuitem" (click)="addUtility('save_result');closeCanvasMenu()">Save Result</button>
+     <button type="button" role="menuitem" (click)="addUtility('load_result');closeCanvasMenu()">Load Result</button>
+     <button type="button" role="menuitem" (click)="addUtility('transform');closeCanvasMenu()">Transform Text</button>
      <button type="button" (click)="closeCanvasMenu()">Cancel</button>
    </div>}
    </div>
@@ -101,6 +108,19 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
          <p class="muted">Use a text value as input to an agent. Number and Boolean values have separate types and cannot connect directly to text inputs.</p>
          <label>Connect value to <select #valueTarget><option value="">Select target</option>@for(other of graph().nodes;track other.id){@if(other.type==='agent'||other.type==='flow'){<option [value]="other.id">{{other.label}}</option>}}</select></label>
          <button mat-stroked-button (click)="connectValue(n.id,valueTarget.value)">Connect typed value</button>
+       }
+       @if(n.type==='save_result'||n.type==='load_result'){
+         <label>Run variable <input [ngModel]="n.variable||''" (ngModelChange)="updateUtility('variable',$event)" placeholder="e.g. summary" maxlength="48"></label>
+         <p class="muted">Variables exist only while the current flow is executing, not across runs.</p>
+       }
+       @if(n.type==='transform'){
+         <label>Transformation <select [ngModel]="n.transform||'trim'" (ngModelChange)="updateUtility('transform',$event)">
+           <option value="trim">Trim whitespace</option><option value="uppercase">UPPERCASE</option><option value="lowercase">lowercase</option>
+           <option value="prefix">Add prefix</option><option value="suffix">Add suffix</option><option value="replace">Replace text</option>
+         </select></label>
+         @if(n.transform==='prefix'||n.transform==='suffix'||n.transform==='replace'){
+           <label>Operand <input [ngModel]="n.value||''" (ngModelChange)="updateUtility('value',$event)" maxlength="1000" [placeholder]="n.transform==='replace'?'find=>replacement':'Text to add'"></label>
+         }
        }
        @if(n.type==='function'){
          <label>Reusable function <select [ngModel]="n.function_id||0" (ngModelChange)="updateFunctionReference(+$event)"><option [ngValue]="0">Choose saved function</option>@for(f of functions();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
@@ -127,12 +147,21 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
      <fse-blueprint-library (functionsChanged)="loadFunctions()"></fse-blueprint-library>
    }
    @if (studioTab()==='runs') {
-   <h3>Recent runs</h3>
+   <div class="run-history-heading"><h3>Recent runs</h3>
+     <label>Output view <select [ngModel]="logView()" (ngModelChange)="logView.set($event)">
+       <option value="markdown">Markdown (default)</option><option value="raw">RAW</option><option value="json">Structured JSON</option>
+     </select></label>
+     <button mat-stroked-button (click)="refreshRuns()" [disabled]="!selectedId()">Refresh history</button>
+   </div>
    @if(!runs().length){<p class="muted">No executions yet. Save and run a flow to see a trace.</p>}
    @for(run of runs();track run.id){
     <details class="flow-run"><summary>#{{run.id}} · {{run.trigger}} · {{run.status}}</summary>
       @if(run.error){<p>{{run.error}}</p>}
-      @if(run.output){<pre>{{run.output}}</pre>}
+      @if(run.output){
+        @if(logView()==='raw'){<pre>{{run.output}}</pre>}
+        @else if(logView()==='json'){<pre>{{formattedRunJSON(run.output)}}</pre>}
+        @else {<fse-markdown-run-output [raw]="run.output"></fse-markdown-run-output>}
+      }
     </details>
    }
    }
@@ -169,6 +198,9 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
  @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .flow-workspace{min-height:280px}.flow-node-editor{max-height:360px}}
 
 .flow-message{border-left:3px solid #73baff;padding-left:12px}
+ .run-history-heading{display:flex;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:14px}
+ .run-history-heading h3{margin:0}
+ .run-history-heading label{flex:0 1 220px}
  .flow-run{padding:10px;border-top:1px solid #3d5268}.flow-run pre{white-space:pre-wrap;word-break:break-word;max-height:250px;overflow:auto}
  `]
 })
@@ -201,6 +233,7 @@ export class FlowStudioComponent {
  }
  closeCanvasMenu(): void { this.canvasMenu.set(false); }
 
+ readonly logView=signal<'markdown'|'raw'|'json'>('markdown');
  readonly studioTab=signal<'editor'|'library'|'runs'>('editor');
  readonly flows=signal<SavedFlow[]>([]);
  readonly functions=signal<{id:number;name:string}[]>([]);
@@ -229,6 +262,19 @@ export class FlowStudioComponent {
  loadFlow(id:number){const f=this.flows().find(x=>x.id===id);if(!f){this.newFlow();return}
   this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');void this.refreshRuns()}
  async loadFunctions(){try{const data=await this.request("/api/admin/blueprint-functions");this.functions.set(data.functions||[])}catch(e){this.message.set(String(e))}}
+ addUtility(type:'save_result'|'load_result'|'transform'){
+   const count=this.graph().nodes.length;
+   const id=type+'-'+Date.now().toString(36);
+   const label=type==='save_result'?'Save Result':type==='load_result'?'Load Result':'Transform Text';
+   this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type,label,variable:'summary',transform:'trim',x:260+(count%4)*140,y:40+Math.floor(count/4)*100}]}));
+   this.chosen.set(id);
+ }
+ updateUtility(field:'variable'|'transform'|'value',value:string){
+   this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,[field]:value}:n)}));
+ }
+ formattedRunJSON(raw:string):string{
+   try{return JSON.stringify(JSON.parse(raw),null,2)}catch{return raw}
+ }
  addFunctionCall(){const n=this.graph().nodes;const id="fn-"+Date.now().toString(36);this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:"function",label:"Call function",function_id:0,x:260+(n.length%4)*140,y:40+Math.floor(n.length/4)*100}]}));this.chosen.set(id)}
  updateFunctionReference(target:number){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,function_id:target}:n)}))}
  addConstant(){const n=this.graph().nodes;const id='value-'+Date.now().toString(36);this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'constant',label:'Value',value_type:'text',value:'Research this signal',x:260+(n.length%4)*140,y:40+Math.floor(n.length/4)*100}]}));this.chosen.set(id)}
