@@ -273,6 +273,7 @@ func (e *Engine) registerFlowRoutes() {
 		defer r.Body.Close()
 		var payload struct{ Value json.RawMessage `json:"value"` }
 		if err:=json.NewDecoder(r.Body).Decode(&payload);err!=nil {writeJSON(w,400,map[string]string{"error":"Trigger event requires a JSON value"});return}
+		eventInput:=string(payload.Value)
 		if def.PayloadType=="number"||def.PayloadType=="boolean" {
 			if _,err:=parseTyped(def.PayloadType,string(payload.Value));err!=nil {writeJSON(w,400,map[string]string{"error":"Event payload type mismatch"});return}
 		} else {
