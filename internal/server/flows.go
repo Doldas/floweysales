@@ -42,51 +42,7 @@ type flowGraph struct {
 	Edges []flowEdge `json:"edges"`
 }
 
-var flowVariablePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{0,47}package server
-
-import (
-	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"regexp"
-	"strings"
-	"time"
-
-	"floweysales/internal/ai"
-	"floweysales/internal/identity"
-	"floweysales/internal/storage"
-)
-
-type flowNode struct {
-	ID         string  `json:"id"`
-	Type       string  `json:"type"`
-	Label      string  `json:"label"`
-	Prompt     string  `json:"prompt,omitempty"`
-	FlowID     int64   `json:"flow_id,omitempty"`
-	FunctionID int64   `json:"function_id,omitempty"`
-	ValueType  string  `json:"value_type,omitempty"`
-	Value      string  `json:"value,omitempty"`
-	Variable   string  `json:"variable,omitempty"`
-	Transform  string  `json:"transform,omitempty"`
-	X          float64 `json:"x"`
-	Y          float64 `json:"y"`
-}
-type flowEdge struct {
-	From     string `json:"from"`
-	To       string `json:"to"`
-	FromPort string `json:"from_port,omitempty"`
-	ToPort   string `json:"to_port,omitempty"`
-}
-type flowGraph struct {
-	Nodes []flowNode `json:"nodes"`
-	Edges []flowEdge `json:"edges"`
-}
-
-)
+var flowVariablePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{0,47}$`)
 
 // transformFlowText is deterministic, bounded and never evaluates code.
 func transformFlowText(operation,input,operand string)(string,error){
