@@ -1,103 +1,162 @@
 package storage
 
 import (
- "context"
- "database/sql"
- "encoding/json"
+	"context"
+	"database/sql"
+	"encoding/json"
 )
 
 type AgentFlow struct {
- ID int64 `json:"id"`
- Name string `json:"name"`
- Graph json.RawMessage `json:"graph"`
- Enabled bool `json:"enabled"`
- IntervalMinutes int `json:"interval_minutes"`
- EventKey string `json:"event_key"`
+	ID              int64           `json:"id"`
+	Name            string          `json:"name"`
+	Graph           json.RawMessage `json:"graph"`
+	Enabled         bool            `json:"enabled"`
+	IntervalMinutes int             `json:"interval_minutes"`
+	EventKey        string          `json:"event_key"`
 }
 type AgentFlowRun struct {
- ID int64 `json:"id"`
- FlowID int64 `json:"flow_id"`
- Trigger string `json:"trigger"`
- Status string `json:"status"`
- Output string `json:"output"`
- Error string `json:"error"`
+	ID      int64  `json:"id"`
+	FlowID  int64  `json:"flow_id"`
+	Trigger string `json:"trigger"`
+	Status  string `json:"status"`
+	Output  string `json:"output"`
+	Error   string `json:"error"`
 }
 
-func (d *Database) ListAgentFlows(ctx context.Context) ([]AgentFlow,error) {
- rows,err:=d.db.QueryContext(ctx,"SELECT id,name,graph_json,enabled,interval_minutes,COALESCE(event_key,'') FROM agent_flows ORDER BY id DESC LIMIT 100")
- if err!=nil{return nil,err}
- defer rows.Close()
- result:=[]AgentFlow{}
- for rows.Next(){var f AgentFlow;var graph string
-  if err:=rows.Scan(&f.ID,&f.Name,&graph,&f.Enabled,&f.IntervalMinutes,&f.EventKey);err!=nil{return nil,err}
-  f.Graph=json.RawMessage(graph);result=append(result,f)
- }
- return result,rows.Err()
+func (d *Database) ListAgentFlows(ctx context.Context) ([]AgentFlow, error) {
+	rows, err := d.db.QueryContext(ctx, "SELECT id,name,graph_json,enabled,interval_minutes,COALESCE(event_key,'') FROM agent_flows ORDER BY id DESC LIMIT 100")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := []AgentFlow{}
+	for rows.Next() {
+		var f AgentFlow
+		var graph string
+		if err := rows.Scan(&f.ID, &f.Name, &graph, &f.Enabled, &f.IntervalMinutes, &f.EventKey); err != nil {
+			return nil, err
+		}
+		f.Graph = json.RawMessage(graph)
+		result = append(result, f)
+	}
+	return result, rows.Err()
 }
-func (d *Database) GetAgentFlow(ctx context.Context,id int64) (AgentFlow,error) {
- var f AgentFlow;var graph string
- err:=d.db.QueryRowContext(ctx,"SELECT id,name,graph_json,enabled,interval_minutes,COALESCE(event_key,'') FROM agent_flows WHERE id=?",id).Scan(&f.ID,&f.Name,&graph,&f.Enabled,&f.IntervalMinutes,&f.EventKey)
- f.Graph=json.RawMessage(graph)
- return f,err
+func (d *Database) GetAgentFlow(ctx context.Context, id int64) (AgentFlow, error) {
+	var f AgentFlow
+	var graph string
+	err := d.db.QueryRowContext(ctx, "SELECT id,name,graph_json,enabled,interval_minutes,COALESCE(event_key,'') FROM agent_flows WHERE id=?", id).Scan(&f.ID, &f.Name, &graph, &f.Enabled, &f.IntervalMinutes, &f.EventKey)
+	f.Graph = json.RawMessage(graph)
+	return f, err
 }
-func (d *Database) SaveAgentFlow(ctx context.Context,f AgentFlow,admin int64) (AgentFlow,error) {
- if f.ID==0 {
-  res,err:=d.db.ExecContext(ctx,`INSERT INTO agent_flows(name,graph_json,enabled,interval_minutes,event_key,next_run_at,created_by)
+func (d *Database) SaveAgentFlow(ctx context.Context, f AgentFlow, admin int64) (AgentFlow, error) {
+	if f.ID == 0 {
+		res, err := d.db.ExecContext(ctx, `INSERT INTO agent_flows(name,graph_json,enabled,interval_minutes,event_key,next_run_at,created_by)
  VALUES(?,?,?,?,?,IF(? > 0 AND ? = TRUE,DATE_ADD(UTC_TIMESTAMP(6), INTERVAL ? MINUTE),NULL),?)`,
- f.Name,string(f.Graph),f.Enabled,f.IntervalMinutes,f.EventKey,f.IntervalMinutes,f.Enabled,f.IntervalMinutes,admin)
- if err!=nil{return f,err};f.ID,err=res.LastInsertId();return f,err
- }
- res,err:=d.db.ExecContext(ctx,`UPDATE agent_flows SET name=?,graph_json=?,enabled=?,interval_minutes=?,event_key=?,
+			f.Name, string(f.Graph), f.Enabled, f.IntervalMinutes, f.EventKey, f.IntervalMinutes, f.Enabled, f.IntervalMinutes, admin)
+		if err != nil {
+			return f, err
+		}
+		f.ID, err = res.LastInsertId()
+		return f, err
+	}
+	res, err := d.db.ExecContext(ctx, `UPDATE agent_flows SET name=?,graph_json=?,enabled=?,interval_minutes=?,event_key=?,
  next_run_at=IF(? > 0 AND ? = TRUE,COALESCE(next_run_at,DATE_ADD(UTC_TIMESTAMP(6),INTERVAL ? MINUTE)),NULL),updated_at=UTC_TIMESTAMP(6) WHERE id=?`,
- f.Name,string(f.Graph),f.Enabled,f.IntervalMinutes,f.EventKey,f.IntervalMinutes,f.Enabled,f.IntervalMinutes,f.ID)
- if err!=nil{return f,err};n,err:=res.RowsAffected();if err!=nil{return f,err};if n==0{return f,sql.ErrNoRows};return f,nil
+		f.Name, string(f.Graph), f.Enabled, f.IntervalMinutes, f.EventKey, f.IntervalMinutes, f.Enabled, f.IntervalMinutes, f.ID)
+	if err != nil {
+		return f, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return f, err
+	}
+	if n == 0 {
+		return f, sql.ErrNoRows
+	}
+	return f, nil
 }
-func (d *Database) CreateAgentFlowRun(ctx context.Context,id int64,trigger string) (int64,error) {
- res,err:=d.db.ExecContext(ctx,"INSERT INTO agent_flow_runs(flow_id,trigger_type,status) VALUES(?,?,'RUNNING')",id,trigger)
- if err!=nil{return 0,err};return res.LastInsertId()
+func (d *Database) CreateAgentFlowRun(ctx context.Context, id int64, trigger string) (int64, error) {
+	res, err := d.db.ExecContext(ctx, "INSERT INTO agent_flow_runs(flow_id,trigger_type,status) VALUES(?,?,'RUNNING')", id, trigger)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
 }
-func (d *Database) FinishAgentFlowRun(ctx context.Context,id int64,output string,runErr error) error {
- status:="SUCCESS";message:=""
- if runErr!=nil {status="FAILED";message=runErr.Error()}
- if len(output)>64000 {output=output[:64000]}
- if len(message)>2000 {message=message[:2000]}
- _,err:=d.db.ExecContext(ctx,"UPDATE agent_flow_runs SET status=?,output_json=?,error_message=?,finished_at=UTC_TIMESTAMP(6) WHERE id=?",status,output,message,id)
- return err
+func (d *Database) FinishAgentFlowRun(ctx context.Context, id int64, output string, runErr error) error {
+	status := "SUCCESS"
+	message := ""
+	if runErr != nil {
+		status = "FAILED"
+		message = runErr.Error()
+	}
+	if len(output) > 64000 {
+		output = output[:64000]
+	}
+	if len(message) > 2000 {
+		message = message[:2000]
+	}
+	_, err := d.db.ExecContext(ctx, "UPDATE agent_flow_runs SET status=?,output_json=?,error_message=?,finished_at=UTC_TIMESTAMP(6) WHERE id=?", status, output, message, id)
+	return err
 }
-func (d *Database) ListAgentFlowRuns(ctx context.Context,flowID int64) ([]AgentFlowRun,error) {
- rows,err:=d.db.QueryContext(ctx,"SELECT id,flow_id,trigger_type,status,COALESCE(output_json,''),COALESCE(error_message,'') FROM agent_flow_runs WHERE flow_id=? ORDER BY id DESC LIMIT 30",flowID)
- if err!=nil{return nil,err};defer rows.Close()
- result:=[]AgentFlowRun{}
- for rows.Next(){var x AgentFlowRun
-  if err:=rows.Scan(&x.ID,&x.FlowID,&x.Trigger,&x.Status,&x.Output,&x.Error);err!=nil{return nil,err}
-  result=append(result,x)
- }
- return result,rows.Err()
+func (d *Database) ListAgentFlowRuns(ctx context.Context, flowID int64) ([]AgentFlowRun, error) {
+	rows, err := d.db.QueryContext(ctx, "SELECT id,flow_id,trigger_type,status,COALESCE(output_json,''),COALESCE(error_message,'') FROM agent_flow_runs WHERE flow_id=? ORDER BY id DESC LIMIT 30", flowID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := []AgentFlowRun{}
+	for rows.Next() {
+		var x AgentFlowRun
+		if err := rows.Scan(&x.ID, &x.FlowID, &x.Trigger, &x.Status, &x.Output, &x.Error); err != nil {
+			return nil, err
+		}
+		result = append(result, x)
+	}
+	return result, rows.Err()
 }
+
 // ClaimDueAgentFlows atomically advances due schedules before launching any
 // external model calls. Two scheduler processes cannot claim the same tick.
-func (d *Database) ClaimDueAgentFlows(ctx context.Context) ([]AgentFlow,error) {
- flows,err:=d.ListAgentFlows(ctx);if err!=nil{return nil,err}
- due:=[]AgentFlow{}
- for _,f:=range flows {
-  if !f.Enabled||f.IntervalMinutes<1 {continue}
-  res,err:=d.db.ExecContext(ctx,`UPDATE agent_flows SET next_run_at=DATE_ADD(UTC_TIMESTAMP(6),INTERVAL interval_minutes MINUTE)
- WHERE id=? AND enabled=TRUE AND interval_minutes>0 AND next_run_at<=UTC_TIMESTAMP(6)`,f.ID)
-  if err!=nil{return due,err}
-  n,err:=res.RowsAffected();if err!=nil{return due,err}
-  if n==1 {due=append(due,f)}
- }
- return due,nil
+func (d *Database) ClaimDueAgentFlows(ctx context.Context) ([]AgentFlow, error) {
+	flows, err := d.ListAgentFlows(ctx)
+	if err != nil {
+		return nil, err
+	}
+	due := []AgentFlow{}
+	for _, f := range flows {
+		if !f.Enabled || f.IntervalMinutes < 1 {
+			continue
+		}
+		res, err := d.db.ExecContext(ctx, `UPDATE agent_flows SET next_run_at=DATE_ADD(UTC_TIMESTAMP(6),INTERVAL interval_minutes MINUTE)
+ WHERE id=? AND enabled=TRUE AND interval_minutes>0 AND next_run_at<=UTC_TIMESTAMP(6)`, f.ID)
+		if err != nil {
+			return due, err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return due, err
+		}
+		if n == 1 {
+			due = append(due, f)
+		}
+	}
+	return due, nil
 }
-func (d *Database) FindEventAgentFlows(ctx context.Context,key string) ([]AgentFlow,error) {
- flows,err:=d.ListAgentFlows(ctx);if err!=nil{return nil,err}
- out:=[]AgentFlow{}
- for _,f:=range flows {if f.Enabled&&f.EventKey==key {out=append(out,f)}}
- return out,nil
+func (d *Database) FindEventAgentFlows(ctx context.Context, key string) ([]AgentFlow, error) {
+	flows, err := d.ListAgentFlows(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := []AgentFlow{}
+	for _, f := range flows {
+		if f.Enabled && f.EventKey == key {
+			out = append(out, f)
+		}
+	}
+	return out, nil
 }
 func (d *Database) RecoverStalledAgentFlowRuns(ctx context.Context) error {
- // Workers are in-process and lost during restart. A run older than 5m is
- // terminally failed rather than remaining RUNNING indefinitely.
- _,err:=d.db.ExecContext(ctx,`UPDATE agent_flow_runs SET status='FAILED',error_message='Worker interrupted or timed out',finished_at=UTC_TIMESTAMP(6) WHERE status='RUNNING' AND started_at<DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 5 MINUTE)`)
- return err
+	// Workers are in-process and lost during restart. A run older than 5m is
+	// terminally failed rather than remaining RUNNING indefinitely.
+	_, err := d.db.ExecContext(ctx, `UPDATE agent_flow_runs SET status='FAILED',error_message='Worker interrupted or timed out',finished_at=UTC_TIMESTAMP(6) WHERE status='RUNNING' AND started_at<DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 5 MINUTE)`)
+	return err
 }
