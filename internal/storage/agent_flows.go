@@ -162,19 +162,33 @@ func (d *Database) RecoverStalledAgentFlowRuns(ctx context.Context) error {
 	return err
 }
 
+// ErrAgentFlowRunning prevents deleting a flow while a worker is active.
+var ErrAgentFlowRunning = errors.New("flow has an active run")
+
 // DeleteAgentFlow removes a saved flow and its run history atomically.
 // Active runs must finish first so workers cannot append orphaned output.
 func (d *Database) DeleteAgentFlow(ctx context.Context, id int64) error {
- tx, err := d.db.BeginTx(ctx, nil)
- if err != nil { return err }
- defer tx.Rollback()
- var present int64
- if err := tx.QueryRowContext(ctx, "SELECT id FROM agent_flows WHERE id=? FOR UPDATE", id).Scan(&present); err != nil { return err }
- var running int
- if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM agent_flow_runs WHERE flow_id=? AND status='RUNNING'", id).Scan(&running); err != nil { return err }
- if running != 0 { return ErrAgentFlowRunning }
- if _, err := tx.ExecContext(ctx, "DELETE FROM agent_flow_runs WHERE flow_id=?", id); err != nil { return err }
- if _, err := tx.ExecContext(ctx, "DELETE FROM agent_flows WHERE id=?", id); err != nil { return err }
- return tx.Commit()
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var present int64
+	if err := tx.QueryRowContext(ctx, "SELECT id FROM agent_flows WHERE id=? FOR UPDATE", id).Scan(&present); err != nil {
+		return err
+	}
+	var running int
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM agent_flow_runs WHERE flow_id=? AND status='RUNNING'", id).Scan(&running); err != nil {
+		return err
+	}
+	if running != 0 {
+		return ErrAgentFlowRunning
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM agent_flow_runs WHERE flow_id=?", id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM agent_flows WHERE id=?", id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
-var ErrAgentFlowRunning = errors.New("flow has an active run")
