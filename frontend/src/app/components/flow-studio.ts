@@ -44,6 +44,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
     <label>Event key <input [ngModel]="eventKey()" (ngModelChange)="eventKey.set($event)" placeholder="e.g. market.close"></label>
     <label class="flow-check"><input type="checkbox" [ngModel]="enabled()" (ngModelChange)="enabled.set($event)"> Enabled</label>
    </div>
+   <div class="blueprint-layout">
    <div class="flow-workspace" aria-label="Agent flow graph editor">
     <svg viewBox="0 0 820 380" role="img" aria-label="Agent nodes and directed connections">
      <defs><marker id="flow-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#72b7ef"/></marker></defs>
@@ -64,8 +65,10 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
      }
     </svg>
    </div>
+   <aside class="flow-node-editor" aria-label="Node details" aria-live="polite">
+   <header class="inspector-heading"><span>DETAILS</span><strong>{{ selectedNode()?.label || 'No node selected' }}</strong></header>
    @if(selectedNode();as n){
-     <div class="flow-node-editor"><strong>Selected node</strong>
+     <div class="inspector-fields">
        <label>Label <input [ngModel]="n.label" (ngModelChange)="updateNode('label',$event)" maxlength="100"></label>
        @if(n.type==='agent') {
         <label>Research instructions<textarea rows="3" [ngModel]="n.prompt" (ngModelChange)="updateNode('prompt',$event)" maxlength="2000"></textarea></label>
@@ -88,7 +91,9 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
          <p class="muted">Runs the selected graph as a function. Recursion is blocked and nesting is limited to 4 levels.</p>
        }
      </div>
-   }
+   } @else { <p class="muted">Select a node in the graph to edit its properties here.</p> }
+   </aside>
+   </div>
    <div class="flow-actions">
      <button mat-flat-button color="primary" (click)="save()" [disabled]="busy()">Save flow</button>
      <button mat-stroked-button (click)="run()" [disabled]="busy()||!selectedId()">Run now</button>
@@ -126,8 +131,17 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
  textarea{width:100%}.flow-check{flex-direction:row;align-items:center}.flow-check input{width:18px;height:18px}
  .flow-workspace{background:radial-gradient(#294057 1px,transparent 1px) 0 0/20px 20px,#0d1b2a;border:1px solid #45627b;overflow:auto;border-radius:12px}
  svg{min-width:660px;width:100%;height:auto;display:block;touch-action:none}
- .flow-node-editor{margin:12px 0;padding:12px;border:1px solid #355a75;border-radius:8px;display:flex;flex-wrap:wrap;gap:12px}
- .flow-node-editor strong{width:100%}.flow-message{border-left:3px solid #73baff;padding-left:12px}
+ .blueprint-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(270px,315px);align-items:stretch;gap:12px;min-height:470px}
+ .blueprint-layout .flow-workspace{min-width:0;min-height:470px}
+ .flow-node-editor{margin:0;padding:16px;border:1px solid #355a75;border-radius:10px;background:#142438;min-width:0;max-height:min(75vh,780px);overflow-y:auto}
+ .inspector-heading{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid #355a75;padding-bottom:12px;margin-bottom:14px}
+ .inspector-heading span{font-size:11px;letter-spacing:.14em;color:#a4c9e7}
+ .inspector-fields{display:flex;flex-direction:column;gap:12px}
+ .inspector-fields label{min-width:0;width:100%;flex:auto}
+ .inspector-fields input,.inspector-fields select,.inspector-fields textarea{box-sizing:border-box;width:100%;min-width:0}
+ @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .flow-workspace{min-height:280px}.flow-node-editor{max-height:360px}}
+
+.flow-message{border-left:3px solid #73baff;padding-left:12px}
  .flow-run{padding:10px;border-top:1px solid #3d5268}.flow-run pre{white-space:pre-wrap;word-break:break-word;max-height:250px;overflow:auto}
  `]
 })
