@@ -45,23 +45,34 @@ type flowGraph struct {
 var flowVariablePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{0,47}$`)
 
 // transformFlowText is deterministic, bounded and never evaluates code.
-func transformFlowText(operation,input,operand string)(string,error){
- var output string
- switch operation {
- case "trim": output=strings.TrimSpace(input)
- case "uppercase": output=strings.ToUpper(input)
- case "lowercase": output=strings.ToLower(input)
- case "prefix": output=operand+input
- case "suffix": output=input+operand
- case "replace":
-    parts:=strings.SplitN(operand,"=>",2)
-    if len(parts)!=2 || parts[0]=="" {return "",fmt.Errorf("replace requires search=>replacement")}
-    output=strings.ReplaceAll(input,parts[0],parts[1])
- default: return "",fmt.Errorf("unsupported transform")
- }
- if len(output)>6000 {return "",fmt.Errorf("transformed output exceeds 6000 bytes")}
- return output,nil
+func transformFlowText(operation, input, operand string) (string, error) {
+	var output string
+	switch operation {
+	case "trim":
+		output = strings.TrimSpace(input)
+	case "uppercase":
+		output = strings.ToUpper(input)
+	case "lowercase":
+		output = strings.ToLower(input)
+	case "prefix":
+		output = operand + input
+	case "suffix":
+		output = input + operand
+	case "replace":
+		parts := strings.SplitN(operand, "=>", 2)
+		if len(parts) != 2 || parts[0] == "" {
+			return "", fmt.Errorf("replace requires search=>replacement")
+		}
+		output = strings.ReplaceAll(input, parts[0], parts[1])
+	default:
+		return "", fmt.Errorf("unsupported transform")
+	}
+	if len(output) > 6000 {
+		return "", fmt.Errorf("transformed output exceeds 6000 bytes")
+	}
+	return output, nil
 }
+
 var flowEventPattern = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,99}$`)
 
 // validateFlow prevents arbitrary executable node types, cyclic graphs,
@@ -106,15 +117,25 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 			return g, nil, fmt.Errorf("only trigger, research agent, constant and subflow nodes are allowed")
 		}
 		if n.Type == "save_result" || n.Type == "load_result" || n.Type == "transform" {
-            utilities++
-            if n.Prompt != "" || n.FlowID != 0 || n.FunctionID != 0 { return g, nil, fmt.Errorf("utility nodes cannot call agents or functions") }
-            if n.Type == "transform" {
-                switch n.Transform {case "trim", "uppercase", "lowercase", "prefix", "suffix", "replace": default: return g,nil,fmt.Errorf("unsupported text transform")}
-                if len(n.Value)>1000 {return g,nil,fmt.Errorf("transform operand too long")}
-            } else if !flowVariablePattern.MatchString(n.Variable) { return g,nil,fmt.Errorf("invalid flow variable name") }
-        }
-        if n.Type == "trigger" {
-            starts++
+			utilities++
+			if n.Prompt != "" || n.FlowID != 0 || n.FunctionID != 0 {
+				return g, nil, fmt.Errorf("utility nodes cannot call agents or functions")
+			}
+			if n.Type == "transform" {
+				switch n.Transform {
+				case "trim", "uppercase", "lowercase", "prefix", "suffix", "replace":
+				default:
+					return g, nil, fmt.Errorf("unsupported text transform")
+				}
+				if len(n.Value) > 1000 {
+					return g, nil, fmt.Errorf("transform operand too long")
+				}
+			} else if !flowVariablePattern.MatchString(n.Variable) {
+				return g, nil, fmt.Errorf("invalid flow variable name")
+			}
+		}
+		if n.Type == "trigger" {
+			starts++
 			if n.Prompt != "" {
 				return g, nil, fmt.Errorf("trigger cannot contain a prompt")
 			}
@@ -436,25 +457,29 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 		if n.Type == "trigger" {
 			continue
 		}
-        if n.Type == "save_result" {
-            variables[n.Variable] = previous
-            results = append(results, map[string]string{"node":n.ID,"label":n.Label,"output":previous,"variable":n.Variable})
-            continue
-        }
-        if n.Type == "load_result" {
-            value, ok := variables[n.Variable]
-            if !ok { return "",fmt.Errorf("node %s: variable %s has not been saved",n.ID,n.Variable) }
-            previous=value
-            results=append(results,map[string]string{"node":n.ID,"label":n.Label,"output":previous,"variable":n.Variable})
-            continue
-        }
-        if n.Type == "transform" {
-            result,err:=transformFlowText(n.Transform,previous,n.Value)
-            if err!=nil{return "",fmt.Errorf("node %s: %w",n.ID,err)}
-            previous=result
-            results=append(results,map[string]string{"node":n.ID,"label":n.Label,"output":previous})
-            continue
-        }
+		if n.Type == "save_result" {
+			variables[n.Variable] = previous
+			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous, "variable": n.Variable})
+			continue
+		}
+		if n.Type == "load_result" {
+			value, ok := variables[n.Variable]
+			if !ok {
+				return "", fmt.Errorf("node %s: variable %s has not been saved", n.ID, n.Variable)
+			}
+			previous = value
+			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous, "variable": n.Variable})
+			continue
+		}
+		if n.Type == "transform" {
+			result, err := transformFlowText(n.Transform, previous, n.Value)
+			if err != nil {
+				return "", fmt.Errorf("node %s: %w", n.ID, err)
+			}
+			previous = result
+			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous})
+			continue
+		}
 		if n.Type == "constant" {
 			previous = n.Value
 			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous})
