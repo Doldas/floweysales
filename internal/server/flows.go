@@ -22,7 +22,7 @@ type flowNode struct {
 	Type   string  `json:"type"`
 	Label  string  `json:"label"`
 	Prompt string  `json:"prompt,omitempty"`
-	FlowID int64 `json:"flow_id,omitempty"`
+	FlowID int64   `json:"flow_id,omitempty"`
 	X      float64 `json:"x"`
 	Y      float64 `json:"y"`
 }
@@ -83,7 +83,9 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		}
 		if n.Type == "flow" {
 			calls++
-			if n.FlowID<=0 || n.Prompt!="" { return g,nil,fmt.Errorf("subflow node needs a flow_id and no inline prompt") }
+			if n.FlowID <= 0 || n.Prompt != "" {
+				return g, nil, fmt.Errorf("subflow node needs a flow_id and no inline prompt")
+			}
 		}
 		if n.Type == "agent" {
 			agents++
@@ -289,14 +291,18 @@ func (e *Engine) launchFlow(f storage.AgentFlow, trigger string) error {
 	return nil
 }
 func (e *Engine) executeFlow(ctx context.Context, f storage.AgentFlow) (string, error) {
-	return e.executeFlowNested(ctx,f,map[int64]bool{},0)
+	return e.executeFlowNested(ctx, f, map[int64]bool{}, 0)
 }
 
-func (e *Engine) executeFlowNested(ctx context.Context,f storage.AgentFlow,parents map[int64]bool,depth int)(string,error){
-	if depth>=4{return "",fmt.Errorf("maximum subflow depth reached")}
-	if parents[f.ID]{return "",fmt.Errorf("recursive flow call blocked: %d",f.ID)}
-	parents[f.ID]=true
-	defer delete(parents,f.ID)
+func (e *Engine) executeFlowNested(ctx context.Context, f storage.AgentFlow, parents map[int64]bool, depth int) (string, error) {
+	if depth >= 4 {
+		return "", fmt.Errorf("maximum subflow depth reached")
+	}
+	if parents[f.ID] {
+		return "", fmt.Errorf("recursive flow call blocked: %d", f.ID)
+	}
+	parents[f.ID] = true
+	defer delete(parents, f.ID)
 	g, order, err := validateFlow(f)
 	if err != nil {
 		return "", err
@@ -316,14 +322,20 @@ func (e *Engine) executeFlowNested(ctx context.Context,f storage.AgentFlow,paren
 		if n.Type == "trigger" {
 			continue
 		}
-		if n.Type=="flow" {
-			child,err:=e.db.GetAgentFlow(ctx,n.FlowID)
-			if err!=nil{return "",fmt.Errorf("subflow %d unavailable: %w",n.FlowID,err)}
-			output,err:=e.executeFlowNested(ctx,child,parents,depth+1)
-			if err!=nil{return "",fmt.Errorf("subflow %d failed: %w",n.FlowID,err)}
-			if len(output)>6000 {output=output[:6000]}
-			previous=output
-			results=append(results,map[string]string{"node":n.ID,"label":n.Label,"output":output})
+		if n.Type == "flow" {
+			child, err := e.db.GetAgentFlow(ctx, n.FlowID)
+			if err != nil {
+				return "", fmt.Errorf("subflow %d unavailable: %w", n.FlowID, err)
+			}
+			output, err := e.executeFlowNested(ctx, child, parents, depth+1)
+			if err != nil {
+				return "", fmt.Errorf("subflow %d failed: %w", n.FlowID, err)
+			}
+			if len(output) > 6000 {
+				output = output[:6000]
+			}
+			previous = output
+			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": output})
 			continue
 		}
 		prompt := n.Prompt
