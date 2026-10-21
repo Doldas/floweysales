@@ -10,7 +10,7 @@ import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angu
 import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'; label:string; variable?:string; transform?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'; label:string; variable?:string; transform?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FlowGraph { nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
@@ -153,6 +153,12 @@ export class ConfirmDeleteFlowDialog {
        }
        @if(n.type==='workspace_read'||n.type==='workspace_write'){
         <label>Userspace path <input [ngModel]="n.value||''" (ngModelChange)="updateUtility('value',$event)" maxlength="512" placeholder="/research/summary.md"></label>
+        @if(n.type==='workspace_write'){
+         <label>File format <select [ngModel]="n.content_type||'text/plain'" (ngModelChange)="updateUtility('content_type',$event)">
+          <option value="text/plain">Plain text (.txt)</option><option value="text/markdown">Markdown (.md)</option>
+          <option value="application/json">JSON (.json)</option><option value="text/csv">CSV (.csv)</option>
+         </select></label>
+        }
         <p class="muted">Uses the flow owner's private userspace. Write File saves the previous result; Read File loads its contents.</p>
        }
        @if(n.type==='function'){
@@ -301,10 +307,10 @@ export class FlowStudioComponent {
    const count=this.graph().nodes.length;
    const id=type+'-'+Date.now().toString(36);
    const label=type==='save_result'?'Save Result':type==='load_result'?'Load Result':type==='workspace_read'?'Read File':type==='workspace_write'?'Write File':'Transform Text';
-   this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type,label,variable:'summary',transform:'trim',value:type==='workspace_read'||type==='workspace_write'?'/research/summary.md':'',x:260+(count%4)*140,y:40+Math.floor(count/4)*100}]}));
+   this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type,label,variable:'summary',transform:'trim',content_type:'text/plain',value:type==='workspace_read'||type==='workspace_write'?'/research/summary.md':'',x:260+(count%4)*140,y:40+Math.floor(count/4)*100}]}));
    this.chosen.set(id);
  }
- updateUtility(field:'variable'|'transform'|'value',value:string){
+ updateUtility(field:'variable'|'transform'|'value'|'content_type',value:string){
    this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,[field]:value}:n)}));
  }
  formattedRunJSON(raw:string):string{
