@@ -18,21 +18,21 @@ import (
 )
 
 type flowNode struct {
-	ID     string  `json:"id"`
-	Type   string  `json:"type"`
-	Label  string  `json:"label"`
-	Prompt string  `json:"prompt,omitempty"`
-	FlowID int64   `json:"flow_id,omitempty"`
-	ValueType string `json:"value_type,omitempty"`
-	Value string `json:"value,omitempty"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
+	ID        string  `json:"id"`
+	Type      string  `json:"type"`
+	Label     string  `json:"label"`
+	Prompt    string  `json:"prompt,omitempty"`
+	FlowID    int64   `json:"flow_id,omitempty"`
+	ValueType string  `json:"value_type,omitempty"`
+	Value     string  `json:"value,omitempty"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
 }
 type flowEdge struct {
-	From string `json:"from"`
-	To   string `json:"to"`
+	From     string `json:"from"`
+	To       string `json:"to"`
 	FromPort string `json:"from_port,omitempty"`
-	ToPort string `json:"to_port,omitempty"`
+	ToPort   string `json:"to_port,omitempty"`
 }
 type flowGraph struct {
 	Nodes []flowNode `json:"nodes"`
@@ -94,15 +94,25 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		}
 		if n.Type == "constant" {
 			constants++
-			if n.ValueType!="text" && n.ValueType!="number" && n.ValueType!="boolean" {return g,nil,fmt.Errorf("constant requires text, number or boolean type")}
-			if len(n.Value)>2000 {return g,nil,fmt.Errorf("constant value too large")}
+			if n.ValueType != "text" && n.ValueType != "number" && n.ValueType != "boolean" {
+				return g, nil, fmt.Errorf("constant requires text, number or boolean type")
+			}
+			if len(n.Value) > 2000 {
+				return g, nil, fmt.Errorf("constant value too large")
+			}
 			switch n.ValueType {
 			case "number":
 				var value json.Number
-				if err:=json.Unmarshal([]byte(n.Value),&value);err!=nil{return g,nil,fmt.Errorf("invalid number constant")}
-				if _,err:=value.Float64();err!=nil{return g,nil,fmt.Errorf("invalid number constant")}
+				if err := json.Unmarshal([]byte(n.Value), &value); err != nil {
+					return g, nil, fmt.Errorf("invalid number constant")
+				}
+				if _, err := value.Float64(); err != nil {
+					return g, nil, fmt.Errorf("invalid number constant")
+				}
 			case "boolean":
-				if n.Value!="true" && n.Value!="false" {return g,nil,fmt.Errorf("invalid boolean constant")}
+				if n.Value != "true" && n.Value != "false" {
+					return g, nil, fmt.Errorf("invalid boolean constant")
+				}
 			}
 		}
 		if n.Type == "agent" {
@@ -125,11 +135,19 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		if from.Type == "agent" && edge.To == edge.From {
 			return g, nil, fmt.Errorf("cycle")
 		}
-		if edge.FromPort!="" || edge.ToPort!="" {
-			if edge.FromPort!="value" || edge.ToPort!="input" {return g,nil,fmt.Errorf("only value-to-input data links supported")}
-			if from.Type=="trigger" {return g,nil,fmt.Errorf("trigger has no value output")}
-			if nodes[edge.To].Type=="trigger" || nodes[edge.To].Type=="constant" {return g,nil,fmt.Errorf("target has no input port")}
-			if from.Type=="constant" && from.ValueType!="text" {return g,nil,fmt.Errorf("agent inputs require text values; use an explicit conversion node")}
+		if edge.FromPort != "" || edge.ToPort != "" {
+			if edge.FromPort != "value" || edge.ToPort != "input" {
+				return g, nil, fmt.Errorf("only value-to-input data links supported")
+			}
+			if from.Type == "trigger" {
+				return g, nil, fmt.Errorf("trigger has no value output")
+			}
+			if nodes[edge.To].Type == "trigger" || nodes[edge.To].Type == "constant" {
+				return g, nil, fmt.Errorf("target has no input port")
+			}
+			if from.Type == "constant" && from.ValueType != "text" {
+				return g, nil, fmt.Errorf("agent inputs require text values; use an explicit conversion node")
+			}
 		}
 		degrees[edge.To]++
 		next[edge.From] = append(next[edge.From], edge.To)
@@ -346,9 +364,9 @@ func (e *Engine) executeFlowNested(ctx context.Context, f storage.AgentFlow, par
 		if n.Type == "trigger" {
 			continue
 		}
-		if n.Type=="constant" {
-			previous=n.Value
-			results=append(results,map[string]string{"node":n.ID,"label":n.Label,"output":previous})
+		if n.Type == "constant" {
+			previous = n.Value
+			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous})
 			continue
 		}
 		if n.Type == "flow" {
