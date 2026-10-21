@@ -278,6 +278,7 @@ func (e *Engine) registerFlowRoutes() {
 		} else {
 			var value string
 			if json.Unmarshal(payload.Value,&value)!=nil||len(value)>2000 {writeJSON(w,400,map[string]string{"error":"Event expects a text value"});return}
+			eventInput=value
 		}
 		flows, err := e.db.FindEventAgentFlows(r.Context(), key)
 		if err != nil {
