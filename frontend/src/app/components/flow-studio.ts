@@ -5,7 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 
-interface FlowNode { id:string; type:'trigger'|'agent'; label:string; prompt?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'; label:string; prompt?:string; flow_id?:number; x:number; y:number }
 interface FlowEdge { from:string; to:string }
 interface FlowGraph { nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
@@ -24,6 +24,7 @@ interface FlowRun { id:number; trigger:string; status:string; output:string; err
      <label>Saved flows <select [ngModel]="selectedId()" (ngModelChange)="loadFlow(+$event)"><option [ngValue]="0">New flow</option>@for(f of flows();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
      <button mat-stroked-button (click)="newFlow()">New</button>
      <button mat-stroked-button (click)="addAgent()">+ Agent</button>
+     <button mat-stroked-button (click)="addSubflow()">+ Call Flow</button>
      <button mat-stroked-button (click)="linkSelected()" [disabled]="!selectedNode()||graph().nodes.length<3">Connect to…</button>
      <button mat-stroked-button (click)="removeSelected()" [disabled]="!selectedNode()||selectedNode()?.type==='trigger'">Remove node</button>
    </div>
@@ -47,7 +48,7 @@ interface FlowRun { id:number; trigger:string; status:string; output:string; err
          <rect [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="12"
            [attr.fill]="n.id===selectedNode()?.id?'#244970':'#1c2a3b'"
            [attr.stroke]="n.id===selectedNode()?.id?'#94caff':'#607993'" stroke-width="2"/>
-         <text [attr.x]="n.x+12" [attr.y]="n.y+24" fill="#dceaf8" font-size="13">{{n.type==='trigger'?'⏱ TRIGGER':'✦ AGENT'}}</text>
+         <text [attr.x]="n.x+12" [attr.y]="n.y+24" fill="#dceaf8" font-size="13">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':'✦ AGENT'}}</text>
          <text [attr.x]="n.x+12" [attr.y]="n.y+48" fill="#dceaf8" font-size="12">{{n.label.slice(0,16)}}</text>
        </g>
      }
@@ -60,6 +61,10 @@ interface FlowRun { id:number; trigger:string; status:string; output:string; err
         <label>Research instructions<textarea rows="3" [ngModel]="n.prompt" (ngModelChange)="updateNode('prompt',$event)" maxlength="2000"></textarea></label>
         <label>Connect from <select #source><option value="">Select parent</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id){<option [value]="other.id">{{other.label}}</option>}}</select></label>
         <button mat-stroked-button (click)="connect(source.value,n.id)">Create connection</button>
+       }
+       @if(n.type==='flow'){
+         <label>Reusable flow to call <select [ngModel]="n.flow_id||0" (ngModelChange)="updateFlowReference(+$event)"><option [ngValue]="0">Choose target flow</option>@for(f of flows();track f.id){@if(f.id!==selectedId()){<option [ngValue]="f.id">{{f.name}} (#{{f.id}})</option>}}</select></label>
+         <p class="muted">Runs the selected graph as a function. Recursion is blocked and nesting is limited to 4 levels.</p>
        }
      </div>
    }
@@ -117,6 +122,8 @@ export class FlowStudioComponent {
  newFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.runs.set([]);this.message.set('')}
  loadFlow(id:number){const f=this.flows().find(x=>x.id===id);if(!f){this.newFlow();return}
   this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');void this.refreshRuns()}
+ addSubflow(){const n=this.graph().nodes;const id='flow-'+Date.now().toString(36);this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'flow',label:'Call flow',flow_id:0,x:260+(n.length%4)*140,y:40+Math.floor(n.length/4)*100}]}));this.chosen.set(id)}
+ updateFlowReference(target:number){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,flow_id:target}:n)}))}
  addAgent(){const n=this.graph().nodes;const id='agent-'+Date.now().toString(36);const x=260+(n.length%4)*140,y=40+Math.floor(n.length/4)*100;this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'agent',label:'Research agent',prompt:'Analyze the evidence and summarize findings.',x,y}]}));this.chosen.set(id)}
  updateNode(field:'label'|'prompt',value:string){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,[field]:value}:n)}))}
  connect(from:string,to:string){if(!from||from===to||this.graph().edges.some(e=>e.from===from&&e.to===to))return;
