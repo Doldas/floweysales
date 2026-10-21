@@ -200,6 +200,11 @@ export class App {
 
   constructor() {
     void this.auth.check();
+    effect(() => {
+      if (this.auth.ready() && this.auth.enabled() && this.auth.user()?.role !== 'SYS_ADMIN' && this.workspace() === 'studio') {
+        this.openWorkspace('market');
+      }
+    });
     // Persist indicator toggles across sessions.
     effect(() => saveIndicatorFlags(this.indicators()));
 
