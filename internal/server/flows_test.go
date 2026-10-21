@@ -53,11 +53,17 @@ func TestFlowGraphValidation(t *testing.T) {
 }
 
 func TestFlowGraphAcceptsSafeSubflowReferences(t *testing.T) {
- f:=storage.AgentFlow{Name:"Parent research",Graph:json.RawMessage(`{"nodes":[{"id":"trigger","type":"trigger"},{"id":"child","type":"flow","label":"Reusable function","flow_id":123}],"edges":[{"from":"trigger","to":"child"}]}`)}
- _,order,err:=validateFlow(f)
- if err!=nil||len(order)!=2{t.Fatalf("valid subflow graph rejected: %v %v",order,err)}
- f.Graph=json.RawMessage(`{"nodes":[{"id":"trigger","type":"trigger"},{"id":"child","type":"flow","flow_id":0}],"edges":[{"from":"trigger","to":"child"}]}`)
- if _,_,err:=validateFlow(f);err==nil{t.Fatal("zero subflow ID accepted")}
- f.Graph=json.RawMessage(`{"nodes":[{"id":"trigger","type":"trigger"},{"id":"child","type":"flow","flow_id":123,"prompt":"arbitrary code"}],"edges":[{"from":"trigger","to":"child"}]}`)
- if _,_,err:=validateFlow(f);err==nil{t.Fatal("executable prompt on subflow accepted")}
+	f := storage.AgentFlow{Name: "Parent research", Graph: json.RawMessage(`{"nodes":[{"id":"trigger","type":"trigger"},{"id":"child","type":"flow","label":"Reusable function","flow_id":123}],"edges":[{"from":"trigger","to":"child"}]}`)}
+	_, order, err := validateFlow(f)
+	if err != nil || len(order) != 2 {
+		t.Fatalf("valid subflow graph rejected: %v %v", order, err)
+	}
+	f.Graph = json.RawMessage(`{"nodes":[{"id":"trigger","type":"trigger"},{"id":"child","type":"flow","flow_id":0}],"edges":[{"from":"trigger","to":"child"}]}`)
+	if _, _, err := validateFlow(f); err == nil {
+		t.Fatal("zero subflow ID accepted")
+	}
+	f.Graph = json.RawMessage(`{"nodes":[{"id":"trigger","type":"trigger"},{"id":"child","type":"flow","flow_id":123,"prompt":"arbitrary code"}],"edges":[{"from":"trigger","to":"child"}]}`)
+	if _, _, err := validateFlow(f); err == nil {
+		t.Fatal("executable prompt on subflow accepted")
+	}
 }
