@@ -41,6 +41,10 @@
 
 <main class="container terminal-container" id="main-content">
 
+  @if (auth.enabled() && auth.user()?.role === "SYS_ADMIN") {
+    <fse-flow-studio></fse-flow-studio>
+  }
+
   <!-- ASSET CONTROL BAR -->
   <mat-card class="glass control-card">
     <mat-card-content class="control-row">
