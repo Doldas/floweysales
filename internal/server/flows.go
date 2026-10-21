@@ -286,7 +286,7 @@ func (e *Engine) registerFlowRoutes() {
 		}
 		count := 0
 		for _, f := range flows {
-			if e.launchFlow(f, "event") == nil {
+			if e.launchFlowWithInput(f, "event", string(payload.Value)) == nil {
 				count++
 			}
 		}
@@ -328,6 +328,9 @@ func (e *Engine) saveFlow(w http.ResponseWriter, r *http.Request, id int64) {
 // launchFlow is deliberately bounded and never executes trading or external
 // write tools. Agent nodes use the existing read-only AI engine and budgets.
 func (e *Engine) launchFlow(f storage.AgentFlow, trigger string) error {
+	return e.launchFlowWithInput(f,trigger,"")
+}
+func (e *Engine) launchFlowWithInput(f storage.AgentFlow, trigger, input string) error {
 	select {
 	case e.flowSlots <- struct{}{}:
 	default:
@@ -342,7 +345,7 @@ func (e *Engine) launchFlow(f storage.AgentFlow, trigger string) error {
 			log.Printf("[Flows] Could not create run: %v", err)
 			return
 		}
-		output, runErr := e.executeFlow(ctx, f)
+		output, runErr := e.executeFlowNestedWithInput(ctx,f,map[int64]bool{},0,input)
 		finishCtx, finishCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer finishCancel()
 		if err := e.db.FinishAgentFlowRun(finishCtx, id, output, runErr); err != nil {
@@ -356,6 +359,9 @@ func (e *Engine) executeFlow(ctx context.Context, f storage.AgentFlow) (string, 
 }
 
 func (e *Engine) executeFlowNested(ctx context.Context, f storage.AgentFlow, parents map[int64]bool, depth int) (string, error) {
+	return e.executeFlowNestedWithInput(ctx,f,parents,depth,"")
+}
+func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.AgentFlow, parents map[int64]bool, depth int,input string) (string, error) {
 	if depth >= 4 {
 		return "", fmt.Errorf("maximum subflow depth reached")
 	}
@@ -374,7 +380,7 @@ func (e *Engine) executeFlowNested(ctx context.Context, f storage.AgentFlow, par
 	}
 	base, key, model := e.aiDefaults()
 	
-	previous := ""
+	previous := input
 	results := []map[string]string{}
 	for _, id := range order {
 		n := nodes[id]
@@ -406,7 +412,7 @@ func (e *Engine) executeFlowNested(ctx context.Context, f storage.AgentFlow, par
 			if err != nil {
 				return "", fmt.Errorf("subflow %d unavailable: %w", n.FlowID, err)
 			}
-			output, err := e.executeFlowNested(ctx, child, parents, depth+1)
+			output, err := e.executeFlowNestedWithInput(ctx, child, parents, depth+1,previous)
 			if err != nil {
 				return "", fmt.Errorf("subflow %d failed: %w", n.FlowID, err)
 			}
