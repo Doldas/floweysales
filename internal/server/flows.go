@@ -18,17 +18,21 @@ import (
 )
 
 type flowNode struct {
-	ID     string  `json:"id"`
-	Type   string  `json:"type"`
-	Label  string  `json:"label"`
-	Prompt string  `json:"prompt,omitempty"`
-	FlowID int64   `json:"flow_id,omitempty"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
+	ID        string  `json:"id"`
+	Type      string  `json:"type"`
+	Label     string  `json:"label"`
+	Prompt    string  `json:"prompt,omitempty"`
+	FlowID    int64   `json:"flow_id,omitempty"`
+	ValueType string  `json:"value_type,omitempty"`
+	Value     string  `json:"value,omitempty"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
 }
 type flowEdge struct {
-	From string `json:"from"`
-	To   string `json:"to"`
+	From     string `json:"from"`
+	To       string `json:"to"`
+	FromPort string `json:"from_port,omitempty"`
+	ToPort   string `json:"to_port,omitempty"`
 }
 type flowGraph struct {
 	Nodes []flowNode `json:"nodes"`
@@ -65,6 +69,7 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 	starts := 0
 	agents := 0
 	calls := 0
+	constants := 0
 	for _, n := range g.Nodes {
 		if len(n.ID) < 1 || len(n.ID) > 48 || len(n.Label) > 100 {
 			return g, nil, fmt.Errorf("invalid node ID or label")
@@ -72,8 +77,8 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		if _, ok := nodes[n.ID]; ok {
 			return g, nil, fmt.Errorf("duplicate node")
 		}
-		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" {
-			return g, nil, fmt.Errorf("only trigger, research agent and subflow nodes are allowed")
+		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" {
+			return g, nil, fmt.Errorf("only trigger, research agent, constant and subflow nodes are allowed")
 		}
 		if n.Type == "trigger" {
 			starts++
@@ -87,6 +92,29 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 				return g, nil, fmt.Errorf("subflow node needs a flow_id and no inline prompt")
 			}
 		}
+		if n.Type == "constant" {
+			constants++
+			if n.ValueType != "text" && n.ValueType != "number" && n.ValueType != "boolean" {
+				return g, nil, fmt.Errorf("constant requires text, number or boolean type")
+			}
+			if len(n.Value) > 2000 {
+				return g, nil, fmt.Errorf("constant value too large")
+			}
+			switch n.ValueType {
+			case "number":
+				var value json.Number
+				if err := json.Unmarshal([]byte(n.Value), &value); err != nil {
+					return g, nil, fmt.Errorf("invalid number constant")
+				}
+				if _, err := value.Float64(); err != nil {
+					return g, nil, fmt.Errorf("invalid number constant")
+				}
+			case "boolean":
+				if n.Value != "true" && n.Value != "false" {
+					return g, nil, fmt.Errorf("invalid boolean constant")
+				}
+			}
+		}
 		if n.Type == "agent" {
 			agents++
 			if len(strings.TrimSpace(n.Prompt)) < 5 || len(n.Prompt) > 2000 {
@@ -95,8 +123,8 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		}
 		nodes[n.ID] = n
 	}
-	if starts != 1 || agents+calls == 0 {
-		return g, nil, fmt.Errorf("flow needs exactly one trigger and at least one agent or subflow")
+	if starts != 1 || agents+calls+constants == 0 {
+		return g, nil, fmt.Errorf("flow needs exactly one trigger and at least one executable node")
 	}
 	for _, edge := range g.Edges {
 		from, okFrom := nodes[edge.From]
@@ -106,6 +134,20 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		}
 		if from.Type == "agent" && edge.To == edge.From {
 			return g, nil, fmt.Errorf("cycle")
+		}
+		if edge.FromPort != "" || edge.ToPort != "" {
+			if edge.FromPort != "value" || edge.ToPort != "input" {
+				return g, nil, fmt.Errorf("only value-to-input data links supported")
+			}
+			if from.Type == "trigger" {
+				return g, nil, fmt.Errorf("trigger has no value output")
+			}
+			if nodes[edge.To].Type == "trigger" || nodes[edge.To].Type == "constant" {
+				return g, nil, fmt.Errorf("target has no input port")
+			}
+			if from.Type == "constant" && from.ValueType != "text" {
+				return g, nil, fmt.Errorf("agent inputs require text values; use an explicit conversion node")
+			}
 		}
 		degrees[edge.To]++
 		next[edge.From] = append(next[edge.From], edge.To)
@@ -320,6 +362,11 @@ func (e *Engine) executeFlowNested(ctx context.Context, f storage.AgentFlow, par
 	for _, id := range order {
 		n := nodes[id]
 		if n.Type == "trigger" {
+			continue
+		}
+		if n.Type == "constant" {
+			previous = n.Value
+			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous})
 			continue
 		}
 		if n.Type == "flow" {

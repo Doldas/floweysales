@@ -67,3 +67,25 @@ func TestFlowGraphAcceptsSafeSubflowReferences(t *testing.T) {
 		t.Fatal("executable prompt on subflow accepted")
 	}
 }
+
+func TestBlueprintTypedConstantConnections(t *testing.T) {
+	cases := []struct {
+		name, graph string
+		ok          bool
+	}{
+		{"text to agent", `{"nodes":[{"id":"start","type":"trigger"},{"id":"value","type":"constant","value_type":"text","value":"Explain AAPL risk"},{"id":"agent","type":"agent","prompt":"Summarize the given research"}],"edges":[{"from":"start","to":"value"},{"from":"value","to":"agent","from_port":"value","to_port":"input"}]}`, true},
+		{"number to text rejected", `{"nodes":[{"id":"start","type":"trigger"},{"id":"value","type":"constant","value_type":"number","value":"42"},{"id":"agent","type":"agent","prompt":"Summarize the given research"}],"edges":[{"from":"start","to":"value"},{"from":"value","to":"agent","from_port":"value","to_port":"input"}]}`, false},
+		{"invalid number", `{"nodes":[{"id":"start","type":"trigger"},{"id":"value","type":"constant","value_type":"number","value":"hello"}],"edges":[{"from":"start","to":"value"}]}`, false},
+		{"invalid boolean", `{"nodes":[{"id":"start","type":"trigger"},{"id":"value","type":"constant","value_type":"boolean","value":"maybe"}],"edges":[{"from":"start","to":"value"}]}`, false},
+		{"unknown port", `{"nodes":[{"id":"start","type":"trigger"},{"id":"value","type":"constant","value_type":"text","value":"Research"},{"id":"agent","type":"agent","prompt":"Summarize the given research"}],"edges":[{"from":"start","to":"value"},{"from":"value","to":"agent","from_port":"unknown","to_port":"input"}]}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := storage.AgentFlow{Name: "Typed pins", Graph: json.RawMessage(tc.graph)}
+			_, _, err := validateFlow(f)
+			if (err == nil) != tc.ok {
+				t.Fatalf("expected valid=%v got %v", tc.ok, err)
+			}
+		})
+	}
+}
