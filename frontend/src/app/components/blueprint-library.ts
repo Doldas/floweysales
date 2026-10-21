@@ -23,8 +23,19 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
   <button mat-stroked-button (click)="add('operation')">+ Operation</button>
  </div>
  <div class="blueprint-layout">
- <div class="canvas">
-  <svg viewBox="0 0 850 340">
+ <div class="canvas-shell">
+    <div class="canvas-navigation" aria-label="Canvas navigation">
+      <button type="button" (click)="panCanvas(-80,0)" aria-label="Pan left">←</button>
+      <button type="button" (click)="panCanvas(0,-80)" aria-label="Pan up">↑</button>
+      <button type="button" (click)="panCanvas(0,80)" aria-label="Pan down">↓</button>
+      <button type="button" (click)="panCanvas(80,0)" aria-label="Pan right">→</button>
+      <button type="button" (click)="zoomCanvas(0.8)" aria-label="Zoom in">＋</button>
+      <span>{{ canvasZoomPercent() }}%</span>
+      <button type="button" (click)="zoomCanvas(1.25)" aria-label="Zoom out">－</button>
+      <button type="button" (click)="resetCanvas()" aria-label="Reset canvas view">Reset view</button>
+    </div>
+    <div class="canvas">
+  <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (contextmenu)="onCanvasContextMenu($event)">
    <defs><marker id="fn-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#7ebdf2"/></marker></defs>
    @for(e of edges();track e.from+e.to+e.to_port){
     <line [attr.x1]="node(e.from)?.x!+120" [attr.y1]="node(e.from)?.y!+25"
@@ -38,6 +49,13 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
     </g>
    }
   </svg>
+ </div>
+ @if(canvasMenu()){<div class="canvas-context-menu" role="menu" aria-label="Create node">
+ <strong>Add node</strong>
+ <button type="button" role="menuitem" (click)="add('constant');closeCanvasMenu()">Constant</button>
+ <button type="button" role="menuitem" (click)="add('operation');closeCanvasMenu()">Operation</button>
+ <button type="button" (click)="closeCanvasMenu()">Cancel</button>
+ </div>}
  </div>
  <aside class="panel" aria-label="Function node details">
   <header class="inspector-heading"><span>DETAILS</span><strong>{{ selectedNode()?.id || 'No node selected' }}</strong></header>
@@ -69,7 +87,14 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
  <div class="triggers">@for(t of triggers();track t.id){<span>{{t.event_key}} · {{t.payload_type}}</span>}</div>
  @if(status()){<p role="status">{{status()}}</p>}
  </mat-card>`,
- styles:[`:host{display:block;margin-top:22px}.lib{padding:18px}.toolbar,.panel,.triggers{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}.panel{padding:16px;border:1px solid #50738e;border-radius:8px;align-content:start;background:#142438;min-width:0;max-height:min(75vh,780px);overflow-y:auto;display:flex;flex-direction:column;align-items:stretch}
+ styles:[`
+ .canvas-shell{position:relative;min-width:0;min-height:0}
+ .canvas-navigation{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:8px;background:#14263a;border:1px solid #45627b;border-radius:8px 8px 0 0}
+ .canvas-navigation button,.canvas-context-menu button{background:#203a53;color:#e5f3ff;border:1px solid #527b99;border-radius:5px;min-height:34px;padding:6px 10px;cursor:pointer}
+ .canvas-navigation button:focus-visible,.canvas-context-menu button:focus-visible{outline:2px solid #80caff}
+ .canvas-navigation span{min-width:48px;text-align:center;font-variant-numeric:tabular-nums}
+ .canvas-context-menu{position:absolute;top:55px;left:16px;z-index:5;display:flex;flex-direction:column;gap:6px;min-width:180px;padding:12px;background:#15283d;border:1px solid #77b9e9;border-radius:10px;box-shadow:0 10px 35px #0008}
+ :host{display:block;margin-top:22px}.lib{padding:18px}.toolbar,.panel,.triggers{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}.panel{padding:16px;border:1px solid #50738e;border-radius:8px;align-content:start;background:#142438;min-width:0;max-height:min(75vh,780px);overflow-y:auto;display:flex;flex-direction:column;align-items:stretch}
  .blueprint-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(270px,315px);gap:12px;align-items:stretch}
  .blueprint-layout .canvas{min-width:0;min-height:440px}
  .inspector-heading{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid #50738e;padding-bottom:12px}
@@ -79,6 +104,34 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
 .panel strong{width:100%}label{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}input,select{background:#14263a;color:#ecf6ff;border:1px solid #68859b;border-radius:6px;padding:8px}.canvas{overflow:auto;border:1px solid #45627b;background:#102032;border-radius:8px}svg{display:block;min-width:650px;width:100%;height:auto}.triggers span{padding:8px;border:1px solid #50738e;border-radius:12px}`]
 })
 export class BlueprintLibraryComponent {
+ readonly canvasView = signal({ x: 0, y: 0, width: 850, height: 340 });
+ readonly canvasMenu = signal(false);
+ readonly canvasViewBox = () => {
+   const v = this.canvasView();
+   return `${v.x} ${v.y} ${v.width} ${v.height}`;
+ };
+ readonly canvasZoomPercent = () => Math.round(850 / this.canvasView().width * 100);
+ zoomCanvas(factor: number): void {
+   const v = this.canvasView();
+   const width = Math.max(850 / 3, Math.min(850 * 4, v.width * factor));
+   const height = width * 340 / 850;
+   this.canvasView.set({ x: v.x + (v.width - width) / 2, y: v.y + (v.height - height) / 2, width, height });
+ }
+ panCanvas(dx: number, dy: number): void {
+   this.canvasView.update(v => ({ ...v, x: v.x + dx * v.width / 850, y: v.y + dy * v.height / 340 }));
+ }
+ resetCanvas(): void { this.canvasView.set({ x: 0, y: 0, width: 850, height: 340 }); this.closeCanvasMenu(); }
+ onCanvasWheel(event: WheelEvent): void {
+   if (!event.ctrlKey && !event.metaKey) return;
+   event.preventDefault();
+   this.zoomCanvas(event.deltaY < 0 ? 0.9 : 1.1);
+ }
+ onCanvasContextMenu(event: MouseEvent): void {
+   event.preventDefault();
+   this.canvasMenu.set(true);
+ }
+ closeCanvasMenu(): void { this.canvasMenu.set(false); }
+
  @Output() functionsChanged=new EventEmitter<void>();
  readonly operations=['add','subtract','multiply','divide','greater','less','equal','and','or','not','if','to_text'];
  readonly functions=signal<Definition[]>([]);
