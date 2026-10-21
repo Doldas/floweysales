@@ -85,6 +85,8 @@ async function testViewport(name, width, height, role = 'SYS_ADMIN') {
       check('inactive chart workspace hidden', !(await page.locator('.chart-card').isVisible()));
       const grid = await page.locator('.grid').evaluate(el => getComputedStyle(el).gridTemplateColumns);
       await page.getByRole('tab', { name: 'Charts' }).click();
+      await page.waitForFunction(() => document.getElementById('workspace-tab-charts')?.getAttribute('aria-selected') === 'true');
+      await page.locator('.chart-card').waitFor({ state: 'visible' });
       check('chart workspace selected', await page.getByRole('tab', { name: 'Charts' }).getAttribute('aria-selected') === 'true');
       const chartCard = page.locator('.chart-card');
       check('.chart-card displayed', await chartCard.isVisible());
@@ -94,12 +96,16 @@ async function testViewport(name, width, height, role = 'SYS_ADMIN') {
       const chart = await page.locator('.chart-container').boundingBox();
       if (width <= 700) check('mobile chart height fits', !!chart && chart.height <= 280, JSON.stringify({ grid, chartHeight: chart?.height }));
       await page.getByRole('tab', { name: 'Ledger' }).click();
+      await page.waitForFunction(() => document.getElementById('workspace-tab-ledger')?.getAttribute('aria-selected') === 'true');
+      await page.locator('.ledger-card').waitFor({ state: 'visible' });
       const ledgerCard = page.locator('.ledger-card');
       check('.ledger-card displayed', await ledgerCard.isVisible());
       const ledgerBox = await ledgerCard.boundingBox();
       check('.ledger-card fits horizontally', !!ledgerBox && ledgerBox.x >= -2 && ledgerBox.x + ledgerBox.width <= width + 2,
         JSON.stringify(ledgerBox));
       await page.getByRole('tab', { name: 'AI Assistant' }).click();
+      await page.waitForFunction(() => document.getElementById('workspace-tab-assistant')?.getAttribute('aria-selected') === 'true');
+      await page.locator('.ai-launcher').waitFor({ state: 'visible' });
       const launcher = page.locator('.ai-launcher');
       check('AI launcher available', await launcher.isVisible());
       if (await launcher.isVisible()) {
