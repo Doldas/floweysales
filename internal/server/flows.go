@@ -201,7 +201,6 @@ func (e *Engine) flowAdmin(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 func (e *Engine) registerFlowRoutes() {
-	e.registerBlueprintRoutes()
 	e.mux.HandleFunc("GET /api/admin/flows", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {
 			return
