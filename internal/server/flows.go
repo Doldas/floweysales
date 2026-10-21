@@ -119,11 +119,15 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 			return g, nil, fmt.Errorf("only trigger, research agent, constant and subflow nodes are allowed")
 		}
 		if n.Type == "workspace_read" || n.Type == "workspace_write" {
-            utilities++
-            if _,err:=storage.CleanUserspacePath(n.Value);err!=nil{return g,nil,fmt.Errorf("invalid workspace file path: %w",err)}
-            if n.Prompt!="" || n.FlowID!=0 || n.FunctionID!=0{return g,nil,fmt.Errorf("workspace nodes cannot call agents")}
-        }
-        if n.Type == "save_result" || n.Type == "load_result" || n.Type == "transform" {
+			utilities++
+			if _, err := storage.CleanUserspacePath(n.Value); err != nil {
+				return g, nil, fmt.Errorf("invalid workspace file path: %w", err)
+			}
+			if n.Prompt != "" || n.FlowID != 0 || n.FunctionID != 0 {
+				return g, nil, fmt.Errorf("workspace nodes cannot call agents")
+			}
+		}
+		if n.Type == "save_result" || n.Type == "load_result" || n.Type == "transform" {
 			utilities++
 			if n.Prompt != "" || n.FlowID != 0 || n.FunctionID != 0 {
 				return g, nil, fmt.Errorf("utility nodes cannot call agents or functions")
@@ -488,22 +492,28 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 		if n.Type == "trigger" {
 			continue
 		}
-        if n.Type=="workspace_read" || n.Type=="workspace_write" {
-            if workspaceOwner==0 {
-                var ownerErr error
-                workspaceOwner,ownerErr=e.db.FlowOwner(ctx,f.ID)
-                if ownerErr!=nil {return "",fmt.Errorf("flow workspace owner unavailable: %w",ownerErr)}
-            }
-            if n.Type=="workspace_write" {
-                if err:=e.db.WriteUserspaceFile(ctx,workspaceOwner,n.Value,"text/plain; charset=utf-8",[]byte(previous));err!=nil{return "",fmt.Errorf("workspace write %s: %w",n.Value,err)}
-            } else {
-                content,_,err:=e.db.ReadUserspaceFile(ctx,workspaceOwner,n.Value)
-                if err!=nil{return "",fmt.Errorf("workspace read %s: %w",n.Value,err)}
-                previous=string(content)
-            }
-            results=append(results,map[string]string{"node":n.ID,"label":n.Label,"output":previous,"file":n.Value})
-            continue
-        }
+		if n.Type == "workspace_read" || n.Type == "workspace_write" {
+			if workspaceOwner == 0 {
+				var ownerErr error
+				workspaceOwner, ownerErr = e.db.FlowOwner(ctx, f.ID)
+				if ownerErr != nil {
+					return "", fmt.Errorf("flow workspace owner unavailable: %w", ownerErr)
+				}
+			}
+			if n.Type == "workspace_write" {
+				if err := e.db.WriteUserspaceFile(ctx, workspaceOwner, n.Value, "text/plain; charset=utf-8", []byte(previous)); err != nil {
+					return "", fmt.Errorf("workspace write %s: %w", n.Value, err)
+				}
+			} else {
+				content, _, err := e.db.ReadUserspaceFile(ctx, workspaceOwner, n.Value)
+				if err != nil {
+					return "", fmt.Errorf("workspace read %s: %w", n.Value, err)
+				}
+				previous = string(content)
+			}
+			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous, "file": n.Value})
+			continue
+		}
 		if n.Type == "save_result" {
 			variables[n.Variable] = previous
 			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous, "variable": n.Variable})
