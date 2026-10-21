@@ -73,21 +73,39 @@ async function testViewport(name, width, height, role = 'SYS_ADMIN') {
       `document=${layout.documentWidth}, viewport=${layout.viewport}`);
 
     if (role === 'SYS_ADMIN') {
-      for (const selector of ['.topbar', '.control-card', '.grid', '.chart-card', '.ledger-card']) {
+      // Overview retains the persistent market controls and KPI summary.
+      for (const selector of ['.topbar', '.control-card', '.grid']) {
         const element = page.locator(selector);
-        check(`${selector} displayed`, await element.count() === 1);
-        if (await element.count() > 0) {
-          const box = await element.boundingBox();
-          check(`${selector} fits horizontally`, !!box && box.x >= -2 && box.x + box.width <= width + 2,
-            box ? `x=${box.x} w=${box.width}` : 'missing');
-        }
+        check(`${selector} displayed`, await element.isVisible());
+        const box = await element.boundingBox();
+        check(`${selector} fits horizontally`, !!box && box.x >= -2 && box.x + box.width <= width + 2,
+          box ? `x=${box.x} w=${box.width}` : 'missing');
       }
-      const breakpoint = await page.evaluate(() => ({
-        grid: getComputedStyle(document.querySelector('.grid')).gridTemplateColumns,
-        chart: document.querySelector('.chart-container')?.getBoundingClientRect().height,
-      }));
-      if (width <= 700) check('mobile chart height fits', !!breakpoint.chart && breakpoint.chart <= 280, JSON.stringify(breakpoint));
-
+      check('workspace tabs present', await page.getByRole('tab', { name: 'Charts' }).isVisible());
+      check('inactive chart workspace hidden', !(await page.locator('.chart-card').isVisible()));
+      const grid = await page.locator('.grid').evaluate(el => getComputedStyle(el).gridTemplateColumns);
+      await page.getByRole('tab', { name: 'Charts' }).click();
+      await page.waitForFunction(() => document.getElementById('workspace-tab-charts')?.getAttribute('aria-selected') === 'true');
+      await page.locator('.chart-card').waitFor({ state: 'visible' });
+      check('chart workspace selected', await page.getByRole('tab', { name: 'Charts' }).getAttribute('aria-selected') === 'true');
+      const chartCard = page.locator('.chart-card');
+      check('.chart-card displayed', await chartCard.isVisible());
+      const chartBox = await chartCard.boundingBox();
+      check('.chart-card fits horizontally', !!chartBox && chartBox.x >= -2 && chartBox.x + chartBox.width <= width + 2,
+        JSON.stringify(chartBox));
+      const chart = await page.locator('.chart-container').boundingBox();
+      if (width <= 700) check('mobile chart height fits', !!chart && chart.height <= 280, JSON.stringify({ grid, chartHeight: chart?.height }));
+      await page.getByRole('tab', { name: 'Ledger' }).click();
+      await page.waitForFunction(() => document.getElementById('workspace-tab-ledger')?.getAttribute('aria-selected') === 'true');
+      await page.locator('.ledger-card').waitFor({ state: 'visible' });
+      const ledgerCard = page.locator('.ledger-card');
+      check('.ledger-card displayed', await ledgerCard.isVisible());
+      const ledgerBox = await ledgerCard.boundingBox();
+      check('.ledger-card fits horizontally', !!ledgerBox && ledgerBox.x >= -2 && ledgerBox.x + ledgerBox.width <= width + 2,
+        JSON.stringify(ledgerBox));
+      await page.getByRole('tab', { name: 'AI Assistant' }).click();
+      await page.waitForFunction(() => document.getElementById('workspace-tab-assistant')?.getAttribute('aria-selected') === 'true');
+      await page.locator('.ai-launcher').waitFor({ state: 'visible' });
       const launcher = page.locator('.ai-launcher');
       check('AI launcher available', await launcher.isVisible());
       if (await launcher.isVisible()) {
@@ -99,6 +117,9 @@ async function testViewport(name, width, height, role = 'SYS_ADMIN') {
         check('AI composer visible', await page.locator('.ai-input').isVisible());
         await page.getByRole('button', { name: 'Minimize' }).click();
       }
+      // Navigation must not create horizontal document overflow on small screens.
+      const finalWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      check('workspace switching avoids page overflow', finalWidth <= width + 2, `document=${finalWidth}`);
     } else {
       check('research page visible', await page.locator('.research-container').isVisible());
       check('no admin trading terminal', await page.locator('.ledger-card').count() === 0);

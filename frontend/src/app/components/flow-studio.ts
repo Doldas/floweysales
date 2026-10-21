@@ -21,7 +21,13 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
  <mat-card class="flow-studio glass">
   <mat-card-header><mat-card-title><mat-icon>account_tree</mat-icon> Agent Flow Studio</mat-card-title></mat-card-header>
   <mat-card-content>
-   <p class="muted">Design a read-only agent graph. Schedule recurring research or start flows with an admin event trigger. Execution never places trades.</p>
+   <p class="muted">Design read-only research automations. No live trades.</p>
+   <nav class="studio-tabs" role="tablist" aria-label="Flow Studio sections">
+     <button type="button" role="tab" [attr.aria-selected]="studioTab()==='editor'" [class.selected]="studioTab()==='editor'" (click)="studioTab.set('editor')">Flow editor</button>
+     <button type="button" role="tab" [attr.aria-selected]="studioTab()==='library'" [class.selected]="studioTab()==='library'" (click)="studioTab.set('library')">Function library &amp; triggers</button>
+     <button type="button" role="tab" [attr.aria-selected]="studioTab()==='runs'" [class.selected]="studioTab()==='runs'" (click)="studioTab.set('runs')">Run history</button>
+   </nav>
+   @if (studioTab()==='editor') {
    <div class="flow-toolbar">
      <label>Saved flows <select [ngModel]="selectedId()" (ngModelChange)="loadFlow(+$event)"><option [ngValue]="0">New flow</option>@for(f of flows();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
      <button mat-stroked-button (click)="newFlow()">New</button>
@@ -91,7 +97,11 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
      <button mat-stroked-button (click)="refresh()">Refresh</button>
    </div>
    @if(message()) { <p class="flow-message" role="status">{{message()}}</p> }
-   <fse-blueprint-library (functionsChanged)="loadFunctions()"></fse-blueprint-library>
+   }
+   @if (studioTab()==='library') {
+     <fse-blueprint-library (functionsChanged)="loadFunctions()"></fse-blueprint-library>
+   }
+   @if (studioTab()==='runs') {
    <h3>Recent runs</h3>
    @if(!runs().length){<p class="muted">No executions yet. Save and run a flow to see a trace.</p>}
    @for(run of runs();track run.id){
@@ -100,10 +110,16 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
       @if(run.output){<pre>{{run.output}}</pre>}
     </details>
    }
+   }
   </mat-card-content>
  </mat-card>`,
  styles:[`
- :host{display:block;margin:24px 0}.flow-studio{padding:18px}.flow-studio mat-card-title{display:flex;align-items:center;gap:12px}
+:host{display:block;margin:0 0 24px}
+ .studio-tabs{display:flex;gap:6px;overflow-x:auto;margin:16px 0 20px;border-bottom:1px solid #50738e;padding:0 0 7px}
+ .studio-tabs button{flex:0 0 auto;padding:12px 16px;border:1px solid transparent;border-radius:8px;background:transparent;color:#c4d7eb;cursor:pointer;font:inherit;font-weight:600}
+ .studio-tabs button.selected{background:#1e435f;border-color:#6aa5c9;color:white}
+ .studio-tabs button:focus-visible{outline:2px solid #78c8ef}
+.flow-studio{padding:18px}.flow-studio mat-card-title{display:flex;align-items:center;gap:12px}
  .muted{opacity:.7}.flow-toolbar,.flow-meta,.flow-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin:16px 0}
  label{display:flex;flex-direction:column;gap:4px;font-size:13px;flex:1;min-width:160px}
  input,select,textarea{background:#14263a;color:#e5f3ff;border:1px solid #5e7b93;border-radius:6px;padding:9px;font:inherit}
@@ -116,6 +132,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
  `]
 })
 export class FlowStudioComponent {
+ readonly studioTab=signal<'editor'|'library'|'runs'>('editor');
  readonly flows=signal<SavedFlow[]>([]);
  readonly functions=signal<{id:number;name:string}[]>([]);
  readonly selectedId=signal(0);

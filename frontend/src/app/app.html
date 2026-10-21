@@ -41,10 +41,30 @@
 
 <main class="container terminal-container" id="main-content">
 
-  @if (auth.enabled() && auth.user()?.role === "SYS_ADMIN") {
-    <fse-flow-studio></fse-flow-studio>
-  }
 
+  <nav class="workspace-tabs" aria-label="FloweySales workspace" role="tablist">
+    @for (tab of workspaceTabs; track tab.id) {
+      @if (!tab.adminOnly || !auth.enabled() || auth.user()?.role === 'SYS_ADMIN') {
+        <button type="button" role="tab" class="workspace-tab"
+          [id]="'workspace-tab-' + tab.id"
+          [attr.aria-selected]="workspace() === tab.id"
+          [attr.aria-controls]="'workspace-panel-' + tab.id"
+          [class.active]="workspace() === tab.id"
+          (click)="openWorkspace(tab.id)">
+          <mat-icon aria-hidden="true">{{ tab.icon }}</mat-icon>
+          <span>{{ tab.label }}</span>
+        </button>
+      }
+    }
+  </nav>
+  <div class="workspace-heading">
+    <div><span class="workspace-eyebrow">WORKSPACE / {{ workspace().toUpperCase() }}</span>
+      <h1>{{ activeWorkspaceLabel() }}</h1>
+    </div>
+    <span class="workspace-mode">Research only · No live trading</span>
+  </div>
+
+  <section id="workspace-panel-market" role="tabpanel" aria-labelledby="workspace-tab-market" [hidden]="workspace() !== 'market'">
   <!-- ASSET CONTROL BAR -->
   <mat-card class="glass control-card">
     <mat-card-content class="control-row">
@@ -129,6 +149,7 @@
     </mat-card-content>
   </mat-card>
 
+
   <!-- KPI CARDS -->
   <div class="grid">
     <mat-card class="glass kpi">
@@ -171,22 +192,16 @@
     </mat-card>
   </div>
 
+
   <!-- ASSET FUNDAMENTALS -->
   @if (hasAssetFundamentals()) {
     <fse-asset-info [data]="marketData()" [currentCurrency]="currency()"></fse-asset-info>
   }
 
-  <!-- QUARTERLY FINANCIALS -->
-  <fse-financials [symbol]="trackedSymbol()" [provider]="provider()"></fse-financials>
 
-  <!-- AI CHAT -->
-  <fse-ai-chat
-    [contextSymbol]="trackedSymbol()"
-    [contextProvider]="provider()"
-    [contextRange]="historyRange()"
-    [contextPrice]="livePrice() | number:'1.2-4'"
-  ></fse-ai-chat>
-
+  </section>
+  @if (workspace() === 'charts') {
+    <section id="workspace-panel-charts" role="tabpanel" aria-labelledby="workspace-tab-charts">
   <!-- CHART -->
   <mat-card class="glass chart-card">
     <mat-card-header>
@@ -254,6 +269,32 @@
     </mat-card>
   }
 
+
+    </section>
+  }
+  @if (workspace() === 'financials') {
+    <section id="workspace-panel-financials" role="tabpanel" aria-labelledby="workspace-tab-financials">
+  <!-- QUARTERLY FINANCIALS -->
+  <fse-financials [symbol]="trackedSymbol()" [provider]="provider()"></fse-financials>
+
+
+    </section>
+  }
+  @if (workspace() === 'assistant') {
+    <section id="workspace-panel-assistant" role="tabpanel" aria-labelledby="workspace-tab-assistant">
+  <!-- AI CHAT -->
+  <fse-ai-chat
+    [contextSymbol]="trackedSymbol()"
+    [contextProvider]="provider()"
+    [contextRange]="historyRange()"
+    [contextPrice]="livePrice() | number:'1.2-4'"
+  ></fse-ai-chat>
+
+
+    </section>
+  }
+  @if (workspace() === 'ledger') {
+    <section id="workspace-panel-ledger" role="tabpanel" aria-labelledby="workspace-tab-ledger">
   <!-- LEDGER -->
   <fse-ledger
     [trackedSymbol]="trackedSymbol()"
@@ -261,8 +302,22 @@
     [currency]="currency()"
   ></fse-ledger>
 
+
+    </section>
+  }
+  @if (workspace() === 'forum') {
+    <section id="workspace-panel-forum" role="tabpanel" aria-labelledby="workspace-tab-forum">
   <!-- FORUM -->
   <fse-forum [trackedSymbol]="trackedSymbol()"></fse-forum>
+
+
+    </section>
+  }
+  @if ((!auth.enabled() || auth.user()?.role === 'SYS_ADMIN') && workspace() === 'studio') {
+    <section id="workspace-panel-studio" role="tabpanel" aria-labelledby="workspace-tab-studio">
+      <fse-flow-studio></fse-flow-studio>
+    </section>
+  }
 
   <footer class="footer">
     Welfory AB • FloweySales Quantum Trading Protocol • Go Engine + Angular Terminal

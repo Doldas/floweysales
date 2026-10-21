@@ -483,3 +483,64 @@
 .tracker-select small{font-size:10px;opacity:.7;margin-left:5px}
 .tracker-remove{width:44px;min-width:44px;height:44px;min-height:44px}
 @media(max-width:700px){.active-trackers{padding:0 12px 10px}.tracker-chips{gap:6px}.tracker-select{max-width:158px}}
+
+
+/* Desktop-style application workspace navigation. */
+.workspace-tabs {
+  display: flex;
+  gap: 4px;
+  align-items: stretch;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  padding: 8px;
+  margin: 0 0 16px;
+  border: 1px solid rgba(133, 168, 198, .25);
+  border-radius: 14px;
+  background: rgba(11, 26, 43, .75);
+}
+.workspace-tab {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 9px;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 10px 17px;
+  color: var(--text-muted, #b4c4d6);
+  font: inherit;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.workspace-tab mat-icon { width: 20px; height: 20px; font-size: 20px; }
+.workspace-tab:hover { background: rgba(100, 154, 200, .14); }
+.workspace-tab.active {
+  color: #e9f8ff;
+  background: rgba(43, 127, 175, .26);
+  border-color: rgba(108, 190, 236, .65);
+  box-shadow: inset 0 -2px 0 #6ad1fa;
+}
+.workspace-tab:focus-visible { outline: 3px solid #6ad1fa; outline-offset: 2px; }
+.workspace-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 8px 0 20px;
+}
+.workspace-heading h1 { font-size: clamp(1.3rem, 2.2vw, 1.9rem); line-height: 1.2; margin: 4px 0 0; }
+.workspace-eyebrow { opacity: .65; letter-spacing: .14em; font-size: .7rem; font-weight: 700; }
+.workspace-mode { opacity: .72; font-size: .8rem; }
+[role="tabpanel"] { min-width: 0; }
+[role="tabpanel"][hidden] { display: none !important; }
+@media (max-width: 700px) {
+ .workspace-tabs { margin-inline: -4px; padding: 5px; gap: 2px; }
+ .workspace-tab { min-height: 44px; padding: 9px 12px; font-size: .81rem; gap: 6px; }
+ .workspace-tab mat-icon { font-size: 18px; width: 18px; height: 18px; }
+ .workspace-heading { margin-bottom: 12px; }
+}
