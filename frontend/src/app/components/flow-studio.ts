@@ -5,6 +5,8 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 
 interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'; label:string; variable?:string; transform?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'; value?:string; x:number; y:number }
@@ -15,8 +17,28 @@ interface FlowRun { id:number; trigger:string; status:string; output:string; err
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
 @Component({
+ selector: 'fse-confirm-delete-flow',
+ standalone: true,
+ imports: [MatDialogModule, MatButtonModule],
+ template: `
+   <h2 mat-dialog-title>Delete flow?</h2>
+   <mat-dialog-content>
+     Delete <strong>{{ data.name }}</strong> and its execution history? This cannot be undone.
+   </mat-dialog-content>
+   <mat-dialog-actions align="end">
+     <button mat-stroked-button (click)="dialog.close(false)">Cancel</button>
+     <button mat-flat-button color="warn" (click)="dialog.close(true)">Confirm delete</button>
+   </mat-dialog-actions>
+ `
+})
+export class ConfirmDeleteFlowDialog {
+ readonly dialog = inject(MatDialogRef<ConfirmDeleteFlowDialog>);
+ readonly data = inject<{ name: string }>(MAT_DIALOG_DATA);
+}
+
+@Component({
  selector:'fse-flow-studio', standalone:true,
- imports:[CommonModule,FormsModule,MatButtonModule,MatCardModule,MatIconModule,BlueprintLibraryComponent,MarkdownRunOutputComponent],
+ imports:[CommonModule,FormsModule,MatButtonModule,MatCardModule,MatIconModule,MatDialogModule,BlueprintLibraryComponent,MarkdownRunOutputComponent],
  changeDetection:ChangeDetectionStrategy.Default,
  template:`
  <mat-card class="flow-studio glass">
@@ -32,6 +54,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
    <div class="flow-toolbar">
      <label>Saved flows <select [ngModel]="selectedId()" (ngModelChange)="loadFlow(+$event)"><option [ngValue]="0">New flow</option>@for(f of flows();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
      <button mat-stroked-button (click)="newFlow()">New</button>
+     <button mat-stroked-button color="warn" (click)="confirmDeleteFlow()" [disabled]="!selectedId()||busy()">Delete flow</button>
      <button mat-stroked-button (click)="addAgent()">+ Agent</button>
      <button mat-stroked-button (click)="addSubflow()">+ Call Flow</button>
      <button mat-stroked-button (click)="addConstant()">+ Value</button>
@@ -205,6 +228,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
  `]
 })
 export class FlowStudioComponent {
+ private readonly dialog = inject(MatDialog);
  readonly canvasView = signal({ x: 0, y: 0, width: 820, height: 380 });
  readonly canvasMenu = signal(false);
  readonly canvasViewBox = () => {
@@ -300,6 +324,24 @@ export class FlowStudioComponent {
   const j=await r.json();if(!r.ok)throw new Error(j.error||('HTTP '+r.status));return j}
  async refresh(){try{const [data,definitions]=await Promise.all([this.request('/api/admin/flows'),this.request('/api/admin/blueprint-triggers')]);this.flows.set(data.flows||[]);this.triggers.set(definitions.triggers||[])}catch(e){this.message.set(String(e))}}
  async refreshRuns(){if(!this.selectedId())return;try{const d=await this.request('/api/admin/flows/'+this.selectedId()+'/runs');this.runs.set(d.runs||[])}catch(e){this.message.set(String(e))}}
+ async confirmDeleteFlow(){
+   const id=this.selectedId();
+   if(!id||this.busy())return;
+   const name=this.flows().find(f=>f.id===id)?.name||this.name();
+   const confirmed=await new Promise<boolean>(resolve=>{
+     this.dialog.open(ConfirmDeleteFlowDialog,{data:{name},width:'420px',maxWidth:'95vw',autoFocus:'first-tabbable'})
+       .afterClosed().subscribe(value=>resolve(value===true));
+   });
+   if(!confirmed||this.selectedId()!==id)return;
+   this.busy.set(true);
+   try{
+     await this.request('/api/admin/flows/'+id,{method:'DELETE'});
+     this.newFlow();
+     await this.refresh();
+     this.message.set('Flow deleted');
+   }catch(e){this.message.set('Delete failed: '+String(e))}
+   finally{this.busy.set(false)}
+ }
  async save(){this.busy.set(true);try{const id=this.selectedId();const body={name:this.name(),graph:this.graph(),enabled:this.enabled(),interval_minutes:this.interval(),event_key:this.eventKey()};
    const flow:SavedFlow=await this.request(id?'/api/admin/flows/'+id:'/api/admin/flows',{method:id?'PUT':'POST',body:JSON.stringify(body)});
    this.selectedId.set(flow.id);this.message.set('Flow saved');await this.refresh()}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}

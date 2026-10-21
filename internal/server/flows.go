@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -274,6 +276,29 @@ func (e *Engine) registerFlowRoutes() {
 			return
 		}
 		e.saveFlow(w, r, id)
+	})
+	// Delete flows only after explicit client confirmation; authorization is checked here.
+	e.mux.HandleFunc("DELETE /api/admin/flows/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if !e.flowAdmin(w, r) {
+			return
+		}
+		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil || id <= 0 {
+			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
+			return
+		}
+		if err := e.db.DeleteAgentFlow(r.Context(), id); err != nil {
+			switch {
+			case errors.Is(err, sql.ErrNoRows):
+				writeJSON(w, 404, map[string]string{"error": "Flow not found"})
+			case errors.Is(err, storage.ErrAgentFlowRunning):
+				writeJSON(w, 409, map[string]string{"error": "Wait for the running flow to finish before deleting"})
+			default:
+				writeJSON(w, 503, map[string]string{"error": "Could not delete flow"})
+			}
+			return
+		}
+		writeJSON(w, 200, map[string]any{"deleted": true, "flow_id": id})
 	})
 	e.mux.HandleFunc("GET /api/admin/flows/{id}/runs", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {
