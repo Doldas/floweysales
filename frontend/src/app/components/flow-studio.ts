@@ -85,6 +85,7 @@ interface FlowRun { id:number; trigger:string; status:string; output:string; err
    <div class="flow-actions">
      <button mat-flat-button color="primary" (click)="save()" [disabled]="busy()">Save flow</button>
      <button mat-stroked-button (click)="run()" [disabled]="busy()||!selectedId()">Run now</button>
+     <label>Event value <input [ngModel]="triggerValue()" (ngModelChange)="triggerValue.set($event)" placeholder="Value matching trigger type"></label>
      <button mat-stroked-button (click)="emitEvent()" [disabled]="busy()||!eventKey()">Trigger event</button>
      <button mat-stroked-button (click)="refresh()">Refresh</button>
    </div>
@@ -121,6 +122,7 @@ export class FlowStudioComponent {
  readonly enabled=signal(false);
  readonly interval=signal(0);
  readonly eventKey=signal('');
+ readonly triggerValue=signal('');
  readonly graph=signal<FlowGraph>(this.defaultGraph());
  readonly chosen=signal('');
  readonly selectedNode=()=>this.graph().nodes.find(n=>n.id===this.chosen());
@@ -168,5 +170,5 @@ export class FlowStudioComponent {
    const flow:SavedFlow=await this.request(id?'/api/admin/flows/'+id:'/api/admin/flows',{method:id?'PUT':'POST',body:JSON.stringify(body)});
    this.selectedId.set(flow.id);this.message.set('Flow saved');await this.refresh()}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
  async run(){this.busy.set(true);try{await this.request('/api/admin/flows/'+this.selectedId()+'/run',{method:'POST'});this.message.set('Agent run queued; refresh history shortly');setTimeout(()=>void this.refreshRuns(),3000)}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
- async emitEvent(){this.busy.set(true);try{const data=await this.request('/api/admin/flow-events/'+encodeURIComponent(this.eventKey()),{method:'POST'});this.message.set(data.started+' flow(s) triggered');}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
+ async emitEvent(){this.busy.set(true);try{const data=await this.request('/api/admin/flow-events/'+encodeURIComponent(this.eventKey()),{method:'POST',body:JSON.stringify({value:this.triggerValue()})});this.message.set(data.started+' flow(s) triggered');}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
 }
