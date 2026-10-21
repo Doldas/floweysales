@@ -12,6 +12,9 @@
    <column name="byte_size" type="INT"><constraints nullable="false"/></column>
    <column name="updated_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"/>
   </createTable>
+  <addForeignKeyConstraint baseTableName="userspace_files" baseColumnNames="owner_id"
+    referencedTableName="auth_users" referencedColumnNames="id"
+    constraintName="fk_userspace_owner" onDelete="CASCADE"/>
   <addUniqueConstraint tableName="userspace_files" columnNames="owner_id,path" constraintName="uq_userspace_owner_path"/>
   <createIndex tableName="userspace_files" indexName="idx_userspace_owner"><column name="owner_id"/></createIndex>
   <rollback><dropTable tableName="userspace_files"/></rollback>
