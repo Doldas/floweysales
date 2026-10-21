@@ -286,7 +286,7 @@ func (e *Engine) registerFlowRoutes() {
 		}
 		count := 0
 		for _, f := range flows {
-			if e.launchFlowWithInput(f, "event", string(payload.Value)) == nil {
+			if e.launchFlowWithInput(f, "event", eventInput) == nil {
 				count++
 			}
 		}
