@@ -30,6 +30,28 @@ func (e *Engine) registerBlueprintRoutes() {
 		}
 		e.saveBlueprintFunction(w, r, id)
 	})
+	e.mux.HandleFunc("POST /api/admin/blueprint-functions/{id}/preview", func(w http.ResponseWriter,r *http.Request) {
+  if !e.flowAdmin(w,r) { return }
+  id,err:=strconv.ParseInt(r.PathValue("id"),10,64)
+  if err!=nil||id<=0 {writeJSON(w,400,map[string]string{"error":"Invalid function ID"});return}
+  def,err:=e.db.GetBlueprintFunction(r.Context(),id)
+  if err!=nil {writeJSON(w,404,map[string]string{"error":"Function not found"});return}
+  var schema struct {Version int `json:"version"`;Inputs []blueprintV2Port `json:"inputs"`}
+  if err=json.Unmarshal(def.Graph,&schema);err!=nil||schema.Version!=2 {writeJSON(w,400,map[string]string{"error":"Preview requires v2 graph"});return}
+  r.Body=http.MaxBytesReader(w,r.Body,4096);defer r.Body.Close()
+  var request struct {Inputs map[string]string `json:"inputs"`}
+  dec:=json.NewDecoder(r.Body);dec.DisallowUnknownFields()
+  if err=dec.Decode(&request);err!=nil {writeJSON(w,400,map[string]string{"error":"Invalid preview input"});return}
+  var extra any
+  if dec.Decode(&extra)!=io.EOF {writeJSON(w,400,map[string]string{"error":"Unexpected preview data"});return}
+  values:=map[string]typedValue{}
+  for _,p:=range schema.Inputs {v,parseErr:=parseTyped(p.Type,request.Inputs[p.Name]);if parseErr!=nil {writeJSON(w,400,map[string]string{"error":parseErr.Error()});return};values[p.Name]=v}
+  result,err:=evaluateBlueprintV2(def,values)
+  if err!=nil {writeJSON(w,400,map[string]string{"error":err.Error()});return}
+  output:=map[string]any{}
+  for name,v:=range result {switch v.Kind {case "number":output[name]=v.Number;case "boolean":output[name]=v.Bool;default:output[name]=v.Text}}
+  writeJSON(w,200,map[string]any{"outputs":output})
+ })
 	e.mux.HandleFunc("GET /api/admin/blueprint-triggers", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {
 			return
