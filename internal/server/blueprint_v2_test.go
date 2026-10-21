@@ -18,7 +18,8 @@ func v2TestGraph() storage.BlueprintFunction {
  {"id":"review","type":"constant","value_type":"text","value":"Review"},
  {"id":"skip","type":"constant","value_type":"text","value":"Skip"},
  {"id":"flag","type":"constant","value_type":"boolean","value":"true"},
- {"id":"finish","type":"output"}
+ {"id":"finish","type":"output"},
+ {"id":"done","type":"output"}
  ],
  "edges":[
  {"kind":"data","from":"start","from_port":"score","to":"cmp","to_port":"a"},
@@ -26,10 +27,11 @@ func v2TestGraph() storage.BlueprintFunction {
  {"kind":"data","from":"cmp","from_port":"value","to":"choice","to_port":"condition"},
  {"kind":"data","from":"cmp","from_port":"value","to":"finish","to_port":"passed"},
  {"kind":"data","from":"review","from_port":"value","to":"finish","to_port":"result"},
+ {"kind":"data","from":"skip","from_port":"value","to":"done","to_port":"result"},
+ {"kind":"data","from":"cmp","from_port":"value","to":"done","to_port":"passed"},
  {"kind":"exec","from":"start","from_port":"next","to":"choice","to_port":"in"},
  {"kind":"exec","from":"choice","from_port":"true","to":"finish","to_port":"in"},
- {"kind":"exec","from":"choice","from_port":"false","to":"review","to_port":"in"},
- {"kind":"exec","from":"review","from_port":"next","to":"finish","to_port":"in"}
+ {"kind":"exec","from":"choice","from_port":"false","to":"done","to_port":"in"}
  ]}`)}
 }
 func TestBlueprintV2MultipleTypedInputsOutputs(t *testing.T){
@@ -38,12 +40,14 @@ func TestBlueprintV2MultipleTypedInputsOutputs(t *testing.T){
  outputs,err:=evaluateBlueprintV2(f,map[string]typedValue{"score":{Kind:"number",Number:90},"threshold":{Kind:"number",Number:80}})
  if err!=nil{t.Fatal(err)}
  if outputs["passed"].Bool!=true||outputs["result"].Text!="Review"{t.Fatalf("unexpected results: %+v",outputs)}
+ outputs,err=evaluateBlueprintV2(f,map[string]typedValue{"score":{Kind:"number",Number:60},"threshold":{Kind:"number",Number:80}})
+ if err!=nil||outputs["result"].Text!="Skip"||outputs["passed"].Bool {t.Fatalf("false branch: %+v %v",outputs,err)}
 }
 func TestBlueprintV2RejectsInvalidGraph(t *testing.T){
  f:=v2TestGraph()
  for _,tc:=range []struct{name,find,repl string}{
  {"type mismatch",`"name":"threshold","type":"number"`,`"name":"threshold","type":"boolean"`},
- {"execution cycle",`"from":"review","from_port":"next","to":"finish"`,`"from":"review","from_port":"next","to":"start"`},
+ {"execution cycle",`"from":"choice","from_port":"false","to":"done"`,`"from":"choice","from_port":"false","to":"start"`},
  {"unknown data pin",`"from_port":"score"`,`"from_port":"missing"`},
  {"duplicate input",`"name":"threshold"`,`"name":"score"`},
  {"unsafe operation",`"operation":"greater"`,`"operation":"shell"`},
