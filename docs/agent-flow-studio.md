@@ -20,3 +20,9 @@ The editor supports positioning nodes, editing prompts, linking nodes, saving, r
 - Next iterations should include per-step persisted checkpoints, retries/dead-letter queues, condition/branch nodes, configurable evidence-backed read-only tools, trigger adapters, replay and cancellation controls, versioned graph revisions, run ownership and more adversarial integration tests.
 
 To start, log in as SYS_ADMIN, scroll to Agent Flow Studio at the top of the terminal, create a flow, adjust prompts and graph links, save it, and either run it manually or enable a schedule.
+
+## Blueprint-style reusable flow calls (next increment)
+
+Add **Call Flow** nodes in the graph editor and select another saved flow by ID. When the parent flow runs, the selected flow is executed as a nested research function, and its serialized output feeds the following node. Nesting is bounded to four levels and a flow cannot call itself recursively, directly or indirectly. Subflows inherit the parent run's time limit and the read-only/no-tools policy. Missing references fail the run safely.
+
+This is the **first building block**, not yet a full Unreal Engine Blueprint-equivalent visual language. Strongly typed value pins, declared input/output ports, independent user-authored function libraries, parameter binding, graph revision pinning, custom trigger constructors and step-by-step debugging remain tracked under #59. Nested flow calls currently share the parent run log rather than creating child run records.
