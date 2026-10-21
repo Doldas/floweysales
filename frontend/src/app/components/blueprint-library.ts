@@ -22,6 +22,7 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
   <button mat-stroked-button (click)="add('constant')">+ Value</button>
   <button mat-stroked-button (click)="add('operation')">+ Operation</button>
  </div>
+ <div class="blueprint-layout">
  <div class="canvas">
   <svg viewBox="0 0 850 340">
    <defs><marker id="fn-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#7ebdf2"/></marker></defs>
@@ -38,8 +39,9 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
    }
   </svg>
  </div>
- @if(selectedNode();as n){
-  <div class="panel"><strong>Selected: {{n.type}}</strong>
+ <aside class="panel" aria-label="Function node details">
+  <header class="inspector-heading"><span>DETAILS</span><strong>{{ selectedNode()?.id || 'No node selected' }}</strong></header>
+  @if(selectedNode();as n){
    @if(n.type==='input'||n.type==='output'||n.type==='constant'){
     <label>Type <select [ngModel]="n.value_type||'text'" (ngModelChange)="edit('value_type',$event)"><option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option></select></label>
    }
@@ -53,8 +55,9 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
    <label>Target pin <select #port><option value="a">a / output</option><option value="b">b</option><option value="condition">condition</option><option value="true">true</option><option value="false">false</option></select></label>
    <button mat-stroked-button (click)="connect(from.value,n.id,port.value)">Connect</button>
    <button mat-stroked-button (click)="removeNode(n.id)" [disabled]="n.type==='input'||n.type==='output'">Remove node</button>
-  </div>
- }
+  } @else {<p>Select a node to edit its pins and properties.</p>}
+ </aside>
+ </div>
  <div class="toolbar"><button mat-flat-button (click)="save()" [disabled]="busy()">Save function</button></div>
  <h3>Custom Event Triggers</h3>
  <p>Define a typed event and subscribe to its key in an enabled flow. Events currently require an authenticated admin request.</p>
@@ -66,7 +69,13 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
  <div class="triggers">@for(t of triggers();track t.id){<span>{{t.event_key}} · {{t.payload_type}}</span>}</div>
  @if(status()){<p role="status">{{status()}}</p>}
  </mat-card>`,
- styles:[`:host{display:block;margin-top:22px}.lib{padding:18px}.toolbar,.panel,.triggers{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}.panel{padding:12px;border:1px solid #50738e;border-radius:8px}.panel strong{width:100%}label{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}input,select{background:#14263a;color:#ecf6ff;border:1px solid #68859b;border-radius:6px;padding:8px}.canvas{overflow:auto;border:1px solid #45627b;background:#102032;border-radius:8px}svg{display:block;min-width:650px;width:100%;height:auto}.triggers span{padding:8px;border:1px solid #50738e;border-radius:12px}`]
+ styles:[`:host{display:block;margin-top:22px}.lib{padding:18px}.toolbar,.panel,.triggers{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}.panel{padding:16px;border:1px solid #50738e;border-radius:8px;align-content:start;background:#142438;min-width:0;max-height:min(75vh,780px);overflow-y:auto;display:flex;flex-direction:column;align-items:stretch}
+ .blueprint-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(270px,315px);gap:12px;align-items:stretch}
+ .blueprint-layout .canvas{min-width:0;min-height:440px}
+ .inspector-heading{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid #50738e;padding-bottom:12px}
+ .inspector-heading span{font-size:11px;letter-spacing:.14em;opacity:.75}
+ .panel label,.panel input,.panel select{min-width:0;width:100%;box-sizing:border-box}
+ @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .canvas{min-height:280px}.panel{max-height:360px}}.panel strong{width:100%}label{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}input,select{background:#14263a;color:#ecf6ff;border:1px solid #68859b;border-radius:6px;padding:8px}.canvas{overflow:auto;border:1px solid #45627b;background:#102032;border-radius:8px}svg{display:block;min-width:650px;width:100%;height:auto}.triggers span{padding:8px;border:1px solid #50738e;border-radius:12px}`]
 })
 export class BlueprintLibraryComponent {
  @Output() functionsChanged=new EventEmitter<void>();
