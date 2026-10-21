@@ -576,3 +576,40 @@ func TestRestingPaperBuyReservesCash(t *testing.T) {
 		t.Fatalf("reservation did not protect cash: %d %v", status, response)
 	}
 }
+
+func TestConcurrentSectorBuysRespectCombinedCap(t *testing.T) {
+	env := newTestEnv(t)
+	env.seed("GIB", 100)
+	env.seed("ABC", 100)
+	cfg := env.engine.tradingConfig()
+	cfg.BaseCash = 10000
+	cfg.MaxSectorAllocationPct = 10
+	cfg.SymbolSectors = map[string]string{"GIB": "Technology", "ABC": "Technology"}
+	env.engine.ConfigureTrading(cfg)
+	var wg sync.WaitGroup
+	codes := make([]int, 2)
+	for i, symbol := range []string{"GIB", "ABC"} {
+		wg.Add(1)
+		go func(i int, symbol string) {
+			defer wg.Done()
+			codes[i], _ = env.do(t, "POST", "/api/orders", map[string]any{
+				"symbol": symbol, "side": "BUY", "quantity": 6,
+				"client_order_id": fmt.Sprintf("sector-race-%d", i),
+			})
+		}(i, symbol)
+	}
+	wg.Wait()
+	success := 0
+	for _, code := range codes {
+		if code == http.StatusOK {
+			success++
+		}
+	}
+	if success != 1 {
+		t.Fatalf("sector cap allowed %d of two competing purchases, status=%v", success, codes)
+	}
+	_, orders := env.do(t, "GET", "/api/orders", nil)
+	if len(listOf(t, orders)) != 1 {
+		t.Fatalf("must store only one sector order: %v", orders)
+	}
+}
