@@ -113,6 +113,31 @@ export class App {
   readonly themes = THEMES;
   readonly providers = PROVIDERS;
 
+  readonly workspaceTabs = [
+    { id: 'market', label: 'Overview', icon: 'dashboard', adminOnly: false },
+    { id: 'charts', label: 'Charts', icon: 'show_chart', adminOnly: false },
+    { id: 'financials', label: 'Financials', icon: 'account_balance', adminOnly: false },
+    { id: 'assistant', label: 'AI Assistant', icon: 'smart_toy', adminOnly: false },
+    { id: 'ledger', label: 'Ledger', icon: 'receipt_long', adminOnly: false },
+    { id: 'forum', label: 'Forum', icon: 'forum', adminOnly: false },
+    { id: 'studio', label: 'Flow Studio', icon: 'account_tree', adminOnly: true },
+  ] as const;
+  readonly workspace = signal<(typeof this.workspaceTabs)[number]['id']>(this.initialWorkspace());
+  readonly activeWorkspaceLabel = computed(
+    () => this.workspaceTabs.find(tab => tab.id === this.workspace())?.label ?? 'Overview',
+  );
+
+  private initialWorkspace(): (typeof this.workspaceTabs)[number]['id'] {
+    const value = typeof localStorage === 'undefined' ? 'market' : localStorage.getItem('floweysales.workspace');
+    return this.workspaceTabs.some(tab => tab.id === value) ? value as (typeof this.workspaceTabs)[number]['id'] : 'market';
+  }
+
+  openWorkspace(id: (typeof this.workspaceTabs)[number]['id']): void {
+    if (id === 'studio' && this.auth.enabled() && this.auth.user()?.role !== 'SYS_ADMIN') return;
+    this.workspace.set(id);
+    localStorage.setItem('floweysales.workspace', id);
+  }
+
   readonly chart = viewChild(TradingChartComponent);
 
   // ---- tracked asset -------------------------------------------------------
