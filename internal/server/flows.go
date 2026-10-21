@@ -132,6 +132,7 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 			if n.Prompt != "" || n.FlowID != 0 || n.FunctionID != 0 {
 				return g, nil, fmt.Errorf("workspace nodes cannot call agents")
 			}
+			if n.Type=="workspace_write" && !allowedUserspaceType(n.ContentType) {return g,nil,fmt.Errorf("unsupported workspace file format")}
 		}
 		if n.Type == "save_result" || n.Type == "load_result" || n.Type == "transform" {
 			utilities++
@@ -507,7 +508,10 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				}
 			}
 			if n.Type == "workspace_write" {
-				if err := e.db.WriteUserspaceFile(ctx, workspaceOwner, n.Value, "text/plain; charset=utf-8", []byte(previous)); err != nil {
+				if n.ContentType=="application/json" && !json.Valid([]byte(previous)){return "",fmt.Errorf("workspace write %s: output is not valid JSON",n.Value)}
+				mime:=n.ContentType
+				if mime==""{mime="text/plain"}
+				if err := e.db.WriteUserspaceFile(ctx, workspaceOwner, n.Value, mime, []byte(previous)); err != nil {
 					return "", fmt.Errorf("workspace write %s: %w", n.Value, err)
 				}
 			} else {
@@ -515,6 +519,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				if err != nil {
 					return "", fmt.Errorf("workspace read %s: %w", n.Value, err)
 				}
+				if len(content)>6000{return "",fmt.Errorf("workspace read %s: file exceeds flow context limit",n.Value)}
 				previous = string(content)
 			}
 			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous, "file": n.Value})
