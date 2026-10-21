@@ -45,6 +45,7 @@ import { TradingChartComponent } from './components/chart';
 import { LedgerComponent } from './components/ledger';
 import { ForumComponent } from './components/forum';
 import { FlowStudioComponent } from './components/flow-studio';
+import { UserspaceFilesComponent } from './components/userspace-files';
 import {
   HISTORY_RANGES,
   PROVIDERS,
@@ -97,6 +98,7 @@ const FIRST_TICK_TIMEOUT_MS = 25_000;
     LedgerComponent,
     ForumComponent,
     FlowStudioComponent,
+    UserspaceFilesComponent,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -120,6 +122,7 @@ export class App {
     { id: 'assistant', label: 'AI Assistant', icon: 'smart_toy', adminOnly: false },
     { id: 'ledger', label: 'Ledger', icon: 'receipt_long', adminOnly: false },
     { id: 'forum', label: 'Forum', icon: 'forum', adminOnly: false },
+    { id: 'files', label: 'My Workspace', icon: 'folder', adminOnly: false },
     { id: 'studio', label: 'Flow Studio', icon: 'account_tree', adminOnly: true },
   ] as const;
   readonly workspace = signal<(typeof this.workspaceTabs)[number]['id']>(this.initialWorkspace());
