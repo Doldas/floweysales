@@ -285,3 +285,9 @@ Optional settings, **disabled by default**:
 SELLs are left available to reduce exposure, subject to ordinary held-position and short-sale rules. All risk thresholds are percentages between 0 and 100; 0 disables them. Restart the app after changing environment variables.
 
 Limitations: peak observations are not continuous; missing/unpriced market ticks can distort paper equity. Sector and liquidity inputs are static and potentially stale. These checks currently occur before the transactional account cash lock rather than inside its database transaction: simultaneous buys can still race on **sector concentration**. Do not claim multi-currency conversion, institutional-grade sector limits, broker-side limits or suitability for real-money execution. Atomic cash reservations from PR #54 remain separately enforced.
+
+## Serialized sector commitments (#7, incremental)
+
+When `PAPER_MAX_SECTOR_ALLOCATION_PCT` is enabled, a second sector-concentration check takes place while holding the shared MySQL paper-account row lock, inside the same transaction that commits the order. This check re-reads all **OPEN BUY** commitments from MySQL, maps each to the configured sector, and combines matching commitments with existing marked long-holding exposure. Concurrent submissions in the same sector therefore cannot each ignore the other's newly committed resting orders. Missing sector classifications fail closed. A separate cross-symbol concurrency regression guards this case.
+
+**Remaining limits:** marked long-holding exposure and total equity are taken from the submission-time account snapshot; they are not revalued under the lock, and external tick-driven fills may change those marks between snapshots. This is not a complete atomic portfolio-NAV/FX risk engine. Sector metadata is operator-provided and must be maintained.
