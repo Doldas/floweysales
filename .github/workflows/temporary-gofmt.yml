@@ -1,0 +1,25 @@
+name: Temporary gofmt repair
+on:
+  push:
+    branches:
+      - feature/59-blueprint-multiport-execution
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  gofmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Format changed Go sources and push
+        run: |
+          gofmt -w internal/server/blueprint_v2.go internal/server/blueprint_v2_test.go internal/server/blueprint_api.go internal/server/blueprint_runtime.go
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add internal/server/blueprint_v2.go internal/server/blueprint_v2_test.go internal/server/blueprint_api.go internal/server/blueprint_runtime.go
+            git commit -m "style(go): apply gofmt to Blueprint v2 files"
+            git push
+          fi
