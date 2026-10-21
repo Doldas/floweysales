@@ -75,7 +75,8 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
  .inspector-heading{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid #50738e;padding-bottom:12px}
  .inspector-heading span{font-size:11px;letter-spacing:.14em;opacity:.75}
  .panel label,.panel input,.panel select{min-width:0;width:100%;box-sizing:border-box}
- @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .canvas{min-height:280px}.panel{max-height:360px}}.panel strong{width:100%}label{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}input,select{background:#14263a;color:#ecf6ff;border:1px solid #68859b;border-radius:6px;padding:8px}.canvas{overflow:auto;border:1px solid #45627b;background:#102032;border-radius:8px}svg{display:block;min-width:650px;width:100%;height:auto}.triggers span{padding:8px;border:1px solid #50738e;border-radius:12px}`]
+ @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .canvas{min-height:280px}.panel{max-height:360px}}
+.panel strong{width:100%}label{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}input,select{background:#14263a;color:#ecf6ff;border:1px solid #68859b;border-radius:6px;padding:8px}.canvas{overflow:auto;border:1px solid #45627b;background:#102032;border-radius:8px}svg{display:block;min-width:650px;width:100%;height:auto}.triggers span{padding:8px;border:1px solid #50738e;border-radius:12px}`]
 })
 export class BlueprintLibraryComponent {
  @Output() functionsChanged=new EventEmitter<void>();
