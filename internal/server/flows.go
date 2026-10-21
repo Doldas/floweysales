@@ -277,6 +277,7 @@ func (e *Engine) registerFlowRoutes() {
 		}
 		e.saveFlow(w, r, id)
 	})
+	// Delete flows only after explicit client confirmation; authorization is checked here.
 	e.mux.HandleFunc("DELETE /api/admin/flows/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {
 			return
