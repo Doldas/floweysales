@@ -20,19 +20,19 @@ import (
 )
 
 type flowNode struct {
-	ID         string  `json:"id"`
-	Type       string  `json:"type"`
-	Label      string  `json:"label"`
-	Prompt     string  `json:"prompt,omitempty"`
-	FlowID     int64   `json:"flow_id,omitempty"`
-	FunctionID int64   `json:"function_id,omitempty"`
-	ValueType  string  `json:"value_type,omitempty"`
-	Value      string  `json:"value,omitempty"`
-	ContentType string `json:"content_type,omitempty"`
-	Variable   string  `json:"variable,omitempty"`
-	Transform  string  `json:"transform,omitempty"`
-	X          float64 `json:"x"`
-	Y          float64 `json:"y"`
+	ID          string  `json:"id"`
+	Type        string  `json:"type"`
+	Label       string  `json:"label"`
+	Prompt      string  `json:"prompt,omitempty"`
+	FlowID      int64   `json:"flow_id,omitempty"`
+	FunctionID  int64   `json:"function_id,omitempty"`
+	ValueType   string  `json:"value_type,omitempty"`
+	Value       string  `json:"value,omitempty"`
+	ContentType string  `json:"content_type,omitempty"`
+	Variable    string  `json:"variable,omitempty"`
+	Transform   string  `json:"transform,omitempty"`
+	X           float64 `json:"x"`
+	Y           float64 `json:"y"`
 }
 type flowEdge struct {
 	From     string `json:"from"`
@@ -46,8 +46,11 @@ type flowGraph struct {
 }
 
 func allowedUserspaceType(mime string) bool {
- switch mime {case "", "text/plain","text/markdown","text/csv","application/json":return true}
- return false
+	switch mime {
+	case "", "text/plain", "text/markdown", "text/csv", "application/json":
+		return true
+	}
+	return false
 }
 
 var flowVariablePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{0,47}$`)
@@ -132,7 +135,9 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 			if n.Prompt != "" || n.FlowID != 0 || n.FunctionID != 0 {
 				return g, nil, fmt.Errorf("workspace nodes cannot call agents")
 			}
-			if n.Type=="workspace_write" && !allowedUserspaceType(n.ContentType) {return g,nil,fmt.Errorf("unsupported workspace file format")}
+			if n.Type == "workspace_write" && !allowedUserspaceType(n.ContentType) {
+				return g, nil, fmt.Errorf("unsupported workspace file format")
+			}
 		}
 		if n.Type == "save_result" || n.Type == "load_result" || n.Type == "transform" {
 			utilities++
@@ -508,9 +513,13 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				}
 			}
 			if n.Type == "workspace_write" {
-				if n.ContentType=="application/json" && !json.Valid([]byte(previous)){return "",fmt.Errorf("workspace write %s: output is not valid JSON",n.Value)}
-				mime:=n.ContentType
-				if mime==""{mime="text/plain"}
+				if n.ContentType == "application/json" && !json.Valid([]byte(previous)) {
+					return "", fmt.Errorf("workspace write %s: output is not valid JSON", n.Value)
+				}
+				mime := n.ContentType
+				if mime == "" {
+					mime = "text/plain"
+				}
 				if err := e.db.WriteUserspaceFile(ctx, workspaceOwner, n.Value, mime, []byte(previous)); err != nil {
 					return "", fmt.Errorf("workspace write %s: %w", n.Value, err)
 				}
@@ -519,7 +528,9 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				if err != nil {
 					return "", fmt.Errorf("workspace read %s: %w", n.Value, err)
 				}
-				if len(content)>6000{return "",fmt.Errorf("workspace read %s: file exceeds flow context limit",n.Value)}
+				if len(content) > 6000 {
+					return "", fmt.Errorf("workspace read %s: file exceeds flow context limit", n.Value)
+				}
 				previous = string(content)
 			}
 			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous, "file": n.Value})
