@@ -57,7 +57,7 @@ func blueprintV2Schema(g blueprintV2Graph) (map[string]blueprintV2Node, error) {
   }
   nodes[n.ID]=n
  }
- if inputCount!=1 || outputCount!=1 {return nil,fmt.Errorf("v2 requires one input and one output interface node")}
+ if inputCount!=1 || outputCount<1 || outputCount>8 {return nil,fmt.Errorf("v2 requires one input and one output interface node")}
  incoming:=map[string]bool{}
  adjacency:=map[string][]string{}
  for _,e:=range g.Edges {
