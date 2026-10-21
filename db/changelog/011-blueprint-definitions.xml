@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="015-blueprint-definitions" author="floweysales" dbms="mysql">
+  <createTable tableName="blueprint_functions">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="name" type="VARCHAR(120)"><constraints nullable="false"/></column>
+   <column name="graph_json" type="LONGTEXT"><constraints nullable="false"/></column>
+   <column name="created_by" type="BIGINT"><constraints nullable="false"/></column>
+  </createTable>
+  <createTable tableName="blueprint_triggers">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="event_key" type="VARCHAR(100)"><constraints nullable="false" unique="true" uniqueConstraintName="uq_blueprint_trigger_event"/></column>
+   <column name="payload_type" type="VARCHAR(12)"><constraints nullable="false"/></column>
+   <column name="created_by" type="BIGINT"><constraints nullable="false"/></column>
+  </createTable>
+  <rollback><dropTable tableName="blueprint_triggers"/><dropTable tableName="blueprint_functions"/></rollback>
+ </changeSet>
+</databaseChangeLog>
