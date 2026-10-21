@@ -1,5 +1,6 @@
 import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
 import { MarkdownRunOutputComponent } from './markdown-run-output';
+import { UserspaceFilesComponent } from './userspace-files';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -38,7 +39,7 @@ export class ConfirmDeleteFlowDialog {
 
 @Component({
  selector:'fse-flow-studio', standalone:true,
- imports:[CommonModule,FormsModule,MatButtonModule,MatCardModule,MatIconModule,MatDialogModule,BlueprintLibraryComponent,MarkdownRunOutputComponent],
+ imports:[CommonModule,FormsModule,MatButtonModule,MatCardModule,MatIconModule,MatDialogModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,UserspaceFilesComponent],
  changeDetection:ChangeDetectionStrategy.Default,
  template:`
  <mat-card class="flow-studio glass">
@@ -48,6 +49,7 @@ export class ConfirmDeleteFlowDialog {
    <nav class="studio-tabs" role="tablist" aria-label="Flow Studio sections">
      <button type="button" role="tab" [attr.aria-selected]="studioTab()==='editor'" [class.selected]="studioTab()==='editor'" (click)="studioTab.set('editor')">Flow editor</button>
      <button type="button" role="tab" [attr.aria-selected]="studioTab()==='library'" [class.selected]="studioTab()==='library'" (click)="studioTab.set('library')">Function library &amp; triggers</button>
+     <button type="button" role="tab" [attr.aria-selected]="studioTab()==='files'" [class.selected]="studioTab()==='files'" (click)="studioTab.set('files')">My Workspace</button>
      <button type="button" role="tab" [attr.aria-selected]="studioTab()==='runs'" [class.selected]="studioTab()==='runs'" (click)="studioTab.set('runs')">Run history</button>
    </nav>
    @if (studioTab()==='editor') {
@@ -177,6 +179,7 @@ export class ConfirmDeleteFlowDialog {
    @if (studioTab()==='library') {
      <fse-blueprint-library (functionsChanged)="loadFunctions()"></fse-blueprint-library>
    }
+   @if (studioTab()==='files') { <fse-userspace-files></fse-userspace-files> }
    @if (studioTab()==='runs') {
    <div class="run-history-heading"><h3>Recent runs</h3>
      <label>Output view <select [ngModel]="logView()" (ngModelChange)="logView.set($event)">
@@ -266,7 +269,7 @@ export class FlowStudioComponent {
  closeCanvasMenu(): void { this.canvasMenu.set(false); }
 
  readonly logView=signal<'markdown'|'raw'|'json'>('markdown');
- readonly studioTab=signal<'editor'|'library'|'runs'>('editor');
+ readonly studioTab=signal<'editor'|'library'|'runs'|'files'>('editor');
  readonly flows=signal<SavedFlow[]>([]);
  readonly functions=signal<{id:number;name:string}[]>([]);
  readonly selectedId=signal(0);
