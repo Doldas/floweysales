@@ -44,6 +44,7 @@ import { FinancialsComponent } from './components/financials';
 import { TradingChartComponent } from './components/chart';
 import { LedgerComponent } from './components/ledger';
 import { ForumComponent } from './components/forum';
+import { FlowStudioComponent } from './components/flow-studio';
 import {
   HISTORY_RANGES,
   PROVIDERS,
@@ -95,6 +96,7 @@ const FIRST_TICK_TIMEOUT_MS = 25_000;
     TradingChartComponent,
     LedgerComponent,
     ForumComponent,
+    FlowStudioComponent,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
