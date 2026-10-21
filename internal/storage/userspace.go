@@ -52,7 +52,7 @@ func (d *Database) WriteUserspaceFile(ctx context.Context,owner int64,rawPath,mi
  defer tx.Rollback()
  // Lock owner via account row, serializing concurrent writes and quota checks.
  var id int64
- if err=tx.QueryRowContext(ctx,"SELECT id FROM users WHERE id=? FOR UPDATE",owner).Scan(&id);err!=nil{return err}
+ if err=tx.QueryRowContext(ctx,"SELECT id FROM auth_users WHERE id=? FOR UPDATE",owner).Scan(&id);err!=nil{return err}
  var count int
  if err=tx.QueryRowContext(ctx,"SELECT COUNT(*) FROM userspace_files WHERE owner_id=?",owner).Scan(&count);err!=nil{return err}
  var exists int
