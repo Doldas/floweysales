@@ -45,8 +45,19 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
     <label class="flow-check"><input type="checkbox" [ngModel]="enabled()" (ngModelChange)="enabled.set($event)"> Enabled</label>
    </div>
    <div class="blueprint-layout">
-   <div class="flow-workspace" aria-label="Agent flow graph editor">
-    <svg viewBox="0 0 820 380" role="img" aria-label="Agent nodes and directed connections">
+   <div class="canvas-shell">
+    <div class="canvas-navigation" aria-label="Canvas navigation">
+      <button type="button" (click)="panCanvas(-80,0)" aria-label="Pan left">←</button>
+      <button type="button" (click)="panCanvas(0,-80)" aria-label="Pan up">↑</button>
+      <button type="button" (click)="panCanvas(0,80)" aria-label="Pan down">↓</button>
+      <button type="button" (click)="panCanvas(80,0)" aria-label="Pan right">→</button>
+      <button type="button" (click)="zoomCanvas(0.8)" aria-label="Zoom in">＋</button>
+      <span>{{ canvasZoomPercent() }}%</span>
+      <button type="button" (click)="zoomCanvas(1.25)" aria-label="Zoom out">－</button>
+      <button type="button" (click)="resetCanvas()" aria-label="Reset canvas view">Reset view</button>
+    </div>
+    <div class="flow-workspace" aria-label="Agent flow graph editor">
+    <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (contextmenu)="onCanvasContextMenu($event)" role="img" aria-label="Agent nodes and directed connections">
      <defs><marker id="flow-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#72b7ef"/></marker></defs>
      @for(edge of graph().edges;track edge.from+edge.to){
        <line [attr.x1]="node(edge.from)?.x!+125" [attr.y1]="node(edge.from)?.y!+35"
@@ -64,6 +75,15 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
        </g>
      }
     </svg>
+   </div>
+   @if(canvasMenu()){<div class="canvas-context-menu" role="menu" aria-label="Create node">
+     <strong>Add node</strong>
+     <button type="button" role="menuitem" (click)="addAgent();closeCanvasMenu()">Research Agent</button>
+     <button type="button" role="menuitem" (click)="addSubflow();closeCanvasMenu()">Call Flow</button>
+     <button type="button" role="menuitem" (click)="addConstant();closeCanvasMenu()">Value</button>
+     <button type="button" role="menuitem" (click)="addFunctionCall();closeCanvasMenu()">Function</button>
+     <button type="button" (click)="closeCanvasMenu()">Cancel</button>
+   </div>}
    </div>
    <aside class="flow-node-editor" aria-label="Node details" aria-live="polite">
    <header class="inspector-heading"><span>DETAILS</span><strong>{{ selectedNode()?.label || 'No node selected' }}</strong></header>
@@ -119,6 +139,13 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
   </mat-card-content>
  </mat-card>`,
  styles:[`
+ .canvas-shell{position:relative;min-width:0;min-height:0}
+ .canvas-navigation{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:8px;background:#14263a;border:1px solid #45627b;border-radius:8px 8px 0 0}
+ .canvas-navigation button,.canvas-context-menu button{background:#203a53;color:#e5f3ff;border:1px solid #527b99;border-radius:5px;min-height:34px;padding:6px 10px;cursor:pointer}
+ .canvas-navigation button:focus-visible,.canvas-context-menu button:focus-visible{outline:2px solid #80caff}
+ .canvas-navigation span{min-width:48px;text-align:center;font-variant-numeric:tabular-nums}
+ .canvas-context-menu{position:absolute;top:55px;left:16px;z-index:5;display:flex;flex-direction:column;gap:6px;min-width:180px;padding:12px;background:#15283d;border:1px solid #77b9e9;border-radius:10px;box-shadow:0 10px 35px #0008}
+ 
 :host{display:block;margin:0 0 24px}
  .studio-tabs{display:flex;gap:6px;overflow-x:auto;margin:16px 0 20px;border-bottom:1px solid #50738e;padding:0 0 7px}
  .studio-tabs button{flex:0 0 auto;padding:12px 16px;border:1px solid transparent;border-radius:8px;background:transparent;color:#c4d7eb;cursor:pointer;font:inherit;font-weight:600}
@@ -146,6 +173,34 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
  `]
 })
 export class FlowStudioComponent {
+ readonly canvasView = signal({ x: 0, y: 0, width: 820, height: 380 });
+ readonly canvasMenu = signal(false);
+ readonly canvasViewBox = () => {
+   const v = this.canvasView();
+   return `${v.x} ${v.y} ${v.width} ${v.height}`;
+ };
+ readonly canvasZoomPercent = () => Math.round(820 / this.canvasView().width * 100);
+ zoomCanvas(factor: number): void {
+   const v = this.canvasView();
+   const width = Math.max(820 / 3, Math.min(820 * 4, v.width * factor));
+   const height = width * 380 / 820;
+   this.canvasView.set({ x: v.x + (v.width - width) / 2, y: v.y + (v.height - height) / 2, width, height });
+ }
+ panCanvas(dx: number, dy: number): void {
+   this.canvasView.update(v => ({ ...v, x: v.x + dx * v.width / 820, y: v.y + dy * v.height / 380 }));
+ }
+ resetCanvas(): void { this.canvasView.set({ x: 0, y: 0, width: 820, height: 380 }); this.closeCanvasMenu(); }
+ onCanvasWheel(event: WheelEvent): void {
+   if (!event.ctrlKey && !event.metaKey) return;
+   event.preventDefault();
+   this.zoomCanvas(event.deltaY < 0 ? 0.9 : 1.1);
+ }
+ onCanvasContextMenu(event: MouseEvent): void {
+   event.preventDefault();
+   this.canvasMenu.set(true);
+ }
+ closeCanvasMenu(): void { this.canvasMenu.set(false); }
+
  readonly studioTab=signal<'editor'|'library'|'runs'>('editor');
  readonly flows=signal<SavedFlow[]>([]);
  readonly functions=signal<{id:number;name:string}[]>([]);
