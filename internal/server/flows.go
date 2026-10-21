@@ -28,6 +28,7 @@ type flowNode struct {
 	FunctionID int64   `json:"function_id,omitempty"`
 	ValueType  string  `json:"value_type,omitempty"`
 	Value      string  `json:"value,omitempty"`
+	ContentType string `json:"content_type,omitempty"`
 	Variable   string  `json:"variable,omitempty"`
 	Transform  string  `json:"transform,omitempty"`
 	X          float64 `json:"x"`
@@ -42,6 +43,11 @@ type flowEdge struct {
 type flowGraph struct {
 	Nodes []flowNode `json:"nodes"`
 	Edges []flowEdge `json:"edges"`
+}
+
+func allowedUserspaceType(mime string) bool {
+ switch mime {case "", "text/plain","text/markdown","text/csv","application/json":return true}
+ return false
 }
 
 var flowVariablePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{0,47}$`)
