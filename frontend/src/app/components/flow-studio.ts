@@ -290,7 +290,7 @@ export class ConfirmDeleteFlowDialog {
       }
       @if(replaySource()===run.id&&replaySteps().length){
        <section class="run-step-list" aria-label="Side-effect-free replay preview">
-        <strong>Replay preview (current flow definition)</strong>
+        <strong>Replay preview (saved graph version)</strong>
         @for(step of replaySteps();track $index){
          <details class="run-step">
           <summary>{{step.status}} · {{step.label||step.node}}</summary>
@@ -530,7 +530,7 @@ export class FlowStudioComponent {
   try{
    const result=await this.request('/api/admin/flows/'+this.selectedId()+'/runs/'+runId+'/preview',{method:'POST',body:JSON.stringify({node:nodeId})});
    this.replaySteps.set(result.steps||[]);
-   this.message.set('Preview only: no agents or side effects were executed. Uses current flow definition.');
+   this.message.set('Preview only: no agents or side effects were executed. Uses the saved graph snapshot.');
   }catch(e){this.message.set('Replay preview unavailable: '+String(e))}
  }
  async showRunSteps(runId:number){
