@@ -37,9 +37,11 @@ func flowV2SourceInput(g flowGraph, nodeID string, state *flowV2State) (string, 
 				continue
 			}
 		}
-		value,err:=flowV2EdgeValue(edge,state.Values[edge.From])
-        if err!=nil{return "",false,fmt.Errorf("node %s: %w",nodeID,err)}
-        values=append(values,value)
+		value, err := flowV2EdgeValue(edge, state.Values[edge.From])
+		if err != nil {
+			return "", false, fmt.Errorf("node %s: %w", nodeID, err)
+		}
+		values = append(values, value)
 	}
 	if len(values) == 0 {
 		return "", false, nil
@@ -58,8 +60,10 @@ func flowV2Merge(g flowGraph, nodeID string, state *flowV2State) (string, bool, 
 		if (edge.FromPort == "true" || edge.FromPort == "false") && strings.ToLower(state.Values[edge.From]) != edge.FromPort {
 			continue
 		}
-		raw,err:=flowV2EdgeValue(edge,state.Values[edge.From])
-        if err!=nil{return "",false,fmt.Errorf("merge %s: %w",nodeID,err)}
+		raw, err := flowV2EdgeValue(edge, state.Values[edge.From])
+		if err != nil {
+			return "", false, fmt.Errorf("merge %s: %w", nodeID, err)
+		}
 		if json.Valid([]byte(raw)) {
 			values = append(values, json.RawMessage(raw))
 		} else {
@@ -117,10 +121,14 @@ func flowV2JSONProperty(value, property string) (string, error) {
 	return string(part), nil
 }
 
-func flowV2EdgeValue(edge flowEdge, source string)(string,error){
- if !strings.HasPrefix(edge.FromPort,"field:"){return source,nil}
- property:=strings.TrimPrefix(edge.FromPort,"field:")
- value,err:=flowV2JSONProperty(source,property)
- if err!=nil{return "",fmt.Errorf("edge %s to %s: %w",edge.From,edge.To,err)}
- return value,nil
+func flowV2EdgeValue(edge flowEdge, source string) (string, error) {
+	if !strings.HasPrefix(edge.FromPort, "field:") {
+		return source, nil
+	}
+	property := strings.TrimPrefix(edge.FromPort, "field:")
+	value, err := flowV2JSONProperty(source, property)
+	if err != nil {
+		return "", fmt.Errorf("edge %s to %s: %w", edge.From, edge.To, err)
+	}
+	return value, nil
 }
