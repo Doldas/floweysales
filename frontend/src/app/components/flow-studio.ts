@@ -146,6 +146,23 @@ export class ConfirmDeleteFlowDialog {
        @if(n.type!=='trigger'){
          <label>Connect output from <select #nodeSource><option value="">Choose upstream node</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id&&other.type!=='output'){<option [value]="other.id">{{other.label}}</option>}}</select></label>
          <button mat-stroked-button (click)="connect(nodeSource.value,n.id)" [disabled]="!nodeSource.value">Connect nodes</button>
+         <div class="field-mapper">
+          <strong>Map JSON field → input</strong>
+          <label>Source agent<select #mappingSource><option value="">Choose JSON agent</option>
+           @for(other of graph().nodes;track other.id){@if(other.id!==n.id&&other.type==='agent'&&other.output_mode==='json'){<option [value]="other.id">{{other.label}}</option>}}
+          </select></label>
+          @if(mappingSource.value){
+           <label>Available fields<select #mappingField><option value="">Choose property</option>
+             @for(field of nodeContractFields(mappingSource.value);track field){<option [value]="field">{{field}}</option>}
+           </select></label>
+           <button mat-stroked-button [disabled]="!mappingField.value" (click)="mapField(mappingSource.value,n.id,mappingField.value)">Connect field</button>
+          }
+          @for(edge of mappedInputs(n.id);track edge.from+edge.from_port){
+           <div class="mapped-edge"><span>{{node(edge.from)?.label}}.{{edge.from_port?.slice(6)}} → input</span>
+             <button type="button" (click)="removeMappedEdge(edge)" [attr.aria-label]="'Remove mapping from '+edge.from">Remove</button>
+           </div>
+          }
+         </div>
        }
        <label>Label <input [ngModel]="n.label" (ngModelChange)="updateNode('label',$event)" maxlength="100"></label>
        @if(n.type==='agent') {
@@ -303,6 +320,10 @@ export class ConfirmDeleteFlowDialog {
  .inspector-heading{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid #355a75;padding-bottom:12px;margin-bottom:14px}
  .inspector-heading span{font-size:11px;letter-spacing:.14em;color:#a4c9e7}
  .inspector-fields{display:flex;flex-direction:column;gap:12px}
+ .field-mapper{display:flex;flex-direction:column;gap:8px;border:1px solid #4b718b;border-radius:8px;padding:10px}
+ .field-mapper strong{font-size:13px}
+ .mapped-edge{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:12px;overflow-wrap:anywhere}
+ .mapped-edge button{color:#bce3ff;background:#1b3850;border:1px solid #527b99;border-radius:5px;padding:5px}
  .inspector-fields label{min-width:0;width:100%;flex:auto}
  .inspector-fields input,.inspector-fields select,.inspector-fields textarea{box-sizing:border-box;width:100%;min-width:0}
  @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .flow-workspace{min-height:280px}.flow-node-editor{max-height:360px}}
@@ -424,7 +445,23 @@ export class FlowStudioComponent {
    this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===id?{...n,[field]:value}:n)}));
  }
  updateNode(field:'label'|'prompt'|'output_mode',value:string){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,[field]:value}:n)}))}
- connect(from:string,to:string){if(!from||from===to||this.graph().edges.some(e=>e.from===from&&e.to===to))return;
+ nodeContractFields(id:string):string[]{
+   const contract=this.node(id)?.json_contract;
+   if(!contract)return [];
+   try{
+    const parsed=JSON.parse(contract) as {properties?:Record<string,unknown>};
+    return parsed.properties&&typeof parsed.properties==='object'?Object.keys(parsed.properties).filter(k=>/^[a-zA-Z][a-zA-Z0-9_]{0,47}$/.test(k)).slice(0,20):[];
+   }catch{return []}
+ }
+ mappedInputs(id:string):FlowEdge[]{return this.graph().edges.filter(e=>e.to===id&&(e.from_port||'').startsWith('field:'))}
+ mapField(from:string,to:string,field:string):void{
+   if(!from||!to||from===to||!this.nodeContractFields(from).includes(field))return;
+   this.graph.update(g=>({...g,version:2,edges:[...g.edges.filter(e=>e.to!==to),{from,to,from_port:'field:'+field,to_port:'input'}]}));
+ }
+ removeMappedEdge(edge:FlowEdge):void{
+   this.graph.update(g=>({...g,edges:g.edges.filter(e=>e!==edge)}));
+ }
+  connect(from:string,to:string){if(!from||from===to||this.graph().edges.some(e=>e.from===from&&e.to===to))return;
   this.graph.update(g=>({...g,edges:[...g.edges,{from,to}]}))}
  linkSelected(){const target=this.selectedNode();if(!target)return;const last=this.graph().nodes.find(x=>x.id!==target.id&&x.type==='agent');if(last)this.connect(last.id,target.id)}
  removeSelected(){const id=this.chosen();if(id==='start')return;this.graph.update(g=>({...g,nodes:g.nodes.filter(n=>n.id!==id),edges:g.edges.filter(e=>e.from!==id&&e.to!==id)}));this.chosen.set('')}
