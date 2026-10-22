@@ -229,6 +229,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, fi
 	e.registerAIRoutes()
 	e.registerFlowRoutes()
 	e.registerBlueprintRoutes()
+	e.registerUserspaceRoutes()
 	e.registerStaticRoutes()
 
 	return e

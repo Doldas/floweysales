@@ -20,18 +20,19 @@ import (
 )
 
 type flowNode struct {
-	ID         string  `json:"id"`
-	Type       string  `json:"type"`
-	Label      string  `json:"label"`
-	Prompt     string  `json:"prompt,omitempty"`
-	FlowID     int64   `json:"flow_id,omitempty"`
-	FunctionID int64   `json:"function_id,omitempty"`
-	ValueType  string  `json:"value_type,omitempty"`
-	Value      string  `json:"value,omitempty"`
-	Variable   string  `json:"variable,omitempty"`
-	Transform  string  `json:"transform,omitempty"`
-	X          float64 `json:"x"`
-	Y          float64 `json:"y"`
+	ID          string  `json:"id"`
+	Type        string  `json:"type"`
+	Label       string  `json:"label"`
+	Prompt      string  `json:"prompt,omitempty"`
+	FlowID      int64   `json:"flow_id,omitempty"`
+	FunctionID  int64   `json:"function_id,omitempty"`
+	ValueType   string  `json:"value_type,omitempty"`
+	Value       string  `json:"value,omitempty"`
+	ContentType string  `json:"content_type,omitempty"`
+	Variable    string  `json:"variable,omitempty"`
+	Transform   string  `json:"transform,omitempty"`
+	X           float64 `json:"x"`
+	Y           float64 `json:"y"`
 }
 type flowEdge struct {
 	From     string `json:"from"`
@@ -42,6 +43,14 @@ type flowEdge struct {
 type flowGraph struct {
 	Nodes []flowNode `json:"nodes"`
 	Edges []flowEdge `json:"edges"`
+}
+
+func allowedUserspaceType(mime string) bool {
+	switch mime {
+	case "", "text/plain", "text/markdown", "text/csv", "application/json":
+		return true
+	}
+	return false
 }
 
 var flowVariablePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{0,47}$`)
@@ -115,8 +124,20 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		if _, ok := nodes[n.ID]; ok {
 			return g, nil, fmt.Errorf("duplicate node")
 		}
-		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" {
+		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" {
 			return g, nil, fmt.Errorf("only trigger, research agent, constant and subflow nodes are allowed")
+		}
+		if n.Type == "workspace_read" || n.Type == "workspace_write" {
+			utilities++
+			if _, err := storage.CleanUserspacePath(n.Value); err != nil {
+				return g, nil, fmt.Errorf("invalid workspace file path: %w", err)
+			}
+			if n.Prompt != "" || n.FlowID != 0 || n.FunctionID != 0 {
+				return g, nil, fmt.Errorf("workspace nodes cannot call agents")
+			}
+			if n.Type == "workspace_write" && !allowedUserspaceType(n.ContentType) {
+				return g, nil, fmt.Errorf("unsupported workspace file format")
+			}
 		}
 		if n.Type == "save_result" || n.Type == "load_result" || n.Type == "transform" {
 			utilities++
@@ -475,11 +496,44 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 	base, key, model := e.aiDefaults()
 
 	previous := input
+	var workspaceOwner int64
 	variables := map[string]string{}
 	results := []map[string]string{}
 	for _, id := range order {
 		n := nodes[id]
 		if n.Type == "trigger" {
+			continue
+		}
+		if n.Type == "workspace_read" || n.Type == "workspace_write" {
+			if workspaceOwner == 0 {
+				var ownerErr error
+				workspaceOwner, ownerErr = e.db.FlowOwner(ctx, f.ID)
+				if ownerErr != nil {
+					return "", fmt.Errorf("flow workspace owner unavailable: %w", ownerErr)
+				}
+			}
+			if n.Type == "workspace_write" {
+				if n.ContentType == "application/json" && !json.Valid([]byte(previous)) {
+					return "", fmt.Errorf("workspace write %s: output is not valid JSON", n.Value)
+				}
+				mime := n.ContentType
+				if mime == "" {
+					mime = "text/plain"
+				}
+				if err := e.db.WriteUserspaceFile(ctx, workspaceOwner, n.Value, mime, []byte(previous)); err != nil {
+					return "", fmt.Errorf("workspace write %s: %w", n.Value, err)
+				}
+			} else {
+				content, _, err := e.db.ReadUserspaceFile(ctx, workspaceOwner, n.Value)
+				if err != nil {
+					return "", fmt.Errorf("workspace read %s: %w", n.Value, err)
+				}
+				if len(content) > 6000 {
+					return "", fmt.Errorf("workspace read %s: file exceeds flow context limit", n.Value)
+				}
+				previous = string(content)
+			}
+			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous, "file": n.Value})
 			continue
 		}
 		if n.Type == "save_result" {

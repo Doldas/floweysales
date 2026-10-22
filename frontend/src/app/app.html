@@ -7,8 +7,15 @@
     <h2>FloweySales Research</h2>
     <p class="research-account">Signed in as {{ auth.user()?.email }} · USER (read-only research access)</p>
     <button mat-stroked-button (click)="auth.logout()">Sign out</button>
-    <fse-financials [symbol]="trackedSymbol()" [provider]="provider()"></fse-financials>
-    <fse-ai-chat [contextSymbol]="trackedSymbol()" [contextProvider]="provider()" [contextRange]="historyRange()" [contextPrice]="livePrice() | number:'1.2-4'"></fse-ai-chat>
+    <nav class="workspace-tabs" aria-label="Research workspaces">
+      <button type="button" class="workspace-tab" [class.active]="workspace() !== 'files'" (click)="openWorkspace('financials')">Research</button>
+      <button type="button" class="workspace-tab" [class.active]="workspace() === 'files'" (click)="openWorkspace('files')">My Workspace</button>
+    </nav>
+    @if(workspace() === 'files'){<fse-userspace-files></fse-userspace-files>}
+    @else {
+      <fse-financials [symbol]="trackedSymbol()" [provider]="provider()"></fse-financials>
+      <fse-ai-chat [contextSymbol]="trackedSymbol()" [contextProvider]="provider()" [contextRange]="historyRange()" [contextPrice]="livePrice() | number:'1.2-4'"></fse-ai-chat>
+    }
   </main>
 } @else {
 <mat-toolbar class="topbar" color="primary" aria-label="FloweySales terminal header">
@@ -44,7 +51,7 @@
 
   <nav class="workspace-tabs" aria-label="FloweySales workspace" role="tablist">
     @for (tab of workspaceTabs; track tab.id) {
-      @if (!tab.adminOnly || !auth.enabled() || auth.user()?.role === 'SYS_ADMIN') {
+      @if ((!tab.adminOnly || !auth.enabled() || auth.user()?.role === 'SYS_ADMIN') && (tab.id !== 'files' || auth.enabled())) {
         <button type="button" role="tab" class="workspace-tab"
           [id]="'workspace-tab-' + tab.id"
           [attr.aria-selected]="workspace() === tab.id"
@@ -311,6 +318,11 @@
   <fse-forum [trackedSymbol]="trackedSymbol()"></fse-forum>
 
 
+    </section>
+  }
+  @if (workspace() === 'files' && auth.enabled()) {
+    <section id="workspace-panel-files" role="tabpanel" aria-labelledby="workspace-tab-files">
+      <fse-userspace-files></fse-userspace-files>
     </section>
   }
   @if ((!auth.enabled() || auth.user()?.role === 'SYS_ADMIN') && workspace() === 'studio') {
