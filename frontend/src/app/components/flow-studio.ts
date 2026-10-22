@@ -11,7 +11,7 @@ import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angu
 import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'loop'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
@@ -63,6 +63,7 @@ export class ConfirmDeleteFlowDialog {
      <button mat-stroked-button (click)="addV2Node('condition')">+ If / Else</button>
      <button mat-stroked-button (click)="addV2Node('merge')">+ Merge</button>
      <button mat-stroked-button (click)="addV2Node('json_get')">+ JSON Field</button>
+     <button mat-stroked-button (click)="addPureLoop()">+ Loop</button>
      <button mat-stroked-button (click)="addOutput()">+ Output</button>
      <button mat-stroked-button (click)="addSubflow()">+ Call Flow</button>
      <button mat-stroked-button (click)="addConstant()">+ Value</button>
@@ -217,6 +218,29 @@ export class ConfirmDeleteFlowDialog {
          @if(n.transform==='prefix'||n.transform==='suffix'||n.transform==='replace'){
            <label>Operand <input [ngModel]="n.value||''" (ngModelChange)="updateUtility('value',$event)" maxlength="1000" [placeholder]="n.transform==='replace'?'find=>replacement':'Text to add'"></label>
          }
+       }
+       @if(n.type==='loop'){
+        <label>Loop type<select [ngModel]="n.loop_mode||'for'" (ngModelChange)="updateLoop(n.id,'loop_mode',$event)">
+          <option value="for">For</option><option value="foreach">For each JSON array element</option>
+          <option value="while">While</option><option value="do_while">Do while</option>
+        </select></label>
+        <label>Max iterations (1–100)<input type="number" min="1" max="100" [ngModel]="n.loop_limit||10" (ngModelChange)="updateLoop(n.id,'loop_limit',+$event)"></label>
+        <label>Transformation<select [ngModel]="n.transform||'increment'" (ngModelChange)="updateLoop(n.id,'transform',$event)">
+         <option value="increment">Increment number</option><option value="decrement">Decrement number</option>
+         <option value="trim">Trim text</option><option value="uppercase">Uppercase</option><option value="lowercase">Lowercase</option>
+         <option value="prefix">Prefix</option><option value="suffix">Suffix</option>
+        </select></label>
+        @if(n.transform==='prefix'||n.transform==='suffix'){
+          <label>Text operand<input [ngModel]="n.value||''" (ngModelChange)="updateLoop(n.id,'value',$event)"></label>
+        }
+        @if(n.loop_mode==='while'||n.loop_mode==='do_while'){
+         <label>Continue while<select [ngModel]="n.operator||'less_than'" (ngModelChange)="updateLoop(n.id,'operator',$event)">
+          <option value="less_than">Less than</option><option value="greater_than">Greater than</option>
+          <option value="equals">Equals</option><option value="not_equals">Not equals</option>
+         </select></label>
+         <label>Comparison<input [ngModel]="n.loop_condition||'10'" (ngModelChange)="updateLoop(n.id,'loop_condition',$event)"></label>
+        }
+        <p class="muted">Pure data loop only. Never executes AI models, HTTP calls or workspace writes inside iterations.</p>
        }
        @if(n.type==='workspace_read'||n.type==='workspace_write'){
         <label>Userspace path <input [ngModel]="n.value||''" (ngModelChange)="updateUtility('value',$event)" maxlength="512" placeholder="/research/summary.md"></label>
@@ -437,7 +461,17 @@ export class FlowStudioComponent {
  loadFlow(id:number){const f=this.flows().find(x=>x.id===id);if(!f){this.newFlow();return}
   this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);void this.refreshRuns()}
  async loadFunctions(){try{const data=await this.request("/api/admin/blueprint-functions");this.functions.set(data.functions||[])}catch(e){this.message.set(String(e))}}
- addUtility(type:'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'){
+ addPureLoop():void{
+   const count=this.graph().nodes.length;
+   const id='loop-'+Date.now().toString(36);
+   this.graph.update(g=>({...g,version:2,nodes:[...g.nodes,{id,type:'loop',label:'Loop',loop_mode:'for',loop_limit:10,transform:'increment',operator:'less_than',loop_condition:'10',x:260+(count%4)*140,y:40+Math.floor(count/4)*100}]}));
+   this.chosen.set(id);
+ }
+ updateLoop(id:string,field:'loop_mode'|'loop_limit'|'transform'|'value'|'operator'|'loop_condition',value:string|number):void{
+   const safe=field==='loop_limit'?(Number.isFinite(Number(value))?Math.max(1,Math.min(100,Math.trunc(Number(value)))):1):value;
+   this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===id?{...n,[field]:safe}:n)}));
+ }
+  addUtility(type:'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'){
    const count=this.graph().nodes.length;
    const id=type+'-'+Date.now().toString(36);
    const label=type==='save_result'?'Save Result':type==='load_result'?'Load Result':type==='workspace_read'?'Read File':type==='workspace_write'?'Write File':'Transform Text';
