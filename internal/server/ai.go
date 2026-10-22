@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"floweysales/internal/ai"
@@ -96,6 +97,29 @@ type chatRequestBody struct {
 
 // registerAIRoutes wires the OpenAI-compatible chat proxy and its config probe.
 func (e *Engine) registerAIRoutes() {
+ e.mux.HandleFunc("GET /api/admin/ai/models",func(w http.ResponseWriter,r *http.Request){
+  if !e.flowAdmin(w,r){return}
+  models,err:=e.db.ListAIModels(r.Context())
+  if err!=nil{writeJSON(w,503,map[string]string{"error":"Model catalog unavailable"});return}
+  writeJSON(w,200,map[string]any{"models":models})
+ })
+ e.mux.HandleFunc("POST /api/admin/ai/models",func(w http.ResponseWriter,r *http.Request){
+  if !e.flowAdmin(w,r){return}
+  r.Body=http.MaxBytesReader(w,r.Body,2048);defer r.Body.Close()
+  var data struct{Model string `json:"model"`;Label string `json:"label"`}
+  dec:=json.NewDecoder(r.Body);dec.DisallowUnknownFields()
+  if err:=dec.Decode(&data);err!=nil{writeJSON(w,400,map[string]string{"error":"Invalid model definition"});return}
+  if err:=e.db.AddAIModel(r.Context(),data.Model,data.Label);err!=nil{writeJSON(w,400,map[string]string{"error":"Cannot save model: "+err.Error()});return}
+  writeJSON(w,201,map[string]bool{"created":true})
+ })
+ e.mux.HandleFunc("DELETE /api/admin/ai/models/{id}",func(w http.ResponseWriter,r *http.Request){
+  if !e.flowAdmin(w,r){return}
+  id,err:=strconv.ParseInt(r.PathValue("id"),10,64)
+  if err!=nil||id<=0{writeJSON(w,400,map[string]string{"error":"Invalid model ID"});return}
+  if err:=e.db.DeleteAIModel(r.Context(),id);err!=nil{writeJSON(w,404,map[string]string{"error":"Model not found"});return}
+  writeJSON(w,200,map[string]bool{"deleted":true})
+ })
+
 	// GET /api/ai/config describes the server-side default endpoint plus the
 	// local-model presets the UI offers. The API key is never returned.
 	e.mux.HandleFunc("GET /api/ai/config", func(w http.ResponseWriter, r *http.Request) {
