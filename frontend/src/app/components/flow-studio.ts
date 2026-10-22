@@ -420,9 +420,9 @@ export class FlowStudioComponent {
  ],edges:[{from:'start',to:'agent-1'}]}}
  node(id:string):FlowNode|undefined{return this.graph().nodes.find(n=>n.id===id)}
  select(id:string){this.chosen.set(id)}
- newFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.message.set('')}
+ newFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);this.message.set('')}
  loadFlow(id:number){const f=this.flows().find(x=>x.id===id);if(!f){this.newFlow();return}
-  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.traceRunId.set(0);this.traceSteps.set([]);void this.refreshRuns()}
+  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);void this.refreshRuns()}
  async loadFunctions(){try{const data=await this.request("/api/admin/blueprint-functions");this.functions.set(data.functions||[])}catch(e){this.message.set(String(e))}}
  addUtility(type:'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'){
    const count=this.graph().nodes.length;
@@ -535,7 +535,7 @@ export class FlowStudioComponent {
  }
  async showRunSteps(runId:number){
   if(!this.selectedId())return;
-  if(this.traceRunId()===runId){this.traceRunId.set(0);this.traceSteps.set([]);return}
+  if(this.traceRunId()===runId){this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);return}
   this.traceRunId.set(runId);this.traceLoading.set(true);this.traceSteps.set([]);
   try{const data=await this.request('/api/admin/flows/'+this.selectedId()+'/runs/'+runId+'/steps');
       if(this.traceRunId()===runId)this.traceSteps.set(data.steps||[]);
