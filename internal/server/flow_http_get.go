@@ -39,7 +39,7 @@ func flowPublicURL(raw string) (*url.URL, error) {
 	if strings.HasSuffix(strings.ToLower(u.Hostname()), ".local") || strings.EqualFold(u.Hostname(), "localhost") {
 		return nil, errors.New("local host is forbidden")
 	}
-	if ip := net.ParseIP(u.Hostname()); ip != nil && !ip.IsGlobalUnicast() {
+	if ip := net.ParseIP(u.Hostname()); ip != nil && !flowAllowedIP(ip) {
 		return nil, errors.New("non-public IP forbidden")
 	}
 	return u, nil
@@ -49,7 +49,7 @@ func flowAllowedIP(ip net.IP) bool {
 		return false
 	}
 	// Exclude shared space, benchmarking, documentation ranges, and metadata.
-	for _, cidr := range []string{"100.64.0.0/10", "169.254.0.0/16", "192.0.0.0/24", "192.0.2.0/24", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4", "2001:db8::/32", "fc00::/7", "fe80::/10", "::ffff:0:0/96"} {
+	for _, cidr := range []string{"100.64.0.0/10", "169.254.0.0/16", "192.0.0.0/24", "192.0.2.0/24", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4", "2001:db8::/32", "fc00::/7", "fe80::/10"} {
 		_, network, _ := net.ParseCIDR(cidr)
 		if network.Contains(ip) {
 			return false
