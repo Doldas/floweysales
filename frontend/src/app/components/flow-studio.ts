@@ -11,7 +11,7 @@ import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angu
 import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; variable?:string; transform?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
@@ -152,6 +152,9 @@ export class ConfirmDeleteFlowDialog {
         <label>Output format <select [ngModel]="n.output_mode||'markdown'" (ngModelChange)="updateNode('output_mode',$event)">
           <option value="markdown">Markdown / Default</option><option value="json">JSON only (strict validation)</option>
         </select></label>
+        <label>Timeout (seconds, 0 = default 45) <input type="number" min="0" max="90" step="1" [ngModel]="n.timeout_seconds||0" (ngModelChange)="updateAgentPolicy(n.id,'timeout_seconds',+$event)"></label>
+        <label>Retries on failure (0–2) <input type="number" min="0" max="2" step="1" [ngModel]="n.max_retries||0" (ngModelChange)="updateAgentPolicy(n.id,'max_retries',+$event)"></label>
+        <p class="muted">Retries only apply to read-only agent calls. Backoff: 1s, then 2s. Other nodes will never repeat automatically.</p>
         <label>Research instructions<textarea rows="3" [ngModel]="n.prompt" (ngModelChange)="updateNode('prompt',$event)" maxlength="2000"></textarea></label>
 
        }
@@ -391,7 +394,12 @@ export class FlowStudioComponent {
  connectValue(from:string,to:string){if(!to||this.node(from)?.value_type!=='text'){this.message.set('Typed link requires a text value and an agent or flow input');return}if(this.graph().edges.some(e=>e.from===from&&e.to===to))return;this.graph.update(g=>({...g,edges:[...g.edges,{from,to,from_port:'value',to_port:'input'}]}))}
  addSubflow(){const n=this.graph().nodes;const id='flow-'+Date.now().toString(36);this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'flow',label:'Call flow',flow_id:0,x:260+(n.length%4)*140,y:40+Math.floor(n.length/4)*100}]}));this.chosen.set(id)}
  updateFlowReference(target:number){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,flow_id:target}:n)}))}
- addV2Node(type:'condition'|'merge'|'json_get'){
+ updateAgentPolicy(id:string,field:'timeout_seconds'|'max_retries',value:number):void {
+   const max=field==='max_retries'?2:90;
+   const safe=Number.isFinite(value)?Math.max(0,Math.min(max,Math.trunc(value))):0;
+   this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===id?{...n,[field]:safe}:n)}));
+ }
+  addV2Node(type:'condition'|'merge'|'json_get'){
    const id=type+'-'+Date.now().toString(36);
    this.graph.update(g=>({...g,version:2,nodes:[...g.nodes,{id,type,label:type==='condition'?'If / Else':type==='merge'?'Merge Results':'JSON Field',operator:type==='condition'?'equals':undefined,property:type==='json_get'?'score':undefined,x:260+(g.nodes.length%3)*130,y:65+Math.floor(g.nodes.length/3)*110}]}));
    this.chosen.set(id);
