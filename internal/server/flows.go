@@ -159,18 +159,36 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 				return g, nil, fmt.Errorf("invalid JSON property")
 			}
 		}
-		if n.Type=="loop" {
-            utilities++
-            if n.Prompt!=""||n.FlowID!=0||n.FunctionID!=0{return g,nil,fmt.Errorf("loop nodes must remain pure")}
-            if n.LoopLimit<1||n.LoopLimit>100{return g,nil,fmt.Errorf("loop limit must be 1–100")}
-            switch n.LoopMode{case "for","foreach","while","do_while":default:return g,nil,fmt.Errorf("invalid loop mode")}
-            switch n.Transform{case "trim","uppercase","lowercase","prefix","suffix","replace","increment","decrement":default:return g,nil,fmt.Errorf("invalid loop transformation")}
-            if len(n.Value)>1000||len(n.LoopCondition)>1000{return g,nil,fmt.Errorf("loop operand too long")}
-            if n.LoopMode=="while"||n.LoopMode=="do_while"{
-                switch n.Operator{case "equals","not_equals","contains","greater_than","less_than":default:return g,nil,fmt.Errorf("invalid loop predicate")}
-            }
-        }
-        if n.Type == "output" {
+		if n.Type == "loop" {
+			utilities++
+			if n.Prompt != "" || n.FlowID != 0 || n.FunctionID != 0 {
+				return g, nil, fmt.Errorf("loop nodes must remain pure")
+			}
+			if n.LoopLimit < 1 || n.LoopLimit > 100 {
+				return g, nil, fmt.Errorf("loop limit must be 1–100")
+			}
+			switch n.LoopMode {
+			case "for", "foreach", "while", "do_while":
+			default:
+				return g, nil, fmt.Errorf("invalid loop mode")
+			}
+			switch n.Transform {
+			case "trim", "uppercase", "lowercase", "prefix", "suffix", "replace", "increment", "decrement":
+			default:
+				return g, nil, fmt.Errorf("invalid loop transformation")
+			}
+			if len(n.Value) > 1000 || len(n.LoopCondition) > 1000 {
+				return g, nil, fmt.Errorf("loop operand too long")
+			}
+			if n.LoopMode == "while" || n.LoopMode == "do_while" {
+				switch n.Operator {
+				case "equals", "not_equals", "contains", "greater_than", "less_than":
+				default:
+					return g, nil, fmt.Errorf("invalid loop predicate")
+				}
+			}
+		}
+		if n.Type == "output" {
 			utilities++
 			if n.Prompt != "" || n.FunctionID != 0 || n.FlowID != 0 {
 				return g, nil, fmt.Errorf("output node cannot run tools")
@@ -850,13 +868,15 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			}
 		}
 
-        if n.Type=="loop"{
-            result,err:=executePureLoop(n,previous)
-            if err!=nil{return "",fmt.Errorf("loop node %s: %w",n.ID,err)}
-            previous=result
-            record(map[string]string{"node":n.ID,"label":n.Label,"output":previous})
-            continue
-        }
+		if n.Type == "loop" {
+			result, err := executePureLoop(n, previous)
+			if err != nil {
+				return "", fmt.Errorf("loop node %s: %w", n.ID, err)
+			}
+			previous = result
+			record(map[string]string{"node": n.ID, "label": n.Label, "output": previous})
+			continue
+		}
 		if n.Type == "output" {
 			record(map[string]string{"node": n.ID, "label": n.Label, "output": previous})
 			nodeResults[n.ID] = previous
