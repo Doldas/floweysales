@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const UserspaceMaxFileBytes = 65536
+const UserspaceMaxFileBytes = 2 * 1024 * 1024
 const UserspaceMaxFiles = 256
 
 type UserspaceFile struct {
