@@ -259,6 +259,10 @@ export class ConfirmDeleteFlowDialog {
        <option value="markdown">Markdown (default)</option><option value="raw">RAW</option><option value="json">Structured JSON</option>
      </select></label>
      <button mat-stroked-button (click)="refreshRuns()" [disabled]="!selectedId()">Refresh history</button>
+     <label>Compare with run<select [ngModel]="compareRun()" (ngModelChange)="compareAgainst(+$event)">
+      <option [ngValue]="0">No comparison</option>
+      @for(other of runs();track other.id){<option [ngValue]="other.id">#{{other.id}} · {{other.status}}</option>}
+     </select></label>
    </div>
    @if(!runs().length){<p class="muted">No executions yet. Save and run a flow to see a trace.</p>}
    @for(run of runs();track run.id){
@@ -272,7 +276,9 @@ export class ConfirmDeleteFlowDialog {
         <div class="run-step-list" aria-label="Node execution trace">
          @for(step of traceSteps();track step.id){
           <details class="run-step">
-           <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}}</span></summary>
+           <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}}</span>
+            @if(compareRun()&&compareRun()!==run.id){<span class="muted"> · {{compareStatus(step.node,step.status,step.output)}}</span>}
+           </summary>
            @if(step.output){<pre>{{step.output}}</pre>}
            @if(step.status==='SUCCESS'&&step.output&&step.output.length<4000){
             <button mat-stroked-button (click)="previewReplay(run.id,step.node)">Replay preview from this node</button>
@@ -402,6 +408,8 @@ export class FlowStudioComponent {
  readonly traceLoading=signal(false);
  readonly replaySteps=signal<{node:string;label:string;status:string;input?:string;output?:string}[]>([]);
  readonly replaySource=signal(0);
+ readonly compareRun=signal(0);
+ readonly comparedSteps=signal<{node:string;status:string;output:string}[]>([]);
  readonly busy=signal(false);
  readonly message=signal('');
  private dragging:{id:string;startX:number;startY:number;x:number;y:number}|null=null;
@@ -502,6 +510,19 @@ export class FlowStudioComponent {
    await this.refreshRuns();
   }catch(e){this.message.set('Cannot cancel run: '+String(e))}
   finally{this.busy.set(false)}
+ }
+ async compareAgainst(runId:number){
+  if(!this.selectedId()||!runId){this.compareRun.set(0);this.comparedSteps.set([]);return}
+  this.compareRun.set(runId);this.comparedSteps.set([]);
+  try{
+   const data=await this.request('/api/admin/flows/'+this.selectedId()+'/runs/'+runId+'/steps');
+   this.comparedSteps.set(data.steps||[]);
+  }catch(e){this.message.set('Cannot compare runs: '+String(e))}
+ }
+ compareStatus(node:string,status:string,output:string):string{
+   const other=this.comparedSteps().find(x=>x.node===node);
+   if(!this.compareRun()||!other)return 'No baseline';
+   return other.status===status&&other.output===output?'Unchanged':other.status!==status?'Status changed':'Output changed';
  }
  async previewReplay(runId:number,nodeId:string){
   if(!this.selectedId())return;
