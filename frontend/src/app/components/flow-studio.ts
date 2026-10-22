@@ -372,7 +372,7 @@ export class FlowStudioComponent {
  dragStart(ev:PointerEvent,id:string){if(ev.button!==0||ev.pointerType==='touch')return;const n=this.node(id);if(!n)return;this.chosen.set(id);this.dragging={id,startX:ev.clientX,startY:ev.clientY,x:n.x,y:n.y};
   const svg=(ev.currentTarget as SVGGElement).ownerSVGElement;if(!svg)return;
   const move=(event:PointerEvent)=>{const box=svg.getBoundingClientRect();if(!this.dragging)return;
-   const dx=(event.clientX-this.dragging.startX)*820/box.width,dy=(event.clientY-this.dragging.startY)*380/box.height;
+   const view=this.canvasView();const dx=(event.clientX-this.dragging.startX)*view.width/box.width,dy=(event.clientY-this.dragging.startY)*view.height/box.height;
    this.graph.update(g=>({...g,nodes:g.nodes.map(node=>node.id===id?{...node,x:Math.max(0,Math.min(695,this.dragging!.x+dx)),y:Math.max(0,Math.min(310,this.dragging!.y+dy))}:node)}))}
   const stop=()=>{svg.removeEventListener('pointermove',move);svg.removeEventListener('pointerup',stop);svg.removeEventListener('pointercancel',stop);this.dragging=null}
   svg.addEventListener('pointermove',move);svg.addEventListener('pointerup',stop);svg.addEventListener('pointercancel',stop);
