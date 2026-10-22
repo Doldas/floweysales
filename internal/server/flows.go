@@ -270,7 +270,24 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		if from.Type == "agent" && edge.To == edge.From {
 			return g, nil, fmt.Errorf("cycle")
 		}
-		if edge.FromPort != "" || edge.ToPort != "" {
+		if g.Version==2 && strings.HasPrefix(edge.FromPort,"field:") && edge.ToPort=="input" {
+            property:=strings.TrimPrefix(edge.FromPort,"field:")
+            if !flowVariablePattern.MatchString(property){return g,nil,fmt.Errorf("invalid mapped field")}
+            if from.Type=="trigger" || from.Type=="condition" || from.Type=="output"{return g,nil,fmt.Errorf("invalid mapped field source")}
+            if nodes[edge.To].Type=="trigger" || nodes[edge.To].Type=="constant"{return g,nil,fmt.Errorf("invalid mapped field target")}
+            if from.Type=="agent" {
+                if from.OutputMode!="json"{return g,nil,fmt.Errorf("mapped agent output must be JSON")}
+                if from.JSONContract!="" {
+                    contract,err:=validateFlowJSONContract(from.JSONContract)
+                    if err!=nil{return g,nil,err}
+                    if _,exists:=contract.Properties[property];!exists{return g,nil,fmt.Errorf("mapped field %s not defined by source contract",property)}
+                }
+            }
+            degrees[edge.To]++
+            next[edge.From]=append(next[edge.From],edge.To)
+            continue
+        }
+        if edge.FromPort != "" || edge.ToPort != "" {
 			if g.Version == 2 && from.Type == "condition" && (edge.FromPort == "true" || edge.FromPort == "false") && edge.ToPort == "" {
 				degrees[edge.To]++
 				next[edge.From] = append(next[edge.From], edge.To)
