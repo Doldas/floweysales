@@ -17,9 +17,15 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
  <h3>Blueprint Function Library</h3>
  <p>Create reusable functions graphically. All operations are pure and cannot execute trades.</p>
  <div class="toolbar">
-  <label>Function <select [ngModel]="currentId()" (ngModelChange)="choose(+$event)"><option [ngValue]="0">New function</option>@for(f of functions();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
+  <label>Function <select [ngModel]="currentId()" (ngModelChange)="choose(+$event)"><option [ngValue]="0">New function</option><optgroup label="Custom">@for(f of functions();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</optgroup></select></label>
   <label>Name <input [ngModel]="name()" (ngModelChange)="name.set($event)"></label>
   <button mat-stroked-button (click)="newFunction()">New</button>
+  <label>Built-in function starters<select [ngModel]="''" (ngModelChange)="loadFunctionTemplate($event)">
+   <option value="">Copy a template…</option>
+   <option value="double">Double a number</option>
+   <option value="threshold">Compare with threshold</option>
+   <option value="percent">Convert fraction to percent</option>
+  </select></label>
   <button mat-stroked-button (click)="add('constant')">+ Value</button>
   <button mat-stroked-button (click)="add('operation')">+ Operation</button>
  </div>
@@ -86,6 +92,15 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
  </aside>
  </div>
  <div class="toolbar"><button mat-flat-button (click)="save()" [disabled]="busy()">Save function</button></div>
+ <h3>Event trigger starters</h3>
+ <div class="toolbar">
+  <label>Trigger template<select [ngModel]="''" (ngModelChange)="useTriggerTemplate($event)">
+   <option value="">Copy an event key…</option>
+   <option value="research.requested">Research requested</option>
+   <option value="market.close">Market close</option>
+   <option value="risk.alert">Risk alert</option>
+  </select></label>
+ </div>
  <h3>Custom Event Triggers</h3>
  <p>Define a typed event and subscribe to its key in an enabled flow. Events currently require an authenticated admin request.</p>
  <div class="toolbar">
@@ -179,6 +194,24 @@ export class BlueprintLibraryComponent {
  constructor(){void this.refresh()}
  private initialNodes():Node[]{return [{id:'input',type:'input',value_type:'number',x:30,y:150},{id:'output',type:'output',value_type:'number',x:690,y:150}]}
  node(id:string){return this.nodes().find(n=>n.id===id)}
+ loadFunctionTemplate(key:string):void {
+  if(!key)return;
+  this.newFunction();
+  const input:Node={id:'input',type:'input',value_type:'number',x:45,y:140};
+  const constant:Node={id:'value',type:'constant',value_type:'number',value:key==='percent'?'100':key==='double'?'2':'70',x:235,y:260};
+  const operation:Node={id:'operation',type:'operation',operation:key==='threshold'?'greater':'multiply',x:410,y:140};
+  const output:Node={id:'output',type:'output',value_type:key==='threshold'?'boolean':'number',x:680,y:140};
+  this.currentId.set(0);
+  this.name.set(key==='double'?'Double a number':key==='percent'?'Convert to percent':'Threshold comparison');
+  this.nodes.set([input,constant,operation,output]);
+  this.edges.set([{from:'input',to:'operation',to_port:'a'},{from:'value',to:'operation',to_port:'b'},{from:'operation',to:'output'}]);
+  this.status.set('Built-in function copied. Save to Custom to keep your editable version.');
+ }
+ useTriggerTemplate(key:string):void{
+  if(!['research.requested','market.close','risk.alert'].includes(key))return;
+  this.eventKey.set(key);this.payloadType.set('text');
+  this.status.set('Trigger template selected. Create trigger to activate this event key.');
+ }
  newFunction(){this.currentId.set(0);this.name.set('My function');this.nodes.set(this.initialNodes());this.edges.set([]);this.selected.set('')}
  choose(id:number){const f=this.functions().find(x=>x.id===id);if(!f){this.newFunction();return}this.currentId.set(id);this.name.set(f.name);this.nodes.set(structuredClone(f.graph.nodes));this.edges.set(structuredClone(f.graph.edges));this.selected.set('')}
  add(type:'constant'|'operation'){const id=type+'-'+Date.now().toString(36);this.nodes.update(n=>[...n,{id,type,x:240+(n.length%3)*95,y:35+(n.length%3)*90,...(type==='operation'?{operation:'add'}:{value_type:'number' as Kind,value:'1'})}]);this.selected.set(id)}
