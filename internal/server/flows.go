@@ -518,7 +518,12 @@ func (e *Engine) launchFlowWithInput(f storage.AgentFlow, trigger, input string)
 		output, runErr := e.executeFlowNestedWithInput(context.WithValue(ctx, flowTraceRunKey{}, id), f, map[int64]bool{}, 0, input)
 		finishCtx, finishCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer finishCancel()
-		if err := e.db.FinishAgentFlowRun(finishCtx, id, output, runErr); err != nil {
+		if runErr != nil {
+            if traceErr:=e.db.AppendAgentFlowRunStep(finishCtx,id,"flow","Flow execution","FAILED",runErr.Error());traceErr!=nil {
+                log.Printf("[Flows] Failed run trace persistence: %v",traceErr)
+            }
+        }
+        if err := e.db.FinishAgentFlowRun(finishCtx, id, output, runErr); err != nil {
 			log.Printf("[Flows] Cannot persist run: %v", err)
 		}
 	}()
