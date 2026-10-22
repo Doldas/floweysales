@@ -10,7 +10,7 @@ import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angu
 import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'; label:string; variable?:string; transform?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'; label:string; output_mode?:'markdown'|'json'; variable?:string; transform?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FlowGraph { nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
@@ -58,6 +58,7 @@ export class ConfirmDeleteFlowDialog {
      <button mat-stroked-button (click)="newFlow()">New</button>
      <button mat-stroked-button color="warn" (click)="confirmDeleteFlow()" [disabled]="!selectedId()||busy()">Delete flow</button>
      <button mat-stroked-button (click)="addAgent()">+ Agent</button>
+     <button mat-stroked-button (click)="addOutput()">+ Output</button>
      <button mat-stroked-button (click)="addSubflow()">+ Call Flow</button>
      <button mat-stroked-button (click)="addConstant()">+ Value</button>
      <button mat-stroked-button (click)="addFunctionCall()">+ Function</button>
@@ -101,7 +102,7 @@ export class ConfirmDeleteFlowDialog {
          <rect [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="12"
            [attr.fill]="n.id===selectedNode()?.id?'#244970':'#1c2a3b'"
            [attr.stroke]="n.id===selectedNode()?.id?'#94caff':'#607993'" stroke-width="2"/>
-         <text [attr.x]="n.x+12" [attr.y]="n.y+24" fill="#dceaf8" font-size="13">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':n.type==='workspace_read'?'▤ READ FILE':n.type==='workspace_write'?'▣ WRITE FILE':'✦ AGENT'}}</text>
+         <text [attr.x]="n.x+12" [attr.y]="n.y+24" fill="#dceaf8" font-size="13">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':n.type==='workspace_read'?'▤ READ FILE':n.type==='workspace_write'?'▣ WRITE FILE':n.type==='output'?'→ OUTPUT':'✦ AGENT'}}</text>
          <text [attr.x]="n.x+12" [attr.y]="n.y+48" fill="#dceaf8" font-size="12">{{n.label.slice(0,16)}}</text>
        </g>
      }
@@ -110,6 +111,7 @@ export class ConfirmDeleteFlowDialog {
    @if(canvasMenu()){<div class="canvas-context-menu" role="menu" aria-label="Create node">
      <strong>Add node</strong>
      <button type="button" role="menuitem" (click)="addAgent();closeCanvasMenu()">Research Agent</button>
+     <button type="button" role="menuitem" (click)="addOutput();closeCanvasMenu()">Output Result</button>
      <button type="button" role="menuitem" (click)="addSubflow();closeCanvasMenu()">Call Flow</button>
      <button type="button" role="menuitem" (click)="addConstant();closeCanvasMenu()">Value</button>
      <button type="button" role="menuitem" (click)="addFunctionCall();closeCanvasMenu()">Function</button>
@@ -125,11 +127,21 @@ export class ConfirmDeleteFlowDialog {
    <header class="inspector-heading"><span>DETAILS</span><strong>{{ selectedNode()?.label || 'No node selected' }}</strong></header>
    @if(selectedNode();as n){
      <div class="inspector-fields">
+       @if(n.type!=='trigger'){
+         <label>Connect output from <select #nodeSource><option value="">Choose upstream node</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id&&other.type!=='output'){<option [value]="other.id">{{other.label}}</option>}}</select></label>
+         <button mat-stroked-button (click)="connect(nodeSource.value,n.id)" [disabled]="!nodeSource.value">Connect nodes</button>
+       }
        <label>Label <input [ngModel]="n.label" (ngModelChange)="updateNode('label',$event)" maxlength="100"></label>
        @if(n.type==='agent') {
+        <label>Output format <select [ngModel]="n.output_mode||'markdown'" (ngModelChange)="updateNode('output_mode',$event)">
+          <option value="markdown">Markdown / Default</option><option value="json">JSON only (strict validation)</option>
+        </select></label>
         <label>Research instructions<textarea rows="3" [ngModel]="n.prompt" (ngModelChange)="updateNode('prompt',$event)" maxlength="2000"></textarea></label>
-        <label>Connect from <select #source><option value="">Select parent</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id){<option [value]="other.id">{{other.label}}</option>}}</select></label>
-        <button mat-stroked-button (click)="connect(source.value,n.id)">Create connection</button>
+
+       }
+       @if(n.type==='output'){
+        <p class="muted">Default behavior: display the incoming agent result. Connect an Agent node to this output, or connect the Agent directly to another processing node.</p>
+
        }
        @if(n.type==='constant'){
          <label>Value type <select [ngModel]="n.value_type||'text'" (ngModelChange)="updateConstant('value_type',$event)"><option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option></select></label>
@@ -323,8 +335,15 @@ export class FlowStudioComponent {
  connectValue(from:string,to:string){if(!to||this.node(from)?.value_type!=='text'){this.message.set('Typed link requires a text value and an agent or flow input');return}if(this.graph().edges.some(e=>e.from===from&&e.to===to))return;this.graph.update(g=>({...g,edges:[...g.edges,{from,to,from_port:'value',to_port:'input'}]}))}
  addSubflow(){const n=this.graph().nodes;const id='flow-'+Date.now().toString(36);this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'flow',label:'Call flow',flow_id:0,x:260+(n.length%4)*140,y:40+Math.floor(n.length/4)*100}]}));this.chosen.set(id)}
  updateFlowReference(target:number){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,flow_id:target}:n)}))}
+ addOutput(){
+   const count=this.graph().nodes.length;
+   const upstream=this.selectedNode();
+   const id='output-'+Date.now().toString(36);
+   this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'output',label:'Output Result',x:260+(count%4)*140,y:40+Math.floor(count/4)*100}],edges:upstream&&upstream.type!=='output'?[...g.edges,{from:upstream.id,to:id}]:g.edges}));
+   this.chosen.set(id);
+ }
  addAgent(){const n=this.graph().nodes;const id='agent-'+Date.now().toString(36);const x=260+(n.length%4)*140,y=40+Math.floor(n.length/4)*100;this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'agent',label:'Research agent',prompt:'Analyze the evidence and summarize findings.',x,y}]}));this.chosen.set(id)}
- updateNode(field:'label'|'prompt',value:string){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,[field]:value}:n)}))}
+ updateNode(field:'label'|'prompt'|'output_mode',value:string){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,[field]:value}:n)}))}
  connect(from:string,to:string){if(!from||from===to||this.graph().edges.some(e=>e.from===from&&e.to===to))return;
   this.graph.update(g=>({...g,edges:[...g.edges,{from,to}]}))}
  linkSelected(){const target=this.selectedNode();if(!target)return;const last=this.graph().nodes.find(x=>x.id!==target.id&&x.type==='agent');if(last)this.connect(last.id,target.id)}

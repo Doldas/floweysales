@@ -48,6 +48,9 @@ func main() {
 
 	ds := ai.NewHTTPDataSource(*backend, *apiKey)
 	srv := mcp.New(ds)
+	if token := os.Getenv("FLOWEY_MCP_WRITE_TOKEN"); *transport == "stdio" && len(token) >= 32 {
+		srv.TrackerTools = &mcp.HTTPTrackerOperations{BaseURL: *backend, Token: token}
+	}
 
 	switch *transport {
 	case "stdio":
