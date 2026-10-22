@@ -156,11 +156,13 @@ type Engine struct {
 	aiMaxToolCalls int
 
 	// Order lifecycle: account settings and the match loop guard.
-	tradingMu  sync.Mutex
-	tradingCfg trading.Config
-	matchMu    sync.Mutex
-	flowSlots  chan struct{}
-	flowStop   context.CancelFunc
+	tradingMu      sync.Mutex
+	tradingCfg     trading.Config
+	matchMu        sync.Mutex
+	flowSlots      chan struct{}
+	flowStop       context.CancelFunc
+	flowRunsMu     sync.Mutex
+	flowRunCancels map[int64]context.CancelFunc
 }
 
 type historyCacheEntry struct {
@@ -185,6 +187,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, fi
 		webFS:           webFS,
 		hub:             newSSEHub(),
 		flowSlots:       make(chan struct{}, 2),
+		flowRunCancels:  make(map[int64]context.CancelFunc),
 		mux:             http.NewServeMux(),
 		historyCache:    make(map[string]historyCacheEntry),
 		financialsCache: make(map[string]financialsCacheEntry),

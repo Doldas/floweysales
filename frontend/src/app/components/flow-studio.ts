@@ -239,6 +239,7 @@ export class ConfirmDeleteFlowDialog {
    @if(!runs().length){<p class="muted">No executions yet. Save and run a flow to see a trace.</p>}
    @for(run of runs();track run.id){
     <details class="flow-run"><summary>#{{run.id}} · {{run.trigger}} · {{run.status}}</summary>
+      @if(run.status==='RUNNING'){<button mat-stroked-button color="warn" (click)="cancelRun(run.id)" [disabled]="busy()">Cancel run</button>}
       <button mat-stroked-button (click)="showRunSteps(run.id)">{{traceRunId()===run.id?'Hide node trace':'Inspect nodes'}}</button>
       @if(traceRunId()===run.id){
        @if(traceLoading()){<p role="status">Loading node trace…</p>}
@@ -426,6 +427,16 @@ export class FlowStudioComponent {
  private async request(url:string,options?:RequestInit):Promise<any>{const r=await fetch(url,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...options?.headers}});
   const j=await r.json();if(!r.ok)throw new Error(j.error||('HTTP '+r.status));return j}
  async refresh(){try{const [data,definitions]=await Promise.all([this.request('/api/admin/flows'),this.request('/api/admin/blueprint-triggers')]);this.flows.set(data.flows||[]);this.triggers.set(definitions.triggers||[])}catch(e){this.message.set(String(e))}}
+ async cancelRun(runId:number){
+  if(!this.selectedId()||this.busy())return;
+  this.busy.set(true);
+  try{
+   await this.request('/api/admin/flows/'+this.selectedId()+'/runs/'+runId+'/cancel',{method:'POST'});
+   this.message.set('Run cancellation requested');
+   await this.refreshRuns();
+  }catch(e){this.message.set('Cannot cancel run: '+String(e))}
+  finally{this.busy.set(false)}
+ }
  async showRunSteps(runId:number){
   if(!this.selectedId())return;
   if(this.traceRunId()===runId){this.traceRunId.set(0);this.traceSteps.set([]);return}
