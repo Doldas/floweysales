@@ -16,3 +16,15 @@ func TestCleanUserspacePath(t *testing.T) {
 		}
 	}
 }
+
+func TestUserspaceFileSizeLimit(t *testing.T) {
+	if UserspaceMaxFileBytes != 2*1024*1024 {
+		t.Fatalf("unexpected userspace file limit: %d", UserspaceMaxFileBytes)
+	}
+	if len(make([]byte, UserspaceMaxFileBytes)) > UserspaceMaxFileBytes {
+		t.Fatal("maximum-size file should be accepted by size guard")
+	}
+	if len(make([]byte, UserspaceMaxFileBytes+1)) <= UserspaceMaxFileBytes {
+		t.Fatal("oversized file should be rejected by size guard")
+	}
+}

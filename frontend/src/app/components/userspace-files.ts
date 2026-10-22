@@ -8,7 +8,7 @@ interface FileEntry { path:string; content_type:string; size:number }
  template:`
  <section class="files">
   <div class="files-header">
-   <div><h3>My Workspace</h3><p>Private files organized by folder path. Maximum 256 files, 64 KiB each.</p></div>
+   <div><h3>My Workspace</h3><p>Private files organized by folder path. Maximum 256 files, 2 MiB each.</p></div>
    <button mat-stroked-button (click)="refresh()" [disabled]="busy()">Refresh</button>
   </div>
   <div class="file-layout">
@@ -26,7 +26,7 @@ interface FileEntry { path:string; content_type:string; size:number }
      <option value="text/markdown">Markdown</option><option value="text/plain">Text</option>
      <option value="application/json">JSON</option><option value="text/csv">CSV</option>
     </select></label>
-    <label>Content<textarea rows="16" [ngModel]="content()" (ngModelChange)="content.set($event)" maxlength="65536"></textarea></label>
+    <label>Content<textarea rows="16" [ngModel]="content()" (ngModelChange)="content.set($event)" maxlength="2097152"></textarea></label>
     <div class="file-actions">
       <button mat-flat-button (click)="save()" [disabled]="busy()||!path()">Save file</button>
       <button mat-stroked-button (click)="download()" [disabled]="!path()">Download</button>
@@ -78,12 +78,15 @@ export class UserspaceFilesComponent {
   try{
    const response=await fetch('/api/userspace/file?path='+encodeURIComponent(path),{credentials:'same-origin'});
    if(!response.ok)throw Error('Cannot open file');
+   if(Number(response.headers.get('content-length')||0)>2*1024*1024)throw Error('File exceeds 2 MiB limit');
    const text=await response.text();
    this.path.set(path);this.content.set(text);
    this.mime.set(this.files().find(f=>f.path===path)?.content_type||'text/plain');
   }catch(e){this.message.set(String(e))}finally{this.busy.set(false)}
  }
  async save(){this.busy.set(true);try{
+  const bytes=new TextEncoder().encode(this.content()).byteLength;
+  if(bytes>2*1024*1024)throw Error('File exceeds 2 MiB limit ('+bytes+' bytes)');
   await this.api('/api/userspace/file',{method:'PUT',body:JSON.stringify({path:this.path(),content_type:this.mime(),content:this.content()})});
   await this.refresh();this.message.set('File saved')
  }catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
