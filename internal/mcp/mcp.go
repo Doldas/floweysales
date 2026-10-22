@@ -145,13 +145,17 @@ func (s *Server) handleToolCall(ctx context.Context, params json.RawMessage) (an
 		args = string(p.Arguments)
 	}
 
-	if strings.HasPrefix(p.Name,"tracker_") {
-        if s.TrackerTools==nil{return toolResult("Tracker control is disabled. Configure FLOWEY_MCP_WRITE_TOKEN on the MCP server and backend.",true),nil}
-        text,err:=s.TrackerTools.ExecuteTracker(ctx,p.Name,args)
-        if err!=nil{return toolResult(err.Error(),true),nil}
-        return toolResult(text,false),nil
-    }
-    text, err := ai.Execute(ctx, s.DS, p.Name, args)
+	if strings.HasPrefix(p.Name, "tracker_") {
+		if s.TrackerTools == nil {
+			return toolResult("Tracker control is disabled. Configure FLOWEY_MCP_WRITE_TOKEN on the MCP server and backend.", true), nil
+		}
+		text, err := s.TrackerTools.ExecuteTracker(ctx, p.Name, args)
+		if err != nil {
+			return toolResult(err.Error(), true), nil
+		}
+		return toolResult(text, false), nil
+	}
+	text, err := ai.Execute(ctx, s.DS, p.Name, args)
 	if err != nil {
 		// Tool failures are reported in-band (isError) per the MCP spec so the
 		// model can read the message and try another provider/symbol.
@@ -174,17 +178,20 @@ type mcpTool struct {
 	InputSchema map[string]any `json:"inputSchema"`
 }
 
-type TrackerOperations interface{
- ExecuteTracker(ctx context.Context,name,args string)(string,error)
+type TrackerOperations interface {
+	ExecuteTracker(ctx context.Context, name, args string) (string, error)
 }
+
 func (s *Server) listTools() []mcpTool {
- tools:=mcpTools()
- if s.TrackerTools==nil{return tools}
- return append(tools,
- mcpTool{Name:"tracker_list",Description:"List currently configured tracked assets (requires explicitly configured tracker management capability).",InputSchema:map[string]any{"type":"object","properties":map[string]any{}}},
- mcpTool{Name:"tracker_status",Description:"Inspect last tick and age for every tracker.",InputSchema:map[string]any{"type":"object","properties":map[string]any{}}},
- mcpTool{Name:"tracker_start",Description:"Start tracking a validated symbol and provider; this mutates the persistent tracker registry, and should only be called when explicitly requested by the user.",InputSchema:map[string]any{"type":"object","properties":map[string]any{"symbol":map[string]any{"type":"string"},"provider":map[string]any{"type":"string","enum":[]string{"YAHOO","FINNHUB","AVANZA","BINANCE"}}},"required":[]string{"symbol","provider"}}},
- )
+	tools := mcpTools()
+	if s.TrackerTools == nil {
+		return tools
+	}
+	return append(tools,
+		mcpTool{Name: "tracker_list", Description: "List currently configured tracked assets (requires explicitly configured tracker management capability).", InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}},
+		mcpTool{Name: "tracker_status", Description: "Inspect last tick and age for every tracker.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}},
+		mcpTool{Name: "tracker_start", Description: "Start tracking a validated symbol and provider; this mutates the persistent tracker registry, and should only be called when explicitly requested by the user.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"symbol": map[string]any{"type": "string"}, "provider": map[string]any{"type": "string", "enum": []string{"YAHOO", "FINNHUB", "AVANZA", "BINANCE"}}}, "required": []string{"symbol", "provider"}}},
+	)
 }
 func mcpTools() []mcpTool {
 	defs := ai.ToolDefs()
