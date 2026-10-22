@@ -11,7 +11,7 @@ import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angu
 import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
