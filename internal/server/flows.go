@@ -32,6 +32,8 @@ type flowNode struct {
 	ContentType string  `json:"content_type,omitempty"`
 	Variable    string  `json:"variable,omitempty"`
 	Transform   string  `json:"transform,omitempty"`
+	Operator    string  `json:"operator,omitempty"`
+	Property    string  `json:"property,omitempty"`
 	X           float64 `json:"x"`
 	Y           float64 `json:"y"`
 }
@@ -42,6 +44,7 @@ type flowEdge struct {
 	ToPort   string `json:"to_port,omitempty"`
 }
 type flowGraph struct {
+	Version int `json:"version,omitempty"`
 	Nodes []flowNode `json:"nodes"`
 	Edges []flowEdge `json:"edges"`
 }
@@ -106,6 +109,7 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 	if err := json.Unmarshal(f.Graph, &g); err != nil {
 		return g, nil, fmt.Errorf("invalid graph: %w", err)
 	}
+	if g.Version != 0 && g.Version != 1 && g.Version != 2 { return g,nil,fmt.Errorf("unsupported flow graph version") }
 	if len(g.Nodes) < 2 || len(g.Nodes) > 16 || len(g.Edges) < 1 || len(g.Edges) > 32 {
 		return g, nil, fmt.Errorf("flow needs 2–16 nodes and 1–32 edges")
 	}
@@ -125,10 +129,19 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		if _, ok := nodes[n.ID]; ok {
 			return g, nil, fmt.Errorf("duplicate node")
 		}
-		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" && n.Type != "output" {
+		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" && n.Type != "output" && (g.Version!=2 || (n.Type!="condition" && n.Type!="merge" && n.Type!="json_get")) {
 			return g, nil, fmt.Errorf("only trigger, research agent, constant and subflow nodes are allowed")
 		}
-		if n.Type == "output" {
+		if g.Version==2 && (n.Type=="condition" || n.Type=="merge" || n.Type=="json_get") {
+            utilities++
+            if n.Prompt!="" || n.FlowID!=0 || n.FunctionID!=0{return g,nil,fmt.Errorf("v2 data nodes cannot invoke tools")}
+            if n.Type=="condition" {
+                switch n.Operator {case "equals","not_equals","contains","greater_than","less_than":default:return g,nil,fmt.Errorf("invalid condition operator")}
+                if len(n.Value)>1000{return g,nil,fmt.Errorf("condition operand too long")}
+            }
+            if n.Type=="json_get" && !flowVariablePattern.MatchString(n.Property){return g,nil,fmt.Errorf("invalid JSON property")}
+        }
+        if n.Type == "output" {
 			utilities++
 			if n.Prompt != "" || n.FunctionID != 0 || n.FlowID != 0 {
 				return g, nil, fmt.Errorf("output node cannot run tools")
@@ -229,6 +242,7 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 			return g, nil, fmt.Errorf("cycle")
 		}
 		if edge.FromPort != "" || edge.ToPort != "" {
+			if g.Version==2 && from.Type=="condition" && (edge.FromPort=="true" || edge.FromPort=="false") && edge.ToPort=="" {degrees[edge.To]++;next[edge.From]=append(next[edge.From],edge.To);continue}
 			if edge.FromPort != "value" || edge.ToPort != "input" {
 				return g, nil, fmt.Errorf("only value-to-input data links supported")
 			}
@@ -504,6 +518,9 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 		nodes[n.ID] = n
 	}
 	base, key, model := e.aiDefaults()
+    v2:=g.Version==2
+    var state *flowV2State
+    if v2{state=newFlowV2State()}
 
 	previous := input
 	nodeResults := map[string]string{"start": input}
@@ -512,22 +529,43 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 	results := []map[string]string{}
 	lastNodeID := "start"
 	for _, id := range order {
+		if v2 && lastNodeID!="start" && state.Active[lastNodeID]{state.Values[lastNodeID]=previous}
 		nodeResults[lastNodeID] = previous
 		n := nodes[id]
 		if n.Type == "trigger" {
+            if v2 {state.Values[n.ID]=input;state.Active[n.ID]=true}
 			continue
 		}
 		lastNodeID = n.ID
-		// Resolve the input from an explicitly connected upstream node.
-		// Unconnected legacy graphs retain the previous sequential result.
-		for _, edge := range g.Edges {
-			if edge.To == n.ID {
-				if value, ok := nodeResults[edge.From]; ok {
-					previous = value
-					break
-				}
-			}
-		}
+        if v2 {
+            if ctx.Err()!=nil{return "",ctx.Err()}
+            var present bool
+            var inputErr error
+            if n.Type=="merge" {previous,present,inputErr=flowV2Merge(g,n.ID,state)} else {previous,present,inputErr=flowV2SourceInput(g,n.ID,state)}
+            if inputErr!=nil{return "",inputErr}
+            if !present {
+                state.Steps=append(state.Steps,flowV2Step{Node:n.ID,Label:n.Label,Status:"SKIPPED"})
+                continue
+            }
+            state.Active[n.ID]=true
+            if n.Type=="condition" {
+                matched,err:=flowV2Condition(previous,n.Operator,n.Value);if err!=nil{return "",fmt.Errorf("node %s: %w",n.ID,err)}
+                previous=strconv.FormatBool(matched)
+            } else if n.Type=="json_get" {
+                value,err:=flowV2JSONProperty(previous,n.Property);if err!=nil{return "",fmt.Errorf("node %s: %w",n.ID,err)}
+                previous=value
+            }
+            if n.Type=="condition" || n.Type=="json_get" || n.Type=="merge" {
+                state.Values[n.ID]=previous
+                state.Steps=append(state.Steps,flowV2Step{Node:n.ID,Label:n.Label,Status:"SUCCESS",Output:previous})
+                results=append(results,map[string]string{"node":n.ID,"label":n.Label,"output":previous})
+                continue
+            }
+        } else {
+            // Preserve legacy sequential behavior in version 1.
+            for _,edge:=range g.Edges {if edge.To==n.ID {if value,ok:=nodeResults[edge.From];ok{previous=value;break}}}
+        }
+
 		if n.Type == "output" {
 			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous})
 			nodeResults[n.ID] = previous
@@ -688,6 +726,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 		}
 		results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous})
 	}
+	if v2 && lastNodeID!="start" && state.Active[lastNodeID]{state.Values[lastNodeID]=previous}
 	raw, _ := json.Marshal(results)
 	return string(raw), nil
 }
