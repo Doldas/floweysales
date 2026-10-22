@@ -1,0 +1,21 @@
+name: Temporary JSON Contract Gofmt
+on:
+  push:
+    branches: [feature/77-flow-json-schema-contracts]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Format Go
+        run: |
+          gofmt -w internal/server/flows.go internal/server/flow_json_contract.go internal/server/flow_json_contract_test.go
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add internal/server/flows.go internal/server/flow_json_contract.go internal/server/flow_json_contract_test.go
+            git commit -m "style(go): format JSON contracts"
+            git push
+          fi
