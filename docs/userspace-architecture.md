@@ -9,7 +9,7 @@ Userspace is a **tenant-owned virtual document store** accessed by the app, save
 - Simple text formats: Markdown, plain text, CSV and JSON, editable from My Workspace in Flow Studio.
 - `workspace_read` and `workspace_write` flow nodes. Read loads text from the flow creator's userspace; write stores the preceding result (text/plain) with an explicit path.
 - Logical path validation forbids `.`, `..`, NUL, backslash, relative paths. No host path access, code execution or general SQL exposed.
-- Per-file 64 KiB limit, per-user 256 file limit, concurrent-write quota serialization using the owning auth row. Deletes are owner scoped.
+- Per-file 2 MiB limit, per-user 256 file limit, concurrent-write quota serialization using the owning auth row. Deletes are owner scoped.
 - File downloads sent as `application/octet-stream` and `nosniff` to avoid displaying untrusted HTML as active content.
 
 ## Deliberate limits of the first slice
