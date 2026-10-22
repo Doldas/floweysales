@@ -377,6 +377,21 @@ func (e *Engine) registerFlowRoutes() {
 		}
 		writeJSON(w, 200, map[string]any{"runs": runs})
 	})
+	e.mux.HandleFunc("GET /api/admin/flows/{id}/runs/{run}/steps", func(w http.ResponseWriter,r *http.Request){
+        if !e.flowAdmin(w,r){return}
+        flowID,err:=strconv.ParseInt(r.PathValue("id"),10,64)
+        if err!=nil||flowID<=0{writeJSON(w,400,map[string]string{"error":"Invalid flow ID"});return}
+        runID,err:=strconv.ParseInt(r.PathValue("run"),10,64)
+        if err!=nil||runID<=0{writeJSON(w,400,map[string]string{"error":"Invalid run ID"});return}
+        runs,err:=e.db.ListAgentFlowRuns(r.Context(),flowID)
+        if err!=nil{writeJSON(w,503,map[string]string{"error":"Run history unavailable"});return}
+        found:=false
+        for _,run:=range runs{if run.ID==runID{found=true;break}}
+        if !found{writeJSON(w,404,map[string]string{"error":"Run not found in recent history"});return}
+        steps,err:=e.db.ListAgentFlowRunSteps(r.Context(),runID)
+        if err!=nil{writeJSON(w,503,map[string]string{"error":"Trace unavailable"});return}
+        writeJSON(w,200,map[string]any{"steps":steps})
+    })
 	e.mux.HandleFunc("POST /api/admin/flows/{id}/run", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {
 			return
