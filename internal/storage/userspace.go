@@ -69,7 +69,7 @@ func (d *Database) WriteUserspaceFile(ctx context.Context, owner int64, rawPath,
 	if owner <= 0 || len(content) > UserspaceMaxFileBytes {
 		return errors.New("userspace file quota exceeded or invalid owner")
 	}
-	if mime != "text/plain" && mime != "text/markdown" && mime != "text/csv" && mime != "application/json" {
+	if mime != "text/plain" && mime != "text/markdown" && mime != "text/csv" && mime != "application/json" && mime != "application/xml" {
 		return errors.New("invalid content type")
 	}
 	tx, err := d.db.BeginTx(ctx, nil)
