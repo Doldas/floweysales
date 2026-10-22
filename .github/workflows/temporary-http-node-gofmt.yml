@@ -1,0 +1,21 @@
+name: Temporary HTTP Node Format
+on:
+  push:
+    branches: [feature/82-http-data-node]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Go formatting
+        run: |
+          gofmt -w internal/server/flows.go internal/server/flow_http_get.go internal/server/flow_http_get_test.go
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add internal/server/flows.go internal/server/flow_http_get.go internal/server/flow_http_get_test.go
+            git commit -m "style(go): format public HTTP data node"
+            git push
+          fi
