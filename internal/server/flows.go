@@ -491,6 +491,76 @@ func (e *Engine) registerFlowRoutes() {
 		}
 		writeJSON(w, 200, map[string]any{"steps": steps})
 	})
+	e.mux.HandleFunc("POST /api/admin/flows/{id}/runs/{run}/preview", func(w http.ResponseWriter, r *http.Request) {
+		if !e.flowAdmin(w, r) {
+			return
+		}
+		flowID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil || flowID <= 0 {
+			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
+			return
+		}
+		runID, err := strconv.ParseInt(r.PathValue("run"), 10, 64)
+		if err != nil || runID <= 0 {
+			writeJSON(w, 400, map[string]string{"error": "Invalid run ID"})
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 1024)
+		var request struct {
+			Node string `json:"node"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil || len(request.Node) > 48 || request.Node == "" {
+			writeJSON(w, 400, map[string]string{"error": "Invalid node ID"})
+			return
+		}
+		recent, err := e.db.ListAgentFlowRuns(r.Context(), flowID)
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"error": "Run lookup failed"})
+			return
+		}
+		found := false
+		for _, run := range recent {
+			if run.ID == runID && run.Status != "RUNNING" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			writeJSON(w, 404, map[string]string{"error": "Finished run not found in recent history"})
+			return
+		}
+		f, err := e.db.GetAgentFlow(r.Context(), flowID)
+		if err != nil {
+			writeJSON(w, 404, map[string]string{"error": "Flow not found"})
+			return
+		}
+		snapshot, err := e.db.GetAgentFlowRunSnapshot(r.Context(), flowID, runID)
+		if err != nil {
+			writeJSON(w, 422, map[string]string{"error": "Historical graph snapshot unavailable; this run predates safe replay"})
+			return
+		}
+		f.Graph = snapshot
+		g, order, err := validateFlow(f)
+		if err != nil || g.Version != 2 {
+			writeJSON(w, 400, map[string]string{"error": "Replay preview requires a valid v2 flow"})
+			return
+		}
+		saved, err := e.db.ListAgentFlowRunSteps(r.Context(), runID)
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"error": "Trace unavailable"})
+			return
+		}
+		trace := make([]replayStoredStep, 0, len(saved))
+		for _, step := range saved {
+			trace = append(trace, replayStoredStep{Node: step.Node, Status: step.Status, Output: step.Output})
+		}
+		steps, err := replayPreviewFromTrace(g, order, trace, request.Node)
+		if err != nil {
+			writeJSON(w, 422, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"steps": steps, "mode": "preview_only", "note": "Uses the saved graph snapshot for this run; no agents, tools, database writes or external actions are executed."})
+	})
 	e.mux.HandleFunc("POST /api/admin/flows/{id}/run", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {
 			return
@@ -612,6 +682,14 @@ func (e *Engine) launchFlowWithInput(f storage.AgentFlow, trigger, input string)
 		id, err := e.db.CreateAgentFlowRun(ctx, f.ID, trigger)
 		if err != nil {
 			log.Printf("[Flows] Could not create run: %v", err)
+			return
+		}
+		// Persist the graph exactly as it was when this run began.
+		if snapshotErr := e.db.SaveAgentFlowRunSnapshot(ctx, id, f.Graph); snapshotErr != nil {
+			log.Printf("[Flows] Could not snapshot run graph: %v", snapshotErr)
+			finishCtx, finishCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = e.db.FinishAgentFlowRun(finishCtx, id, "", fmt.Errorf("run graph snapshot failed: %w", snapshotErr))
+			finishCancel()
 			return
 		}
 		e.flowRunsMu.Lock()

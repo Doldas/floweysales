@@ -259,6 +259,10 @@ export class ConfirmDeleteFlowDialog {
        <option value="markdown">Markdown (default)</option><option value="raw">RAW</option><option value="json">Structured JSON</option>
      </select></label>
      <button mat-stroked-button (click)="refreshRuns()" [disabled]="!selectedId()">Refresh history</button>
+     <label>Compare with run<select [ngModel]="compareRun()" (ngModelChange)="compareAgainst(+$event)">
+      <option [ngValue]="0">No comparison</option>
+      @for(other of runs();track other.id){<option [ngValue]="other.id">#{{other.id}} · {{other.status}}</option>}
+     </select></label>
    </div>
    @if(!runs().length){<p class="muted">No executions yet. Save and run a flow to see a trace.</p>}
    @for(run of runs();track run.id){
@@ -272,12 +276,29 @@ export class ConfirmDeleteFlowDialog {
         <div class="run-step-list" aria-label="Node execution trace">
          @for(step of traceSteps();track step.id){
           <details class="run-step">
-           <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}}</span></summary>
+           <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}}</span>
+            @if(compareRun()&&compareRun()!==run.id){<span class="muted"> · {{compareStatus(step.node,step.status,step.output)}}</span>}
+           </summary>
            @if(step.output){<pre>{{step.output}}</pre>}
+           @if(step.status==='SUCCESS'&&step.output&&step.output.length<4000){
+            <button mat-stroked-button (click)="previewReplay(run.id,step.node)">Replay preview from this node</button>
+           }
           </details>
          }
         </div>
        }
+      }
+      @if(replaySource()===run.id&&replaySteps().length){
+       <section class="run-step-list" aria-label="Side-effect-free replay preview">
+        <strong>Replay preview (saved graph version)</strong>
+        @for(step of replaySteps();track $index){
+         <details class="run-step">
+          <summary>{{step.status}} · {{step.label||step.node}}</summary>
+          @if(step.input){<p>Input</p><pre>{{step.input}}</pre>}
+          @if(step.output){<p>Output</p><pre>{{step.output}}</pre>}
+         </details>
+        }
+       </section>
       }
       @if(run.error){<p>{{run.error}}</p>}
       @if(run.output){
@@ -385,6 +406,10 @@ export class FlowStudioComponent {
  readonly traceRunId=signal(0);
  readonly traceSteps=signal<FlowRunStep[]>([]);
  readonly traceLoading=signal(false);
+ readonly replaySteps=signal<{node:string;label:string;status:string;input?:string;output?:string}[]>([]);
+ readonly replaySource=signal(0);
+ readonly compareRun=signal(0);
+ readonly comparedSteps=signal<{node:string;status:string;output:string}[]>([]);
  readonly busy=signal(false);
  readonly message=signal('');
  private dragging:{id:string;startX:number;startY:number;x:number;y:number}|null=null;
@@ -395,9 +420,9 @@ export class FlowStudioComponent {
  ],edges:[{from:'start',to:'agent-1'}]}}
  node(id:string):FlowNode|undefined{return this.graph().nodes.find(n=>n.id===id)}
  select(id:string){this.chosen.set(id)}
- newFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.message.set('')}
+ newFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);this.message.set('')}
  loadFlow(id:number){const f=this.flows().find(x=>x.id===id);if(!f){this.newFlow();return}
-  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.traceRunId.set(0);this.traceSteps.set([]);void this.refreshRuns()}
+  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);void this.refreshRuns()}
  async loadFunctions(){try{const data=await this.request("/api/admin/blueprint-functions");this.functions.set(data.functions||[])}catch(e){this.message.set(String(e))}}
  addUtility(type:'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'){
    const count=this.graph().nodes.length;
@@ -486,9 +511,31 @@ export class FlowStudioComponent {
   }catch(e){this.message.set('Cannot cancel run: '+String(e))}
   finally{this.busy.set(false)}
  }
+ async compareAgainst(runId:number){
+  if(!this.selectedId()||!runId){this.compareRun.set(0);this.comparedSteps.set([]);return}
+  this.compareRun.set(runId);this.comparedSteps.set([]);
+  try{
+   const data=await this.request('/api/admin/flows/'+this.selectedId()+'/runs/'+runId+'/steps');
+   this.comparedSteps.set(data.steps||[]);
+  }catch(e){this.message.set('Cannot compare runs: '+String(e))}
+ }
+ compareStatus(node:string,status:string,output:string):string{
+   const other=this.comparedSteps().find(x=>x.node===node);
+   if(!this.compareRun()||!other)return 'No baseline';
+   return other.status===status&&other.output===output?'Unchanged':other.status!==status?'Status changed':'Output changed';
+ }
+ async previewReplay(runId:number,nodeId:string){
+  if(!this.selectedId())return;
+  this.replaySteps.set([]);this.replaySource.set(runId);
+  try{
+   const result=await this.request('/api/admin/flows/'+this.selectedId()+'/runs/'+runId+'/preview',{method:'POST',body:JSON.stringify({node:nodeId})});
+   this.replaySteps.set(result.steps||[]);
+   this.message.set('Preview only: no agents or side effects were executed. Uses the saved graph snapshot.');
+  }catch(e){this.message.set('Replay preview unavailable: '+String(e))}
+ }
  async showRunSteps(runId:number){
   if(!this.selectedId())return;
-  if(this.traceRunId()===runId){this.traceRunId.set(0);this.traceSteps.set([]);return}
+  if(this.traceRunId()===runId){this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);return}
   this.traceRunId.set(runId);this.traceLoading.set(true);this.traceSteps.set([]);
   try{const data=await this.request('/api/admin/flows/'+this.selectedId()+'/runs/'+runId+'/steps');
       if(this.traceRunId()===runId)this.traceSteps.set(data.steps||[]);
