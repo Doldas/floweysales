@@ -127,19 +127,21 @@ export class ConfirmDeleteFlowDialog {
    <header class="inspector-heading"><span>DETAILS</span><strong>{{ selectedNode()?.label || 'No node selected' }}</strong></header>
    @if(selectedNode();as n){
      <div class="inspector-fields">
+       @if(n.type!=='trigger'){
+         <label>Connect output from <select #nodeSource><option value="">Choose upstream node</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id&&other.type!=='output'){<option [value]="other.id">{{other.label}}</option>}}</select></label>
+         <button mat-stroked-button (click)="connect(nodeSource.value,n.id)" [disabled]="!nodeSource.value">Connect nodes</button>
+       }
        <label>Label <input [ngModel]="n.label" (ngModelChange)="updateNode('label',$event)" maxlength="100"></label>
        @if(n.type==='agent') {
         <label>Output format <select [ngModel]="n.output_mode||'markdown'" (ngModelChange)="updateNode('output_mode',$event)">
           <option value="markdown">Markdown / Default</option><option value="json">JSON only (strict validation)</option>
         </select></label>
         <label>Research instructions<textarea rows="3" [ngModel]="n.prompt" (ngModelChange)="updateNode('prompt',$event)" maxlength="2000"></textarea></label>
-        <label>Connect from <select #source><option value="">Select parent</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id){<option [value]="other.id">{{other.label}}</option>}}</select></label>
-        <button mat-stroked-button (click)="connect(source.value,n.id)">Create connection</button>
+
        }
        @if(n.type==='output'){
         <p class="muted">Default behavior: display the incoming agent result. Connect an Agent node to this output, or connect the Agent directly to another processing node.</p>
-        <label>Input source <select #outputSource><option value="">Choose upstream node</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id&&other.type!=='output'){<option [value]="other.id">{{other.label}}</option>}}</select></label>
-        <button mat-stroked-button (click)="connect(outputSource.value,n.id)">Connect output</button>
+
        }
        @if(n.type==='constant'){
          <label>Value type <select [ngModel]="n.value_type||'text'" (ngModelChange)="updateConstant('value_type',$event)"><option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option></select></label>
@@ -335,8 +337,9 @@ export class FlowStudioComponent {
  updateFlowReference(target:number){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,flow_id:target}:n)}))}
  addOutput(){
    const count=this.graph().nodes.length;
+   const upstream=this.selectedNode();
    const id='output-'+Date.now().toString(36);
-   this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'output',label:'Output Result',x:260+(count%4)*140,y:40+Math.floor(count/4)*100}]}));
+   this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'output',label:'Output Result',x:260+(count%4)*140,y:40+Math.floor(count/4)*100}],edges:upstream&&upstream.type!=='output'?[...g.edges,{from:upstream.id,to:id}]:g.edges}));
    this.chosen.set(id);
  }
  addAgent(){const n=this.graph().nodes;const id='agent-'+Date.now().toString(36);const x=260+(n.length%4)*140,y=40+Math.floor(n.length/4)*100;this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'agent',label:'Research agent',prompt:'Analyze the evidence and summarize findings.',x,y}]}));this.chosen.set(id)}
