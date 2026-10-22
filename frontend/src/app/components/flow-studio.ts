@@ -1,3 +1,4 @@
+import { CanvasGestures } from './canvas-gestures';
 import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
 import { MarkdownRunOutputComponent } from './markdown-run-output';
 import { UserspaceFilesComponent } from './userspace-files';
@@ -79,17 +80,13 @@ export class ConfirmDeleteFlowDialog {
    <div class="blueprint-layout">
    <div class="canvas-shell">
     <div class="canvas-navigation" aria-label="Canvas navigation">
-      <button type="button" (click)="panCanvas(-80,0)" aria-label="Pan left">←</button>
-      <button type="button" (click)="panCanvas(0,-80)" aria-label="Pan up">↑</button>
-      <button type="button" (click)="panCanvas(0,80)" aria-label="Pan down">↓</button>
-      <button type="button" (click)="panCanvas(80,0)" aria-label="Pan right">→</button>
       <button type="button" (click)="zoomCanvas(0.8)" aria-label="Zoom in">＋</button>
       <span>{{ canvasZoomPercent() }}%</span>
       <button type="button" (click)="zoomCanvas(1.25)" aria-label="Zoom out">－</button>
       <button type="button" (click)="resetCanvas()" aria-label="Reset canvas view">Reset view</button>
     </div>
     <div class="flow-workspace" aria-label="Agent flow graph editor">
-    <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (contextmenu)="onCanvasContextMenu($event)" role="img" aria-label="Agent nodes and directed connections">
+    <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (pointerdown)="onCanvasPointerDown($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="onCanvasPointerEnd($event)" (pointercancel)="onCanvasPointerEnd($event)" (contextmenu)="onCanvasContextMenu($event)" role="img" aria-label="Agent nodes and directed connections">
      <defs><marker id="flow-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#72b7ef"/></marker></defs>
      @for(edge of graph().edges;track edge.from+edge.to){
        <line [attr.x1]="node(edge.from)?.x!+125" [attr.y1]="node(edge.from)?.y!+35"
@@ -97,7 +94,7 @@ export class ConfirmDeleteFlowDialog {
              stroke="#72b7ef" stroke-width="2.5" marker-end="url(#flow-arrow)"/>
      }
      @for(n of graph().nodes;track n.id){
-       <g (click)="select(n.id)" (pointerdown)="dragStart($event,n.id)" style="cursor:move" tabindex="0"
+       <g data-canvas-node (pointerenter)="hoveredNode.set(n.id)" (click)="select(n.id)" (pointerdown)="dragStart($event,n.id)" style="cursor:move" tabindex="0"
           (keydown.enter)="select(n.id)" [attr.aria-label]="'Select '+n.label">
          <rect [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="12"
            [attr.fill]="n.id===selectedNode()?.id?'#244970':'#1c2a3b'"
@@ -108,6 +105,21 @@ export class ConfirmDeleteFlowDialog {
      }
     </svg>
    </div>
+   @if(quickNode();as q){<div class="node-quick-tooltip" aria-label="Quick node settings">
+     <strong>⚙ {{q.label}}</strong>
+     <label>Name <input [ngModel]="q.label" (ngModelChange)="updateNodeFor(q.id,'label',$event)" maxlength="100"></label>
+     @if(q.type==='agent'){
+       <label>Format <select [ngModel]="q.output_mode||'markdown'" (ngModelChange)="updateNodeFor(q.id,'output_mode',$event)">
+         <option value="markdown">Markdown</option><option value="json">JSON only</option>
+       </select></label>
+       <label>Prompt <textarea rows="3" [ngModel]="q.prompt||''" (ngModelChange)="updateNodeFor(q.id,'prompt',$event)" maxlength="2000"></textarea></label>
+     }
+     @if(q.type==='constant'||q.type==='workspace_read'||q.type==='workspace_write'){
+       <label>{{q.type==='constant'?'Value':'File path'}} <input [ngModel]="q.value||''" (ngModelChange)="updateNodeFor(q.id,'value',$event)"></label>
+     }
+     <button type="button" (click)="select(q.id);hoveredNode.set('')">Full details</button>
+     <button type="button" (click)="hoveredNode.set('')">Close</button>
+   </div>}
    @if(canvasMenu()){<div class="canvas-context-menu" role="menu" aria-label="Create node">
      <strong>Add node</strong>
      <button type="button" role="menuitem" (click)="addAgent();closeCanvasMenu()">Research Agent</button>
@@ -238,7 +250,11 @@ export class ConfirmDeleteFlowDialog {
  input,select,textarea{background:#14263a;color:#e5f3ff;border:1px solid #5e7b93;border-radius:6px;padding:9px;font:inherit}
  textarea{width:100%}.flow-check{flex-direction:row;align-items:center}.flow-check input{width:18px;height:18px}
  .flow-workspace{background:radial-gradient(#294057 1px,transparent 1px) 0 0/20px 20px,#0d1b2a;border:1px solid #45627b;overflow:auto;border-radius:12px}
- svg{min-width:660px;width:100%;height:auto;display:block;touch-action:none}
+ svg{min-width:660px;width:100%;height:auto;display:block;touch-action:none;cursor:grab}
+ .node-quick-tooltip{position:absolute;right:14px;top:62px;z-index:7;display:flex;flex-direction:column;gap:8px;padding:12px;width:min(290px,85%);max-height:65vh;overflow:auto;background:#1a334a;border:1px solid #8abce4;box-shadow:0 12px 28px #000a;border-radius:10px}
+ .node-quick-tooltip label{display:flex;flex-direction:column;gap:4px;min-width:0}
+ .node-quick-tooltip input,.node-quick-tooltip textarea,.node-quick-tooltip select{width:100%;box-sizing:border-box}
+ .node-quick-tooltip button{min-height:32px}
  .blueprint-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(270px,315px);align-items:stretch;gap:12px;min-height:470px}
  .blueprint-layout .flow-workspace{min-width:0;min-height:470px}
  .flow-node-editor{margin:0;padding:16px;border:1px solid #355a75;border-radius:10px;background:#142438;min-width:0;max-height:min(75vh,780px);overflow-y:auto}
@@ -258,6 +274,8 @@ export class ConfirmDeleteFlowDialog {
 })
 export class FlowStudioComponent {
  private readonly dialog = inject(MatDialog);
+ readonly hoveredNode=signal<string>('');
+ readonly quickNode=()=>this.node(this.hoveredNode());
  readonly canvasView = signal({ x: 0, y: 0, width: 820, height: 380 });
  readonly canvasMenu = signal(false);
  readonly canvasViewBox = () => {
@@ -274,12 +292,12 @@ export class FlowStudioComponent {
  panCanvas(dx: number, dy: number): void {
    this.canvasView.update(v => ({ ...v, x: v.x + dx * v.width / 820, y: v.y + dy * v.height / 380 }));
  }
- resetCanvas(): void { this.canvasView.set({ x: 0, y: 0, width: 820, height: 380 }); this.closeCanvasMenu(); }
- onCanvasWheel(event: WheelEvent): void {
-   if (!event.ctrlKey && !event.metaKey) return;
-   event.preventDefault();
-   this.zoomCanvas(event.deltaY < 0 ? 0.9 : 1.1);
- }
+ resetCanvas(): void { this.gestures.reset(); this.canvasView.set({ x: 0, y: 0, width: 820, height: 380 }); this.closeCanvasMenu(); }
+ readonly gestures = new CanvasGestures(() => this.canvasView(), view => this.canvasView.set(view), 820, 380);
+ onCanvasPointerDown(event: PointerEvent): void { this.gestures.pointerDown(event); }
+ onCanvasPointerMove(event: PointerEvent): void { this.gestures.pointerMove(event); }
+ onCanvasPointerEnd(event: PointerEvent): void { this.gestures.pointerEnd(event); }
+ onCanvasWheel(event: WheelEvent): void { this.gestures.wheel(event); }
  onCanvasContextMenu(event: MouseEvent): void {
    event.preventDefault();
    this.canvasMenu.set(true);
@@ -343,12 +361,15 @@ export class FlowStudioComponent {
    this.chosen.set(id);
  }
  addAgent(){const n=this.graph().nodes;const id='agent-'+Date.now().toString(36);const x=260+(n.length%4)*140,y=40+Math.floor(n.length/4)*100;this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'agent',label:'Research agent',prompt:'Analyze the evidence and summarize findings.',x,y}]}));this.chosen.set(id)}
+ updateNodeFor(id:string,field:'label'|'prompt'|'output_mode'|'value',value:string):void {
+   this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===id?{...n,[field]:value}:n)}));
+ }
  updateNode(field:'label'|'prompt'|'output_mode',value:string){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,[field]:value}:n)}))}
  connect(from:string,to:string){if(!from||from===to||this.graph().edges.some(e=>e.from===from&&e.to===to))return;
   this.graph.update(g=>({...g,edges:[...g.edges,{from,to}]}))}
  linkSelected(){const target=this.selectedNode();if(!target)return;const last=this.graph().nodes.find(x=>x.id!==target.id&&x.type==='agent');if(last)this.connect(last.id,target.id)}
  removeSelected(){const id=this.chosen();if(id==='start')return;this.graph.update(g=>({...g,nodes:g.nodes.filter(n=>n.id!==id),edges:g.edges.filter(e=>e.from!==id&&e.to!==id)}));this.chosen.set('')}
- dragStart(ev:PointerEvent,id:string){if(ev.button!==0)return;const n=this.node(id);if(!n)return;this.chosen.set(id);this.dragging={id,startX:ev.clientX,startY:ev.clientY,x:n.x,y:n.y};
+ dragStart(ev:PointerEvent,id:string){if(ev.button!==0||ev.pointerType==='touch')return;const n=this.node(id);if(!n)return;this.chosen.set(id);this.dragging={id,startX:ev.clientX,startY:ev.clientY,x:n.x,y:n.y};
   const svg=(ev.currentTarget as SVGGElement).ownerSVGElement;if(!svg)return;
   const move=(event:PointerEvent)=>{const box=svg.getBoundingClientRect();if(!this.dragging)return;
    const dx=(event.clientX-this.dragging.startX)*820/box.width,dy=(event.clientY-this.dragging.startY)*380/box.height;
