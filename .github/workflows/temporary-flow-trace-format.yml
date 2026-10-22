@@ -1,0 +1,21 @@
+name: Temporary Flow Trace Formatting
+on:
+  push:
+    branches: [feature/74-flow-run-node-traces]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Format trace sources
+        run: |
+          gofmt -w internal/storage/flow_run_steps.go internal/server/flows.go
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add internal/storage/flow_run_steps.go internal/server/flows.go
+            git commit -m "style(go): gofmt node trace changes"
+            git push
+          fi
