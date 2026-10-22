@@ -12,7 +12,7 @@ func TestFlowV2ConditionAndJSON(t *testing.T) {
 		value, op, arg string
 		want           bool
 	}{
-		{"85", "greater_than", "70", true}, {"low", "equals", "high", false}, {"AAPL", "contains", "APP", true},
+		{"85", "greater_than", "70", true}, {"low", "equals", "high", false}, {"AAPL", "contains", "AAP", true},
 	} {
 		got, err := flowV2Condition(tc.value, tc.op, tc.arg)
 		if err != nil || got != tc.want {
