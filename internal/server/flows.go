@@ -20,22 +20,24 @@ import (
 )
 
 type flowNode struct {
-	ID          string  `json:"id"`
-	Type        string  `json:"type"`
-	Label       string  `json:"label"`
-	Prompt      string  `json:"prompt,omitempty"`
-	OutputMode  string  `json:"output_mode,omitempty"`
-	FlowID      int64   `json:"flow_id,omitempty"`
-	FunctionID  int64   `json:"function_id,omitempty"`
-	ValueType   string  `json:"value_type,omitempty"`
-	Value       string  `json:"value,omitempty"`
-	ContentType string  `json:"content_type,omitempty"`
-	Variable    string  `json:"variable,omitempty"`
-	Transform   string  `json:"transform,omitempty"`
-	Operator    string  `json:"operator,omitempty"`
-	Property    string  `json:"property,omitempty"`
-	X           float64 `json:"x"`
-	Y           float64 `json:"y"`
+	ID             string  `json:"id"`
+	Type           string  `json:"type"`
+	Label          string  `json:"label"`
+	Prompt         string  `json:"prompt,omitempty"`
+	OutputMode     string  `json:"output_mode,omitempty"`
+	TimeoutSeconds int     `json:"timeout_seconds,omitempty"`
+	MaxRetries     int     `json:"max_retries,omitempty"`
+	FlowID         int64   `json:"flow_id,omitempty"`
+	FunctionID     int64   `json:"function_id,omitempty"`
+	ValueType      string  `json:"value_type,omitempty"`
+	Value          string  `json:"value,omitempty"`
+	ContentType    string  `json:"content_type,omitempty"`
+	Variable       string  `json:"variable,omitempty"`
+	Transform      string  `json:"transform,omitempty"`
+	Operator       string  `json:"operator,omitempty"`
+	Property       string  `json:"property,omitempty"`
+	X              float64 `json:"x"`
+	Y              float64 `json:"y"`
 }
 type flowEdge struct {
 	From     string `json:"from"`
@@ -158,6 +160,12 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 			if n.Prompt != "" || n.FunctionID != 0 || n.FlowID != 0 {
 				return g, nil, fmt.Errorf("output node cannot run tools")
 			}
+		}
+		if n.TimeoutSeconds < 0 || n.TimeoutSeconds > 90 || n.MaxRetries < 0 || n.MaxRetries > 2 {
+			return g, nil, fmt.Errorf("node timeout must be 0–90 seconds and retries 0–2")
+		}
+		if n.Type != "agent" && (n.TimeoutSeconds != 0 || n.MaxRetries != 0) {
+			return g, nil, fmt.Errorf("timeout and retries are supported only for read-only agent nodes")
 		}
 		if n.Type == "agent" && n.OutputMode != "" && n.OutputMode != "markdown" && n.OutputMode != "json" {
 			return g, nil, fmt.Errorf("unsupported agent output mode")
@@ -834,23 +842,54 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			systemPrompt += "\nReturn exactly one valid JSON object or array with no markdown fences, prose, or text before or after the JSON."
 		}
 		options := ai.AgentOptions{MaxSteps: 4, MaxToolCalls: 0, DisableTools: true, SystemPrompt: systemPrompt}
-		var result strings.Builder
-		var agentError error
-		err := ai.Run(ctx, client, engineSource{e: e}, []ai.Message{{Role: "user", Content: prompt}}, options, func(ev ai.Event) {
-			if ev.Type == "delta" && result.Len() < 12000 {
-				result.WriteString(ev.Content)
-			}
-			if ev.Type == "error" {
-				agentError = errors.New(ev.Error)
-			}
-		})
-		if err != nil {
-			return "", err
+		timeout := n.TimeoutSeconds
+		if timeout == 0 {
+			timeout = 45
 		}
-		if agentError != nil {
-			return "", agentError
+		maxRetries := n.MaxRetries
+		var response string
+		var runErr error
+		for attempt := 0; attempt <= maxRetries; attempt++ {
+			if err := ctx.Err(); err != nil {
+				return "", err
+			}
+			nodeCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+			var result strings.Builder
+			var agentError error
+			runErr = ai.Run(nodeCtx, client, engineSource{e: e}, []ai.Message{{Role: "user", Content: prompt}}, options, func(ev ai.Event) {
+				if ev.Type == "delta" && result.Len() < 12000 {
+					result.WriteString(ev.Content)
+				}
+				if ev.Type == "error" {
+					agentError = errors.New(ev.Error)
+				}
+			})
+			if runErr == nil {
+				runErr = agentError
+			}
+			if runErr == nil && nodeCtx.Err() != nil {
+				runErr = nodeCtx.Err()
+			}
+			cancel()
+			if runErr == nil {
+				response = result.String()
+				break
+			}
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
+			if attempt == maxRetries {
+				return "", fmt.Errorf("agent node %s failed after %d attempt(s): %w", n.ID, attempt+1, runErr)
+			}
+			// Exponential bounded backoff; only agents with disabled tools can retry.
+			delay := time.Duration(1<<attempt) * time.Second
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(delay):
+			}
 		}
-		previous = result.String()
+		previous = response
 		if n.OutputMode == "json" {
 			trimmed := strings.TrimSpace(previous)
 			var decoded any
