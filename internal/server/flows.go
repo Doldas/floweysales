@@ -678,14 +678,14 @@ func (e *Engine) launchFlowWithInput(f storage.AgentFlow, trigger, input string)
 			log.Printf("[Flows] Could not create run: %v", err)
 			return
 		}
-        // Persist the graph exactly as it was when this run began.
-        if snapshotErr:=e.db.SaveAgentFlowRunSnapshot(ctx,id,f.Graph);snapshotErr!=nil {
-            log.Printf("[Flows] Could not snapshot run graph: %v",snapshotErr)
-            finishCtx,finishCancel:=context.WithTimeout(context.Background(),5*time.Second)
-            _=e.db.FinishAgentFlowRun(finishCtx,id,"",fmt.Errorf("run graph snapshot failed: %w",snapshotErr))
-            finishCancel()
-            return
-        }
+		// Persist the graph exactly as it was when this run began.
+		if snapshotErr := e.db.SaveAgentFlowRunSnapshot(ctx, id, f.Graph); snapshotErr != nil {
+			log.Printf("[Flows] Could not snapshot run graph: %v", snapshotErr)
+			finishCtx, finishCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = e.db.FinishAgentFlowRun(finishCtx, id, "", fmt.Errorf("run graph snapshot failed: %w", snapshotErr))
+			finishCancel()
+			return
+		}
 		e.flowRunsMu.Lock()
 		e.flowRunCancels[id] = cancel
 		e.flowRunsMu.Unlock()
