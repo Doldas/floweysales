@@ -377,21 +377,37 @@ func (e *Engine) registerFlowRoutes() {
 		}
 		writeJSON(w, 200, map[string]any{"runs": runs})
 	})
-	e.mux.HandleFunc("POST /api/admin/flows/{id}/runs/{run}/cancel",func(w http.ResponseWriter,r *http.Request){
-        if !e.flowAdmin(w,r){return}
-        flowID,err:=strconv.ParseInt(r.PathValue("id"),10,64)
-        if err!=nil||flowID<=0{writeJSON(w,400,map[string]string{"error":"Invalid flow ID"});return}
-        runID,err:=strconv.ParseInt(r.PathValue("run"),10,64)
-        if err!=nil||runID<=0{writeJSON(w,400,map[string]string{"error":"Invalid run ID"});return}
-        changed,err:=e.db.CancelAgentFlowRun(r.Context(),flowID,runID)
-        if err!=nil{writeJSON(w,503,map[string]string{"error":"Cancellation unavailable"});return}
-        if !changed{writeJSON(w,409,map[string]string{"error":"Run is already finished or does not belong to this flow"});return}
-        e.flowRunsMu.Lock()
-        cancel:=e.flowRunCancels[runID]
-        if cancel!=nil{cancel()}
-        e.flowRunsMu.Unlock()
-        writeJSON(w,200,map[string]any{"cancelled":true,"run_id":runID})
-    })
+	e.mux.HandleFunc("POST /api/admin/flows/{id}/runs/{run}/cancel", func(w http.ResponseWriter, r *http.Request) {
+		if !e.flowAdmin(w, r) {
+			return
+		}
+		flowID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil || flowID <= 0 {
+			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
+			return
+		}
+		runID, err := strconv.ParseInt(r.PathValue("run"), 10, 64)
+		if err != nil || runID <= 0 {
+			writeJSON(w, 400, map[string]string{"error": "Invalid run ID"})
+			return
+		}
+		changed, err := e.db.CancelAgentFlowRun(r.Context(), flowID, runID)
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"error": "Cancellation unavailable"})
+			return
+		}
+		if !changed {
+			writeJSON(w, 409, map[string]string{"error": "Run is already finished or does not belong to this flow"})
+			return
+		}
+		e.flowRunsMu.Lock()
+		cancel := e.flowRunCancels[runID]
+		if cancel != nil {
+			cancel()
+		}
+		e.flowRunsMu.Unlock()
+		writeJSON(w, 200, map[string]any{"cancelled": true, "run_id": runID})
+	})
 	e.mux.HandleFunc("GET /api/admin/flows/{id}/runs/{run}/steps", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {
 			return
@@ -553,11 +569,13 @@ func (e *Engine) launchFlowWithInput(f storage.AgentFlow, trigger, input string)
 			return
 		}
 		e.flowRunsMu.Lock()
-        e.flowRunCancels[id]=cancel
-        e.flowRunsMu.Unlock()
-        defer func(){e.flowRunsMu.Lock();delete(e.flowRunCancels,id);e.flowRunsMu.Unlock()}()
-        if ctx.Err()!=nil{return}
-        output, runErr := e.executeFlowNestedWithInput(context.WithValue(ctx, flowTraceRunKey{}, id), f, map[int64]bool{}, 0, input)
+		e.flowRunCancels[id] = cancel
+		e.flowRunsMu.Unlock()
+		defer func() { e.flowRunsMu.Lock(); delete(e.flowRunCancels, id); e.flowRunsMu.Unlock() }()
+		if ctx.Err() != nil {
+			return
+		}
+		output, runErr := e.executeFlowNestedWithInput(context.WithValue(ctx, flowTraceRunKey{}, id), f, map[int64]bool{}, 0, input)
 		finishCtx, finishCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer finishCancel()
 		if runErr != nil {
@@ -582,7 +600,9 @@ func (e *Engine) executeFlowNested(ctx context.Context, f storage.AgentFlow, par
 type flowTraceRunKey struct{}
 
 func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.AgentFlow, parents map[int64]bool, depth int, input string) (string, error) {
-	if err:=ctx.Err();err!=nil{return "",err}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if depth >= 4 {
 		return "", fmt.Errorf("maximum subflow depth reached")
 	}
@@ -625,7 +645,9 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 	}
 	lastNodeID := "start"
 	for _, id := range order {
-		if err:=ctx.Err();err!=nil{return "",err}
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
 		if v2 && lastNodeID != "start" && state.Active[lastNodeID] {
 			state.Values[lastNodeID] = previous
 		}

@@ -195,9 +195,11 @@ func (d *Database) DeleteAgentFlow(ctx context.Context, id int64) error {
 
 // CancelAgentFlowRun transitions only a running run, atomically and within its flow.
 // The worker's subsequent completion cannot overwrite CANCELLED.
-func (d *Database) CancelAgentFlowRun(ctx context.Context,flowID,runID int64)(bool,error){
- result,err:=d.db.ExecContext(ctx,"UPDATE agent_flow_runs SET status='CANCELLED',error_message='Cancelled by administrator',finished_at=UTC_TIMESTAMP(6) WHERE id=? AND flow_id=? AND status='RUNNING'",runID,flowID)
- if err!=nil{return false,err}
- affected,err:=result.RowsAffected()
- return affected==1,err
+func (d *Database) CancelAgentFlowRun(ctx context.Context, flowID, runID int64) (bool, error) {
+	result, err := d.db.ExecContext(ctx, "UPDATE agent_flow_runs SET status='CANCELLED',error_message='Cancelled by administrator',finished_at=UTC_TIMESTAMP(6) WHERE id=? AND flow_id=? AND status='RUNNING'", runID, flowID)
+	if err != nil {
+		return false, err
+	}
+	affected, err := result.RowsAffected()
+	return affected == 1, err
 }
