@@ -39,7 +39,7 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
       [attr.x2]="node(e.to)?.x" [attr.y2]="node(e.to)?.y!+25" stroke="#7ebdf2" stroke-width="2" marker-end="url(#fn-arrow)"/>
    }
    @for(n of nodes();track n.id){
-    <g data-canvas-node (click)="selected.set(n.id)" tabindex="0" (keydown.enter)="selected.set(n.id)">
+    <g data-canvas-node (pointerenter)="hoveredNode.set(n.id)" (click)="selected.set(n.id)" tabindex="0" (keydown.enter)="selected.set(n.id)">
      <rect [attr.x]="n.x" [attr.y]="n.y" width="120" height="50" rx="9" [attr.fill]="selected()===n.id?'#345579':'#1b3449'" stroke="#8db5d1"/>
      <text [attr.x]="n.x+8" [attr.y]="n.y+21" fill="white" font-size="12">{{n.type.toUpperCase()}}</text>
      <text [attr.x]="n.x+8" [attr.y]="n.y+40" fill="#bbd7eb" font-size="11">{{n.operation||n.value_type||n.id}}</text>
@@ -47,6 +47,18 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
    }
   </svg>
  </div>
+ @if(quickNode();as q){
+  <div class="node-quick-tooltip" aria-label="Quick function node settings">
+   <strong>⚙ {{q.id}}</strong>
+   @if(q.type==='constant'||q.type==='input'||q.type==='output'){
+     <label>Type <select [ngModel]="q.value_type||'text'" (ngModelChange)="editNode(q.id,'value_type',$event)"><option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option></select></label>
+   }
+   @if(q.type==='constant'){<label>Value <input [ngModel]="q.value||''" (ngModelChange)="editNode(q.id,'value',$event)"></label>}
+   @if(q.type==='operation'){<label>Operation <select [ngModel]="q.operation||'add'" (ngModelChange)="editNode(q.id,'operation',$event)">@for(op of operations;track op){<option [value]="op">{{op}}</option>}</select></label>}
+   <button type="button" (click)="selected.set(q.id);hoveredNode.set('')">Full details</button>
+   <button type="button" (click)="hoveredNode.set('')">Close</button>
+  </div>
+ }
  @if(canvasMenu()){<div class="canvas-context-menu" role="menu" aria-label="Create node">
  <strong>Add node</strong>
  <button type="button" role="menuitem" (click)="add('constant');closeCanvasMenu()">Constant</button>
@@ -86,6 +98,10 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
  </mat-card>`,
  styles:[`
  .canvas-shell{position:relative;min-width:0;min-height:0}
+ .node-quick-tooltip{position:absolute;right:12px;top:60px;z-index:7;display:flex;flex-direction:column;gap:9px;padding:12px;width:min(260px,85%);background:#1a334a;border:1px solid #82bbec;border-radius:9px;box-shadow:0 12px 28px #000a}
+ .node-quick-tooltip label{display:flex;flex-direction:column;gap:5px}
+ .node-quick-tooltip input,.node-quick-tooltip select{width:100%;box-sizing:border-box}
+ .node-quick-tooltip button{min-height:32px}
  .canvas-navigation{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:8px;background:#14263a;border:1px solid #45627b;border-radius:8px 8px 0 0}
  .canvas-navigation button,.canvas-context-menu button{background:#203a53;color:#e5f3ff;border:1px solid #527b99;border-radius:5px;min-height:34px;padding:6px 10px;cursor:pointer}
  .canvas-navigation button:focus-visible,.canvas-context-menu button:focus-visible{outline:2px solid #80caff}
@@ -129,6 +145,9 @@ export class BlueprintLibraryComponent {
  }
  closeCanvasMenu(): void { this.canvasMenu.set(false); }
 
+ readonly hoveredNode=signal('');
+ readonly quickNode=()=>this.node(this.hoveredNode());
+ editNode(id:string,field:'value_type'|'value'|'operation',value:string):void { this.nodes.update(items=>items.map(n=>n.id===id?{...n,[field]:value}:n)); }
  @Output() functionsChanged=new EventEmitter<void>();
  readonly operations=['add','subtract','multiply','divide','greater','less','equal','and','or','not','if','to_text'];
  readonly functions=signal<Definition[]>([]);
