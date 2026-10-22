@@ -1,3 +1,4 @@
+import { CanvasGestures } from './canvas-gestures';
 import { Component, EventEmitter, Output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -25,24 +26,20 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
  <div class="blueprint-layout">
  <div class="canvas-shell">
     <div class="canvas-navigation" aria-label="Canvas navigation">
-      <button type="button" (click)="panCanvas(-80,0)" aria-label="Pan left">←</button>
-      <button type="button" (click)="panCanvas(0,-80)" aria-label="Pan up">↑</button>
-      <button type="button" (click)="panCanvas(0,80)" aria-label="Pan down">↓</button>
-      <button type="button" (click)="panCanvas(80,0)" aria-label="Pan right">→</button>
       <button type="button" (click)="zoomCanvas(0.8)" aria-label="Zoom in">＋</button>
       <span>{{ canvasZoomPercent() }}%</span>
       <button type="button" (click)="zoomCanvas(1.25)" aria-label="Zoom out">－</button>
       <button type="button" (click)="resetCanvas()" aria-label="Reset canvas view">Reset view</button>
     </div>
     <div class="canvas">
-  <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (contextmenu)="onCanvasContextMenu($event)">
+  <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (pointerdown)="onCanvasPointerDown($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="onCanvasPointerEnd($event)" (pointercancel)="onCanvasPointerEnd($event)" (contextmenu)="onCanvasContextMenu($event)">
    <defs><marker id="fn-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#7ebdf2"/></marker></defs>
    @for(e of edges();track e.from+e.to+e.to_port){
     <line [attr.x1]="node(e.from)?.x!+120" [attr.y1]="node(e.from)?.y!+25"
       [attr.x2]="node(e.to)?.x" [attr.y2]="node(e.to)?.y!+25" stroke="#7ebdf2" stroke-width="2" marker-end="url(#fn-arrow)"/>
    }
    @for(n of nodes();track n.id){
-    <g (click)="selected.set(n.id)" tabindex="0" (keydown.enter)="selected.set(n.id)">
+    <g data-canvas-node (pointerenter)="hoveredNode.set(n.id)" (click)="selected.set(n.id)" tabindex="0" (keydown.enter)="selected.set(n.id)">
      <rect [attr.x]="n.x" [attr.y]="n.y" width="120" height="50" rx="9" [attr.fill]="selected()===n.id?'#345579':'#1b3449'" stroke="#8db5d1"/>
      <text [attr.x]="n.x+8" [attr.y]="n.y+21" fill="white" font-size="12">{{n.type.toUpperCase()}}</text>
      <text [attr.x]="n.x+8" [attr.y]="n.y+40" fill="#bbd7eb" font-size="11">{{n.operation||n.value_type||n.id}}</text>
@@ -50,6 +47,18 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
    }
   </svg>
  </div>
+ @if(quickNode();as q){
+  <div class="node-quick-tooltip" aria-label="Quick function node settings">
+   <strong>⚙ {{q.id}}</strong>
+   @if(q.type==='constant'||q.type==='input'||q.type==='output'){
+     <label>Type <select [ngModel]="q.value_type||'text'" (ngModelChange)="editNode(q.id,'value_type',$event)"><option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option></select></label>
+   }
+   @if(q.type==='constant'){<label>Value <input [ngModel]="q.value||''" (ngModelChange)="editNode(q.id,'value',$event)"></label>}
+   @if(q.type==='operation'){<label>Operation <select [ngModel]="q.operation||'add'" (ngModelChange)="editNode(q.id,'operation',$event)">@for(op of operations;track op){<option [value]="op">{{op}}</option>}</select></label>}
+   <button type="button" (click)="selected.set(q.id);hoveredNode.set('')">Full details</button>
+   <button type="button" (click)="hoveredNode.set('')">Close</button>
+  </div>
+ }
  @if(canvasMenu()){<div class="canvas-context-menu" role="menu" aria-label="Create node">
  <strong>Add node</strong>
  <button type="button" role="menuitem" (click)="add('constant');closeCanvasMenu()">Constant</button>
@@ -89,6 +98,10 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
  </mat-card>`,
  styles:[`
  .canvas-shell{position:relative;min-width:0;min-height:0}
+ .node-quick-tooltip{position:absolute;right:12px;top:60px;z-index:7;display:flex;flex-direction:column;gap:9px;padding:12px;width:min(260px,85%);background:#1a334a;border:1px solid #82bbec;border-radius:9px;box-shadow:0 12px 28px #000a}
+ .node-quick-tooltip label{display:flex;flex-direction:column;gap:5px}
+ .node-quick-tooltip input,.node-quick-tooltip select{width:100%;box-sizing:border-box}
+ .node-quick-tooltip button{min-height:32px}
  .canvas-navigation{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:8px;background:#14263a;border:1px solid #45627b;border-radius:8px 8px 0 0}
  .canvas-navigation button,.canvas-context-menu button{background:#203a53;color:#e5f3ff;border:1px solid #527b99;border-radius:5px;min-height:34px;padding:6px 10px;cursor:pointer}
  .canvas-navigation button:focus-visible,.canvas-context-menu button:focus-visible{outline:2px solid #80caff}
@@ -101,7 +114,7 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
  .inspector-heading span{font-size:11px;letter-spacing:.14em;opacity:.75}
  .panel label,.panel input,.panel select{min-width:0;width:100%;box-sizing:border-box}
  @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .canvas{min-height:280px}.panel{max-height:360px}}
-.panel strong{width:100%}label{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}input,select{background:#14263a;color:#ecf6ff;border:1px solid #68859b;border-radius:6px;padding:8px}.canvas{overflow:auto;border:1px solid #45627b;background:#102032;border-radius:8px}svg{display:block;min-width:650px;width:100%;height:auto}.triggers span{padding:8px;border:1px solid #50738e;border-radius:12px}`]
+.panel strong{width:100%}label{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}input,select{background:#14263a;color:#ecf6ff;border:1px solid #68859b;border-radius:6px;padding:8px}.canvas{overflow:auto;border:1px solid #45627b;background:#102032;border-radius:8px}svg{display:block;min-width:650px;width:100%;height:auto;touch-action:none;cursor:grab}.triggers span{padding:8px;border:1px solid #50738e;border-radius:12px}`]
 })
 export class BlueprintLibraryComponent {
  readonly canvasView = signal({ x: 0, y: 0, width: 850, height: 340 });
@@ -120,18 +133,21 @@ export class BlueprintLibraryComponent {
  panCanvas(dx: number, dy: number): void {
    this.canvasView.update(v => ({ ...v, x: v.x + dx * v.width / 850, y: v.y + dy * v.height / 340 }));
  }
- resetCanvas(): void { this.canvasView.set({ x: 0, y: 0, width: 850, height: 340 }); this.closeCanvasMenu(); }
- onCanvasWheel(event: WheelEvent): void {
-   if (!event.ctrlKey && !event.metaKey) return;
-   event.preventDefault();
-   this.zoomCanvas(event.deltaY < 0 ? 0.9 : 1.1);
- }
+ resetCanvas(): void { this.gestures.reset(); this.canvasView.set({ x: 0, y: 0, width: 850, height: 340 }); this.closeCanvasMenu(); }
+ readonly gestures = new CanvasGestures(() => this.canvasView(), view => this.canvasView.set(view), 850, 340);
+ onCanvasPointerDown(event: PointerEvent): void { this.gestures.pointerDown(event); }
+ onCanvasPointerMove(event: PointerEvent): void { this.gestures.pointerMove(event); }
+ onCanvasPointerEnd(event: PointerEvent): void { this.gestures.pointerEnd(event); }
+ onCanvasWheel(event: WheelEvent): void { this.gestures.wheel(event); }
  onCanvasContextMenu(event: MouseEvent): void {
    event.preventDefault();
    this.canvasMenu.set(true);
  }
  closeCanvasMenu(): void { this.canvasMenu.set(false); }
 
+ readonly hoveredNode=signal('');
+ readonly quickNode=()=>this.node(this.hoveredNode());
+ editNode(id:string,field:'value_type'|'value'|'operation',value:string):void { this.nodes.update(items=>items.map(n=>n.id===id?{...n,[field]:value}:n)); }
  @Output() functionsChanged=new EventEmitter<void>();
  readonly operations=['add','subtract','multiply','divide','greater','less','equal','and','or','not','if','to_text'];
  readonly functions=signal<Definition[]>([]);
