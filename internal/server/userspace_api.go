@@ -63,7 +63,7 @@ func (e *Engine) registerUserspaceRoutes() {
 		if !ok {
 			return
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, storage.UserspaceMaxFileBytes*2+4096)
+		r.Body = http.MaxBytesReader(w, r.Body, storage.UserspaceMaxFileBytes*6+4096)
 		defer r.Body.Close()
 		var data struct {
 			Path        string `json:"path"`
