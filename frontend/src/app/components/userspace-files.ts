@@ -15,11 +15,18 @@ interface TreeItem { name:string; path:string; depth:number; }
   <header class="explorer-toolbar">
    <div><h3><span aria-hidden="true">▣</span> My Workspace</h3><small>Private documents · 2 MiB per file · 256 files</small></div>
    <div class="toolbar-actions">
-    <button mat-stroked-button (click)="newFolder()">+ Folder</button>
+    <button mat-stroked-button (click)="newFolder()" [disabled]="busy()">+ Folder</button>
     <button mat-stroked-button (click)="newFile()">+ File</button>
     <button mat-stroked-button (click)="refresh()" [disabled]="busy()">Refresh</button>
    </div>
   </header>
+  @if(creatingFolder()){
+   <form class="folder-creator" (submit)="$event.preventDefault();createFolder()">
+    <label>New folder name <input name="folderName" [ngModel]="folderName()" (ngModelChange)="folderName.set($event)" maxlength="80" placeholder="e.g. reports" aria-label="New folder name"></label>
+    <button mat-flat-button type="submit" [disabled]="busy()||!folderName().trim()">Create folder</button>
+    <button mat-stroked-button type="button" (click)="creatingFolder.set(false)">Cancel</button>
+   </form>
+  }
   <div class="breadcrumb" aria-label="Current folder">
    <button type="button" (click)="navigate('/')">Workspace</button>
    @for(crumb of crumbs();track crumb.path){<span aria-hidden="true">›</span><button type="button" (click)="navigate(crumb.path)">{{crumb.name}}</button>}
@@ -27,9 +34,17 @@ interface TreeItem { name:string; path:string; depth:number; }
   <div class="explorer-grid">
    <nav class="folder-tree" aria-label="Folders">
     <strong>Folders</strong>
-    <button type="button" [class.active]="folder()==='/'" (click)="navigate('/')">▾ Workspace</button>
-    @for(dir of directories();track dir.path){
-     <button type="button" [class.active]="folder()===dir.path" [style.padding-left.px]="12+dir.depth*16" (click)="navigate(dir.path)">▸ {{dir.name}}</button>
+    <div class="folder-item">
+     <button type="button" class="folder-toggle" (click)="workspaceExpanded.update(v=>!v)" [attr.aria-expanded]="workspaceExpanded()" aria-label="Toggle Workspace folders">{{workspaceExpanded()?'▾':'▸'}}</button>
+     <button type="button" [class.active]="folder()==='/'" (click)="navigate('/')">Workspace</button>
+    </div>
+    @if(workspaceExpanded()){
+     @for(dir of visibleDirectories();track dir.path){
+      <div class="folder-item" [style.padding-left.px]="dir.depth*16">
+       <button type="button" class="folder-toggle" (click)="toggleDirectory(dir.path)" [attr.aria-expanded]="!isCollapsed(dir.path)" [attr.aria-label]="'Toggle '+dir.name">{{isCollapsed(dir.path)?'▸':'▾'}}</button>
+       <button type="button" [class.active]="folder()===dir.path" (click)="navigate(dir.path)">{{dir.name}}</button>
+      </div>
+     }
     }
    </nav>
    <div class="directory" role="region" aria-label="Files">
@@ -99,6 +114,11 @@ interface TreeItem { name:string; path:string; depth:number; }
  .explorer-grid{display:grid;grid-template-columns:minmax(155px,20%) minmax(200px,30%) minmax(0,1fr);min-height:500px}
  .folder-tree,.directory,.editor-panel{padding:13px;min-width:0;overflow:auto}.folder-tree,.directory{border-right:1px solid #36556b}
  .folder-tree{display:flex;flex-direction:column;gap:5px}.folder-tree strong{margin-bottom:8px}
+ .folder-item{display:flex;align-items:center;min-width:0;gap:0}
+ .folder-item button:not(.folder-toggle){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+ .folder-tree .folder-toggle{flex:0 0 28px;text-align:center;padding:7px 4px}
+ .folder-creator{display:flex;flex-wrap:wrap;align-items:end;gap:10px;padding:12px 16px;background:#172d42;border-bottom:1px solid #36556b}
+ .folder-creator label{flex:1;min-width:180px}
  .folder-tree button{background:transparent;border:0;text-align:left;white-space:nowrap;color:inherit;padding:7px 10px;cursor:pointer;border-radius:5px}
  button.active,.folder-tree button:hover{background:#264865}.directory-header{display:flex;justify-content:space-between;gap:8px;padding:7px 0 14px}
  .file-row{display:grid;grid-template-columns:minmax(120px,1fr) 75px 62px;gap:8px;padding:10px 8px;border:0;border-bottom:1px solid #2d4256;width:100%;text-align:left;background:transparent;color:inherit;cursor:pointer;font:inherit}
@@ -119,6 +139,10 @@ interface TreeItem { name:string; path:string; depth:number; }
 export class UserspaceFilesComponent {
  readonly files=signal<FileEntry[]>([]);
  readonly folder=signal('/');
+ readonly workspaceExpanded=signal(true);
+ readonly collapsedDirectories=signal<string[]>([]);
+ readonly creatingFolder=signal(false);
+ readonly folderName=signal('');
  readonly path=signal('/research/report.md');
  readonly mime=signal('text/markdown');
  readonly content=signal('');
@@ -134,8 +158,14 @@ export class UserspaceFilesComponent {
   }
   return [...seen].sort().map(path=>({path,name:this.basename(path),depth:path.split('/').filter(Boolean).length-1}));
  });
+ readonly visibleDirectories=computed(()=>this.directories().filter(d=>{
+  if(!this.workspaceExpanded())return false;
+  let parent=this.parent(d.path);
+  while(parent!=='/'){if(this.collapsedDirectories().includes(parent))return false;parent=this.parent(parent)}
+  return true;
+ }));
  readonly childFolders=computed(()=>this.directories().filter(d=>this.parent(d.path)===this.folder()));
- readonly visibleFiles=computed(()=>this.files().filter(f=>this.parent(f.path)===this.folder()));
+ readonly visibleFiles=computed(()=>this.files().filter(f=>!this.isFolderMarker(f.path)&&this.parent(f.path)===this.folder()));
  readonly crumbs=computed(()=>{const parts=this.folder().split('/').filter(Boolean);return parts.map((name,i)=>({name,path:'/'+parts.slice(0,i+1).join('/')}))});
  readonly language=computed(()=>this.mime()==='application/json'?'JSON':this.mime()==='application/xml'?'XML':this.mime()==='text/csv'?'CSV':this.mime()==='text/markdown'?'Markdown':'Text');
  readonly highlighted=computed(()=>{
@@ -179,10 +209,38 @@ export class UserspaceFilesComponent {
   return rows;
  });
  constructor(){void this.refresh()}
+ isFolderMarker(path:string):boolean{return path.endsWith('/.folder')}
+ isCollapsed(path:string):boolean{return this.collapsedDirectories().includes(path)}
+ toggleDirectory(path:string):void{
+  this.collapsedDirectories.update(old=>old.includes(path)?old.filter(p=>p!==path):[...old,path]);
+ }
  basename(path:string){return path.split('/').filter(Boolean).pop()||'Workspace'}
  parent(path:string){const parts=path.split('/').filter(Boolean);return parts.length<=1?'/':'/'+parts.slice(0,-1).join('/')}
  navigate(path:string){this.folder.set(path)}
- newFolder(){this.message.set('Create a file within a folder to create it, for example /research/notes.md');}
+ newFolder(){this.folderName.set('');this.creatingFolder.set(true);this.message.set('')}
+ async createFolder():Promise<void>{
+  if(this.busy())return;
+  const name=this.folderName().trim();
+  if(!/^[\p{L}\p{N}][\p{L}\p{N} _.-]{0,79}$/u.test(name)||name==='.'||name==='..'){
+   this.message.set('Invalid folder name. Use letters, numbers, spaces, _ or - (max 80 characters).');return;
+  }
+  const target=(this.folder()==='/'?'':this.folder())+'/'+name;
+  if(this.directories().some(d=>d.path===target)||this.files().some(f=>f.path===target)){
+   this.message.set('A file or folder with that name already exists.');return;
+  }
+  this.busy.set(true);
+  try{
+   // Keep an empty folder as a small, private marker file. No new server API is needed.
+   await this.api('/api/userspace/file',{method:'PUT',body:JSON.stringify({path:target+'/.folder',content_type:'text/plain',content:''})});
+   await this.refresh();
+   this.creatingFolder.set(false);
+   this.workspaceExpanded.set(true);
+   this.collapsedDirectories.update(old=>old.filter(p=>!target.startsWith(p+'/')));
+   this.navigate(target);
+   this.message.set('Folder created: '+name);
+  }catch(e){this.message.set('Could not create folder: '+String(e))}
+  finally{this.busy.set(false)}
+ }
  newFile(){this.path.set((this.folder()==='/'?'':this.folder())+'/new.md');this.mime.set('text/markdown');this.content.set('');this.view.set('edit');this.deleteRequested.set(false)}
  private escape(s:string){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
  private async api(url:string,options?:RequestInit):Promise<any>{
