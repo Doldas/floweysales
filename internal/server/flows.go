@@ -48,7 +48,7 @@ type flowGraph struct {
 
 func allowedUserspaceType(mime string) bool {
 	switch mime {
-	case "", "text/plain", "text/markdown", "text/csv", "application/json":
+	case "", "text/plain", "text/markdown", "text/csv", "application/json", "application/xml":
 		return true
 	}
 	return false
