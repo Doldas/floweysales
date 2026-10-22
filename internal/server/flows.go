@@ -534,6 +534,12 @@ func (e *Engine) registerFlowRoutes() {
 			writeJSON(w, 404, map[string]string{"error": "Flow not found"})
 			return
 		}
+		snapshot, err := e.db.GetAgentFlowRunSnapshot(r.Context(), flowID, runID)
+        if err != nil {
+            writeJSON(w, 422, map[string]string{"error": "Historical graph snapshot unavailable; this run predates safe replay"})
+            return
+        }
+        f.Graph=snapshot
 		g, order, err := validateFlow(f)
 		if err != nil || g.Version != 2 {
 			writeJSON(w, 400, map[string]string{"error": "Replay preview requires a valid v2 flow"})
