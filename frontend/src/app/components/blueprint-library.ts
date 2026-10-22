@@ -1,5 +1,5 @@
 import { CanvasGestures } from './canvas-gestures';
-import { Component, EventEmitter, Output, signal } from '@angular/core';
+import { HostListener, Component, EventEmitter, Output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -151,6 +151,11 @@ export class BlueprintLibraryComponent {
  readonly hoveredNode=signal('');
  openQuickNode(id:string):void { this.selected.set(id); this.hoveredNode.set(id); }
  closeQuickNode():void { this.hoveredNode.set(''); }
+ @HostListener('document:click',['$event'])
+ onDocumentClick(event:MouseEvent):void {
+  const el=event.target;
+  if(el instanceof Element && !el.closest('[data-canvas-node], .node-quick-tooltip'))this.closeQuickNode();
+ }
  closeQuickNodeOnCanvas(event:MouseEvent):void {
   if(!(event.target as Element).closest('[data-canvas-node]'))this.closeQuickNode();
  }
