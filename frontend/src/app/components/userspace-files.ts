@@ -21,7 +21,7 @@ interface TreeItem { name:string; path:string; depth:number; }
    </div>
   </header>
   @if(creatingFolder()){
-   <form class="folder-creator" (submit)="$event.preventDefault();void createFolder()">
+   <form class="folder-creator" (submit)="$event.preventDefault();createFolder()">
     <label>New folder name <input name="folderName" [ngModel]="folderName()" (ngModelChange)="folderName.set($event)" maxlength="80" placeholder="e.g. reports" aria-label="New folder name"></label>
     <button mat-flat-button type="submit" [disabled]="busy()||!folderName().trim()">Create folder</button>
     <button mat-stroked-button type="button" (click)="creatingFolder.set(false)">Cancel</button>
@@ -154,7 +154,7 @@ export class UserspaceFilesComponent {
   const seen=new Set<string>();
   for(const file of this.files()){
    const parts=file.path.split('/').filter(Boolean);
-   for(let i=0;i<(this.isFolderMarker(file.path)?parts.length-1:parts.length-1);i++)seen.add('/'+parts.slice(0,i+1).join('/'));
+   for(let i=0;i<parts.length-1;i++)seen.add('/'+parts.slice(0,i+1).join('/'));
   }
   return [...seen].sort().map(path=>({path,name:this.basename(path),depth:path.split('/').filter(Boolean).length-1}));
  });
