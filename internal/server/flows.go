@@ -576,6 +576,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			}
 			if !present {
 				state.Steps = append(state.Steps, flowV2Step{Node: n.ID, Label: n.Label, Status: "SKIPPED"})
+				results = append(results, map[string]string{"node": n.ID, "label": n.Label, "status": "SKIPPED"})
 				continue
 			}
 			state.Active[n.ID] = true
