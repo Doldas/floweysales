@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="017-flow-node-execution-events" author="floweysales" dbms="mysql">
+  <createTable tableName="agent_flow_run_steps">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="run_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="node_id" type="VARCHAR(48)"><constraints nullable="false"/></column>
+   <column name="node_label" type="VARCHAR(100)"/>
+   <column name="status" type="VARCHAR(16)"><constraints nullable="false"/></column>
+   <column name="output_preview" type="TEXT"/>
+   <column name="created_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"/>
+  </createTable>
+  <createIndex tableName="agent_flow_run_steps" indexName="idx_flow_run_steps"><column name="run_id"/><column name="id"/></createIndex>
+  <addForeignKeyConstraint baseTableName="agent_flow_run_steps" baseColumnNames="run_id"
+   referencedTableName="agent_flow_runs" referencedColumnNames="id" constraintName="fk_flow_step_run" onDelete="CASCADE"/>
+  <rollback><dropTable tableName="agent_flow_run_steps"/></rollback>
+ </changeSet>
+</databaseChangeLog>

@@ -377,6 +377,43 @@ func (e *Engine) registerFlowRoutes() {
 		}
 		writeJSON(w, 200, map[string]any{"runs": runs})
 	})
+	e.mux.HandleFunc("GET /api/admin/flows/{id}/runs/{run}/steps", func(w http.ResponseWriter, r *http.Request) {
+		if !e.flowAdmin(w, r) {
+			return
+		}
+		flowID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil || flowID <= 0 {
+			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
+			return
+		}
+		runID, err := strconv.ParseInt(r.PathValue("run"), 10, 64)
+		if err != nil || runID <= 0 {
+			writeJSON(w, 400, map[string]string{"error": "Invalid run ID"})
+			return
+		}
+		runs, err := e.db.ListAgentFlowRuns(r.Context(), flowID)
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"error": "Run history unavailable"})
+			return
+		}
+		found := false
+		for _, run := range runs {
+			if run.ID == runID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			writeJSON(w, 404, map[string]string{"error": "Run not found in recent history"})
+			return
+		}
+		steps, err := e.db.ListAgentFlowRunSteps(r.Context(), runID)
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"error": "Trace unavailable"})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"steps": steps})
+	})
 	e.mux.HandleFunc("POST /api/admin/flows/{id}/run", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {
 			return
@@ -500,9 +537,14 @@ func (e *Engine) launchFlowWithInput(f storage.AgentFlow, trigger, input string)
 			log.Printf("[Flows] Could not create run: %v", err)
 			return
 		}
-		output, runErr := e.executeFlowNestedWithInput(ctx, f, map[int64]bool{}, 0, input)
+		output, runErr := e.executeFlowNestedWithInput(context.WithValue(ctx, flowTraceRunKey{}, id), f, map[int64]bool{}, 0, input)
 		finishCtx, finishCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer finishCancel()
+		if runErr != nil {
+			if traceErr := e.db.AppendAgentFlowRunStep(finishCtx, id, "flow", "Flow execution", "FAILED", runErr.Error()); traceErr != nil {
+				log.Printf("[Flows] Failed run trace persistence: %v", traceErr)
+			}
+		}
 		if err := e.db.FinishAgentFlowRun(finishCtx, id, output, runErr); err != nil {
 			log.Printf("[Flows] Cannot persist run: %v", err)
 		}
@@ -516,6 +558,9 @@ func (e *Engine) executeFlow(ctx context.Context, f storage.AgentFlow) (string, 
 func (e *Engine) executeFlowNested(ctx context.Context, f storage.AgentFlow, parents map[int64]bool, depth int) (string, error) {
 	return e.executeFlowNestedWithInput(ctx, f, parents, depth, "")
 }
+
+type flowTraceRunKey struct{}
+
 func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.AgentFlow, parents map[int64]bool, depth int, input string) (string, error) {
 	if depth >= 4 {
 		return "", fmt.Errorf("maximum subflow depth reached")
@@ -545,6 +590,18 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 	var workspaceOwner int64
 	variables := map[string]string{}
 	results := []map[string]string{}
+	record := func(step map[string]string) {
+		results = append(results, step)
+		if runID, ok := ctx.Value(flowTraceRunKey{}).(int64); ok && depth == 0 {
+			status := step["status"]
+			if status == "" {
+				status = "SUCCESS"
+			}
+			if err := e.db.AppendAgentFlowRunStep(ctx, runID, step["node"], step["label"], status, step["output"]); err != nil {
+				log.Printf("[Flows] Node trace persistence failed: %v", err)
+			}
+		}
+	}
 	lastNodeID := "start"
 	for _, id := range order {
 		if v2 && lastNodeID != "start" && state.Active[lastNodeID] {
@@ -576,7 +633,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			}
 			if !present {
 				state.Steps = append(state.Steps, flowV2Step{Node: n.ID, Label: n.Label, Status: "SKIPPED"})
-				results = append(results, map[string]string{"node": n.ID, "label": n.Label, "status": "SKIPPED"})
+				record(map[string]string{"node": n.ID, "label": n.Label, "status": "SKIPPED"})
 				continue
 			}
 			state.Active[n.ID] = true
@@ -596,7 +653,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			if n.Type == "condition" || n.Type == "json_get" || n.Type == "merge" {
 				state.Values[n.ID] = previous
 				state.Steps = append(state.Steps, flowV2Step{Node: n.ID, Label: n.Label, Status: "SUCCESS", Output: previous})
-				results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous})
+				record(map[string]string{"node": n.ID, "label": n.Label, "output": previous})
 				continue
 			}
 		} else {
@@ -612,7 +669,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 		}
 
 		if n.Type == "output" {
-			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous})
+			record(map[string]string{"node": n.ID, "label": n.Label, "output": previous})
 			nodeResults[n.ID] = previous
 			continue
 		}
@@ -645,12 +702,12 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				}
 				previous = string(content)
 			}
-			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous, "file": n.Value})
+			record(map[string]string{"node": n.ID, "label": n.Label, "output": previous, "file": n.Value})
 			continue
 		}
 		if n.Type == "save_result" {
 			variables[n.Variable] = previous
-			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous, "variable": n.Variable})
+			record(map[string]string{"node": n.ID, "label": n.Label, "output": previous, "variable": n.Variable})
 			continue
 		}
 		if n.Type == "load_result" {
@@ -659,7 +716,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				return "", fmt.Errorf("node %s: variable %s has not been saved", n.ID, n.Variable)
 			}
 			previous = value
-			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous, "variable": n.Variable})
+			record(map[string]string{"node": n.ID, "label": n.Label, "output": previous, "variable": n.Variable})
 			continue
 		}
 		if n.Type == "transform" {
@@ -668,12 +725,12 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				return "", fmt.Errorf("node %s: %w", n.ID, err)
 			}
 			previous = result
-			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous})
+			record(map[string]string{"node": n.ID, "label": n.Label, "output": previous})
 			continue
 		}
 		if n.Type == "constant" {
 			previous = n.Value
-			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous})
+			record(map[string]string{"node": n.ID, "label": n.Label, "output": previous})
 			continue
 		}
 		if n.Type == "function" {
@@ -701,7 +758,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				return "", fmt.Errorf("function %d: %w", n.FunctionID, err)
 			}
 			previous = result.String()
-			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous})
+			record(map[string]string{"node": n.ID, "label": n.Label, "output": previous})
 			continue
 		}
 		if n.Type == "flow" {
@@ -717,7 +774,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				output = output[:6000]
 			}
 			previous = output
-			results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": output})
+			record(map[string]string{"node": n.ID, "label": n.Label, "output": output})
 			continue
 		}
 		prompt := n.Prompt
@@ -769,7 +826,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 		if len(previous) > 6000 {
 			previous = previous[:6000]
 		}
-		results = append(results, map[string]string{"node": n.ID, "label": n.Label, "output": previous})
+		record(map[string]string{"node": n.ID, "label": n.Label, "output": previous})
 	}
 	if v2 && lastNodeID != "start" && state.Active[lastNodeID] {
 		state.Values[lastNodeID] = previous
