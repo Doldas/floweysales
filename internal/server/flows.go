@@ -134,7 +134,7 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		if _, ok := nodes[n.ID]; ok {
 			return g, nil, fmt.Errorf("duplicate node")
 		}
-		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" && n.Type != "output" && (g.Version != 2 || (n.Type != "condition" && n.Type != "merge" && n.Type != "json_get")) {
+		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" && n.Type != "output" && n.Type != "http_get" && (g.Version != 2 || (n.Type != "condition" && n.Type != "merge" && n.Type != "json_get")) {
 			return g, nil, fmt.Errorf("only trigger, research agent, constant and subflow nodes are allowed")
 		}
 		if g.Version == 2 && (n.Type == "condition" || n.Type == "merge" || n.Type == "json_get") {
@@ -179,7 +179,13 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		if n.Type == "agent" && n.OutputMode != "" && n.OutputMode != "markdown" && n.OutputMode != "json" {
 			return g, nil, fmt.Errorf("unsupported agent output mode")
 		}
-		if n.Type == "workspace_read" || n.Type == "workspace_write" {
+		if n.Type=="http_get"{
+            utilities++
+            if n.Prompt!=""||n.FlowID!=0||n.FunctionID!=0{return g,nil,fmt.Errorf("HTTP GET nodes cannot invoke agents")}
+            if _,err:=flowPublicURL(n.Value);err!=nil{return g,nil,fmt.Errorf("HTTP GET node %s: %w",n.ID,err)}
+            if n.ValueType!="json"&&n.ValueType!="xml"{return g,nil,fmt.Errorf("HTTP GET requires JSON or XML format")}
+        }
+        if n.Type == "workspace_read" || n.Type == "workspace_write" {
 			utilities++
 			if _, err := storage.CleanUserspacePath(n.Value); err != nil {
 				return g, nil, fmt.Errorf("invalid workspace file path: %w", err)
@@ -836,6 +842,13 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			}
 		}
 
+        if n.Type=="http_get"{
+            output,err:=flowFetchPublic(ctx,n.Value,n.ValueType)
+            if err!=nil{return "",fmt.Errorf("HTTP GET node %s: %w",n.ID,err)}
+            previous=output
+            record(map[string]string{"node":n.ID,"label":n.Label,"output":previous})
+            continue
+        }
 		if n.Type == "output" {
 			record(map[string]string{"node": n.ID, "label": n.Label, "output": previous})
 			nodeResults[n.ID] = previous
