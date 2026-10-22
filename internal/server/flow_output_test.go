@@ -14,17 +14,17 @@ func TestFlowAgentOutputGraphAndFormats(t *testing.T) {
 		valid bool
 	}{
 		{
-			name: "agent to output",
+			name:  "agent to output",
 			graph: `{"nodes":[{"id":"start","type":"trigger"},{"id":"agent","type":"agent","prompt":"Research the asset thoroughly"},{"id":"display","type":"output","label":"Show result"}],"edges":[{"from":"start","to":"agent"},{"from":"agent","to":"display"}]}`,
 			valid: true,
 		},
 		{
-			name: "agent json to transform",
+			name:  "agent json to transform",
 			graph: `{"nodes":[{"id":"start","type":"trigger"},{"id":"agent","type":"agent","prompt":"Research the asset thoroughly","output_mode":"json"},{"id":"transform","type":"transform","transform":"trim"}],"edges":[{"from":"start","to":"agent"},{"from":"agent","to":"transform"}]}`,
 			valid: true,
 		},
 		{
-			name: "unknown output format",
+			name:  "unknown output format",
 			graph: `{"nodes":[{"id":"start","type":"trigger"},{"id":"agent","type":"agent","prompt":"Research the asset thoroughly","output_mode":"shell"}],"edges":[{"from":"start","to":"agent"}]}`,
 			valid: false,
 		},
