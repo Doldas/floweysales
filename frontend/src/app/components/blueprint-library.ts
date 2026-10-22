@@ -1,5 +1,5 @@
 import { CanvasGestures } from './canvas-gestures';
-import { Component, EventEmitter, Output, signal } from '@angular/core';
+import { HostListener, Component, EventEmitter, Output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -32,14 +32,14 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
       <button type="button" (click)="resetCanvas()" aria-label="Reset canvas view">Reset view</button>
     </div>
     <div class="canvas">
-  <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (pointerdown)="onCanvasPointerDown($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="onCanvasPointerEnd($event)" (pointercancel)="onCanvasPointerEnd($event)" (contextmenu)="onCanvasContextMenu($event)">
+  <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (pointerdown)="onCanvasPointerDown($event)" (click)="closeQuickNodeOnCanvas($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="onCanvasPointerEnd($event)" (pointercancel)="onCanvasPointerEnd($event)" (contextmenu)="onCanvasContextMenu($event)">
    <defs><marker id="fn-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#7ebdf2"/></marker></defs>
    @for(e of edges();track e.from+e.to+e.to_port){
     <line [attr.x1]="node(e.from)?.x!+120" [attr.y1]="node(e.from)?.y!+25"
       [attr.x2]="node(e.to)?.x" [attr.y2]="node(e.to)?.y!+25" stroke="#7ebdf2" stroke-width="2" marker-end="url(#fn-arrow)"/>
    }
    @for(n of nodes();track n.id){
-    <g data-canvas-node (pointerenter)="hoveredNode.set(n.id)" (click)="selected.set(n.id)" tabindex="0" (keydown.enter)="selected.set(n.id)">
+    <g data-canvas-node (click)="$event.stopPropagation();openQuickNode(n.id)" tabindex="0" (keydown.enter)="openQuickNode(n.id)">
      <rect [attr.x]="n.x" [attr.y]="n.y" width="120" height="50" rx="9" [attr.fill]="selected()===n.id?'#345579':'#1b3449'" stroke="#8db5d1"/>
      <text [attr.x]="n.x+8" [attr.y]="n.y+21" fill="white" font-size="12">{{n.type.toUpperCase()}}</text>
      <text [attr.x]="n.x+8" [attr.y]="n.y+40" fill="#bbd7eb" font-size="11">{{n.operation||n.value_type||n.id}}</text>
@@ -48,15 +48,15 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
   </svg>
  </div>
  @if(quickNode();as q){
-  <div class="node-quick-tooltip" aria-label="Quick function node settings">
-   <strong>⚙ {{q.id}}</strong>
+  <div class="node-quick-tooltip" (click)="$event.stopPropagation()" aria-label="Quick function node settings">
+   <div class="quick-tooltip-title"><strong>⚙ {{q.id}}</strong><button type="button" class="quick-tooltip-close" (click)="closeQuickNode()" aria-label="Close quick settings" title="Close">×</button></div>
    @if(q.type==='constant'||q.type==='input'||q.type==='output'){
      <label>Type <select [ngModel]="q.value_type||'text'" (ngModelChange)="editNode(q.id,'value_type',$event)"><option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option></select></label>
    }
    @if(q.type==='constant'){<label>Value <input [ngModel]="q.value||''" (ngModelChange)="editNode(q.id,'value',$event)"></label>}
    @if(q.type==='operation'){<label>Operation <select [ngModel]="q.operation||'add'" (ngModelChange)="editNode(q.id,'operation',$event)">@for(op of operations;track op){<option [value]="op">{{op}}</option>}</select></label>}
    <button type="button" (click)="selected.set(q.id);hoveredNode.set('')">Full details</button>
-   <button type="button" (click)="hoveredNode.set('')">Close</button>
+   <button type="button" (click)="closeQuickNode()">Close</button>
   </div>
  }
  @if(canvasMenu()){<div class="canvas-context-menu" role="menu" aria-label="Create node">
@@ -98,7 +98,10 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
  </mat-card>`,
  styles:[`
  .canvas-shell{position:relative;min-width:0;min-height:0}
- .node-quick-tooltip{position:absolute;right:12px;top:60px;z-index:7;display:flex;flex-direction:column;gap:9px;padding:12px;width:min(260px,85%);background:#1a334a;border:1px solid #82bbec;border-radius:9px;box-shadow:0 12px 28px #000a}
+ .node-quick-tooltip{position:absolute;right:12px;top:60px;z-index:7;display:flex;flex-direction:column;gap:9px;padding:12px;width:min(260px,85%);background:rgba(26,51,74,.89);backdrop-filter:blur(10px);border:1px solid #82bbec;border-radius:9px;box-shadow:0 12px 28px #000a}
+ .quick-tooltip-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
+ .quick-tooltip-close{width:26px;height:26px;min-height:26px!important;padding:0!important;flex:0 0 auto;color:#fff!important;background:#b52b38!important;border:1px solid #e15d66!important;border-radius:5px!important;font-size:20px!important;line-height:1!important;cursor:pointer}
+ .quick-tooltip-close:hover{background:#db3545!important}
  .node-quick-tooltip label{display:flex;flex-direction:column;gap:5px}
  .node-quick-tooltip input,.node-quick-tooltip select{width:100%;box-sizing:border-box}
  .node-quick-tooltip button{min-height:32px}
@@ -146,6 +149,17 @@ export class BlueprintLibraryComponent {
  closeCanvasMenu(): void { this.canvasMenu.set(false); }
 
  readonly hoveredNode=signal('');
+ openQuickNode(id:string):void { this.selected.set(id); this.hoveredNode.set(id); }
+ closeQuickNode():void { this.hoveredNode.set(''); }
+ @HostListener('document:click',['$event'])
+ onDocumentClick(event:MouseEvent):void {
+  const el=event.target;
+  if(el instanceof Element && !el.closest('[data-canvas-node], .node-quick-tooltip'))this.closeQuickNode();
+ }
+ closeQuickNodeOnCanvas(event:MouseEvent):void {
+  if(!(event.target as Element).closest('[data-canvas-node]'))this.closeQuickNode();
+ }
+
  readonly quickNode=()=>this.node(this.hoveredNode());
  editNode(id:string,field:'value_type'|'value'|'operation',value:string):void { this.nodes.update(items=>items.map(n=>n.id===id?{...n,[field]:value}:n)); }
  @Output() functionsChanged=new EventEmitter<void>();

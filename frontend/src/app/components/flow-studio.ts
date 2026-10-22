@@ -1,5 +1,5 @@
 import { CanvasGestures } from './canvas-gestures';
-import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
+import { HostListener, Component, ChangeDetectionStrategy, signal } from '@angular/core';
 import { MarkdownRunOutputComponent } from './markdown-run-output';
 import { UserspaceFilesComponent } from './userspace-files';
 import { CommonModule } from '@angular/common';
@@ -90,7 +90,7 @@ export class ConfirmDeleteFlowDialog {
       <button type="button" (click)="resetCanvas()" aria-label="Reset canvas view">Reset view</button>
     </div>
     <div class="flow-workspace" aria-label="Agent flow graph editor">
-    <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (pointerdown)="onCanvasPointerDown($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="onCanvasPointerEnd($event)" (pointercancel)="onCanvasPointerEnd($event)" (contextmenu)="onCanvasContextMenu($event)" role="img" aria-label="Agent nodes and directed connections">
+    <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (pointerdown)="onCanvasPointerDown($event)" (click)="closeQuickNodeOnCanvas($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="onCanvasPointerEnd($event)" (pointercancel)="onCanvasPointerEnd($event)" (contextmenu)="onCanvasContextMenu($event)" role="img" aria-label="Agent nodes and directed connections">
      <defs><marker id="flow-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#72b7ef"/></marker></defs>
      @for(edge of graph().edges;track edge.from+edge.to){
        <line [attr.x1]="node(edge.from)?.x!+125" [attr.y1]="node(edge.from)?.y!+35"
@@ -98,8 +98,8 @@ export class ConfirmDeleteFlowDialog {
              stroke="#72b7ef" stroke-width="2.5" marker-end="url(#flow-arrow)"/>
      }
      @for(n of graph().nodes;track n.id){
-       <g data-canvas-node (pointerenter)="hoveredNode.set(n.id)" (click)="select(n.id)" (pointerdown)="dragStart($event,n.id)" style="cursor:move" tabindex="0"
-          (keydown.enter)="select(n.id)" [attr.aria-label]="'Select '+n.label">
+       <g data-canvas-node (click)="$event.stopPropagation();openQuickNode(n.id)" (pointerdown)="dragStart($event,n.id)" style="cursor:move" tabindex="0"
+          (keydown.enter)="openQuickNode(n.id)" [attr.aria-label]="'Select '+n.label">
          <rect [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="12"
            [attr.fill]="n.id===selectedNode()?.id?'#244970':'#1c2a3b'"
            [attr.stroke]="n.id===selectedNode()?.id?'#94caff':'#607993'" stroke-width="2"/>
@@ -109,8 +109,8 @@ export class ConfirmDeleteFlowDialog {
      }
     </svg>
    </div>
-   @if(quickNode();as q){<div class="node-quick-tooltip" aria-label="Quick node settings">
-     <strong>⚙ {{q.label}}</strong>
+   @if(quickNode();as q){<div class="node-quick-tooltip" (click)="$event.stopPropagation()" aria-label="Quick node settings">
+     <div class="quick-tooltip-title"><strong>⚙ {{q.label}}</strong><button type="button" class="quick-tooltip-close" (click)="closeQuickNode()" aria-label="Close quick settings" title="Close">×</button></div>
      <label>Name <input [ngModel]="q.label" (ngModelChange)="updateNodeFor(q.id,'label',$event)" maxlength="100"></label>
      @if(q.type==='agent'){
        <label>Format <select [ngModel]="q.output_mode||'markdown'" (ngModelChange)="updateNodeFor(q.id,'output_mode',$event)">
@@ -122,7 +122,7 @@ export class ConfirmDeleteFlowDialog {
        <label>{{q.type==='constant'?'Value':'File path'}} <input [ngModel]="q.value||''" (ngModelChange)="updateNodeFor(q.id,'value',$event)"></label>
      }
      <button type="button" (click)="select(q.id);hoveredNode.set('')">Full details</button>
-     <button type="button" (click)="hoveredNode.set('')">Close</button>
+     <button type="button" (click)="closeQuickNode()">Close</button>
    </div>}
    @if(canvasMenu()){<div class="canvas-context-menu" role="menu" aria-label="Create node">
      <strong>Add node</strong>
@@ -331,7 +331,10 @@ export class ConfirmDeleteFlowDialog {
  textarea{width:100%}.flow-check{flex-direction:row;align-items:center}.flow-check input{width:18px;height:18px}
  .flow-workspace{background:radial-gradient(#294057 1px,transparent 1px) 0 0/20px 20px,#0d1b2a;border:1px solid #45627b;overflow:auto;border-radius:12px}
  svg{min-width:660px;width:100%;height:auto;display:block;touch-action:none;cursor:grab}
- .node-quick-tooltip{position:absolute;right:14px;top:62px;z-index:7;display:flex;flex-direction:column;gap:8px;padding:12px;width:min(290px,85%);max-height:65vh;overflow:auto;background:#1a334a;border:1px solid #8abce4;box-shadow:0 12px 28px #000a;border-radius:10px}
+ .node-quick-tooltip{position:absolute;right:14px;top:62px;z-index:7;display:flex;flex-direction:column;gap:8px;padding:12px;width:min(290px,85%);max-height:65vh;overflow:auto;background:rgba(26,51,74,.89);backdrop-filter:blur(10px);border:1px solid #8abce4;box-shadow:0 12px 28px #000a;border-radius:10px}
+ .quick-tooltip-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
+ .quick-tooltip-close{width:26px;height:26px;min-height:26px!important;padding:0!important;flex:0 0 auto;color:#fff!important;background:#b52b38!important;border:1px solid #e15d66!important;border-radius:5px!important;font-size:20px!important;line-height:1!important;cursor:pointer}
+ .quick-tooltip-close:hover{background:#db3545!important}
  .node-quick-tooltip label{display:flex;flex-direction:column;gap:4px;min-width:0}
  .node-quick-tooltip input,.node-quick-tooltip textarea,.node-quick-tooltip select{width:100%;box-sizing:border-box}
  .node-quick-tooltip button{min-height:32px}
@@ -360,6 +363,16 @@ export class FlowStudioComponent {
  private readonly dialog = inject(MatDialog);
  readonly hoveredNode=signal<string>('');
  readonly quickNode=()=>this.node(this.hoveredNode());
+ openQuickNode(id:string):void {this.select(id);this.hoveredNode.set(id);}
+ // Closing the quick panel never changes the selected graph node.
+ closeQuickNode():void {this.hoveredNode.set('');}
+ @HostListener('document:click',['$event'])
+ onDocumentClick(event:MouseEvent):void {
+  const el=event.target;
+  if(el instanceof Element && !el.closest('[data-canvas-node], .node-quick-tooltip'))this.closeQuickNode();
+ }
+ closeQuickNodeOnCanvas(event:MouseEvent):void {if(!(event.target as Element).closest('[data-canvas-node]'))this.closeQuickNode();}
+
  readonly canvasView = signal({ x: 0, y: 0, width: 820, height: 380 });
  readonly canvasMenu = signal(false);
  readonly canvasViewBox = () => {
