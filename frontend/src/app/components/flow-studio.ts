@@ -1,5 +1,5 @@
 import { CanvasGestures } from './canvas-gestures';
-import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
+import { HostListener, Component, ChangeDetectionStrategy, signal } from '@angular/core';
 import { MarkdownRunOutputComponent } from './markdown-run-output';
 import { UserspaceFilesComponent } from './userspace-files';
 import { CommonModule } from '@angular/common';
@@ -363,6 +363,15 @@ export class FlowStudioComponent {
  private readonly dialog = inject(MatDialog);
  readonly hoveredNode=signal<string>('');
  readonly quickNode=()=>this.node(this.hoveredNode());
+ openQuickNode(id:string):void {this.select(id);this.hoveredNode.set(id);}
+ closeQuickNode():void {this.hoveredNode.set('');}
+ @HostListener('document:click',['$event'])
+ onDocumentClick(event:MouseEvent):void {
+  const el=event.target;
+  if(el instanceof Element && !el.closest('[data-canvas-node], .node-quick-tooltip'))this.closeQuickNode();
+ }
+ closeQuickNodeOnCanvas(event:MouseEvent):void {if(!(event.target as Element).closest('[data-canvas-node]'))this.closeQuickNode();}
+
  readonly canvasView = signal({ x: 0, y: 0, width: 820, height: 380 });
  readonly canvasMenu = signal(false);
  readonly canvasViewBox = () => {
