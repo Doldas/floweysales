@@ -274,10 +274,25 @@ export class ConfirmDeleteFlowDialog {
           <details class="run-step">
            <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}}</span></summary>
            @if(step.output){<pre>{{step.output}}</pre>}
+           @if(step.status==='SUCCESS'&&step.output&&step.output.length<4000){
+            <button mat-stroked-button (click)="previewReplay(run.id,step.node)">Replay preview from this node</button>
+           }
           </details>
          }
         </div>
        }
+      }
+      @if(replaySource()===run.id&&replaySteps().length){
+       <section class="run-step-list" aria-label="Side-effect-free replay preview">
+        <strong>Replay preview (current flow definition)</strong>
+        @for(step of replaySteps();track $index){
+         <details class="run-step">
+          <summary>{{step.status}} · {{step.label||step.node}}</summary>
+          @if(step.input){<p>Input</p><pre>{{step.input}}</pre>}
+          @if(step.output){<p>Output</p><pre>{{step.output}}</pre>}
+         </details>
+        }
+       </section>
       }
       @if(run.error){<p>{{run.error}}</p>}
       @if(run.output){
@@ -385,6 +400,8 @@ export class FlowStudioComponent {
  readonly traceRunId=signal(0);
  readonly traceSteps=signal<FlowRunStep[]>([]);
  readonly traceLoading=signal(false);
+ readonly replaySteps=signal<{node:string;label:string;status:string;input?:string;output?:string}[]>([]);
+ readonly replaySource=signal(0);
  readonly busy=signal(false);
  readonly message=signal('');
  private dragging:{id:string;startX:number;startY:number;x:number;y:number}|null=null;
@@ -485,6 +502,15 @@ export class FlowStudioComponent {
    await this.refreshRuns();
   }catch(e){this.message.set('Cannot cancel run: '+String(e))}
   finally{this.busy.set(false)}
+ }
+ async previewReplay(runId:number,nodeId:string){
+  if(!this.selectedId())return;
+  this.replaySteps.set([]);this.replaySource.set(runId);
+  try{
+   const result=await this.request('/api/admin/flows/'+this.selectedId()+'/runs/'+runId+'/preview',{method:'POST',body:JSON.stringify({node:nodeId})});
+   this.replaySteps.set(result.steps||[]);
+   this.message.set('Preview only: no agents or side effects were executed. Uses current flow definition.');
+  }catch(e){this.message.set('Replay preview unavailable: '+String(e))}
  }
  async showRunSteps(runId:number){
   if(!this.selectedId())return;
