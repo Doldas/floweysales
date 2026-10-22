@@ -364,6 +364,7 @@ export class FlowStudioComponent {
  readonly hoveredNode=signal<string>('');
  readonly quickNode=()=>this.node(this.hoveredNode());
  openQuickNode(id:string):void {this.select(id);this.hoveredNode.set(id);}
+ // Closing the quick panel never changes the selected graph node.
  closeQuickNode():void {this.hoveredNode.set('');}
  @HostListener('document:click',['$event'])
  onDocumentClick(event:MouseEvent):void {
