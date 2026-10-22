@@ -15,6 +15,7 @@ interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'functi
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
+interface FlowRunStep {id:number;node:string;label:string;status:string;output:string}
 interface FlowRun { id:number; trigger:string; status:string; output:string; error:string }
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
@@ -238,6 +239,21 @@ export class ConfirmDeleteFlowDialog {
    @if(!runs().length){<p class="muted">No executions yet. Save and run a flow to see a trace.</p>}
    @for(run of runs();track run.id){
     <details class="flow-run"><summary>#{{run.id}} · {{run.trigger}} · {{run.status}}</summary>
+      <button mat-stroked-button (click)="showRunSteps(run.id)">{{traceRunId()===run.id?'Hide node trace':'Inspect nodes'}}</button>
+      @if(traceRunId()===run.id){
+       @if(traceLoading()){<p role="status">Loading node trace…</p>}
+       @else if(!traceSteps().length){<p class="muted">No node trace available for this run. Earlier runs may predate node tracing.</p>}
+       @else{
+        <div class="run-step-list" aria-label="Node execution trace">
+         @for(step of traceSteps();track step.id){
+          <details class="run-step">
+           <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}}</span></summary>
+           @if(step.output){<pre>{{step.output}}</pre>}
+          </details>
+         }
+        </div>
+       }
+      }
       @if(run.error){<p>{{run.error}}</p>}
       @if(run.output){
         @if(logView()==='raw'){<pre>{{run.output}}</pre>}
@@ -287,7 +303,7 @@ export class ConfirmDeleteFlowDialog {
  .run-history-heading{display:flex;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:14px}
  .run-history-heading h3{margin:0}
  .run-history-heading label{flex:0 1 220px}
- .flow-run{padding:10px;border-top:1px solid #3d5268}.flow-run pre{white-space:pre-wrap;word-break:break-word;max-height:250px;overflow:auto}
+ .flow-run{padding:10px;border-top:1px solid #3d5268}.run-step-list{display:flex;flex-direction:column;gap:5px;margin:12px 0;padding:10px;border:1px solid #50738e;border-radius:8px}.run-step{padding:9px;background:#162d40;border-radius:6px}.run-step summary{cursor:pointer}.step-skipped{opacity:.6}.flow-run pre{white-space:pre-wrap;word-break:break-word;max-height:250px;overflow:auto}
  `]
 })
 export class FlowStudioComponent {
@@ -337,6 +353,9 @@ export class FlowStudioComponent {
  readonly chosen=signal('');
  readonly selectedNode=()=>this.graph().nodes.find(n=>n.id===this.chosen());
  readonly runs=signal<FlowRun[]>([]);
+ readonly traceRunId=signal(0);
+ readonly traceSteps=signal<FlowRunStep[]>([]);
+ readonly traceLoading=signal(false);
  readonly busy=signal(false);
  readonly message=signal('');
  private dragging:{id:string;startX:number;startY:number;x:number;y:number}|null=null;
@@ -347,9 +366,9 @@ export class FlowStudioComponent {
  ],edges:[{from:'start',to:'agent-1'}]}}
  node(id:string):FlowNode|undefined{return this.graph().nodes.find(n=>n.id===id)}
  select(id:string){this.chosen.set(id)}
- newFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.runs.set([]);this.message.set('')}
+ newFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.message.set('')}
  loadFlow(id:number){const f=this.flows().find(x=>x.id===id);if(!f){this.newFlow();return}
-  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');void this.refreshRuns()}
+  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.traceRunId.set(0);this.traceSteps.set([]);void this.refreshRuns()}
  async loadFunctions(){try{const data=await this.request("/api/admin/blueprint-functions");this.functions.set(data.functions||[])}catch(e){this.message.set(String(e))}}
  addUtility(type:'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'){
    const count=this.graph().nodes.length;
@@ -407,6 +426,15 @@ export class FlowStudioComponent {
  private async request(url:string,options?:RequestInit):Promise<any>{const r=await fetch(url,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...options?.headers}});
   const j=await r.json();if(!r.ok)throw new Error(j.error||('HTTP '+r.status));return j}
  async refresh(){try{const [data,definitions]=await Promise.all([this.request('/api/admin/flows'),this.request('/api/admin/blueprint-triggers')]);this.flows.set(data.flows||[]);this.triggers.set(definitions.triggers||[])}catch(e){this.message.set(String(e))}}
+ async showRunSteps(runId:number){
+  if(!this.selectedId())return;
+  if(this.traceRunId()===runId){this.traceRunId.set(0);this.traceSteps.set([]);return}
+  this.traceRunId.set(runId);this.traceLoading.set(true);this.traceSteps.set([]);
+  try{const data=await this.request('/api/admin/flows/'+this.selectedId()+'/runs/'+runId+'/steps');
+      if(this.traceRunId()===runId)this.traceSteps.set(data.steps||[]);
+  }catch(e){this.message.set('Could not load run trace: '+String(e))}
+  finally{this.traceLoading.set(false)}
+ }
  async refreshRuns(){if(!this.selectedId())return;try{const d=await this.request('/api/admin/flows/'+this.selectedId()+'/runs');this.runs.set(d.runs||[])}catch(e){this.message.set(String(e))}}
  async confirmDeleteFlow(){
    const id=this.selectedId();
