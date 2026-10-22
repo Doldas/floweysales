@@ -553,7 +553,7 @@ func (e *Engine) registerFlowRoutes() {
 			writeJSON(w, 422, map[string]string{"error": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"steps": steps, "mode": "preview_only", "note": "Uses the current flow definition; no agents, tools, database writes or external actions are executed."})
+		writeJSON(w, 200, map[string]any{"steps": steps, "mode": "preview_only", "note": "Uses the saved graph snapshot for this run; no agents, tools, database writes or external actions are executed."})
 	})
 	e.mux.HandleFunc("POST /api/admin/flows/{id}/run", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {
@@ -678,6 +678,14 @@ func (e *Engine) launchFlowWithInput(f storage.AgentFlow, trigger, input string)
 			log.Printf("[Flows] Could not create run: %v", err)
 			return
 		}
+        // Persist the graph exactly as it was when this run began.
+        if snapshotErr:=e.db.SaveAgentFlowRunSnapshot(ctx,id,f.Graph);snapshotErr!=nil {
+            log.Printf("[Flows] Could not snapshot run graph: %v",snapshotErr)
+            finishCtx,finishCancel:=context.WithTimeout(context.Background(),5*time.Second)
+            _=e.db.FinishAgentFlowRun(finishCtx,id,"",fmt.Errorf("run graph snapshot failed: %w",snapshotErr))
+            finishCancel()
+            return
+        }
 		e.flowRunsMu.Lock()
 		e.flowRunCancels[id] = cancel
 		e.flowRunsMu.Unlock()
