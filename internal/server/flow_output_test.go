@@ -31,9 +31,11 @@ func TestFlowAgentOutputGraphAndFormats(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := storage.AgentFlow{Name:"Agent output", Graph:json.RawMessage(tc.graph)}
-			_,_,err:=validateFlow(f)
-			if (err==nil)!=tc.valid {t.Fatalf("valid=%v, error=%v",tc.valid,err)}
+			f := storage.AgentFlow{Name: "Agent output", Graph: json.RawMessage(tc.graph)}
+			_, _, err := validateFlow(f)
+			if (err == nil) != tc.valid {
+				t.Fatalf("valid=%v, error=%v", tc.valid, err)
+			}
 		})
 	}
 }
