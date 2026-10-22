@@ -11,9 +11,9 @@ import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angu
 import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'; label:string; output_mode?:'markdown'|'json'; variable?:string; transform?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; variable?:string; transform?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
-interface FlowGraph { nodes:FlowNode[]; edges:FlowEdge[] }
+interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
 interface FlowRun { id:number; trigger:string; status:string; output:string; error:string }
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
@@ -59,6 +59,9 @@ export class ConfirmDeleteFlowDialog {
      <button mat-stroked-button (click)="newFlow()">New</button>
      <button mat-stroked-button color="warn" (click)="confirmDeleteFlow()" [disabled]="!selectedId()||busy()">Delete flow</button>
      <button mat-stroked-button (click)="addAgent()">+ Agent</button>
+     <button mat-stroked-button (click)="addV2Node('condition')">+ If / Else</button>
+     <button mat-stroked-button (click)="addV2Node('merge')">+ Merge</button>
+     <button mat-stroked-button (click)="addV2Node('json_get')">+ JSON Field</button>
      <button mat-stroked-button (click)="addOutput()">+ Output</button>
      <button mat-stroked-button (click)="addSubflow()">+ Call Flow</button>
      <button mat-stroked-button (click)="addConstant()">+ Value</button>
@@ -99,7 +102,7 @@ export class ConfirmDeleteFlowDialog {
          <rect [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="12"
            [attr.fill]="n.id===selectedNode()?.id?'#244970':'#1c2a3b'"
            [attr.stroke]="n.id===selectedNode()?.id?'#94caff':'#607993'" stroke-width="2"/>
-         <text [attr.x]="n.x+12" [attr.y]="n.y+24" fill="#dceaf8" font-size="13">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':n.type==='workspace_read'?'▤ READ FILE':n.type==='workspace_write'?'▣ WRITE FILE':n.type==='output'?'→ OUTPUT':'✦ AGENT'}}</text>
+         <text [attr.x]="n.x+12" [attr.y]="n.y+24" fill="#dceaf8" font-size="13">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':n.type==='workspace_read'?'▤ READ FILE':n.type==='workspace_write'?'▣ WRITE FILE':n.type==='output'?'→ OUTPUT':n.type==='condition'?'◇ IF / ELSE':n.type==='merge'?'⇉ MERGE':n.type==='json_get'?'{} JSON FIELD':'✦ AGENT'}}</text>
          <text [attr.x]="n.x+12" [attr.y]="n.y+48" fill="#dceaf8" font-size="12">{{n.label.slice(0,16)}}</text>
        </g>
      }
@@ -151,6 +154,21 @@ export class ConfirmDeleteFlowDialog {
         <label>Research instructions<textarea rows="3" [ngModel]="n.prompt" (ngModelChange)="updateNode('prompt',$event)" maxlength="2000"></textarea></label>
 
        }
+       @if(n.type==='condition'){
+         <label>Condition <select [ngModel]="n.operator||'equals'" (ngModelChange)="updateNodeFor(n.id,'operator',$event)">
+           <option value="equals">Equals</option><option value="not_equals">Not equals</option>
+           <option value="contains">Contains</option><option value="greater_than">Greater than</option><option value="less_than">Less than</option>
+         </select></label>
+         <label>Compare with <input [ngModel]="n.value||''" (ngModelChange)="updateNodeFor(n.id,'value',$event)"></label>
+         <label>True → <select #trueTarget><option value="">Select node</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id){<option [value]="other.id">{{other.label}}</option>}}</select></label>
+         <button mat-stroked-button (click)="connectBranch(n.id,trueTarget.value,'true')">Connect TRUE</button>
+         <label>False → <select #falseTarget><option value="">Select node</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id){<option [value]="other.id">{{other.label}}</option>}}</select></label>
+         <button mat-stroked-button (click)="connectBranch(n.id,falseTarget.value,'false')">Connect FALSE</button>
+       }
+       @if(n.type==='json_get'){
+         <label>JSON property <input [ngModel]="n.property||''" (ngModelChange)="updateNodeFor(n.id,'property',$event)" maxlength="48" placeholder="score"></label>
+       }
+       @if(n.type==='merge'){<p class="muted">Combines active incoming values into a JSON array.</p>}
        @if(n.type==='output'){
         <p class="muted">Default behavior: display the incoming agent result. Connect an Agent node to this output, or connect the Agent directly to another processing node.</p>
 
@@ -353,6 +371,15 @@ export class FlowStudioComponent {
  connectValue(from:string,to:string){if(!to||this.node(from)?.value_type!=='text'){this.message.set('Typed link requires a text value and an agent or flow input');return}if(this.graph().edges.some(e=>e.from===from&&e.to===to))return;this.graph.update(g=>({...g,edges:[...g.edges,{from,to,from_port:'value',to_port:'input'}]}))}
  addSubflow(){const n=this.graph().nodes;const id='flow-'+Date.now().toString(36);this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'flow',label:'Call flow',flow_id:0,x:260+(n.length%4)*140,y:40+Math.floor(n.length/4)*100}]}));this.chosen.set(id)}
  updateFlowReference(target:number){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,flow_id:target}:n)}))}
+ addV2Node(type:'condition'|'merge'|'json_get'){
+   const id=type+'-'+Date.now().toString(36);
+   this.graph.update(g=>({...g,version:2,nodes:[...g.nodes,{id,type,label:type==='condition'?'If / Else':type==='merge'?'Merge Results':'JSON Field',operator:type==='condition'?'equals':undefined,property:type==='json_get'?'score':undefined,x:260+(g.nodes.length%3)*130,y:65+Math.floor(g.nodes.length/3)*110}]}));
+   this.chosen.set(id);
+ }
+ connectBranch(from:string,to:string,branch:'true'|'false'){
+   if(!from||!to||from===to)return;
+   this.graph.update(g=>({...g,version:2,edges:[...g.edges.filter(e=>!(e.from===from&&e.from_port===branch)),{from,to,from_port:branch}]}));
+ }
  addOutput(){
    const count=this.graph().nodes.length;
    const upstream=this.selectedNode();
@@ -361,7 +388,7 @@ export class FlowStudioComponent {
    this.chosen.set(id);
  }
  addAgent(){const n=this.graph().nodes;const id='agent-'+Date.now().toString(36);const x=260+(n.length%4)*140,y=40+Math.floor(n.length/4)*100;this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'agent',label:'Research agent',prompt:'Analyze the evidence and summarize findings.',x,y}]}));this.chosen.set(id)}
- updateNodeFor(id:string,field:'label'|'prompt'|'output_mode'|'value',value:string):void {
+ updateNodeFor(id:string,field:'label'|'prompt'|'output_mode'|'value'|'operator'|'property',value:string):void {
    this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===id?{...n,[field]:value}:n)}));
  }
  updateNode(field:'label'|'prompt'|'output_mode',value:string){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,[field]:value}:n)}))}
