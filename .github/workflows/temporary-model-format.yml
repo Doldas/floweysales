@@ -1,0 +1,20 @@
+name: Temporary Model Gofmt
+on:
+  push:
+    branches: [feature/83-agent-model-selection]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          gofmt -w internal/server/flows.go internal/server/flow_agent_model_test.go
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add internal/server/flows.go internal/server/flow_agent_model_test.go
+            git commit -m "style(go): format model override"
+            git push
+          fi
