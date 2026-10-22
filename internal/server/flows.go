@@ -61,70 +61,7 @@ func allowedUserspaceType(mime string) bool {
 	return false
 }
 
-var flowModelNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]*package server
-
-import (
-	"context"
-	"database/sql"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"regexp"
-	"strconv"
-	"strings"
-	"time"
-
-	"floweysales/internal/ai"
-	"floweysales/internal/identity"
-	"floweysales/internal/storage"
-)
-
-type flowNode struct {
-	ID             string  `json:"id"`
-	Type           string  `json:"type"`
-	Label          string  `json:"label"`
-	Prompt         string  `json:"prompt,omitempty"`
-	OutputMode     string  `json:"output_mode,omitempty"`
-	Model          string  `json:"model,omitempty"`
-	JSONContract   string  `json:"json_contract,omitempty"`
-	TimeoutSeconds int     `json:"timeout_seconds,omitempty"`
-	MaxRetries     int     `json:"max_retries,omitempty"`
-	FlowID         int64   `json:"flow_id,omitempty"`
-	FunctionID     int64   `json:"function_id,omitempty"`
-	ValueType      string  `json:"value_type,omitempty"`
-	Value          string  `json:"value,omitempty"`
-	ContentType    string  `json:"content_type,omitempty"`
-	Variable       string  `json:"variable,omitempty"`
-	Transform      string  `json:"transform,omitempty"`
-	Operator       string  `json:"operator,omitempty"`
-	Property       string  `json:"property,omitempty"`
-	X              float64 `json:"x"`
-	Y              float64 `json:"y"`
-}
-type flowEdge struct {
-	From     string `json:"from"`
-	To       string `json:"to"`
-	FromPort string `json:"from_port,omitempty"`
-	ToPort   string `json:"to_port,omitempty"`
-}
-type flowGraph struct {
-	Version int        `json:"version,omitempty"`
-	Nodes   []flowNode `json:"nodes"`
-	Edges   []flowEdge `json:"edges"`
-}
-
-func allowedUserspaceType(mime string) bool {
-	switch mime {
-	case "", "text/plain", "text/markdown", "text/csv", "application/json", "application/xml":
-		return true
-	}
-	return false
-}
-
-)
+var flowModelNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]*$`)
 var flowVariablePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{0,47}$`)
 
 // transformFlowText is deterministic, bounded and never evaluates code.
