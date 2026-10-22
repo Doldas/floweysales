@@ -42,6 +42,7 @@ func flowV2Merge(g flowGraph,nodeID string,state *flowV2State)(string,bool,error
  values:=[]json.RawMessage{}
  for _,edge:=range g.Edges{
   if edge.To!=nodeID||!state.Active[edge.From]{continue}
+  if (edge.FromPort=="true"||edge.FromPort=="false") && strings.ToLower(state.Values[edge.From])!=edge.FromPort {continue}
   raw:=state.Values[edge.From]
   if json.Valid([]byte(raw)){values=append(values,json.RawMessage(raw))}else{
    data,_:=json.Marshal(raw);values=append(values,data)
