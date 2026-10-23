@@ -139,7 +139,7 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		if _, ok := nodes[n.ID]; ok {
 			return g, nil, fmt.Errorf("duplicate node")
 		}
-		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" && n.Type != "output" && (g.Version != 2 || n.Type != "loop") && n.Type != "http_get" && (g.Version != 2 || n.Type != "web_crawl") && (g.Version != 2 || (n.Type != "condition" && n.Type != "merge" && n.Type != "json_get")) {
+		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" && n.Type != "output" && (g.Version != 2 || n.Type != "loop") && n.Type != "http_get" && (g.Version != 2 || n.Type != "web_search") && (g.Version != 2 || n.Type != "web_crawl") && (g.Version != 2 || (n.Type != "condition" && n.Type != "merge" && n.Type != "json_get")) {
 			return g, nil, fmt.Errorf("only trigger, research agent, constant and subflow nodes are allowed")
 		}
 		if g.Version == 2 && (n.Type == "condition" || n.Type == "merge" || n.Type == "json_get") {
@@ -217,6 +217,16 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		}
 		if n.Type == "agent" && n.OutputMode != "" && n.OutputMode != "markdown" && n.OutputMode != "json" {
 			return g, nil, fmt.Errorf("unsupported agent output mode")
+		}
+		if n.Type == "web_search" {
+			utilities++
+			if n.Prompt != "" || n.FlowID != 0 || n.FunctionID != 0 || n.Model != "" {
+				return g, nil, fmt.Errorf("web search must not invoke agents or subflows")
+			}
+			query := strings.TrimSpace(n.Value)
+			if len(query) < 2 || len(query) > 400 || strings.ContainsAny(query, "\r\n") {
+				return g, nil, fmt.Errorf("invalid web search query")
+			}
 		}
 		if n.Type == "web_crawl" {
 			utilities++
@@ -484,7 +494,7 @@ func (e *Engine) configuredFlowModelsAllowed(ctx context.Context, graph flowGrap
 func flowAllowedForNonAdmin(graph flowGraph) bool {
 	for _, node := range graph.Nodes {
 		switch node.Type {
-		case "trigger", "agent", "constant", "condition", "merge", "json_get", "transform", "loop", "output", "http_get", "web_crawl":
+		case "trigger", "agent", "constant", "condition", "merge", "json_get", "transform", "loop", "output", "http_get", "web_crawl", "web_search":
 		default:
 			return false
 		}
@@ -1000,6 +1010,13 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			}
 		}
 
+		if n.Type == "web_search" {
+			result, err := e.runWebSearch(ctx, n.Value)
+			if err != nil {return "", fmt.Errorf("web search node %s: %w", n.ID, err)}
+			previous = result
+			record(map[string]string{"node": n.ID, "label": n.Label, "output": previous})
+			continue
+		}
 		if n.Type == "web_crawl" {
 			output, err := flowCrawlPublic(ctx, n.Value, n.LoopLimit)
 			if err != nil {
