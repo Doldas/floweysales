@@ -269,3 +269,9 @@ catalog or match the system default; users cannot register new models.
 recovered without the original master encryption key. Before inviting users,
 test actual SMTP delivery, TLS trust and the public application URL in the
 deployed environment. Invitations do not auto-login the recipient.
+
+## Integration secrets encryption key
+
+At startup, Floweysales uses `FLOWEYSALES_SECRETS_KEY` if provided (32 random bytes encoded as standard Base64). If it is unset or empty, the server generates a key and stores it in a local file, reusing the same key on subsequent starts. The key is never printed to logs.
+
+The default path for a standalone server is `<user-config-dir>/floweysales/secrets.key`. Set `FLOWEYSALES_SECRETS_KEY_FILE` to use a different persistent path. Both Docker Compose configurations set it to `/secrets/secrets.key` and mount the named `secrets_data` volume; **back up this volume together with the database**. Do not delete the key file or change the explicit environment key after saving integration credentials: previously stored API credentials would become undecryptable. An invalid environment key or a corrupt persisted key makes startup fail rather than silently generating a replacement.
