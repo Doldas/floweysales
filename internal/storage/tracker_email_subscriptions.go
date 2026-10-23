@@ -5,7 +5,6 @@ import (
  "fmt"
  "regexp"
  "strings"
- "time"
 )
 
 var trackerSubscriptionSymbol=regexp.MustCompile(`^[A-Z0-9._-]{1,32}$`)
@@ -67,4 +66,3 @@ func (d *Database) TrackerEmailRecipients(ctx context.Context,symbol,provider,ev
  for rows.Next(){var recipient TrackerEmailRecipient;if err:=rows.Scan(&recipient.UserID,&recipient.Email,&recipient.CooldownMinutes);err!=nil{return nil,err};out=append(out,recipient)}
  return out,rows.Err()
 }
-var _=time.Second
