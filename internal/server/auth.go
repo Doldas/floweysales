@@ -82,7 +82,7 @@ func (e *Engine) Handler() http.Handler {
 				writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "Authentication required"})
 				return
 			}
-			if !allowedAPI(u.Role, r.Method, r.URL.Path) {
+			if !e.allowedUserAPI(r, u) {
 				writeJSON(w, http.StatusForbidden, map[string]any{"error": "Insufficient permissions"})
 				return
 			}
@@ -113,6 +113,24 @@ func allowedAPI(role, method, path string) bool {
 	default:
 		return false
 	}
+}
+
+func (e *Engine) allowedUserAPI(r *http.Request,u identity.User)bool{
+ if u.Role==identity.RoleSysAdmin{return true}
+ method,path:=r.Method,r.URL.Path
+ if strings.HasPrefix(path,"/api/admin/flows"){
+  permission:="flows.write"
+  if method==http.MethodGet{permission="flows.read"}
+  if strings.HasSuffix(path,"/run")||strings.HasSuffix(path,"/cancel"){permission="flows.run"}
+  if strings.HasSuffix(path,"/preview"){permission="flows.read"}
+  return e.authService.HasPermission(r.Context(),u.Role,permission)
+ }
+ if method==http.MethodGet && (path=="/api/search"||path=="/api/history"||path=="/api/financials"||path=="/api/providers"||path=="/api/provider/endpoints"||path=="/api/provider/research"||path=="/api/quote"||path=="/api/sec/filings"||path=="/api/sec/section"||path=="/api/sec/facts"||path=="/api/ai/config"||path=="/api/ai/tools"){
+  return e.authService.HasPermission(r.Context(),u.Role,"research.read")
+ }
+ if method==http.MethodPost && path=="/api/ai/chat" {return e.authService.HasPermission(r.Context(),u.Role,"ai.chat")}
+ if method==http.MethodPost && path=="/api/valuation/dcf" {return e.authService.HasPermission(r.Context(),u.Role,"research.read")}
+ return false
 }
 
 func (e *Engine) serveUserProvision(w http.ResponseWriter, r *http.Request) {
