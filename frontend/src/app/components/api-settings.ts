@@ -14,7 +14,7 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
  imports:[FormsModule,MatButtonModule,MatCardModule,AdminAccessSettingsComponent],
  template:`
  <div class="api-settings">
-  <header><h2>System Admin · API Settings</h2>
+  <header><h2>System Admin · Settings</h2>
    <p>Central configuration for AI and web search integrations. Credentials are encrypted on the server and never displayed after saving.</p>
   </header>
   @if(!encryptionReady()){
