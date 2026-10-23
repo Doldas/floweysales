@@ -19,4 +19,5 @@
   <include file="015-ai-model-catalog.xml" relativeToChangelogFile="true"/>
   <include file="016-api-integration-secrets.xml" relativeToChangelogFile="true"/>
   <include file="017-account-invitations.xml" relativeToChangelogFile="true"/>
+  <include file="018-smtp-settings.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
