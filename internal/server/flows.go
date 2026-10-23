@@ -1012,7 +1012,9 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 
 		if n.Type == "web_search" {
 			result, err := e.runWebSearch(ctx, n.Value)
-			if err != nil {return "", fmt.Errorf("web search node %s: %w", n.ID, err)}
+			if err != nil {
+				return "", fmt.Errorf("web search node %s: %w", n.ID, err)
+			}
 			previous = result
 			record(map[string]string{"node": n.ID, "label": n.Label, "output": previous})
 			continue
