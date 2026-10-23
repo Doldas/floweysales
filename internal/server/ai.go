@@ -97,6 +97,29 @@ type chatRequestBody struct {
 
 // registerAIRoutes wires the OpenAI-compatible chat proxy and its config probe.
 func (e *Engine) registerAIRoutes() {
+	e.mux.HandleFunc("GET /api/ai/models/available", func(w http.ResponseWriter, r *http.Request) {
+		if e.authService == nil {
+			writeJSON(w, 403, map[string]string{"error": "Authentication required"})
+			return
+		}
+		user, ok := e.currentUser(r)
+		if !ok {
+			writeJSON(w, 401, map[string]string{"error": "Authentication required"})
+			return
+		}
+		if !e.authService.HasPermission(r.Context(), user.Role, "models.use") {
+			writeJSON(w, 403, map[string]string{"error": "Model permission denied"})
+			return
+		}
+		models, err := e.db.ListAIModels(r.Context())
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"error": "Model catalog unavailable"})
+			return
+		}
+		_, _, defaultModel := e.aiDefaults()
+		writeJSON(w, 200, map[string]any{"models": models, "default_model": defaultModel})
+	})
+
 	e.mux.HandleFunc("GET /api/admin/ai/models", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {
 			return

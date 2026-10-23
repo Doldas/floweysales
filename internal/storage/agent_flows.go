@@ -203,3 +203,27 @@ func (d *Database) CancelAgentFlowRun(ctx context.Context, flowID, runID int64) 
 	affected, err := result.RowsAffected()
 	return affected == 1, err
 }
+
+func (d *Database) ListAgentFlowsForUser(ctx context.Context, userID int64) ([]AgentFlow, error) {
+	rows, err := d.db.QueryContext(ctx, "SELECT id,name,graph_json,enabled,interval_minutes,COALESCE(event_key,'') FROM agent_flows WHERE created_by=? ORDER BY id DESC LIMIT 100", userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := []AgentFlow{}
+	for rows.Next() {
+		var f AgentFlow
+		var graph string
+		if err := rows.Scan(&f.ID, &f.Name, &graph, &f.Enabled, &f.IntervalMinutes, &f.EventKey); err != nil {
+			return nil, err
+		}
+		f.Graph = json.RawMessage(graph)
+		result = append(result, f)
+	}
+	return result, rows.Err()
+}
+func (d *Database) AgentFlowOwnedBy(ctx context.Context, flowID, userID int64) (bool, error) {
+	var count int
+	err := d.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM agent_flows WHERE id=? AND created_by=?", flowID, userID).Scan(&count)
+	return count == 1, err
+}

@@ -207,7 +207,7 @@ func (s *Service) Login(ctx context.Context, rawEmail, password string) (string,
 	if err != nil {
 		return "", User{}, err
 	}
-	if !VerifyPassword(stored, password) || !active || (u.Role != RoleSysAdmin && u.Role != RoleUser) {
+	if !VerifyPassword(stored, password) || !active || !s.RoleExists(ctx, u.Role) {
 		return "", User{}, ErrInvalidCredentials
 	}
 	secret := make([]byte, 32)
@@ -239,7 +239,7 @@ func (s *Service) Authenticate(ctx context.Context, token string) (User, bool) {
 	err := s.db.QueryRowContext(ctx,
 		`SELECT u.id, u.email, u.role FROM auth_sessions s
            JOIN auth_users u ON s.user_id = u.id
-          WHERE s.token_hash = ? AND s.expires_at > ? AND u.active = TRUE AND u.role IN ('SYS_ADMIN', 'USER')`,
+          WHERE s.token_hash = ? AND s.expires_at > ? AND u.active = TRUE AND EXISTS (SELECT 1 FROM auth_roles roles WHERE roles.role_name=u.role)`,
 		TokenDigest(token), time.Now().UTC()).Scan(&u.ID, &u.Email, &u.Role)
 	return u, err == nil
 }

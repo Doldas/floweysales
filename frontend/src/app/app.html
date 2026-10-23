@@ -2,16 +2,20 @@
   <main style="min-height:100vh;display:grid;place-items:center">Checking session…</main>
 } @else if (auth.enabled() && !auth.user()) {
   <fse-login></fse-login>
-} @else if (auth.enabled() && auth.user()?.role === 'USER') {
+} @else if (auth.enabled() && auth.user()?.role !== 'SYS_ADMIN') {
   <main class="container research-container">
     <h2>FloweySales Research</h2>
-    <p class="research-account">Signed in as {{ auth.user()?.email }} · USER (read-only research access)</p>
+    <p class="research-account">Signed in as {{ auth.user()?.email }} · {{ auth.user()?.role }}</p>
     <button mat-stroked-button (click)="auth.logout()">Sign out</button>
     <nav class="workspace-tabs" aria-label="Research workspaces">
       <button type="button" class="workspace-tab" [class.active]="workspace() !== 'files'" (click)="openWorkspace('financials')">Research</button>
       <button type="button" class="workspace-tab" [class.active]="workspace() === 'files'" (click)="openWorkspace('files')">My Workspace</button>
+      @if(auth.permissions().includes('flows.read')){
+       <button type="button" class="workspace-tab" [class.active]="workspace() === 'studio'" (click)="openWorkspace('studio')">My Flows</button>
+      }
     </nav>
     @if(workspace() === 'files'){<fse-userspace-files></fse-userspace-files>}
+    @else if(workspace() === 'studio' && auth.permissions().includes('flows.read')){<fse-flow-studio></fse-flow-studio>}
     @else {
       <fse-financials [symbol]="trackedSymbol()" [provider]="provider()"></fse-financials>
       <fse-ai-chat [contextSymbol]="trackedSymbol()" [contextProvider]="provider()" [contextRange]="historyRange()" [contextPrice]="livePrice() | number:'1.2-4'"></fse-ai-chat>

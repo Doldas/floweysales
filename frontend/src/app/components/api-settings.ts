@@ -1,4 +1,5 @@
 import { Component, signal } from '@angular/core';
+import { AdminAccessSettingsComponent } from './admin-access-settings';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -10,16 +11,24 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
 @Component({
  selector:'fse-api-settings',
  standalone:true,
- imports:[FormsModule,MatButtonModule,MatCardModule],
+ imports:[FormsModule,MatButtonModule,MatCardModule,AdminAccessSettingsComponent],
  template:`
  <div class="api-settings">
-  <header><h2>System Admin · API Settings</h2>
+  <header><h2>System Admin · Settings</h2>
    <p>Central configuration for AI and web search integrations. Credentials are encrypted on the server and never displayed after saving.</p>
   </header>
   @if(!encryptionReady()){
    <p class="warning" role="alert">Persistent API credentials are unavailable until the server administrator configures FLOWEYSALES_SECRETS_KEY as a base64-encoded, 32-byte encryption key. Store this key securely and back it up.</p>
   }
   @if(message()){<p role="status">{{message()}}</p>}
+  <nav class="settings-tabs" role="tablist" aria-label="System administration">
+    <button type="button" [class.active]="tab()==='integrations'" (click)="tab.set('integrations')">API integrations</button>
+    <button type="button" [class.active]="tab()==='users'" (click)="tab.set('users')">User management</button>
+    <button type="button" [class.active]="tab()==='roles'" (click)="tab.set('roles')">Role management</button>
+    <button type="button" [class.active]="tab()==='permissions'" (click)="tab.set('permissions')">Permission management</button>
+    <button type="button" [class.active]="tab()==='mail'" (click)="tab.set('mail')">Mail configuration</button>
+  </nav>
+  @if(tab()==='integrations'){
   <div class="cards">
    <mat-card>
     <h3>AI provider</h3>
@@ -74,9 +83,15 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
     <p class="muted">Provider credentials are configured here for upcoming web-search nodes. Crawling public HTML pages does not require a search API key. Search execution is not yet implemented by this settings change.</p>
    </mat-card>
   </div>
+  } @else {
+    <fse-admin-access-settings [tab]="tab()"></fse-admin-access-settings>
+  }
  </div>
  `,
  styles:[`
+ .settings-tabs{display:flex;flex-wrap:wrap;gap:8px;border-bottom:1px solid #65809b;padding-bottom:12px}
+ .settings-tabs button{padding:10px;border-radius:7px;border:1px solid #547892;background:#203b50;color:#f4f8ff;cursor:pointer}
+ .settings-tabs button.active{background:#346889;border-color:#b6d3e8}
  .api-settings{display:flex;flex-direction:column;gap:16px;padding:16px;max-width:1150px;margin:0 auto}
  .api-settings h2,.api-settings h3,.api-settings h4{margin:0 0 10px}
  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:18px}
@@ -91,6 +106,7 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
  `]
 })
 export class ApiSettingsComponent{
+ readonly tab=signal("integrations");
  readonly busy=signal(false);
  readonly message=signal('');
  readonly encryptionReady=signal(false);

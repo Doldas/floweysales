@@ -426,12 +426,84 @@ func (e *Engine) flowAdmin(w http.ResponseWriter, r *http.Request) bool {
 	}
 	return true
 }
+func (e *Engine) flowAuthorized(w http.ResponseWriter, r *http.Request, permission string) bool {
+	if e.authService == nil {
+		writeJSON(w, 403, map[string]string{"error": "Authentication required"})
+		return false
+	}
+	user, ok := e.currentUser(r)
+	if !ok {
+		writeJSON(w, 401, map[string]string{"error": "Authentication required"})
+		return false
+	}
+	if user.Role == identity.RoleSysAdmin {
+		return true
+	}
+	if !e.authService.HasPermission(r.Context(), user.Role, permission) {
+		writeJSON(w, 403, map[string]string{"error": "Flow permission denied"})
+		return false
+	}
+	if idValue := r.PathValue("id"); idValue != "" {
+		id, err := strconv.ParseInt(idValue, 10, 64)
+		if err != nil || id <= 0 {
+			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
+			return false
+		}
+		owned, err := e.db.AgentFlowOwnedBy(r.Context(), id, user.ID)
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"error": "Flow ownership unavailable"})
+			return false
+		}
+		if !owned {
+			writeJSON(w, 404, map[string]string{"error": "Flow not found"})
+			return false
+		}
+	}
+	return true
+}
+func (e *Engine) configuredFlowModelsAllowed(ctx context.Context, graph flowGraph) error {
+	models, err := e.db.ListAIModels(ctx)
+	if err != nil {
+		return fmt.Errorf("model catalog unavailable")
+	}
+	allowed := map[string]bool{}
+	for _, model := range models {
+		allowed[model.Model] = true
+	}
+	_, _, defaultModel := e.aiDefaults()
+	if defaultModel != "" {
+		allowed[defaultModel] = true
+	}
+	for _, node := range graph.Nodes {
+		if node.Type == "agent" && node.Model != "" && !allowed[node.Model] {
+			return fmt.Errorf("model %q is not registered by SYS_ADMIN", node.Model)
+		}
+	}
+	return nil
+}
+func flowAllowedForNonAdmin(graph flowGraph) bool {
+	for _, node := range graph.Nodes {
+		switch node.Type {
+		case "trigger", "agent", "constant", "condition", "merge", "json_get", "transform", "loop", "output", "http_get", "web_crawl":
+		default:
+			return false
+		}
+	}
+	return true
+}
 func (e *Engine) registerFlowRoutes() {
 	e.mux.HandleFunc("GET /api/admin/flows", func(w http.ResponseWriter, r *http.Request) {
-		if !e.flowAdmin(w, r) {
+		if !e.flowAuthorized(w, r, "flows.read") {
 			return
 		}
-		flows, err := e.db.ListAgentFlows(r.Context())
+		user, _ := e.currentUser(r)
+		var flows []storage.AgentFlow
+		var err error
+		if user.Role == identity.RoleSysAdmin {
+			flows, err = e.db.ListAgentFlows(r.Context())
+		} else {
+			flows, err = e.db.ListAgentFlowsForUser(r.Context(), user.ID)
+		}
 		if err != nil {
 			writeJSON(w, 503, map[string]string{"error": "Flow storage unavailable"})
 			return
@@ -449,7 +521,7 @@ func (e *Engine) registerFlowRoutes() {
 	})
 	// Delete flows only after explicit client confirmation; authorization is checked here.
 	e.mux.HandleFunc("DELETE /api/admin/flows/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if !e.flowAdmin(w, r) {
+		if !e.flowAuthorized(w, r, "flows.write") {
 			return
 		}
 		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -471,7 +543,7 @@ func (e *Engine) registerFlowRoutes() {
 		writeJSON(w, 200, map[string]any{"deleted": true, "flow_id": id})
 	})
 	e.mux.HandleFunc("GET /api/admin/flows/{id}/runs", func(w http.ResponseWriter, r *http.Request) {
-		if !e.flowAdmin(w, r) {
+		if !e.flowAuthorized(w, r, "flows.read") {
 			return
 		}
 		var id int64
@@ -487,7 +559,7 @@ func (e *Engine) registerFlowRoutes() {
 		writeJSON(w, 200, map[string]any{"runs": runs})
 	})
 	e.mux.HandleFunc("POST /api/admin/flows/{id}/runs/{run}/cancel", func(w http.ResponseWriter, r *http.Request) {
-		if !e.flowAdmin(w, r) {
+		if !e.flowAuthorized(w, r, "flows.run") {
 			return
 		}
 		flowID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -518,7 +590,7 @@ func (e *Engine) registerFlowRoutes() {
 		writeJSON(w, 200, map[string]any{"cancelled": true, "run_id": runID})
 	})
 	e.mux.HandleFunc("GET /api/admin/flows/{id}/runs/{run}/steps", func(w http.ResponseWriter, r *http.Request) {
-		if !e.flowAdmin(w, r) {
+		if !e.flowAuthorized(w, r, "flows.read") {
 			return
 		}
 		flowID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -555,7 +627,7 @@ func (e *Engine) registerFlowRoutes() {
 		writeJSON(w, 200, map[string]any{"steps": steps})
 	})
 	e.mux.HandleFunc("POST /api/admin/flows/{id}/runs/{run}/preview", func(w http.ResponseWriter, r *http.Request) {
-		if !e.flowAdmin(w, r) {
+		if !e.flowAuthorized(w, r, "flows.read") {
 			return
 		}
 		flowID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -625,7 +697,7 @@ func (e *Engine) registerFlowRoutes() {
 		writeJSON(w, 200, map[string]any{"steps": steps, "mode": "preview_only", "note": "Uses the saved graph snapshot for this run; no agents, tools, database writes or external actions are executed."})
 	})
 	e.mux.HandleFunc("POST /api/admin/flows/{id}/run", func(w http.ResponseWriter, r *http.Request) {
-		if !e.flowAdmin(w, r) {
+		if !e.flowAuthorized(w, r, "flows.run") {
 			return
 		}
 		var id int64
@@ -637,6 +709,18 @@ func (e *Engine) registerFlowRoutes() {
 		if err != nil {
 			writeJSON(w, 404, map[string]string{"error": "Flow not found"})
 			return
+		}
+		current, _ := e.currentUser(r)
+		if current.Role != identity.RoleSysAdmin {
+			graph, _, err := validateFlow(f)
+			if err != nil || !flowAllowedForNonAdmin(graph) {
+				writeJSON(w, 403, map[string]string{"error": "Flow is not permitted for user execution"})
+				return
+			}
+			if err := e.configuredFlowModelsAllowed(r.Context(), graph); err != nil {
+				writeJSON(w, 403, map[string]string{"error": err.Error()})
+				return
+			}
 		}
 		if err := e.launchFlow(f, "manual"); err != nil {
 			writeJSON(w, 429, map[string]string{"error": err.Error()})
@@ -696,7 +780,7 @@ func (e *Engine) registerFlowRoutes() {
 	})
 }
 func (e *Engine) saveFlow(w http.ResponseWriter, r *http.Request, id int64) {
-	if !e.flowAdmin(w, r) {
+	if !e.flowAuthorized(w, r, "flows.write") {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 20000)
@@ -714,6 +798,23 @@ func (e *Engine) saveFlow(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	f.ID = id
+	if graph, _, err := validateFlow(f); err == nil {
+		current, _ := e.currentUser(r)
+		if current.Role != identity.RoleSysAdmin {
+			if !flowAllowedForNonAdmin(graph) {
+				writeJSON(w, 403, map[string]string{"error": "Flow contains admin-only or side-effecting nodes"})
+				return
+			}
+			if err := e.configuredFlowModelsAllowed(r.Context(), graph); err != nil {
+				writeJSON(w, 403, map[string]string{"error": err.Error()})
+				return
+			}
+			if f.IntervalMinutes != 0 || f.Enabled || f.EventKey != "" {
+				writeJSON(w, 403, map[string]string{"error": "Scheduled and event-driven flows require system admin"})
+				return
+			}
+		}
+	}
 	if _, _, err := validateFlow(f); err != nil {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})
 		return

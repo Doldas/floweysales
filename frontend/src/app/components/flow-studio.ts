@@ -10,6 +10,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
+import { AuthState } from '../auth.service';
 
 interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'loop'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
@@ -50,7 +51,9 @@ export class ConfirmDeleteFlowDialog {
    <p class="muted">Design read-only research automations. No live trades.</p>
    <nav class="studio-tabs" role="tablist" aria-label="Flow Studio sections">
      <button type="button" role="tab" [attr.aria-selected]="studioTab()==='editor'" [class.selected]="studioTab()==='editor'" (click)="studioTab.set('editor')">Flow editor</button>
+     @if(auth.user()?.role==='SYS_ADMIN'){
      <button type="button" role="tab" [attr.aria-selected]="studioTab()==='library'" [class.selected]="studioTab()==='library'" (click)="studioTab.set('library')">Function library &amp; triggers</button>
+     }
      <button type="button" role="tab" [attr.aria-selected]="studioTab()==='files'" [class.selected]="studioTab()==='files'" (click)="studioTab.set('files')">My Workspace</button>
      <button type="button" role="tab" [attr.aria-selected]="studioTab()==='runs'" [class.selected]="studioTab()==='runs'" (click)="studioTab.set('runs')">Run history</button>
    </nav>
@@ -75,22 +78,24 @@ export class ConfirmDeleteFlowDialog {
      <button mat-stroked-button (click)="addHTTPGet()">+ HTTP JSON/XML</button>
      <button mat-stroked-button (click)="addWebCrawler()">+ Web crawler</button>
      <button mat-stroked-button (click)="addOutput()">+ Output</button>
-     <button mat-stroked-button (click)="addSubflow()">+ Call Flow</button>
+     @if(auth.user()?.role==='SYS_ADMIN'){<button mat-stroked-button (click)="addSubflow()">+ Call Flow</button>}
      <button mat-stroked-button (click)="addConstant()">+ Value</button>
-     <button mat-stroked-button (click)="addFunctionCall()">+ Function</button>
-     <button mat-stroked-button (click)="addUtility('save_result')">+ Save Result</button>
-     <button mat-stroked-button (click)="addUtility('load_result')">+ Load Result</button>
+     @if(auth.user()?.role==='SYS_ADMIN'){<button mat-stroked-button (click)="addFunctionCall()">+ Function</button>}
+     @if(auth.user()?.role==='SYS_ADMIN'){<button mat-stroked-button (click)="addUtility('save_result')">+ Save Result</button>}
+     @if(auth.user()?.role==='SYS_ADMIN'){<button mat-stroked-button (click)="addUtility('load_result')">+ Load Result</button>}
      <button mat-stroked-button (click)="addUtility('transform')">+ Transform</button>
-     <button mat-stroked-button (click)="addUtility('workspace_read')">+ Read File</button>
-     <button mat-stroked-button (click)="addUtility('workspace_write')">+ Write File</button>
+     @if(auth.user()?.role==='SYS_ADMIN'){<button mat-stroked-button (click)="addUtility('workspace_read')">+ Read File</button>}
+     @if(auth.user()?.role==='SYS_ADMIN'){<button mat-stroked-button (click)="addUtility('workspace_write')">+ Write File</button>}
      <button mat-stroked-button (click)="linkSelected()" [disabled]="!selectedNode()||graph().nodes.length<3">Connect to…</button>
      <button mat-stroked-button (click)="removeSelected()" [disabled]="!selectedNode()||selectedNode()?.type==='trigger'">Remove node</button>
    </div>
    <div class="flow-meta">
     <label>Flow name <input [ngModel]="name()" (ngModelChange)="name.set($event)" maxlength="120"></label>
+    @if(auth.user()?.role==='SYS_ADMIN'){
     <label>Repeat every (minutes, 0 = off) <input type="number" min="0" max="10080" [ngModel]="interval()" (ngModelChange)="interval.set(+$event)"></label>
     <label>Event key <input [ngModel]="eventKey()" (ngModelChange)="eventKey.set($event)" placeholder="e.g. market.close"></label>
     <label class="flow-check"><input type="checkbox" [ngModel]="enabled()" (ngModelChange)="enabled.set($event)"> Enabled</label>
+    } @else {<p class="muted">Your flows are manual-only and cannot use admin-only nodes.</p>}
    </div>
    <div class="blueprint-layout">
    <div class="canvas-shell">
@@ -177,8 +182,11 @@ export class ConfirmDeleteFlowDialog {
        }
        <label>Label <input [ngModel]="n.label" (ngModelChange)="updateNode('label',$event)" maxlength="100"></label>
        @if(n.type==='agent') {
-        <label>AI Model (optional override)
-         <input [ngModel]="n.model||''" (ngModelChange)="updateNodeFor(n.id,'model',$event)" maxlength="120" placeholder="System default">
+        <label>AI Model
+         <select [ngModel]="n.model||''" (ngModelChange)="updateNodeFor(n.id,'model',$event)">
+          <option value="">System default ({{defaultAIModel()||'configured by administrator'}})</option>
+          @for(model of availableModels();track model.model){<option [value]="model.model">{{model.label}} · {{model.model}}</option>}
+         </select>
         </label>
         <p class="muted">Leave blank to use the system default. Overrides use the configured AI provider endpoint; the named model must exist there.</p>
         <label>Output format <select [ngModel]="n.output_mode||'markdown'" (ngModelChange)="updateNode('output_mode',$event)">
@@ -410,6 +418,7 @@ export class ConfirmDeleteFlowDialog {
  `]
 })
 export class FlowStudioComponent {
+ readonly auth=inject(AuthState);
  private readonly dialog = inject(MatDialog);
  readonly hoveredNode=signal<string>('');
  readonly quickNode=()=>this.node(this.hoveredNode());
@@ -454,6 +463,8 @@ export class FlowStudioComponent {
  readonly logView=signal<'markdown'|'raw'|'json'>('markdown');
  readonly studioTab=signal<'editor'|'library'|'runs'|'files'>('editor');
  readonly flows=signal<SavedFlow[]>([]);
+ readonly availableModels=signal<{model:string;label:string}[]>([]);
+ readonly defaultAIModel=signal('');
  readonly functions=signal<{id:number;name:string}[]>([]);
  readonly selectedId=signal(0);
  readonly name=signal('Daily research');
@@ -476,7 +487,16 @@ export class FlowStudioComponent {
  readonly busy=signal(false);
  readonly message=signal('');
  private dragging:{id:string;startX:number;startY:number;x:number;y:number}|null=null;
- constructor(){void this.refresh();void this.loadFunctions()}
+ constructor(){void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN')void this.loadFunctions();void this.loadModels()}
+ async loadModels():Promise<void>{
+   try{
+    const response=await fetch('/api/ai/models/available',{credentials:'same-origin'});
+    if(!response.ok)return;
+    const data=await response.json();
+    this.availableModels.set(data.models||[]);
+    this.defaultAIModel.set(data.default_model||'');
+   }catch{}
+ }
  private defaultGraph():FlowGraph{return {nodes:[
   {id:'start',type:'trigger',label:'Start',x:65,y:150},
   {id:'agent-1',type:'agent',label:'Research',prompt:'Analyze the current market and summarize significant opportunities, risks and evidence.',x:310,y:150}
@@ -611,7 +631,16 @@ export class FlowStudioComponent {
  }
  private async request(url:string,options?:RequestInit):Promise<any>{const r=await fetch(url,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...options?.headers}});
   const j=await r.json();if(!r.ok)throw new Error(j.error||('HTTP '+r.status));return j}
- async refresh(){try{const [data,definitions]=await Promise.all([this.request('/api/admin/flows'),this.request('/api/admin/blueprint-triggers')]);this.flows.set(data.flows||[]);this.triggers.set(definitions.triggers||[])}catch(e){this.message.set(String(e))}}
+ async refresh(){
+  try{
+   const data=await this.request('/api/admin/flows');
+   this.flows.set(data.flows||[]);
+   if(this.auth.user()?.role==='SYS_ADMIN'){
+    try{const definitions=await this.request('/api/admin/blueprint-triggers');this.triggers.set(definitions.triggers||[])}
+    catch{this.triggers.set([])}
+   }else{this.triggers.set([])}
+  }catch(e){this.message.set(String(e))}
+ }
  async cancelRun(runId:number){
   if(!this.selectedId()||this.busy())return;
   this.busy.set(true);

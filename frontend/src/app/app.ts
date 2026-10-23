@@ -126,7 +126,7 @@ export class App {
     { id: 'forum', label: 'Forum', icon: 'forum', adminOnly: false },
     { id: 'files', label: 'My Workspace', icon: 'folder', adminOnly: false },
     { id: 'studio', label: 'Flow Studio', icon: 'account_tree', adminOnly: true },
-    { id: 'api-settings', label: 'API Settings', icon: 'settings', adminOnly: true },
+    { id: 'api-settings', label: 'Settings', icon: 'settings', adminOnly: true },
   ] as const;
   readonly workspace = signal<(typeof this.workspaceTabs)[number]['id']>(this.initialWorkspace());
   readonly activeWorkspaceLabel = computed(
@@ -139,7 +139,7 @@ export class App {
   }
 
   openWorkspace(id: (typeof this.workspaceTabs)[number]['id']): void {
-    if (id === 'studio' && this.auth.enabled() && this.auth.user()?.role !== 'SYS_ADMIN') return;
+    if (id === 'studio' && this.auth.enabled() && this.auth.user()?.role !== 'SYS_ADMIN' && !this.auth.permissions().includes('flows.read')) return;
     if (id === 'api-settings' && this.auth.user()?.role !== 'SYS_ADMIN') return;
     this.workspace.set(id);
     localStorage.setItem('floweysales.workspace', id);
