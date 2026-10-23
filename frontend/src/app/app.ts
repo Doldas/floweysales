@@ -139,7 +139,7 @@ export class App {
   }
 
   openWorkspace(id: (typeof this.workspaceTabs)[number]['id']): void {
-    if (id === 'studio' && this.auth.enabled() && this.auth.user()?.role !== 'SYS_ADMIN') return;
+    if (id === 'studio' && this.auth.enabled() && this.auth.user()?.role !== 'SYS_ADMIN' && !this.auth.permissions().includes('flows.read')) return;
     if (id === 'api-settings' && this.auth.user()?.role !== 'SYS_ADMIN') return;
     this.workspace.set(id);
     localStorage.setItem('floweysales.workspace', id);
