@@ -219,3 +219,23 @@ environment variable of the same name.
 - Optional `search_web` tool uses the Brave Search API with a server-side `BRAVE_SEARCH_API_KEY`; returned public URLs should be independently verified.
 - P/E uses matching TTM per-share EPS and share price or market cap and TTM earnings; P/FCF requires market cap divided by TTM total FCF.
 - For unattended Docker / Podman updates from **successful CI-published GHCR images**, see [auto-updates](docs/auto-updates.md). The scheduled updater preserves `.env`, MySQL and SQLite volumes and does not auto-upgrade MySQL.
+
+
+### System Admin: AI and web-search API credentials
+
+The **API Settings** tab (available only to `SYS_ADMIN`) manages the AI endpoint,
+default model and agent budgets, AI model choices, and encrypted credentials for
+OpenAI-compatible AI and Brave/Tavily web search. API keys are never returned by
+the GET endpoints; only configured/not-configured status is shown.
+
+Persistent credentials require a stable 32-byte server-side AES-256-GCM master
+key provided through `FLOWEYSALES_SECRETS_KEY` (standard base64). Generate one
+with `openssl rand -base64 32` and install it in the deployment's secret
+manager, **not** in Git, frontend configuration or browser storage. Preserve it
+across server restarts and backups: losing it means existing encrypted API keys
+cannot be recovered. Without it, the admin page remains accessible but saving
+API keys is disabled. Encryption uses random per-secret nonces and authenticated
+integration identifiers. Existing environment-only AI keys still work.
+
+Web search credentials can be saved ahead of the upcoming search-engine node;
+this settings page alone does not activate a search endpoint or crawler.
