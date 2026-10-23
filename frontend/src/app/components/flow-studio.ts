@@ -121,15 +121,15 @@ export class ConfirmDeleteFlowDialog {
       <button type="button" (click)="zoomCanvas(0.8)" aria-label="Zoom in">＋</button>
       <span>{{ canvasZoomPercent() }}%</span>
       <button type="button" (click)="zoomCanvas(1.25)" aria-label="Zoom out">－</button>
+      <button type="button" (click)="fitCanvas()" aria-label="Fit all nodes in view">Fit flow</button>
       <button type="button" (click)="resetCanvas()" aria-label="Reset canvas view">Reset view</button>
+      @if(connectingFrom()){<span class="canvas-connect-hint" role="status">Select an input port <button type="button" (click)="cancelConnecting()">Cancel</button></span>}
     </div>
     <div class="flow-workspace" aria-label="Agent flow graph editor">
     <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (pointerdown)="onCanvasPointerDown($event)" (click)="closeQuickNodeOnCanvas($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="onCanvasPointerEnd($event)" (pointercancel)="onCanvasPointerEnd($event)" (contextmenu)="onCanvasContextMenu($event)" role="img" aria-label="Agent nodes and directed connections">
      <defs><marker id="flow-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#72b7ef"/></marker></defs>
      @for(edge of graph().edges;track edge.from+edge.to){
-       <line [attr.x1]="node(edge.from)?.x!+125" [attr.y1]="node(edge.from)?.y!+35"
-             [attr.x2]="node(edge.to)?.x" [attr.y2]="node(edge.to)?.y!+35"
-             stroke="#72b7ef" stroke-width="2.5" marker-end="url(#flow-arrow)"/>
+       <path [attr.d]="edgePath(edge)" fill="none" stroke="#72b7ef" stroke-width="2.5" marker-end="url(#flow-arrow)"/>
      }
      @for(n of graph().nodes;track n.id){
        <g data-canvas-node (click)="$event.stopPropagation();openQuickNode(n.id)" (pointerdown)="dragStart($event,n.id)" style="cursor:move" tabindex="0"
@@ -139,6 +139,8 @@ export class ConfirmDeleteFlowDialog {
            [attr.stroke]="n.id===selectedNode()?.id?'#94caff':'#607993'" stroke-width="2"/>
          <text [attr.x]="n.x+12" [attr.y]="n.y+24" fill="#dceaf8" font-size="13">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':n.type==='workspace_read'?'▤ READ FILE':n.type==='workspace_write'?'▣ WRITE FILE':n.type==='output'?'→ OUTPUT':n.type==='condition'?'◇ IF / ELSE':n.type==='merge'?'⇉ MERGE':n.type==='json_get'?'{} JSON FIELD':'✦ AGENT'}}</text>
          <text [attr.x]="n.x+12" [attr.y]="n.y+48" fill="#dceaf8" font-size="12">{{n.label.slice(0,16)}}</text>
+          @if(n.type!=='trigger'){<circle class="canvas-port input-port" [attr.cx]="n.x" [attr.cy]="n.y+35" r="8" tabindex="0" role="button" [attr.aria-label]="'Connect into '+n.label" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation();chooseInputPort(n.id)" (keydown.enter)="$event.stopPropagation();chooseInputPort(n.id)"/>}
+          @if(n.type!=='output'){<circle class="canvas-port output-port" [class.port-active]="connectingFrom()===n.id" [attr.cx]="n.x+125" [attr.cy]="n.y+35" r="8" tabindex="0" role="button" [attr.aria-label]="'Start connection from '+n.label" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation();chooseOutputPort(n.id)" (keydown.enter)="$event.stopPropagation();chooseOutputPort(n.id)"/>}
        </g>
      }
     </svg>
@@ -423,7 +425,9 @@ export class ConfirmDeleteFlowDialog {
  label{display:flex;flex-direction:column;gap:4px;font-size:13px;flex:1;min-width:160px}
  input,select,textarea{background:#14263a;color:#e5f3ff;border:1px solid #5e7b93;border-radius:6px;padding:9px;font:inherit}
  textarea{width:100%}.flow-check{flex-direction:row;align-items:center}.flow-check input{width:18px;height:18px}
- .flow-workspace{background:radial-gradient(#294057 1px,transparent 1px) 0 0/20px 20px,#0d1b2a;border:1px solid #45627b;overflow:auto;border-radius:12px}
+ .canvas-port{stroke:#c6edff;stroke-width:2;cursor:crosshair}.input-port{fill:#2c789a}.output-port{fill:#329f78}.port-active{stroke:#ffe19a;stroke-width:4}.canvas-port:focus-visible{stroke:#ffe19a;stroke-width:4;outline:none}
+  .canvas-connect-hint{display:flex;align-items:center;gap:8px;font-size:12px;color:#ffe19a;margin-left:auto}.canvas-connect-hint button{background:#3b3540;color:#ffe19a;border:1px solid #ae8c67;border-radius:5px;cursor:pointer;padding:5px}
+  .flow-workspace{background:radial-gradient(#294057 1px,transparent 1px) 0 0/20px 20px,#0d1b2a;border:1px solid #45627b;overflow:auto;border-radius:12px}
  svg{min-width:660px;width:100%;height:auto;display:block;touch-action:none;cursor:grab}
  .node-quick-tooltip{position:absolute;right:14px;top:62px;z-index:7;display:flex;flex-direction:column;gap:8px;padding:12px;width:min(290px,85%);max-height:65vh;overflow:auto;background:rgba(26,51,74,.89);backdrop-filter:blur(10px);border:1px solid #8abce4;box-shadow:0 12px 28px #000a;border-radius:10px}
  .quick-tooltip-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -471,6 +475,28 @@ export class FlowStudioComponent {
 
  readonly canvasView = signal({ x: 0, y: 0, width: 820, height: 380 });
  readonly canvasMenu = signal(false);
+  readonly connectingFrom=signal('');
+  cancelConnecting():void{this.connectingFrom.set('')}
+  chooseOutputPort(id:string):void{if(this.node(id)?.type==='output')return;this.chosen.set(id);this.connectingFrom.set(id);this.closeQuickNode()}
+  chooseInputPort(id:string):void{
+    const from=this.connectingFrom();
+    if(!from){this.message.set('Select an output port first.');return}
+    if(from===id||this.node(id)?.type==='trigger')return;
+    this.connect(from,id);this.chosen.set(id);this.connectingFrom.set('');
+  }
+  edgePath(e:FlowEdge):string{
+    const a=this.node(e.from),b=this.node(e.to);if(!a||!b)return '';
+    const x1=a.x+125,y1=a.y+35,x2=b.x,y2=b.y+35,d=Math.max(45,Math.abs(x2-x1)*0.45);
+    return 'M '+x1+' '+y1+' C '+(x1+d)+' '+y1+', '+(x2-d)+' '+y2+', '+x2+' '+y2;
+  }
+  fitCanvas():void{
+    const nodes=this.graph().nodes;if(!nodes.length){this.resetCanvas();return}
+    const padding=65,left=Math.min(...nodes.map(n=>n.x)),top=Math.min(...nodes.map(n=>n.y));
+    const right=Math.max(...nodes.map(n=>n.x+125)),bottom=Math.max(...nodes.map(n=>n.y+70));
+    const contentWidth=right-left+2*padding,contentHeight=bottom-top+2*padding;
+    const width=Math.max(contentWidth,contentHeight*820/380,410),height=width*380/820;
+    this.canvasView.set({x:left-padding-(width-contentWidth)/2,y:top-padding-(height-contentHeight)/2,width,height});
+  }
  readonly canvasViewBox = () => {
    const v = this.canvasView();
    return `${v.x} ${v.y} ${v.width} ${v.height}`;
@@ -717,7 +743,7 @@ export class FlowStudioComponent {
   const svg=(ev.currentTarget as SVGGElement).ownerSVGElement;if(!svg)return;
   const move=(event:PointerEvent)=>{const box=svg.getBoundingClientRect();if(!this.dragging)return;
    const view=this.canvasView();const dx=(event.clientX-this.dragging.startX)*view.width/box.width,dy=(event.clientY-this.dragging.startY)*view.height/box.height;
-   this.graph.update(g=>({...g,nodes:g.nodes.map(node=>node.id===id?{...node,x:Math.max(0,Math.min(695,this.dragging!.x+dx)),y:Math.max(0,Math.min(310,this.dragging!.y+dy))}:node)}))}
+   this.graph.update(g=>({...g,nodes:g.nodes.map(node=>node.id===id?{...node,x:Math.round(this.dragging!.x+dx),y:Math.round(this.dragging!.y+dy)}:node)}))}
   const stop=()=>{svg.removeEventListener('pointermove',move);svg.removeEventListener('pointerup',stop);svg.removeEventListener('pointercancel',stop);this.dragging=null}
   svg.addEventListener('pointermove',move);svg.addEventListener('pointerup',stop);svg.addEventListener('pointercancel',stop);
  }
