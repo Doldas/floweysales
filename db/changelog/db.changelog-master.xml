@@ -17,4 +17,5 @@
   <include file="013-flow-run-steps.xml" relativeToChangelogFile="true"/>
   <include file="014-flow-run-snapshots.xml" relativeToChangelogFile="true"/>
   <include file="015-ai-model-catalog.xml" relativeToChangelogFile="true"/>
+  <include file="016-api-integration-secrets.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
