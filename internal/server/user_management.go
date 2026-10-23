@@ -56,6 +56,30 @@ func validSMTP(cfg identity.SMTPSettings)bool{
 }
 
 func (e *Engine) registerUserManagementRoutes(){
+ e.mux.HandleFunc("GET /api/admin/roles",func(w http.ResponseWriter,r *http.Request){
+  if !e.flowAdmin(w,r){return}
+  roles,err:=e.authService.ListRoles(r.Context())
+  if err!=nil{writeJSON(w,503,map[string]string{"error":"Cannot load roles"});return}
+  writeJSON(w,200,map[string]any{"roles":roles,"permissions":[]string{"research.read","ai.chat","models.use","flows.read","flows.write","flows.run"}})
+ })
+ e.mux.HandleFunc("POST /api/admin/roles",func(w http.ResponseWriter,r *http.Request){
+  if !e.flowAdmin(w,r){return}
+  r.Body=http.MaxBytesReader(w,r.Body,1024);defer r.Body.Close()
+  var req struct{Name string `json:"name"`}
+  if err:=json.NewDecoder(r.Body).Decode(&req);err!=nil{writeJSON(w,400,map[string]string{"error":"Invalid role"});return}
+  if err:=e.authService.AddRole(r.Context(),req.Name);err!=nil{writeJSON(w,400,map[string]string{"error":"Role must be unique, uppercase letters/underscores, length 2–40"});return}
+  writeJSON(w,201,map[string]bool{"created":true})
+ })
+ e.mux.HandleFunc("PUT /api/admin/roles/{name}/permissions/{permission}",func(w http.ResponseWriter,r *http.Request){
+  if !e.flowAdmin(w,r){return}
+  r.Body=http.MaxBytesReader(w,r.Body,1024);defer r.Body.Close()
+  var req struct{Enabled bool `json:"enabled"`}
+  if err:=json.NewDecoder(r.Body).Decode(&req);err!=nil{writeJSON(w,400,map[string]string{"error":"Invalid grant"});return}
+  if err:=e.authService.SetRolePermission(r.Context(),r.PathValue("name"),r.PathValue("permission"),req.Enabled);err!=nil{
+   writeJSON(w,400,map[string]string{"error":"Invalid role or permission"});return
+  }
+  writeJSON(w,200,map[string]bool{"updated":true})
+ })
  e.mux.HandleFunc("GET /api/admin/users/list",func(w http.ResponseWriter,r *http.Request){
   if !e.flowAdmin(w,r){return}
   users,err:=e.authService.ListUsers(r.Context());if err!=nil{writeJSON(w,503,map[string]string{"error":"Unable to list users"});return}
