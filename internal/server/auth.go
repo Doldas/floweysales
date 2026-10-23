@@ -215,7 +215,8 @@ func (e *Engine) serveAuth(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusUnauthorized, map[string]any{"enabled": true, "error": "Authentication required"})
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"enabled": true, "user": u})
+		perms,_:=e.authService.PermissionsForRole(r.Context(),u.Role)
+		writeJSON(w, http.StatusOK, map[string]any{"enabled": true, "user": u, "permissions": perms})
 	case r.Method == "POST" && r.URL.Path == "/api/auth/accept-invite":
         if e.authService==nil{writeJSON(w,404,map[string]string{"error":"Authentication disabled"});return}
         addr,_,err:=net.SplitHostPort(r.RemoteAddr);if err!=nil{addr=r.RemoteAddr}
