@@ -616,7 +616,7 @@ export class FlowStudioComponent {
  readonly executionGraph=signal<FlowGraph|null>(null);
  readonly executionSnapshotUnavailable=signal(false);
  readonly executionSelectedNode=signal('');
- executionStep(id:string):FlowRunStep|undefined{return this.traceSteps().filter(s=>s.node===id).at(-1)}
+ executionStep(id:string):FlowRunStep|undefined{const steps=this.traceSteps().filter(s=>s.node===id);return steps[steps.length-1]}
  executionNodeStatus(id:string):string{return this.executionStep(id)?.status||'NOT RECORDED'}
  executionNodeColor(id:string):string{switch(this.executionNodeStatus(id)){case 'SUCCESS':return '#176349';case 'FAILED':return '#953643';case 'RUNNING':return '#8e6927';case 'SKIPPED':return '#596374';default:return '#24394f'}}
  executionNodeLabel(id:string):string{return this.executionGraph()?.nodes.find(n=>n.id===id)?.label||id}
@@ -836,7 +836,7 @@ export class FlowStudioComponent {
  }
  async showRunSteps(runId:number){
   const flowId=this.historyFlowId();if(!flowId)return;
-  if(this.traceRunId()===runId){this.traceRunId.set(0);this.traceSteps.set([]);this.executionGraph.set(null);this.executionSelectedNode.set('');return}
+  if(this.traceRunId()===runId){this.traceRunId.set(0);this.traceSteps.set([]);this.traceLoading.set(false);this.executionGraph.set(null);this.executionSelectedNode.set('');return}
   this.traceRunId.set(runId);this.traceSteps.set([]);this.traceLoading.set(true);this.executionGraph.set(null);this.executionSelectedNode.set('');this.executionSnapshotUnavailable.set(false);
   const base='/api/admin/flows/'+flowId+'/runs/'+runId;
   const [trace,snapshot]=await Promise.allSettled([this.request(base+'/steps'),this.request(base+'/snapshot')]);
@@ -849,7 +849,17 @@ export class FlowStudioComponent {
  }
  selectHistoryFlow(id:number):void{this.executionGraph.set(null);this.executionSnapshotUnavailable.set(false);this.executionSelectedNode.set('');this.historyFlowId.set(id);this.historyRequestVersion++;this.historyLoading.set(false);this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.traceLoading.set(false);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);if(id)void this.refreshRuns()}
   async refreshRuns(){const id=this.historyFlowId();if(!id)return;const version=++this.historyRequestVersion;this.historyLoading.set(true);
-   try{const d=await this.request('/api/admin/flows/'+id+'/runs');if(this.historyFlowId()===id&&this.historyRequestVersion===version)this.runs.set(d.runs||[])}
+   try{
+      const d=await this.request('/api/admin/flows/'+id+'/runs');
+      if(this.historyFlowId()===id&&this.historyRequestVersion===version){
+        this.runs.set(d.runs||[]);
+        const runId=this.traceRunId();
+        if(runId&&(d.runs||[]).some((run:FlowRun)=>run.id===runId)){
+          const trace=await this.request('/api/admin/flows/'+id+'/runs/'+runId+'/steps');
+          if(this.historyFlowId()===id&&this.traceRunId()===runId&&this.historyRequestVersion===version)this.traceSteps.set(trace.steps||[]);
+        }
+      }
+    }
    catch(e){if(this.historyFlowId()===id&&this.historyRequestVersion===version)this.message.set('Could not refresh run history: '+String(e))}
    finally{if(this.historyRequestVersion===version)this.historyLoading.set(false)}}
  async confirmDeleteFlow(){
