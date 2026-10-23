@@ -14,7 +14,8 @@ Make flows easy to discover, build, run, inspect and troubleshoot without moving
 - [ ] Add automated Angular tests for navigation, deletion, unsaved work and history selectors.
 
 ## P1 — Flow management
-- [ ] Create My Flows dashboard with search, sorting, last run, status, schedule and create/duplicate/run/open actions.
+- [x] Create initial My Flows dashboard with search, sorting, enabled/schedule indicators, create/edit/run/history actions.
+- [ ] Extend the dashboard with latest run status/time and duplicate action once backend metadata is available.
 - [ ] Replace dense add-node toolbar with a searchable node palette and categories; preserve full keyboard navigation.
 - [ ] Introduce a consistent editor command bar and clear Save, Saved, Saving, Failed indicators.
 - [ ] Add graph validation (disconnected nodes, required inputs, invalid schema, trigger and output paths) before Run.
