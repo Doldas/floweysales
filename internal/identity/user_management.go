@@ -51,7 +51,7 @@ func (s *Service) AcceptInvitation(ctx context.Context,token,password string)err
  return tx.Commit()
 }
 func (s *Service) UpdateUserRole(ctx context.Context,id int64,role string)error{
- if id<=0||(role!=RoleUser&&role!=RoleSysAdmin){return ErrInvalidBootstrap}
+ if id<=0||!s.RoleExists(ctx,role){return ErrInvalidBootstrap}
  _,err:=s.db.ExecContext(ctx,"UPDATE auth_users SET role=? WHERE id=? AND active=TRUE",role,id)
  if err!=nil{return err}
  _,err=s.db.ExecContext(ctx,"DELETE FROM auth_sessions WHERE user_id=?",id)
