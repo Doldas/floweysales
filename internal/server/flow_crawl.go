@@ -12,7 +12,7 @@ import (
 )
 
 var crawlerHref = regexp.MustCompile(`(?is)<a\b[^>]*\bhref\s*=\s*["']([^"'<>]{1,1000})["']`)
-var crawlerScript = regexp.MustCompile(`(?is)<(script|style|noscript|svg)\b[^>]*>.*?</\1>`)
+var crawlerScript = regexp.MustCompile(`(?is)<script\b[^>]*>.*?</script>|<style\b[^>]*>.*?</style>|<noscript\b[^>]*>.*?</noscript>|<svg\b[^>]*>.*?</svg>`)
 var crawlerTags = regexp.MustCompile(`(?s)<[^>]*>`)
 var crawlerSpaces = regexp.MustCompile(`\s+`)
 
@@ -38,7 +38,7 @@ func flowCrawlLinks(raw string, base *url.URL) []string {
  links:=[]string{}
  for _,match:=range matches {
   ref,err:=url.Parse(html.UnescapeString(match[1]))
-  if err!=nil||ref.User!=nil||ref.Fragment!=""&&ref.Opaque!="" {continue}
+  if err!=nil||ref.User!=nil||ref.Opaque!="" {continue}
   target:=base.ResolveReference(ref)
   target.Fragment=""
   if target.Scheme!=base.Scheme||!strings.EqualFold(target.Host,base.Host){continue}
