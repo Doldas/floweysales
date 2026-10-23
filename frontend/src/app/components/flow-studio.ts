@@ -92,26 +92,21 @@ export class ConfirmDeleteFlowDialog {
       </select>
      </label>
      <button mat-stroked-button color="warn" (click)="confirmDeleteFlow()" [disabled]="!selectedId()||busy()">Delete flow</button>
-     <button mat-stroked-button (click)="addAgent()">+ Agent</button>
-     <button mat-stroked-button (click)="addV2Node('condition')">+ If / Else</button>
-     <button mat-stroked-button (click)="addV2Node('merge')">+ Merge</button>
-     <button mat-stroked-button (click)="addV2Node('json_get')">+ JSON Field</button>
-     <button mat-stroked-button (click)="addPureLoop()">+ Loop</button>
-     <button mat-stroked-button (click)="addHTTPGet()">+ HTTP JSON/XML</button>
-     <button mat-stroked-button (click)="addWebCrawler()">+ Web crawler</button>
-     <button mat-stroked-button (click)="addWebSearch()">+ Web search</button>
-     <button mat-stroked-button (click)="addOutput()">+ Output</button>
-     @if(auth.user()?.role==='SYS_ADMIN'){<button mat-stroked-button (click)="addSubflow()">+ Call Flow</button>}
-     <button mat-stroked-button (click)="addConstant()">+ Value</button>
-     @if(auth.user()?.role==='SYS_ADMIN'){<button mat-stroked-button (click)="addFunctionCall()">+ Function</button>}
-     @if(auth.user()?.role==='SYS_ADMIN'){<button mat-stroked-button (click)="addUtility('save_result')">+ Save Result</button>}
-     @if(auth.user()?.role==='SYS_ADMIN'){<button mat-stroked-button (click)="addUtility('load_result')">+ Load Result</button>}
-     <button mat-stroked-button (click)="addUtility('transform')">+ Transform</button>
-     @if(auth.user()?.role==='SYS_ADMIN'){<button mat-stroked-button (click)="addUtility('workspace_read')">+ Read File</button>}
-     @if(auth.user()?.role==='SYS_ADMIN'){<button mat-stroked-button (click)="addUtility('workspace_write')">+ Write File</button>}
+     <button mat-flat-button type="button" (click)="toggleNodePicker()" [attr.aria-expanded]="nodePickerOpen()" aria-controls="node-picker">+ Add node</button>
      <button mat-stroked-button (click)="linkSelected()" [disabled]="!selectedNode()||graph().nodes.length<3">Connect to…</button>
      <button mat-stroked-button (click)="removeSelected()" [disabled]="!selectedNode()||selectedNode()?.type==='trigger'">Remove node</button>
    </div>
+   @if(nodePickerOpen()){
+    <section id="node-picker" class="node-picker" aria-label="Add a node">
+      <div class="node-picker-top"><strong>Add a node</strong><button type="button" (click)="nodePickerOpen.set(false)" aria-label="Close node picker">×</button></div>
+      <label>Search nodes<input type="search" [ngModel]="nodePickerQuery()" (ngModelChange)="nodePickerQuery.set($event)" (keydown.escape)="nodePickerOpen.set(false)" placeholder="Search node type"></label>
+      <div class="node-picker-items">
+        @for(item of visibleNodeTypes();track item.id){
+          <button type="button" (click)="addPickedNode(item.id)"><mat-icon aria-hidden="true">add_circle_outline</mat-icon>{{item.label}}</button>
+        } @empty {<p class="muted">No matching nodes.</p>}
+      </div>
+    </section>
+   }
    <div class="flow-meta">
     <label>Flow name <input [ngModel]="name()" (ngModelChange)="name.set($event)" maxlength="120"></label>
     @if(auth.user()?.role==='SYS_ADMIN'){
@@ -407,7 +402,12 @@ export class ConfirmDeleteFlowDialog {
  styles:[`
  .canvas-shell{position:relative;min-width:0;min-height:0}
  .flows-overview{display:grid;gap:18px;margin:16px 0 24px}.overview-heading,.overview-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.overview-heading{justify-content:space-between}.overview-heading h2,.overview-flow-top h3{margin:0 0 6px}.overview-heading p,.overview-flow-top p{margin:0}.overview-filters{display:flex;flex-wrap:wrap;gap:12px}.overview-filters label{flex:1 1 190px}.flow-overview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:14px}.overview-flow-card{display:flex;flex-direction:column;gap:14px;padding:16px;border:1px solid #456b87;border-radius:12px;background:#142438}.overview-flow-top{display:flex;justify-content:space-between;gap:12px}.overview-flow-top h3{font-size:17px;overflow-wrap:anywhere}.overview-flow-top p{font-size:12px}.overview-flow-status{padding:4px 8px;white-space:nowrap;border:1px solid #7e8290;border-radius:20px;font-size:11px}.overview-flow-status.active{border-color:#52bd93;color:#a6f3ce}.overview-flow-trigger{margin:0;color:#c7d9eb;font-size:13px;overflow-wrap:anywhere}.overview-flow-card>.overview-actions{margin-top:auto}.overview-flow-card>.overview-actions button{flex:1 1 auto;min-height:38px}.overview-empty{padding:32px 16px;border:1px dashed #55718a;border-radius:12px;text-align:center}
-.canvas-navigation{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:8px;background:#14263a;border:1px solid #45627b;border-radius:8px 8px 0 0}
+.node-picker{display:grid;gap:12px;margin:14px 0;padding:16px;border:1px solid #6086a1;border-radius:10px;background:#15293e}
+  .node-picker-top{display:flex;align-items:center;justify-content:space-between}.node-picker-top button{background:#27445d;border:1px solid #7394ad;border-radius:6px;color:white;min-width:34px;min-height:34px;cursor:pointer}
+  .node-picker label{width:100%;min-width:0}.node-picker-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,180px),1fr));gap:8px;max-height:310px;overflow:auto}
+  .node-picker-items button{display:flex;align-items:center;gap:8px;text-align:left;background:#213c54;color:#edf7ff;border:1px solid #547d9b;border-radius:7px;padding:12px;cursor:pointer;font:inherit}
+  .node-picker-items button:hover{background:#305773}.node-picker-items button:focus-visible{outline:2px solid #94caff}
+  .canvas-navigation{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:8px;background:#14263a;border:1px solid #45627b;border-radius:8px 8px 0 0}
  .canvas-navigation button,.canvas-context-menu button{background:#203a53;color:#e5f3ff;border:1px solid #527b99;border-radius:5px;min-height:34px;padding:6px 10px;cursor:pointer}
  .canvas-navigation button:focus-visible,.canvas-context-menu button:focus-visible{outline:2px solid #80caff}
  .canvas-navigation span{min-width:48px;text-align:center;font-variant-numeric:tabular-nums}
@@ -498,7 +498,17 @@ export class FlowStudioComponent {
  closeCanvasMenu(): void { this.canvasMenu.set(false); }
 
  readonly logView=signal<'markdown'|'raw'|'json'>('markdown');
- readonly studioTab=signal<'overview'|'editor'|'library'|'runs'|'files'>('overview');
+ readonly nodePickerOpen=signal(false);
+  readonly nodePickerQuery=signal('');
+  readonly nodeTypes=[{"id":0,"label":"Agent","admin":false},{"id":1,"label":"If / Else","admin":false},{"id":2,"label":"Merge","admin":false},{"id":3,"label":"JSON Field","admin":false},{"id":4,"label":"Loop","admin":false},{"id":5,"label":"HTTP JSON/XML","admin":false},{"id":6,"label":"Web crawler","admin":false},{"id":7,"label":"Web search","admin":false},{"id":8,"label":"Output","admin":false},{"id":9,"label":"Call Flow","admin":true},{"id":10,"label":"Value","admin":false},{"id":11,"label":"Function","admin":true},{"id":12,"label":"Save Result","admin":true},{"id":13,"label":"Load Result","admin":true},{"id":14,"label":"Transform","admin":false},{"id":15,"label":"Read File","admin":true},{"id":16,"label":"Write File","admin":true}];
+  readonly visibleNodeTypes=()=>this.nodeTypes.filter(n=>(!n.admin||this.auth.user()?.role==='SYS_ADMIN')&&n.label.toLowerCase().includes(this.nodePickerQuery().trim().toLowerCase()));
+  toggleNodePicker(){this.nodePickerOpen.update(v=>!v);this.nodePickerQuery.set('')}
+  addPickedNode(id:number){
+    if(!this.visibleNodeTypes().some(n=>n.id===id))return;
+    switch(id){case 0:this.addAgent();break;case 1:this.addV2Node('condition');break;case 2:this.addV2Node('merge');break;case 3:this.addV2Node('json_get');break;case 4:this.addPureLoop();break;case 5:this.addHTTPGet();break;case 6:this.addWebCrawler();break;case 7:this.addWebSearch();break;case 8:this.addOutput();break;case 9:this.addSubflow();break;case 10:this.addConstant();break;case 11:this.addFunctionCall();break;case 12:this.addUtility('save_result');break;case 13:this.addUtility('load_result');break;case 14:this.addUtility('transform');break;case 15:this.addUtility('workspace_read');break;case 16:this.addUtility('workspace_write');break;default:return;}
+    this.nodePickerOpen.set(false);
+  }
+  readonly studioTab=signal<'overview'|'editor'|'library'|'runs'|'files'>('overview');
   readonly flowSearch=signal('');readonly flowFilter=signal('all');readonly flowSort=signal('name');
   readonly listedFlows=()=>{
     const q=this.flowSearch().trim().toLowerCase(), filter=this.flowFilter(),sort=this.flowSort();
