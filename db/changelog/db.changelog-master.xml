@@ -21,4 +21,5 @@
   <include file="017-account-invitations.xml" relativeToChangelogFile="true"/>
   <include file="018-smtp-settings.xml" relativeToChangelogFile="true"/>
   <include file="019-custom-roles-permissions.xml" relativeToChangelogFile="true"/>
+  <include file="020-tracker-email-subscriptions.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
