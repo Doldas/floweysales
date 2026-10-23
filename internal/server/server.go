@@ -148,15 +148,15 @@ type Engine struct {
 	financialsMu    sync.Mutex
 	financialsCache map[string]financialsCacheEntry
 
-	integrationMu sync.Mutex
+	integrationMu     sync.Mutex
 	webSearchProvider string
-	webSearchAPIKey string
-	aiMu           sync.Mutex
-	aiBaseURL      string
-	aiAPIKey       string
-	aiModel        string
-	aiMaxSteps     int
-	aiMaxToolCalls int
+	webSearchAPIKey   string
+	aiMu              sync.Mutex
+	aiBaseURL         string
+	aiAPIKey          string
+	aiModel           string
+	aiMaxSteps        int
+	aiMaxToolCalls    int
 
 	// Order lifecycle: account settings and the match loop guard.
 	tradingMu      sync.Mutex
