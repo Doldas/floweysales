@@ -1,0 +1,53 @@
+# Floweysales Flow Studio & History UX implementation plan
+
+## Goal
+Make flows easy to discover, build, run, inspect and troubleshoot without moving between unrelated screens. Preserve existing backend security and flow execution semantics. Deliver in reviewable increments with automated tests and accessibility checks.
+
+## P0 — Usability and data integrity
+- [x] Select a flow in Run History without opening/changing the editor. History requests, compare, cancel, replay and trace must use that selection.
+- [x] Put Delete node in the quick tooltip; keep only the corner X for closing; never allow trigger removal.
+- [x] Add a visible unsaved-changes indicator and confirm before replacing a flow or applying a template.
+- [x] Add a History search and status filter.
+- [ ] Add keyboard shortcuts and undo/redo using an editor command history, including drag transactions.
+- [ ] Separate draft from active flow: save draft, validate and explicitly publish/enable.
+- [ ] Ensure stale async History responses never overwrite a newer selection; cancel/ignore pending trace, preview and compare.
+- [ ] Add automated Angular tests for navigation, deletion, unsaved work and history selectors.
+
+## P1 — Flow management
+- [ ] Create My Flows dashboard with search, sorting, last run, status, schedule and create/duplicate/run/open actions.
+- [ ] Replace dense add-node toolbar with a searchable node palette and categories; preserve full keyboard navigation.
+- [ ] Introduce a consistent editor command bar and clear Save, Saved, Saving, Failed indicators.
+- [ ] Add graph validation (disconnected nodes, required inputs, invalid schema, trigger and output paths) before Run.
+- [ ] Support a large, effectively unbounded graph, fit-to-content and auto-layout without changing persisted semantics.
+
+## P1 — Run History and diagnostics
+- [ ] Backend: return pagination, start/end timestamps, duration, trigger, flow snapshot version, failure node and step totals.
+- [ ] Frontend: timestamped, paginated History table, status/date/trigger filters and explicit empty/error/loading states.
+- [ ] Live run updates using bounded polling/SSE with cleanup, rather than a single 3-second refresh.
+- [ ] Execution detail view: node input, output, error, attempt count, elapsed time and safely redacted secrets.
+- [ ] Execution graph overlay: success/failure/running/skipped badges on the graph snapshot for the selected run.
+- [ ] Side-by-side run comparison matching snapshot nodes with clear added/removed/modified annotations.
+- [ ] Replay preview with explicit non-side-effect mode and clear relationship to its saved graph snapshot.
+- [ ] Optionally aggregate success rate, duration and AI costs when backend data supports it.
+
+## P2 — Consistency and accessibility
+- [ ] Extract FlowStudio into FlowList, Canvas, NodePalette, NodeInspector, RunHistory and ExecutionDetail components, and centralize state in a service/store.
+- [ ] Accessible keyboard-only connections; semantic names, roles, focus handling, dialogs and Escape behavior.
+- [ ] Responsive tablet/mobile layouts focused on viewing and monitoring, plus touch-friendly node editing.
+- [ ] Normalize status colors, icons, typography, spacing, confirmation language and notifications.
+- [ ] Add visual regression and WCAG 2.2 AA checks for core scenarios.
+
+## Acceptance scenarios
+1. In History, switch Flow A → B → A while an unrelated edited flow remains untouched; only selected flow's runs show.
+2. Open a node tooltip, remove a non-trigger node and its edges; only the corner X closes the tooltip.
+3. Switching an edited flow or applying a template requires a discard decision; cancel preserves edits.
+4. Search and status filters work together with clear empty state.
+5. Open a failed run and identify the failing node, input, output, and error without searching unrelated logs.
+6. Run a long task and receive accurate status updates until completion/cancellation.
+7. Navigate major flows using keyboard and a narrow viewport without losing actions or data.
+
+## Release strategy
+Implement backend metadata and APIs in backward-compatible increments. Add component tests and run `npm test`, `npm run build`, accessibility and smoke tests before merge. Migrate UI areas incrementally and retain existing flow graph format to protect saved automations.
+
+## Current implementation scope
+The first P0 improvements are implemented in the companion PR. Other tasks above remain planned and should not be considered shipped.
