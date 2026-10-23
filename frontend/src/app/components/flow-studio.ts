@@ -360,6 +360,33 @@ export class ConfirmDeleteFlowDialog {
       @if(run.status==='RUNNING'){<button mat-stroked-button color="warn" (click)="cancelRun(run.id)" [disabled]="busy()">Cancel run</button>}
       <button mat-stroked-button (click)="showRunSteps(run.id)">{{traceRunId()===run.id?'Hide node trace':'Inspect nodes'}}</button>
       @if(traceRunId()===run.id){
+       @if(executionGraph();as graph){
+        <section class="exec-graph" aria-label="Historical execution graph">
+          <strong>Execution graph · run #{{run.id}}</strong>
+          <p class="muted">Saved graph from this run. Select a node to inspect its status and recorded output.</p>
+          <div class="exec-graph-canvas">
+            <svg [attr.viewBox]="executionViewBox()" role="group" [attr.aria-label]="'Execution graph for run '+run.id">
+              @for(edge of graph.edges;track $index){<path [attr.d]="executionEdgePath(edge,graph)" stroke="#8eacc6" stroke-width="2" fill="none"/>}
+              @for(n of graph.nodes;track n.id){
+                <g tabindex="0" role="button" class="exec-node" [attr.aria-label]="n.label+', '+executionNodeStatus(n.id)"
+                 (click)="executionSelectedNode.set(n.id)" (keydown.enter)="executionSelectedNode.set(n.id)" (keydown.space)="$event.preventDefault();executionSelectedNode.set(n.id)">
+                  <rect [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="10"
+                   [attr.fill]="executionNodeColor(n.id)" [attr.stroke]="executionSelectedNode()===n.id?'#ffe59c':'#8fa6bc'" [attr.stroke-width]="executionSelectedNode()===n.id?4:2"/>
+                  <text [attr.x]="n.x+10" [attr.y]="n.y+24" font-size="12" fill="#fff">{{n.label.slice(0,17)}}</text>
+                  <text [attr.x]="n.x+10" [attr.y]="n.y+46" font-size="11" fill="#fff">{{executionNodeStatus(n.id)}}</text>
+                </g>
+              }
+            </svg>
+          </div>
+          @if(executionSelectedNode();as nodeId){
+            <div class="exec-selected">
+              <strong>{{executionNodeLabel(nodeId)}} · {{executionNodeStatus(nodeId)}}</strong>
+              @if(executionStep(nodeId);as step){@if(step.output){<pre>{{step.output}}</pre>}@else{<p class="muted">No recorded output.</p>}}
+              @else{<p class="muted">No recorded step for this node.</p>}
+            </div>
+          }
+        </section>
+       } @else if(!traceLoading()&&executionSnapshotUnavailable()){<p class="muted">Graph snapshot unavailable for this run. The trace remains available below.</p>}
        @if(traceLoading()){<p role="status">Loading node trace…</p>}
        @else if(!traceSteps().length){<p class="muted">No node trace available for this run. Earlier runs may predate node tracing.</p>}
        @else{
@@ -452,6 +479,12 @@ export class ConfirmDeleteFlowDialog {
  @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .flow-workspace{min-height:280px}.flow-node-editor{max-height:360px}}
 
 .flow-message{border-left:3px solid #73baff;padding-left:12px}
+ .exec-graph{margin:14px 0;display:grid;gap:10px;padding:14px;border:1px solid #557c99;border-radius:12px;background:#12293d}
+ .exec-graph-canvas{overflow:auto;border:1px solid #3c5d77;border-radius:8px;background:#0b1c2e}
+ .exec-graph-canvas svg{min-width:0;width:100%;min-height:210px;max-height:520px;height:auto;cursor:default}
+ .exec-node{cursor:pointer}.exec-node:focus-visible rect{stroke:#ffe59c;stroke-width:4}
+ .exec-selected{padding:12px;border-radius:8px;border:1px solid #52758f;background:#1a354b}
+ .exec-selected pre{max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
  .run-history-heading{display:flex;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:14px}
  .run-history-heading h3{margin:0}
  .run-history-heading label{flex:0 1 220px}
@@ -580,6 +613,15 @@ export class FlowStudioComponent {
   readonly filteredRuns=()=>this.runs().filter(run=>(this.historyStatusFilter()==='all'||run.status===this.historyStatusFilter())&&(!this.historySearch()||String(run.id).includes(this.historySearch().trim())||run.trigger.toLowerCase().includes(this.historySearch().trim().toLowerCase())));
  readonly traceRunId=signal(0);
  readonly traceSteps=signal<FlowRunStep[]>([]);
+ readonly executionGraph=signal<FlowGraph|null>(null);
+ readonly executionSnapshotUnavailable=signal(false);
+ readonly executionSelectedNode=signal('');
+ executionStep(id:string):FlowRunStep|undefined{return this.traceSteps().filter(s=>s.node===id).at(-1)}
+ executionNodeStatus(id:string):string{return this.executionStep(id)?.status||'NOT RECORDED'}
+ executionNodeColor(id:string):string{switch(this.executionNodeStatus(id)){case 'SUCCESS':return '#176349';case 'FAILED':return '#953643';case 'RUNNING':return '#8e6927';case 'SKIPPED':return '#596374';default:return '#24394f'}}
+ executionNodeLabel(id:string):string{return this.executionGraph()?.nodes.find(n=>n.id===id)?.label||id}
+ executionViewBox():string{const n=this.executionGraph()?.nodes||[];if(!n.length)return '0 0 820 380';const l=Math.min(...n.map(x=>x.x))-60,t=Math.min(...n.map(x=>x.y))-60,r=Math.max(...n.map(x=>x.x+125))+60,b=Math.max(...n.map(x=>x.y+70))+60;return l+' '+t+' '+(r-l)+' '+(b-t)}
+ executionEdgePath(e:FlowEdge,g:FlowGraph):string{const a=g.nodes.find(n=>n.id===e.from),b=g.nodes.find(n=>n.id===e.to);if(!a||!b)return '';const x=a.x+125,y=a.y+35,tx=b.x,ty=b.y+35,d=Math.max(45,Math.abs(tx-x)*.45);return 'M '+x+' '+y+' C '+(x+d)+' '+y+', '+(tx-d)+' '+ty+', '+tx+' '+ty}
  readonly traceLoading=signal(false);
  readonly replaySteps=signal<{node:string;label:string;status:string;input?:string;output?:string}[]>([]);
  readonly replaySource=signal(0);
@@ -794,14 +836,18 @@ export class FlowStudioComponent {
  }
  async showRunSteps(runId:number){
   const flowId=this.historyFlowId();if(!flowId)return;
-  if(this.traceRunId()===runId){this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);return}
-  this.traceRunId.set(runId);this.traceLoading.set(true);this.traceSteps.set([]);
-  try{const data=await this.request('/api/admin/flows/'+this.historyFlowId()+'/runs/'+runId+'/steps');
-      if(this.historyFlowId()===flowId&&this.traceRunId()===runId)this.traceSteps.set(data.steps||[]);
-  }catch(e){this.message.set('Could not load run trace: '+String(e))}
-  finally{this.traceLoading.set(false)}
+  if(this.traceRunId()===runId){this.traceRunId.set(0);this.traceSteps.set([]);this.executionGraph.set(null);this.executionSelectedNode.set('');return}
+  this.traceRunId.set(runId);this.traceSteps.set([]);this.traceLoading.set(true);this.executionGraph.set(null);this.executionSelectedNode.set('');this.executionSnapshotUnavailable.set(false);
+  const base='/api/admin/flows/'+flowId+'/runs/'+runId;
+  const [trace,snapshot]=await Promise.allSettled([this.request(base+'/steps'),this.request(base+'/snapshot')]);
+  if(this.historyFlowId()!==flowId||this.traceRunId()!==runId)return;
+  if(trace.status==='fulfilled')this.traceSteps.set(trace.value.steps||[]);
+  else this.message.set('Could not load node trace: '+String(trace.reason));
+  if(snapshot.status==='fulfilled'&&Array.isArray(snapshot.value.graph?.nodes)&&Array.isArray(snapshot.value.graph?.edges))this.executionGraph.set(snapshot.value.graph);
+  else this.executionSnapshotUnavailable.set(true);
+  this.traceLoading.set(false);
  }
- selectHistoryFlow(id:number):void{this.historyFlowId.set(id);this.historyRequestVersion++;this.historyLoading.set(false);this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.traceLoading.set(false);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);if(id)void this.refreshRuns()}
+ selectHistoryFlow(id:number):void{this.executionGraph.set(null);this.executionSnapshotUnavailable.set(false);this.executionSelectedNode.set('');this.historyFlowId.set(id);this.historyRequestVersion++;this.historyLoading.set(false);this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.traceLoading.set(false);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);if(id)void this.refreshRuns()}
   async refreshRuns(){const id=this.historyFlowId();if(!id)return;const version=++this.historyRequestVersion;this.historyLoading.set(true);
    try{const d=await this.request('/api/admin/flows/'+id+'/runs');if(this.historyFlowId()===id&&this.historyRequestVersion===version)this.runs.set(d.runs||[])}
    catch(e){if(this.historyFlowId()===id&&this.historyRequestVersion===version)this.message.set('Could not refresh run history: '+String(e))}
