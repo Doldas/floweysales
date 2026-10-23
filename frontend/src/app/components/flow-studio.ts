@@ -50,6 +50,7 @@ export class ConfirmDeleteFlowDialog {
   <mat-card-content>
    <p class="muted">Design read-only research automations. No live trades.</p>
    <nav class="studio-tabs" role="tablist" aria-label="Flow Studio sections">
+     <button type="button" role="tab" [attr.aria-selected]="studioTab()==='overview'" [class.selected]="studioTab()==='overview'" (click)="studioTab.set('overview')">My Flows</button>
      <button type="button" role="tab" [attr.aria-selected]="studioTab()==='editor'" [class.selected]="studioTab()==='editor'" (click)="studioTab.set('editor')">Flow editor</button>
      @if(auth.user()?.role==='SYS_ADMIN'){
      <button type="button" role="tab" [attr.aria-selected]="studioTab()==='library'" [class.selected]="studioTab()==='library'" (click)="studioTab.set('library')">Function library &amp; triggers</button>
@@ -57,7 +58,28 @@ export class ConfirmDeleteFlowDialog {
      <button type="button" role="tab" [attr.aria-selected]="studioTab()==='files'" [class.selected]="studioTab()==='files'" (click)="studioTab.set('files')">My Workspace</button>
      <button type="button" role="tab" [attr.aria-selected]="studioTab()==='runs'" [class.selected]="studioTab()==='runs'" (click)="studioTab.set('runs')">Run history</button>
    </nav>
-   @if (studioTab()==='editor') {
+   @if(studioTab()==='overview'){
+    <section class="flows-overview" aria-label="My Flows">
+      <div class="overview-heading"><div><h2>My Flows</h2><p class="muted">Manage your saved automations without opening the editor.</p></div><div class="overview-actions"><button mat-stroked-button (click)="refresh()">Refresh</button><button mat-flat-button color="primary" (click)="startFlowFromOverview()">+ New flow</button></div></div>
+      <div class="overview-filters">
+       <label>Search<input type="search" [ngModel]="flowSearch()" (ngModelChange)="flowSearch.set($event)" placeholder="Flow name or event key"></label>
+       <label>Status<select [ngModel]="flowFilter()" (ngModelChange)="flowFilter.set($event)"><option value="all">All</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option><option value="scheduled">Scheduled</option><option value="manual">Not scheduled</option></select></label>
+       <label>Sort<select [ngModel]="flowSort()" (ngModelChange)="flowSort.set($event)"><option value="name">Name A–Z</option><option value="name-desc">Name Z–A</option><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
+      </div>
+      <p class="muted">{{listedFlows().length}} of {{flows().length}} flows · {{enabledFlowCount()}} enabled · {{scheduledFlowCount()}} scheduled</p>
+      @if(!flows().length){<div class="overview-empty"><h3>No saved flows</h3><button mat-flat-button color="primary" (click)="startFlowFromOverview()">Create your first flow</button></div>}
+      @else if(!listedFlows().length){<div class="overview-empty"><h3>No matching flows</h3><button mat-stroked-button (click)="clearFlowFilters()">Clear filters</button></div>}
+      @else{<div class="flow-overview-grid">
+       @for(flow of listedFlows();track flow.id){<article class="overview-flow-card">
+        <div class="overview-flow-top"><div><h3>{{flow.name}}</h3><p class="muted">{{flow.graph.nodes.length}} nodes · {{flow.graph.edges.length}} links</p></div><span class="overview-flow-status" [class.active]="flow.enabled">{{flow.enabled?'Enabled':'Disabled'}}</span></div>
+        <p class="overview-flow-trigger">@if(flow.interval_minutes>0){Every {{flow.interval_minutes}} min}@else if(flow.event_key){Event: {{flow.event_key}}}@else{Manual execution}</p>
+        <div class="overview-actions"><button mat-flat-button color="primary" (click)="openFlowFromOverview(flow.id)">Edit</button><button mat-stroked-button (click)="openHistoryForFlow(flow.id)">History</button><button mat-stroked-button (click)="runSavedFlow(flow.id)" [disabled]="busy()">Run now</button></div>
+       </article>}
+      </div>}
+      @if(message()){<p class="flow-message" role="status">{{message()}}</p>}
+    </section>
+    }
+    @if (studioTab()==='editor') {
    <div class="flow-toolbar">
      <label>Saved flows <select [ngModel]="selectedId()" (ngModelChange)="loadFlow(+$event)"><option [ngValue]="0">New flow</option>@for(f of flows();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
      <button mat-stroked-button (click)="newFlow()">New</button>
@@ -384,7 +406,8 @@ export class ConfirmDeleteFlowDialog {
  </mat-card>`,
  styles:[`
  .canvas-shell{position:relative;min-width:0;min-height:0}
- .canvas-navigation{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:8px;background:#14263a;border:1px solid #45627b;border-radius:8px 8px 0 0}
+ .flows-overview{display:grid;gap:18px;margin:16px 0 24px}.overview-heading,.overview-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.overview-heading{justify-content:space-between}.overview-heading h2,.overview-flow-top h3{margin:0 0 6px}.overview-heading p,.overview-flow-top p{margin:0}.overview-filters{display:flex;flex-wrap:wrap;gap:12px}.overview-filters label{flex:1 1 190px}.flow-overview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:14px}.overview-flow-card{display:flex;flex-direction:column;gap:14px;padding:16px;border:1px solid #456b87;border-radius:12px;background:#142438}.overview-flow-top{display:flex;justify-content:space-between;gap:12px}.overview-flow-top h3{font-size:17px;overflow-wrap:anywhere}.overview-flow-top p{font-size:12px}.overview-flow-status{padding:4px 8px;white-space:nowrap;border:1px solid #7e8290;border-radius:20px;font-size:11px}.overview-flow-status.active{border-color:#52bd93;color:#a6f3ce}.overview-flow-trigger{margin:0;color:#c7d9eb;font-size:13px;overflow-wrap:anywhere}.overview-flow-card>.overview-actions{margin-top:auto}.overview-flow-card>.overview-actions button{flex:1 1 auto;min-height:38px}.overview-empty{padding:32px 16px;border:1px dashed #55718a;border-radius:12px;text-align:center}
+.canvas-navigation{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:8px;background:#14263a;border:1px solid #45627b;border-radius:8px 8px 0 0}
  .canvas-navigation button,.canvas-context-menu button{background:#203a53;color:#e5f3ff;border:1px solid #527b99;border-radius:5px;min-height:34px;padding:6px 10px;cursor:pointer}
  .canvas-navigation button:focus-visible,.canvas-context-menu button:focus-visible{outline:2px solid #80caff}
  .canvas-navigation span{min-width:48px;text-align:center;font-variant-numeric:tabular-nums}
@@ -475,7 +498,24 @@ export class FlowStudioComponent {
  closeCanvasMenu(): void { this.canvasMenu.set(false); }
 
  readonly logView=signal<'markdown'|'raw'|'json'>('markdown');
- readonly studioTab=signal<'editor'|'library'|'runs'|'files'>('editor');
+ readonly studioTab=signal<'overview'|'editor'|'library'|'runs'|'files'>('overview');
+  readonly flowSearch=signal('');readonly flowFilter=signal('all');readonly flowSort=signal('name');
+  readonly listedFlows=()=>{
+    const q=this.flowSearch().trim().toLowerCase(), filter=this.flowFilter(),sort=this.flowSort();
+    return this.flows().filter(f=>(!q||f.name.toLowerCase().includes(q)||(f.event_key||'').toLowerCase().includes(q))&&(filter==='all'||filter==='enabled'&&f.enabled||filter==='disabled'&&!f.enabled||filter==='scheduled'&&f.interval_minutes>0||filter==='manual'&&f.interval_minutes===0)).sort((a,b)=>sort==='newest'?b.id-a.id:sort==='oldest'?a.id-b.id:sort==='name-desc'?b.name.localeCompare(a.name):a.name.localeCompare(b.name));
+  };
+  enabledFlowCount(){return this.flows().filter(f=>f.enabled).length}
+  scheduledFlowCount(){return this.flows().filter(f=>f.interval_minutes>0).length}
+  clearFlowFilters(){this.flowSearch.set('');this.flowFilter.set('all');this.flowSort.set('name')}
+  startFlowFromOverview(){if(!this.allowDiscard())return;this.resetFlow();this.studioTab.set('editor')}
+  openFlowFromOverview(id:number){this.loadFlow(id);if(this.selectedId()===id)this.studioTab.set('editor')}
+  openHistoryForFlow(id:number){this.selectHistoryFlow(id);this.studioTab.set('runs')}
+  async runSavedFlow(id:number){
+    if(this.busy()||!this.flows().some(f=>f.id===id))return;
+    this.busy.set(true);
+    try{await this.request('/api/admin/flows/'+id+'/run',{method:'POST'});this.openHistoryForFlow(id);this.message.set('Run queued; check History for results.');setTimeout(()=>{if(this.historyFlowId()===id)void this.refreshRuns()},3000)}
+    catch(e){this.message.set('Could not start run: '+String(e))}finally{this.busy.set(false)}
+  }
  readonly flows=signal<SavedFlow[]>([]);
  readonly availableModels=signal<{model:string;label:string}[]>([]);
  readonly defaultAIModel=signal('');
@@ -684,7 +724,7 @@ export class FlowStudioComponent {
   }catch(e){this.message.set(String(e))}
  }
  async cancelRun(runId:number){
-  if(!this.selectedId()||this.busy())return;
+  if(!this.historyFlowId()||this.busy())return;
   this.busy.set(true);
   try{
    await this.request('/api/admin/flows/'+this.historyFlowId()+'/runs/'+runId+'/cancel',{method:'POST'});
