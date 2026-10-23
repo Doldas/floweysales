@@ -319,6 +319,8 @@ export class ConfirmDeleteFlowDialog {
    @if (studioTab()==='runs') {
    <div class="run-history-heading"><h3>Recent runs</h3>
      <label>Flow <select [ngModel]="historyFlowId()" (ngModelChange)="selectHistoryFlow(+$event)" aria-label="Select flow for history"><option [ngValue]="0">Select a flow…</option>@for(f of flows();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
+     <label>Find run <input [ngModel]="historySearch()" (ngModelChange)="historySearch.set($event)" placeholder="Run ID or trigger"></label>
+     <label>Status <select [ngModel]="historyStatusFilter()" (ngModelChange)="historyStatusFilter.set($event)"><option value="all">All statuses</option><option value="SUCCESS">Success</option><option value="FAILED">Failed</option><option value="RUNNING">Running</option><option value="CANCELLED">Cancelled</option></select></label>
      <label>Output view <select [ngModel]="logView()" (ngModelChange)="logView.set($event)">
        <option value="markdown">Markdown (default)</option><option value="raw">RAW</option><option value="json">Structured JSON</option>
      </select></label>
@@ -331,7 +333,8 @@ export class ConfirmDeleteFlowDialog {
    @if(!historyFlowId()){<p class="muted">Select a flow above to view its history.</p>}
     @else if(!runs().length&&!historyLoading()){<p class="muted">No executions yet for this flow.</p>}
     @if(historyLoading()){<p role="status">Loading run history…</p>}
-   @for(run of runs();track run.id){
+    @if(historyFlowId()&&runs().length&&!filteredRuns().length){<p class="muted">No runs match your filters.</p>}
+   @for(run of filteredRuns();track run.id){
     <details class="flow-run"><summary>#{{run.id}} · {{run.trigger}} · {{run.status}}</summary>
       @if(run.status==='RUNNING'){<button mat-stroked-button color="warn" (click)="cancelRun(run.id)" [disabled]="busy()">Cancel run</button>}
       <button mat-stroked-button (click)="showRunSteps(run.id)">{{traceRunId()===run.id?'Hide node trace':'Inspect nodes'}}</button>
@@ -488,6 +491,9 @@ export class FlowStudioComponent {
  readonly runs=signal<FlowRun[]>([]);
   readonly historyFlowId=signal(0);
   readonly historyLoading=signal(false);
+  readonly historyStatusFilter=signal('all');
+  readonly historySearch=signal('');
+  readonly filteredRuns=()=>this.runs().filter(run=>(this.historyStatusFilter()==='all'||run.status===this.historyStatusFilter())&&(!this.historySearch()||String(run.id).includes(this.historySearch().trim())||run.trigger.toLowerCase().includes(this.historySearch().trim().toLowerCase())));
  readonly traceRunId=signal(0);
  readonly traceSteps=signal<FlowRunStep[]>([]);
  readonly traceLoading=signal(false);
