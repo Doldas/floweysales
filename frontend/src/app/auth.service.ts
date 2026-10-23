@@ -7,6 +7,7 @@ export class AuthState {
   readonly ready = signal(false);
   readonly enabled = signal(false);
   readonly user = signal<AuthUser | null>(null);
+  readonly permissions = signal<string[]>([]);
   readonly error = signal('');
 
   async check(): Promise<void> {
@@ -16,9 +17,11 @@ export class AuthState {
         const data = await response.json();
         this.enabled.set(data.enabled === true);
         this.user.set(data.user ?? null);
+        this.permissions.set(data.permissions||[]);
       } else if (response.status === 401) {
         this.enabled.set(true);
         this.user.set(null);
+        this.permissions.set([]);
       } else {
         throw new Error('Authentication status unavailable: HTTP ' + response.status);
       }
