@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="017-account-invitations" author="floweysales" dbms="mysql">
+  <createTable tableName="auth_invitations">
+   <column name="token_hash" type="CHAR(64)"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="user_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="expires_at" type="DATETIME(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <addForeignKeyConstraint baseTableName="auth_invitations" baseColumnNames="user_id" referencedTableName="auth_users" referencedColumnNames="id" constraintName="fk_auth_invite_user" onDelete="CASCADE"/>
+  <rollback><dropTable tableName="auth_invitations"/></rollback>
+ </changeSet>
+</databaseChangeLog>
