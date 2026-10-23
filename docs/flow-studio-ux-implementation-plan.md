@@ -16,7 +16,8 @@ Make flows easy to discover, build, run, inspect and troubleshoot without moving
 ## P1 — Flow management
 - [x] Create initial My Flows dashboard with search, sorting, enabled/schedule indicators, create/edit/run/history actions.
 - [ ] Extend the dashboard with latest run status/time and duplicate action once backend metadata is available.
-- [ ] Replace dense add-node toolbar with a searchable node palette and categories; preserve full keyboard navigation.
+- [x] Replace dense add-node toolbar with a searchable, role-aware node picker using existing node creation actions.
+- [ ] Extend the picker with categories, richer descriptions and keyboard-first focus handling.
 - [ ] Introduce a consistent editor command bar and clear Save, Saved, Saving, Failed indicators.
 - [ ] Add graph validation (disconnected nodes, required inputs, invalid schema, trigger and output paths) before Run.
 - [ ] Support a large, effectively unbounded graph, fit-to-content and auto-layout without changing persisted semantics.
