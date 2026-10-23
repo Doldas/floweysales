@@ -129,7 +129,7 @@ func runOneTracker(ctx context.Context, target server.MarketTarget, db *storage.
 			}
 			if decision == tracker.Sell {
 				state = "STOP_LOSS"
-				if notifier != nil && (lastAlert.IsZero() || time.Since(lastAlert) >= cooldown) {
+				if dispatch != nil && (lastAlert.IsZero() || time.Since(lastAlert) >= cooldown) {
 					dispatch(ctx, target.Symbol, target.ProviderID, "STOP_LOSS", "STOP LOSS: "+target.Symbol, fmt.Sprintf("Stop triggered for %s at %.4f (initial %.4f)", target.Symbol, t.StopLoss(), firstPrice))
 					lastAlert = time.Now()
 				}
