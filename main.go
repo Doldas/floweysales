@@ -62,6 +62,9 @@ func parseInt(s string, fallback int) int {
 }
 
 func main() {
+	if err := server.EnsureAPISecretsKey(); err != nil {
+		log.Fatalf("[CONFIG] initialize integration secret encryption: %v", err)
+	}
 	defaults := app.LoadProperties("config.properties")
 
 	emailCooldownDuration := time.Duration(parseInt(

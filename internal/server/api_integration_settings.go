@@ -112,7 +112,7 @@ func (e *Engine) registerIntegrationSettingsRoutes() {
 			return
 		}
 		if _, err := apiSecretCipher(); err != nil {
-			writeJSON(w, 503, map[string]string{"error": "Configure FLOWEYSALES_SECRETS_KEY in the server environment before saving credentials"})
+			writeJSON(w, 503, map[string]string{"error": "Server secret encryption key is unavailable; check server startup configuration"})
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 8192)
