@@ -65,6 +65,8 @@ services:
       REST_API_HOST: 0.0.0.0
       REST_API_PORT: 8080
       AUTH_ENABLED: "true"
+      FLOWEYSALES_SECRETS_KEY: ${FLOWEYSALES_SECRETS_KEY:-}
+      FLOWEYSALES_SECRETS_KEY_FILE: /secrets/secrets.key
       AUTH_MYSQL_DSN: 'flowey_auth:${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}@tcp(mysql:3306)/floweysales_auth?parseTime=true&loc=UTC&tls=false'
       AUTH_BOOTSTRAP_EMAIL: ${AUTH_BOOTSTRAP_EMAIL:-}
       AUTH_BOOTSTRAP_PASSWORD: ${AUTH_BOOTSTRAP_PASSWORD:-}
@@ -96,6 +98,7 @@ services:
       - "127.0.0.1:${APP_PORT:-8080}:8080"
     volumes:
       - trading_data:/data:ro
+      - secrets_data:/secrets
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -112,3 +115,4 @@ networks:
 volumes:
   mysql_data:
   trading_data:
+  secrets_data:
