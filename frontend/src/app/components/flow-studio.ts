@@ -631,7 +631,16 @@ export class FlowStudioComponent {
  }
  private async request(url:string,options?:RequestInit):Promise<any>{const r=await fetch(url,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...options?.headers}});
   const j=await r.json();if(!r.ok)throw new Error(j.error||('HTTP '+r.status));return j}
- async refresh(){try{const [data,definitions]=await Promise.all([this.request('/api/admin/flows'),this.request('/api/admin/blueprint-triggers')]);this.flows.set(data.flows||[]);this.triggers.set(definitions.triggers||[])}catch(e){this.message.set(String(e))}}
+ async refresh(){
+  try{
+   const data=await this.request('/api/admin/flows');
+   this.flows.set(data.flows||[]);
+   if(this.auth.user()?.role==='SYS_ADMIN'){
+    try{const definitions=await this.request('/api/admin/blueprint-triggers');this.triggers.set(definitions.triggers||[])}
+    catch{this.triggers.set([])}
+   }else{this.triggers.set([])}
+  }catch(e){this.message.set(String(e))}
+ }
  async cancelRun(runId:number){
   if(!this.selectedId()||this.busy())return;
   this.busy.set(true);
