@@ -1,9 +1,9 @@
 package server
 
 import (
-	"fmt"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -115,37 +115,51 @@ func TestMySQLAuthGate(t *testing.T) {
 	userCookie := userCookies[0]
 	// A new user cannot log in until their one-time invitation is accepted.
 	inviteToken, err := auth.InviteUser(t.Context(), "invited@example.test")
-	if err != nil { t.Fatal(err) }
-	assert(request("POST", "/api/auth/accept-invite", map[string]string{"token":inviteToken,"password":"short"}, nil, ""), http.StatusBadRequest)
-	assert(request("POST", "/api/auth/accept-invite", map[string]string{"token":inviteToken,"password":"a-strong-invitation-password"}, nil, ""), http.StatusOK)
-	assert(request("POST", "/api/auth/accept-invite", map[string]string{"token":inviteToken,"password":"another-strong-password"}, nil, ""), http.StatusBadRequest)
-	invitedLogin := request("POST", "/api/auth/login", map[string]string{"email":"invited@example.test","password":"a-strong-invitation-password"}, nil, "")
-	assert(invitedLogin,http.StatusOK)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert(request("POST", "/api/auth/accept-invite", map[string]string{"token": inviteToken, "password": "short"}, nil, ""), http.StatusBadRequest)
+	assert(request("POST", "/api/auth/accept-invite", map[string]string{"token": inviteToken, "password": "a-strong-invitation-password"}, nil, ""), http.StatusOK)
+	assert(request("POST", "/api/auth/accept-invite", map[string]string{"token": inviteToken, "password": "another-strong-password"}, nil, ""), http.StatusBadRequest)
+	invitedLogin := request("POST", "/api/auth/login", map[string]string{"email": "invited@example.test", "password": "a-strong-invitation-password"}, nil, "")
+	assert(invitedLogin, http.StatusOK)
 
 	// USER may save a manual, read-only flow, but another USER cannot access it.
 	ownedFlow := map[string]any{
-	 "name":"My private research",
-	 "graph":map[string]any{
-	  "nodes":[]map[string]any{{"id":"start","type":"trigger","label":"Start","x":20,"y":20},{"id":"agent","type":"agent","label":"Research","prompt":"Summarize public earnings facts","x":200,"y":20}},
-	  "edges":[]map[string]string{{"from":"start","to":"agent"}},
-	 },
-	 "enabled":false,"interval_minutes":0,"event_key":"",
+		"name": "My private research",
+		"graph": map[string]any{
+			"nodes": []map[string]any{{"id": "start", "type": "trigger", "label": "Start", "x": 20, "y": 20}, {"id": "agent", "type": "agent", "label": "Research", "prompt": "Summarize public earnings facts", "x": 200, "y": 20}},
+			"edges": []map[string]string{{"from": "start", "to": "agent"}},
+		},
+		"enabled": false, "interval_minutes": 0, "event_key": "",
 	}
-	savedResponse := request("POST", "/api/admin/flows",ownedFlow,userCookie,"")
-	if savedResponse.StatusCode!=http.StatusOK {t.Fatalf("user flow creation: %d",savedResponse.StatusCode)}
+	savedResponse := request("POST", "/api/admin/flows", ownedFlow, userCookie, "")
+	if savedResponse.StatusCode != http.StatusOK {
+		t.Fatalf("user flow creation: %d", savedResponse.StatusCode)
+	}
 	var savedFlow map[string]any
-	if err:=json.NewDecoder(savedResponse.Body).Decode(&savedFlow);err!=nil{t.Fatal(err)}
+	if err := json.NewDecoder(savedResponse.Body).Decode(&savedFlow); err != nil {
+		t.Fatal(err)
+	}
 	savedResponse.Body.Close()
-	flowID:=int64(savedFlow["id"].(float64))
-	otherUser,err:=auth.CreateUser(t.Context(),"other-researcher@example.test","another-long-research-password")
-	if err!=nil{t.Fatal(err)}
-	if otherUser.Role!="USER"{t.Fatal("incorrect new user role")}
-	otherLogin:=request("POST","/api/auth/login",map[string]string{"email":otherUser.Email,"password":"another-long-research-password"},nil,"")
-	if otherLogin.StatusCode!=http.StatusOK {t.Fatalf("other user login: %d",otherLogin.StatusCode)}
-	otherCookies:=otherLogin.Cookies()
+	flowID := int64(savedFlow["id"].(float64))
+	otherUser, err := auth.CreateUser(t.Context(), "other-researcher@example.test", "another-long-research-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if otherUser.Role != "USER" {
+		t.Fatal("incorrect new user role")
+	}
+	otherLogin := request("POST", "/api/auth/login", map[string]string{"email": otherUser.Email, "password": "another-long-research-password"}, nil, "")
+	if otherLogin.StatusCode != http.StatusOK {
+		t.Fatalf("other user login: %d", otherLogin.StatusCode)
+	}
+	otherCookies := otherLogin.Cookies()
 	otherLogin.Body.Close()
-	if len(otherCookies)!=1{t.Fatal("other user has no session")}
-	assert(request("GET", fmt.Sprintf("/api/admin/flows/%d/runs",flowID),nil,otherCookies[0],""),http.StatusNotFound)
+	if len(otherCookies) != 1 {
+		t.Fatal("other user has no session")
+	}
+	assert(request("GET", fmt.Sprintf("/api/admin/flows/%d/runs", flowID), nil, otherCookies[0], ""), http.StatusNotFound)
 	// Only safe research routes are available to USER. No orders or global changes.
 	assert(request("GET", "/api/ai/tools", nil, userCookie, ""), http.StatusOK)
 	assert(request("GET", "/api/orders", nil, userCookie, ""), http.StatusForbidden)
