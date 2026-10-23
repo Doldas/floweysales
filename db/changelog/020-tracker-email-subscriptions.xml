@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="020-tracker-email-subscriptions" author="floweysales" dbms="mysql">
+  <createTable tableName="tracker_email_subscriptions">
+   <column name="user_id" type="BIGINT"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_tracker_email_subscription"/></column>
+   <column name="symbol" type="VARCHAR(32)"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_tracker_email_subscription"/></column>
+   <column name="provider" type="VARCHAR(40)"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_tracker_email_subscription"/></column>
+   <column name="golden_cross" type="BOOLEAN" defaultValueBoolean="true"><constraints nullable="false"/></column>
+   <column name="death_cross" type="BOOLEAN" defaultValueBoolean="true"><constraints nullable="false"/></column>
+   <column name="stop_loss" type="BOOLEAN" defaultValueBoolean="true"><constraints nullable="false"/></column>
+   <column name="cooldown_minutes" type="INT" defaultValueNumeric="10"><constraints nullable="false"/></column>
+   <column name="last_sent_at" type="DATETIME(6)"/>
+  </createTable>
+  <addForeignKeyConstraint baseTableName="tracker_email_subscriptions" baseColumnNames="user_id" referencedTableName="auth_users" referencedColumnNames="id" constraintName="fk_tracker_email_subscriber" onDelete="CASCADE"/>
+  <rollback><dropTable tableName="tracker_email_subscriptions"/></rollback>
+ </changeSet>
+</databaseChangeLog>
