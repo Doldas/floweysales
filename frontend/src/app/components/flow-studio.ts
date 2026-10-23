@@ -526,8 +526,8 @@ export class FlowStudioComponent {
  node(id:string):FlowNode|undefined{return this.graph().nodes.find(n=>n.id===id)}
  select(id:string){this.chosen.set(id)}
  applyFlowTemplate(id:string):void{
-  if(!id)return;
-  this.newFlow();
+  if(!id||!this.allowDiscard())return;
+  this.resetFlow();
   const start:FlowNode={id:'start',type:'trigger',label:'Start',x:45,y:145};
   const agent:FlowNode={id:'research',type:'agent',label:'Research',prompt:'Analyze this company using verifiable evidence and identify uncertainties.',output_mode:'json',
     json_contract:JSON.stringify({type:'object',required:['symbol','score'],properties:{symbol:{type:'string'},score:{type:'number'},summary:{type:'string'}}}),x:230,y:145};
@@ -551,8 +551,9 @@ export class FlowStudioComponent {
   this.interval.set(0);
   this.message.set('Template copied as a new, disabled flow. Review nodes and save it to keep your own version.');
  }
- newFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);this.message.set('');this.savedSnapshot.set(this.currentSnapshot())}
- loadFlow(id:number){if(!this.allowDiscard())return;const f=this.flows().find(x=>x.id===id);if(!f){this.newFlow();return}
+ newFlow(){if(!this.allowDiscard())return;this.resetFlow()}
+ private resetFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);this.message.set('');this.savedSnapshot.set(this.currentSnapshot())}
+ loadFlow(id:number){if(!this.allowDiscard())return;const f=this.flows().find(x=>x.id===id);if(!f){this.resetFlow();return}
   this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);this.historyFlowId.set(f.id);this.savedSnapshot.set(this.currentSnapshot());void this.refreshRuns()}
  async loadFunctions(){try{const data=await this.request("/api/admin/blueprint-functions");this.functions.set(data.functions||[])}catch(e){this.message.set(String(e))}}
  addWebSearch():void {
@@ -698,7 +699,7 @@ export class FlowStudioComponent {
    return other.status===status&&other.output===output?'Unchanged':other.status!==status?'Status changed':'Output changed';
  }
  async previewReplay(runId:number,nodeId:string){
-  if(!this.selectedId())return;
+  if(!this.historyFlowId())return;
   this.replaySteps.set([]);this.replaySource.set(runId);
   try{
    const result=await this.request('/api/admin/flows/'+this.historyFlowId()+'/runs/'+runId+'/preview',{method:'POST',body:JSON.stringify({node:nodeId})});
@@ -707,7 +708,7 @@ export class FlowStudioComponent {
   }catch(e){this.message.set('Replay preview unavailable: '+String(e))}
  }
  async showRunSteps(runId:number){
-  if(!this.selectedId())return;
+  if(!this.historyFlowId())return;
   if(this.traceRunId()===runId){this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);return}
   this.traceRunId.set(runId);this.traceLoading.set(true);this.traceSteps.set([]);
   try{const data=await this.request('/api/admin/flows/'+this.historyFlowId()+'/runs/'+runId+'/steps');
@@ -731,7 +732,8 @@ export class FlowStudioComponent {
    this.busy.set(true);
    try{
      await this.request('/api/admin/flows/'+id,{method:'DELETE'});
-     this.newFlow();
+     if(this.historyFlowId()===id)this.selectHistoryFlow(0);
+     this.resetFlow();
      await this.refresh();
      this.message.set('Flow deleted');
    }catch(e){this.message.set('Delete failed: '+String(e))}
