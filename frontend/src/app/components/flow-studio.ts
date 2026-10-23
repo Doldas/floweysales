@@ -58,6 +58,14 @@ export class ConfirmDeleteFlowDialog {
    <div class="flow-toolbar">
      <label>Saved flows <select [ngModel]="selectedId()" (ngModelChange)="loadFlow(+$event)"><option [ngValue]="0">New flow</option>@for(f of flows();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
      <button mat-stroked-button (click)="newFlow()">New</button>
+     <label>Starter templates
+      <select [ngModel]="''" (ngModelChange)="applyFlowTemplate($event)">
+       <option value="">Choose a template…</option>
+       <option value="research">Market research report</option>
+       <option value="risk">Risk-score decision</option>
+       <option value="event">Event-driven analysis</option>
+      </select>
+     </label>
      <button mat-stroked-button color="warn" (click)="confirmDeleteFlow()" [disabled]="!selectedId()||busy()">Delete flow</button>
      <button mat-stroked-button (click)="addAgent()">+ Agent</button>
      <button mat-stroked-button (click)="addV2Node('condition')">+ If / Else</button>
@@ -469,6 +477,32 @@ export class FlowStudioComponent {
  ],edges:[{from:'start',to:'agent-1'}]}}
  node(id:string):FlowNode|undefined{return this.graph().nodes.find(n=>n.id===id)}
  select(id:string){this.chosen.set(id)}
+ applyFlowTemplate(id:string):void{
+  if(!id)return;
+  this.newFlow();
+  const start:FlowNode={id:'start',type:'trigger',label:'Start',x:45,y:145};
+  const agent:FlowNode={id:'research',type:'agent',label:'Research',prompt:'Analyze this company using verifiable evidence and identify uncertainties.',output_mode:'json',
+    json_contract:JSON.stringify({type:'object',required:['symbol','score'],properties:{symbol:{type:'string'},score:{type:'number'},summary:{type:'string'}}}),x:230,y:145};
+  if(id==='research'){
+   this.name.set('Template: Market research report');
+   const output:FlowNode={id:'report',type:'output',label:'Report',x:440,y:145};
+   this.graph.set({version:2,nodes:[start,agent,output],edges:[{from:'start',to:'research'},{from:'research',to:'report'}]});
+  } else if(id==='risk'){
+   this.name.set('Template: Risk score decision');
+   const condition:FlowNode={id:'risk-check',type:'condition',label:'Risk above 70?',operator:'greater_than',value:'70',x:500,y:145};
+   const high:FlowNode={id:'high',type:'output',label:'Review required',x:730,y:90};
+   const low:FlowNode={id:'low',type:'output',label:'Low risk',x:730,y:210};
+   this.graph.set({version:2,nodes:[start,agent,condition,high,low],edges:[{from:'start',to:'research'},{from:'research',to:'risk-check',from_port:'field:score',to_port:'input'},{from:'risk-check',to:'high',from_port:'true'},{from:'risk-check',to:'low',from_port:'false'}]});
+  }else if(id==='event'){
+   this.name.set('Template: Event-driven analysis');
+   this.eventKey.set('research.requested');
+   const output:FlowNode={id:'output',type:'output',label:'Report',x:440,y:145};
+   this.graph.set({version:2,nodes:[start,agent,output],edges:[{from:'start',to:'research'},{from:'research',to:'output'}]});
+  }
+  this.enabled.set(false);
+  this.interval.set(0);
+  this.message.set('Template copied as a new, disabled flow. Review nodes and save it to keep your own version.');
+ }
  newFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);this.message.set('')}
  loadFlow(id:number){const f=this.flows().find(x=>x.id===id);if(!f){this.newFlow();return}
   this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);void this.refreshRuns()}
