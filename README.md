@@ -239,3 +239,33 @@ integration identifiers. Existing environment-only AI keys still work.
 
 Web search credentials can be saved ahead of the upcoming search-engine node;
 this settings page alone does not activate a search endpoint or crawler.
+
+
+### User accounts, roles and SMTP invitations
+
+In **Settings → Mail configuration**, a SYS_ADMIN configures the SMTP host,
+port **587** (STARTTLS with certificate verification), sender, username,
+public HTTPS application URL and encrypted SMTP password. The server must also
+have the persistent `FLOWEYSALES_SECRETS_KEY` environment secret documented
+above; it is not configurable or retrievable through the UI.
+
+In **Settings → User management**, inviting an email address creates an
+**inactive** account and sends a password setup link. Tokens are random,
+SHA-256 hashed in the database, expire after 48 hours and are consumed on first
+use. Users choose a password of at least 14 characters before sign-in.
+Mail delivery failures revoke the pending invitation. Deactivating a user
+revokes their sessions and outstanding invitations.
+
+**Role management** creates roles. **Permission management** grants explicit
+`research.read`, `ai.chat`, `models.use`, `flows.read`, `flows.write`
+and `flows.run` permissions. Built-in `SYS_ADMIN` remains protected.
+Normal `USER` accounts can create and run their **own manual flows** by
+default. Owner checks are enforced on every flow-related API operation.
+Non-admin flows cannot use workspace I/O, shared function/subflow calls, or
+automatic/event triggers. Agent model choices must be in the configured model
+catalog or match the system default; users cannot register new models.
+
+**Deployment note:** Existing SMTP credentials are encrypted and cannot be
+recovered without the original master encryption key. Before inviting users,
+test actual SMTP delivery, TLS trust and the public application URL in the
+deployed environment. Invitations do not auto-login the recipient.
