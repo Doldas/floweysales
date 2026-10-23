@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"floweysales/internal/market"
-		"floweysales/internal/server"
+	"floweysales/internal/server"
 	"floweysales/internal/storage"
 	"floweysales/internal/tracker"
 )
@@ -15,7 +15,7 @@ import (
 // Tracker loops are independently cancellable; no shared mutable EMA state,
 // no per-tick console logging, and a finite maximum of 16 workers.
 func runActiveTrackers(ctx context.Context, config *server.SharedMarketConfig, db *storage.Database,
-	api *market.MarketApi, dispatch func(context.Context,string,string,string,string,string), cfg tracker.Config,
+	api *market.MarketApi, dispatch func(context.Context, string, string, string, string, string), cfg tracker.Config,
 	requestedInterval, cooldown time.Duration, finnhubKey string) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -120,7 +120,7 @@ func runOneTracker(ctx context.Context, target server.MarketTarget, db *storage.
 						if relation == 1 {
 							label = "DEATH CROSS"
 						}
-						dispatch(ctx,target.Symbol,target.ProviderID,state,label+": "+target.Symbol, fmt.Sprintf("%s for %s. Fast EMA %.4f Slow EMA %.4f",
+						dispatch(ctx, target.Symbol, target.ProviderID, state, label+": "+target.Symbol, fmt.Sprintf("%s for %s. Fast EMA %.4f Slow EMA %.4f",
 							label, target.Symbol, fast, slow))
 						lastAlert = time.Now()
 					}
@@ -130,7 +130,7 @@ func runOneTracker(ctx context.Context, target server.MarketTarget, db *storage.
 			if decision == tracker.Sell {
 				state = "STOP_LOSS"
 				if notifier != nil && (lastAlert.IsZero() || time.Since(lastAlert) >= cooldown) {
-					dispatch(ctx,target.Symbol,target.ProviderID,"STOP_LOSS","STOP LOSS: "+target.Symbol, fmt.Sprintf("Stop triggered for %s at %.4f (initial %.4f)", target.Symbol, t.StopLoss(), firstPrice))
+					dispatch(ctx, target.Symbol, target.ProviderID, "STOP_LOSS", "STOP LOSS: "+target.Symbol, fmt.Sprintf("Stop triggered for %s at %.4f (initial %.4f)", target.Symbol, t.StopLoss(), firstPrice))
 					lastAlert = time.Now()
 				}
 			}
