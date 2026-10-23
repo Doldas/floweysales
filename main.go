@@ -15,7 +15,6 @@ import (
 	"floweysales/internal/app"
 	"floweysales/internal/identity"
 	"floweysales/internal/market"
-	"floweysales/internal/notify"
 	"floweysales/internal/server"
 	"floweysales/internal/storage"
 	"floweysales/internal/tracker"
@@ -65,11 +64,8 @@ func parseInt(s string, fallback int) int {
 func main() {
 	defaults := app.LoadProperties("config.properties")
 
-	appMail := app.ResolveConfig("SMTP_APP_MAIL", "server@mail.nu", defaults)
-	appMailPassword := app.ResolveConfig("SMTP_APP_MAIL_PSW", "xxxx xxxx xxxx xxxx", defaults)
 	emailCooldownDuration := time.Duration(parseInt(
 		app.ResolveConfig("EMAIL_COOLDOWN_DURATION_MIN", "10", defaults), 10)) * time.Minute
-	receiveAlertsAt := app.ResolveConfig("DEFAULT_SMTP_MAIL_RECIPIENT", "user1@mail.nu", defaults)
 
 	sharedConfig := &server.SharedMarketConfig{}
 	sharedConfig.Symbol = app.ResolveConfig("DEFAULT_MARKET_SYMBOL", "GIB", defaults)
@@ -210,13 +206,9 @@ func main() {
 	if err := restAPI.Start(restApiHost, restApiPort); err != nil {
 		log.Fatalf("bind %s:%s: %v", restApiHost, restApiPort, err)
 	}
-	var notifier *notify.EmailNotifier
-	if strings.EqualFold(os.Getenv("ENABLE_TRACK_ALERT_EMAIL"), "true") {
-		notifier = notify.NewEmailNotifier(appMail, appMailPassword, receiveAlertsAt)
-	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	runActiveTrackers(ctx, sharedConfig, db, api, notifier, cfg, updateRate, emailCooldownDuration, finnhubAPIKey)
+	runActiveTrackers(ctx, sharedConfig, db, api, restAPI.DispatchTrackerAlert, cfg, updateRate, emailCooldownDuration, finnhubAPIKey)
 	restAPI.Stop()
 }
 

@@ -120,6 +120,9 @@ func (e *Engine) allowedUserAPI(r *http.Request, u identity.User) bool {
 		return true
 	}
 	method, path := r.Method, r.URL.Path
+	if strings.HasPrefix(path, "/api/me/tracker-emails") && (method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete) {
+		return true
+	}
 	if strings.HasPrefix(path, "/api/admin/flows") {
 		permission := "flows.write"
 		if method == http.MethodGet {

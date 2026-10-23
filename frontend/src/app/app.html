@@ -10,11 +10,13 @@
     <nav class="workspace-tabs" aria-label="Research workspaces">
       <button type="button" class="workspace-tab" [class.active]="workspace() !== 'files'" (click)="openWorkspace('financials')">Research</button>
       <button type="button" class="workspace-tab" [class.active]="workspace() === 'files'" (click)="openWorkspace('files')">My Workspace</button>
+      <button type="button" class="workspace-tab" [class.active]="workspace() === 'tracker-emails'" (click)="openWorkspace('tracker-emails')">Notifications</button>
       @if(auth.permissions().includes('flows.read')){
        <button type="button" class="workspace-tab" [class.active]="workspace() === 'studio'" (click)="openWorkspace('studio')">My Flows</button>
       }
     </nav>
-    @if(workspace() === 'files'){<fse-userspace-files></fse-userspace-files>}
+    @if(workspace() === 'tracker-emails'){<fse-tracker-email-settings></fse-tracker-email-settings>}
+    @else if(workspace() === 'files'){<fse-userspace-files></fse-userspace-files>}
     @else if(workspace() === 'studio' && auth.permissions().includes('flows.read')){<fse-flow-studio></fse-flow-studio>}
     @else {
       <fse-financials [symbol]="trackedSymbol()" [provider]="provider()"></fse-financials>
@@ -341,6 +343,7 @@
     </section>
   }
 
+  @if(workspace() === 'tracker-emails') {<fse-tracker-email-settings></fse-tracker-email-settings>}
   <footer class="footer">
     Welfory AB • FloweySales Quantum Trading Protocol • Go Engine + Angular Terminal
   </footer>

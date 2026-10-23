@@ -45,6 +45,7 @@ import { TradingChartComponent } from './components/chart';
 import { LedgerComponent } from './components/ledger';
 import { ForumComponent } from './components/forum';
 import { FlowStudioComponent } from './components/flow-studio';
+import { TrackerEmailSettingsComponent } from './components/tracker-email-settings';
 import { ApiSettingsComponent } from './components/api-settings';
 import { UserspaceFilesComponent } from './components/userspace-files';
 import {
@@ -99,6 +100,7 @@ const FIRST_TICK_TIMEOUT_MS = 25_000;
     LedgerComponent,
     ForumComponent,
     FlowStudioComponent,
+    TrackerEmailSettingsComponent,
     ApiSettingsComponent,
     UserspaceFilesComponent,
   ],
@@ -127,6 +129,7 @@ export class App {
     { id: 'files', label: 'My Workspace', icon: 'folder', adminOnly: false },
     { id: 'studio', label: 'Flow Studio', icon: 'account_tree', adminOnly: true },
     { id: 'api-settings', label: 'Settings', icon: 'settings', adminOnly: true },
+    { id: 'tracker-emails', label: 'Notifications', icon: 'mail', adminOnly: false },
   ] as const;
   readonly workspace = signal<(typeof this.workspaceTabs)[number]['id']>(this.initialWorkspace());
   readonly activeWorkspaceLabel = computed(
