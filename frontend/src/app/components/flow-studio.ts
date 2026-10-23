@@ -532,7 +532,7 @@ export class FlowStudioComponent {
    this.chosen.set(id);
  }
  updateLoop(id:string,field:'loop_mode'|'loop_limit'|'transform'|'value'|'operator'|'loop_condition',value:string|number):void{
-   const safe=field==='loop_limit'?(Number.isFinite(Number(value))?Math.max(1,Math.min(100,Math.trunc(Number(value)))):1):value;
+   const safe=field==='loop_limit'?(Number.isFinite(Number(value))?Math.max(1,Math.min(this.node(id)?.type==='web_crawl'?3:100,Math.trunc(Number(value)))):1):value;
    this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===id?{...n,[field]:safe}:n)}));
  }
  addUtility(type:'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'){
