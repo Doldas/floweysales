@@ -560,9 +560,9 @@ export class FlowStudioComponent {
   this.message.set('Template copied as a new, disabled flow. Review nodes and save it to keep your own version.');
  }
  newFlow(){if(!this.allowDiscard())return;this.resetFlow()}
- private resetFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);this.message.set('');this.savedSnapshot.set(this.currentSnapshot())}
+ private resetFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.message.set('');this.savedSnapshot.set(this.currentSnapshot())}
  loadFlow(id:number){if(!this.allowDiscard())return;const f=this.flows().find(x=>x.id===id);if(!f){this.resetFlow();return}
-  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);this.savedSnapshot.set(this.currentSnapshot())}
+  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.savedSnapshot.set(this.currentSnapshot())}
  async loadFunctions(){try{const data=await this.request("/api/admin/blueprint-functions");this.functions.set(data.functions||[])}catch(e){this.message.set(String(e))}}
  addWebSearch():void {
   const count=this.graph().nodes.length;
