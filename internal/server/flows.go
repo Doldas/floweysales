@@ -139,7 +139,7 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		if _, ok := nodes[n.ID]; ok {
 			return g, nil, fmt.Errorf("duplicate node")
 		}
-		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" && n.Type != "output" && (g.Version != 2 || n.Type != "loop") && n.Type != "http_get" && (g.Version != 2 || (n.Type != "condition" && n.Type != "merge" && n.Type != "json_get")) {
+		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" && n.Type != "output" && (g.Version != 2 || n.Type != "loop") && n.Type != "http_get" && (g.Version != 2 || n.Type != "web_crawl") && (g.Version != 2 || (n.Type != "condition" && n.Type != "merge" && n.Type != "json_get")) {
 			return g, nil, fmt.Errorf("only trigger, research agent, constant and subflow nodes are allowed")
 		}
 		if g.Version == 2 && (n.Type == "condition" || n.Type == "merge" || n.Type == "json_get") {
@@ -217,6 +217,18 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		}
 		if n.Type == "agent" && n.OutputMode != "" && n.OutputMode != "markdown" && n.OutputMode != "json" {
 			return g, nil, fmt.Errorf("unsupported agent output mode")
+		}
+		if n.Type == "web_crawl" {
+			utilities++
+			if n.Prompt != "" || n.FlowID != 0 || n.FunctionID != 0 || n.Model != "" {
+				return g, nil, fmt.Errorf("web crawler nodes cannot invoke agents or subflows")
+			}
+			if _, err := flowPublicURL(n.Value); err != nil {
+				return g, nil, fmt.Errorf("crawler node %s: %w", n.ID, err)
+			}
+			if n.LoopLimit < 1 || n.LoopLimit > 3 {
+				return g, nil, fmt.Errorf("crawler page limit must be 1–3")
+			}
 		}
 		if n.Type == "http_get" {
 			utilities++
@@ -887,6 +899,15 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			}
 		}
 
+		if n.Type == "web_crawl" {
+			output, err := flowCrawlPublic(ctx, n.Value, n.LoopLimit)
+			if err != nil {
+				return "", fmt.Errorf("crawler node %s: %w", n.ID, err)
+			}
+			previous = output
+			record(map[string]string{"node": n.ID, "label": n.Label, "output": previous})
+			continue
+		}
 		if n.Type == "http_get" {
 			output, err := flowFetchPublic(ctx, n.Value, n.ValueType)
 			if err != nil {

@@ -11,7 +11,7 @@ import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angu
 import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'loop'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'loop'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
@@ -73,6 +73,7 @@ export class ConfirmDeleteFlowDialog {
      <button mat-stroked-button (click)="addV2Node('json_get')">+ JSON Field</button>
      <button mat-stroked-button (click)="addPureLoop()">+ Loop</button>
      <button mat-stroked-button (click)="addHTTPGet()">+ HTTP JSON/XML</button>
+     <button mat-stroked-button (click)="addWebCrawler()">+ Web crawler</button>
      <button mat-stroked-button (click)="addOutput()">+ Output</button>
      <button mat-stroked-button (click)="addSubflow()">+ Call Flow</button>
      <button mat-stroked-button (click)="addConstant()">+ Value</button>
@@ -231,6 +232,11 @@ export class ConfirmDeleteFlowDialog {
          @if(n.transform==='prefix'||n.transform==='suffix'||n.transform==='replace'){
            <label>Operand <input [ngModel]="n.value||''" (ngModelChange)="updateUtility('value',$event)" maxlength="1000" [placeholder]="n.transform==='replace'?'find=>replacement':'Text to add'"></label>
          }
+       }
+       @if(n.type==='web_crawl'){
+        <label>Public start URL<input [ngModel]="n.value||''" (ngModelChange)="updateUtility('value',$event)" maxlength="2048" placeholder="https://example.com/research"></label>
+        <label>Maximum pages (1–3)<input type="number" min="1" max="3" step="1" [ngModel]="n.loop_limit||1" (ngModelChange)="updateLoop(n.id,'loop_limit',+$event)"></label>
+        <p class="muted">Fetches text from public HTML pages on the same origin only. No redirects or scripts; max 64 KiB per page. Output is a JSON array of pages and extracted text.</p>
        }
        @if(n.type==='http_get'){
         <label>Public URL (HTTP GET only) <input [ngModel]="n.value||''" (ngModelChange)="updateUtility('value',$event)" maxlength="2048" placeholder="https://api.example.com/data"></label>
@@ -507,6 +513,12 @@ export class FlowStudioComponent {
  loadFlow(id:number){const f=this.flows().find(x=>x.id===id);if(!f){this.newFlow();return}
   this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);void this.refreshRuns()}
  async loadFunctions(){try{const data=await this.request("/api/admin/blueprint-functions");this.functions.set(data.functions||[])}catch(e){this.message.set(String(e))}}
+ addWebCrawler():void {
+   const count=this.graph().nodes.length;
+   const id='web-crawl-'+Date.now().toString(36);
+   this.graph.update(g=>({...g,version:2,nodes:[...g.nodes,{id,type:'web_crawl',label:'Web crawler',value:'https://example.com/',loop_limit:1,x:260+(count%4)*140,y:40+Math.floor(count/4)*100}]}));
+   this.chosen.set(id);
+ }
  addHTTPGet():void {
    const count=this.graph().nodes.length;
    const id='http-get-'+Date.now().toString(36);
@@ -520,7 +532,7 @@ export class FlowStudioComponent {
    this.chosen.set(id);
  }
  updateLoop(id:string,field:'loop_mode'|'loop_limit'|'transform'|'value'|'operator'|'loop_condition',value:string|number):void{
-   const safe=field==='loop_limit'?(Number.isFinite(Number(value))?Math.max(1,Math.min(100,Math.trunc(Number(value)))):1):value;
+   const safe=field==='loop_limit'?(Number.isFinite(Number(value))?Math.max(1,Math.min(this.node(id)?.type==='web_crawl'?3:100,Math.trunc(Number(value)))):1):value;
    this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===id?{...n,[field]:safe}:n)}));
  }
  addUtility(type:'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'){
