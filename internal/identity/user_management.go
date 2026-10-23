@@ -122,7 +122,9 @@ func (s *Service) SetUserActive(ctx context.Context, id int64, active bool) erro
 		return err
 	}
 	_, err = s.db.ExecContext(ctx, "DELETE FROM auth_sessions WHERE user_id=?", id)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	if !active {
 		_, err = s.db.ExecContext(ctx, "DELETE FROM auth_invitations WHERE user_id=?", id)
 	}
