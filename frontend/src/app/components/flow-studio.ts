@@ -360,7 +360,7 @@ export class ConfirmDeleteFlowDialog {
       <summary><span class="run-summary-status" [class.run-success]="run.status==='SUCCESS'" [class.run-failed]="run.status==='FAILED'" [class.run-active]="run.status==='RUNNING'">{{run.status}}</span> #{{run.id}} · {{run.trigger}} <span class="muted">· {{displayRunTime(run.started_at)}} · {{displayRunDuration(run)}}</span></summary>
       <div class="run-diagnostics">
        <span><strong>Started:</strong> {{displayRunTime(run.started_at)}}</span>
-       <span><strong>Finished:</strong> {{displayRunTime(run.finished_at)}}</span>
+       <span><strong>Finished:</strong> {{run.status==='RUNNING'?'In progress':displayRunTime(run.finished_at)}}</span>
        <span><strong>Duration:</strong> {{displayRunDuration(run)}}</span>
        <span><strong>Trigger:</strong> {{run.trigger}}</span>
       </div>
@@ -398,7 +398,8 @@ export class ConfirmDeleteFlowDialog {
             <div class="exec-selected">
               <strong>{{executionNodeLabel(nodeId)}} · {{executionNodeStatus(nodeId)}}</strong>
               @if(executionStep(nodeId);as selectedStep){<p class="muted">Recorded {{displayRunTime(selectedStep.created_at)}}</p>}
-              <p class="muted">This view shows persisted output previews, not raw node inputs. Individual execution durations and retry counts are not yet recorded.</p>
+              <p class="muted">Only persisted output previews are displayed. Raw inputs, per-node durations and retry counts are not available in historical records.</p>
+              @if(activeRunError();as failure){<div class="exec-error-hint"><strong>Run error:</strong> {{failure}}</div>}
               @if(executionStep(nodeId);as step){@if(step.output){<pre>{{step.output}}</pre>}@else{<p class="muted">No recorded output.</p>}}
               @else{<p class="muted">No recorded step for this node.</p>}
             </div>
@@ -638,8 +639,11 @@ export class FlowStudioComponent {
  readonly executionGraph=signal<FlowGraph|null>(null);
  readonly executionSnapshotUnavailable=signal(false);
  readonly executionSelectedNode=signal('');
+ activeRunError():string{
+   return this.runs().find(r=>r.id===this.traceRunId()&&r.status==='FAILED')?.error||'';
+ }
  displayRunTime(value?:string|null):string{
-   if(!value)return 'Not finished';
+   if(!value)return 'Unavailable';
    const date=new Date(value);
    return Number.isNaN(date.getTime())?'Unavailable':date.toLocaleString();
  }
