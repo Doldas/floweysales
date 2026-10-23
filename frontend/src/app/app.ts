@@ -45,6 +45,7 @@ import { TradingChartComponent } from './components/chart';
 import { LedgerComponent } from './components/ledger';
 import { ForumComponent } from './components/forum';
 import { FlowStudioComponent } from './components/flow-studio';
+import { ApiSettingsComponent } from './components/api-settings';
 import { UserspaceFilesComponent } from './components/userspace-files';
 import {
   HISTORY_RANGES,
@@ -98,6 +99,7 @@ const FIRST_TICK_TIMEOUT_MS = 25_000;
     LedgerComponent,
     ForumComponent,
     FlowStudioComponent,
+    ApiSettingsComponent,
     UserspaceFilesComponent,
   ],
   templateUrl: './app.html',
@@ -124,6 +126,7 @@ export class App {
     { id: 'forum', label: 'Forum', icon: 'forum', adminOnly: false },
     { id: 'files', label: 'My Workspace', icon: 'folder', adminOnly: false },
     { id: 'studio', label: 'Flow Studio', icon: 'account_tree', adminOnly: true },
+    { id: 'api-settings', label: 'API Settings', icon: 'settings', adminOnly: true },
   ] as const;
   readonly workspace = signal<(typeof this.workspaceTabs)[number]['id']>(this.initialWorkspace());
   readonly activeWorkspaceLabel = computed(
@@ -137,6 +140,7 @@ export class App {
 
   openWorkspace(id: (typeof this.workspaceTabs)[number]['id']): void {
     if (id === 'studio' && this.auth.enabled() && this.auth.user()?.role !== 'SYS_ADMIN') return;
+    if (id === 'api-settings' && this.auth.user()?.role !== 'SYS_ADMIN') return;
     this.workspace.set(id);
     localStorage.setItem('floweysales.workspace', id);
   }

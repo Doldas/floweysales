@@ -148,12 +148,15 @@ type Engine struct {
 	financialsMu    sync.Mutex
 	financialsCache map[string]financialsCacheEntry
 
-	aiMu           sync.Mutex
-	aiBaseURL      string
-	aiAPIKey       string
-	aiModel        string
-	aiMaxSteps     int
-	aiMaxToolCalls int
+	integrationMu     sync.Mutex
+	webSearchProvider string
+	webSearchAPIKey   string
+	aiMu              sync.Mutex
+	aiBaseURL         string
+	aiAPIKey          string
+	aiModel           string
+	aiMaxSteps        int
+	aiMaxToolCalls    int
 
 	// Order lifecycle: account settings and the match loop guard.
 	tradingMu      sync.Mutex
@@ -230,6 +233,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, fi
 	e.registerConfigRoutes()
 	e.registerForumRoutes()
 	e.registerAIRoutes()
+	e.registerIntegrationSettingsRoutes()
 	e.registerFlowRoutes()
 	e.registerBlueprintRoutes()
 	e.registerUserspaceRoutes()
@@ -296,7 +300,7 @@ func (e *Engine) RestoreAISettings() error {
 		e.ConfigureAI(cfg.BaseURL, key, cfg.Model)
 		e.ConfigureAgentLimits(cfg.MaxSteps, cfg.MaxToolCalls)
 	}
-	return nil
+	return e.RestoreAPISecrets(context.Background())
 }
 func (e *Engine) aiDefaults() (baseURL, apiKey, model string) {
 	e.aiMu.Lock()
