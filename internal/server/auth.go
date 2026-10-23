@@ -198,7 +198,19 @@ func (e *Engine) serveAuth(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"enabled": true, "user": u})
-	case r.Method == "POST" && r.URL.Path == "/api/auth/login":
+	case r.Method == "POST" && r.URL.Path == "/api/auth/accept-invite":
+        if e.authService==nil{writeJSON(w,404,map[string]string{"error":"Authentication disabled"});return}
+        addr,_,err:=net.SplitHostPort(r.RemoteAddr);if err!=nil{addr=r.RemoteAddr}
+        if !e.authLimiter.allow(addr){writeJSON(w,429,map[string]string{"error":"Too many attempts"});return}
+        r.Body=http.MaxBytesReader(w,r.Body,8192);defer r.Body.Close()
+        var req struct{Token string `json:"token"`;Password string `json:"password"`}
+        dec:=json.NewDecoder(r.Body);dec.DisallowUnknownFields()
+        if err:=dec.Decode(&req);err!=nil{writeJSON(w,400,map[string]string{"error":"Invalid invitation request"});return}
+        if err:=e.authService.AcceptInvitation(r.Context(),req.Token,req.Password);err!=nil{
+            writeJSON(w,400,map[string]string{"error":"Invitation invalid, expired or password fails policy (minimum 14 characters)"});return
+        }
+        writeJSON(w,200,map[string]bool{"accepted":true})
+    case r.Method == "POST" && r.URL.Path == "/api/auth/login":
 		if e.authService == nil {
 			writeJSON(w, http.StatusNotFound, map[string]any{"error": "Authentication is disabled"})
 			return
