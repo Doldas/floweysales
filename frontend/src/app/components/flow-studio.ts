@@ -139,7 +139,7 @@ export class ConfirmDeleteFlowDialog {
        <label>{{q.type==='constant'?'Value':'File path'}} <input [ngModel]="q.value||''" (ngModelChange)="updateNodeFor(q.id,'value',$event)"></label>
      }
      <button type="button" (click)="select(q.id);hoveredNode.set('')">Full details</button>
-     <button type="button" (click)="closeQuickNode()">Close</button>
+     @if(q.type!=='trigger'){<button type="button" class="node-quick-delete" (click)="removeNode(q.id)">Delete node</button>}
    </div>}
    @if(canvasMenu()){<div class="canvas-context-menu" role="menu" aria-label="Create node">
      <strong>Add node</strong>
@@ -318,16 +318,19 @@ export class ConfirmDeleteFlowDialog {
    @if (studioTab()==='files') { <fse-userspace-files></fse-userspace-files> }
    @if (studioTab()==='runs') {
    <div class="run-history-heading"><h3>Recent runs</h3>
+     <label>Flow <select [ngModel]="historyFlowId()" (ngModelChange)="selectHistoryFlow(+$event)" aria-label="Select flow for history"><option [ngValue]="0">Select a flow…</option>@for(f of flows();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
      <label>Output view <select [ngModel]="logView()" (ngModelChange)="logView.set($event)">
        <option value="markdown">Markdown (default)</option><option value="raw">RAW</option><option value="json">Structured JSON</option>
      </select></label>
-     <button mat-stroked-button (click)="refreshRuns()" [disabled]="!selectedId()">Refresh history</button>
+     <button mat-stroked-button (click)="refreshRuns()" [disabled]="!historyFlowId()">Refresh history</button>
      <label>Compare with run<select [ngModel]="compareRun()" (ngModelChange)="compareAgainst(+$event)">
       <option [ngValue]="0">No comparison</option>
       @for(other of runs();track other.id){<option [ngValue]="other.id">#{{other.id}} · {{other.status}}</option>}
      </select></label>
    </div>
-   @if(!runs().length){<p class="muted">No executions yet. Save and run a flow to see a trace.</p>}
+   @if(!historyFlowId()){<p class="muted">Select a flow above to view its history.</p>}
+    @else if(!runs().length&&!historyLoading()){<p class="muted">No executions yet for this flow.</p>}
+    @if(historyLoading()){<p role="status">Loading run history…</p>}
    @for(run of runs();track run.id){
     <details class="flow-run"><summary>#{{run.id}} · {{run.trigger}} · {{run.status}}</summary>
       @if(run.status==='RUNNING'){<button mat-stroked-button color="warn" (click)="cancelRun(run.id)" [disabled]="busy()">Cancel run</button>}
@@ -401,6 +404,7 @@ export class ConfirmDeleteFlowDialog {
  .node-quick-tooltip label{display:flex;flex-direction:column;gap:4px;min-width:0}
  .node-quick-tooltip input,.node-quick-tooltip textarea,.node-quick-tooltip select{width:100%;box-sizing:border-box}
  .node-quick-tooltip button{min-height:32px}
+  .node-quick-delete{background:#562632;color:#ffe5e5;border:1px solid #b65f6b;border-radius:6px;padding:8px;cursor:pointer}
  .blueprint-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(270px,315px);align-items:stretch;gap:12px;min-height:470px}
  .blueprint-layout .flow-workspace{min-width:0;min-height:470px}
  .flow-node-editor{margin:0;padding:16px;border:1px solid #355a75;border-radius:10px;background:#142438;min-width:0;max-height:min(75vh,780px);overflow-y:auto}
@@ -482,6 +486,8 @@ export class FlowStudioComponent {
  readonly chosen=signal('');
  readonly selectedNode=()=>this.graph().nodes.find(n=>n.id===this.chosen());
  readonly runs=signal<FlowRun[]>([]);
+  readonly historyFlowId=signal(0);
+  readonly historyLoading=signal(false);
  readonly traceRunId=signal(0);
  readonly traceSteps=signal<FlowRunStep[]>([]);
  readonly traceLoading=signal(false);
@@ -536,7 +542,7 @@ export class FlowStudioComponent {
  }
  newFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);this.message.set('')}
  loadFlow(id:number){const f=this.flows().find(x=>x.id===id);if(!f){this.newFlow();return}
-  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);void this.refreshRuns()}
+  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);this.historyFlowId.set(f.id);void this.refreshRuns()}
  async loadFunctions(){try{const data=await this.request("/api/admin/blueprint-functions");this.functions.set(data.functions||[])}catch(e){this.message.set(String(e))}}
  addWebSearch():void {
   const count=this.graph().nodes.length;
@@ -631,7 +637,12 @@ export class FlowStudioComponent {
   connect(from:string,to:string){if(!from||from===to||this.graph().edges.some(e=>e.from===from&&e.to===to))return;
   this.graph.update(g=>({...g,edges:[...g.edges,{from,to}]}))}
  linkSelected(){const target=this.selectedNode();if(!target)return;const last=this.graph().nodes.find(x=>x.id!==target.id&&x.type==='agent');if(last)this.connect(last.id,target.id)}
- removeSelected(){const id=this.chosen();if(id==='start')return;this.graph.update(g=>({...g,nodes:g.nodes.filter(n=>n.id!==id),edges:g.edges.filter(e=>e.from!==id&&e.to!==id)}));this.chosen.set('')}
+ removeSelected(){this.removeNode(this.chosen())}
+  removeNode(id:string){const n=this.node(id);if(!n||n.type==='trigger')return;
+    this.graph.update(g=>({...g,nodes:g.nodes.filter(n=>n.id!==id),edges:g.edges.filter(e=>e.from!==id&&e.to!==id)}));
+    if(this.chosen()===id)this.chosen.set('');
+    this.closeQuickNode();this.message.set('Node removed; save the flow to persist.');
+  }
  dragStart(ev:PointerEvent,id:string){if(ev.button!==0||ev.pointerType==='touch')return;const n=this.node(id);if(!n)return;this.chosen.set(id);this.dragging={id,startX:ev.clientX,startY:ev.clientY,x:n.x,y:n.y};
   const svg=(ev.currentTarget as SVGGElement).ownerSVGElement;if(!svg)return;
   const move=(event:PointerEvent)=>{const box=svg.getBoundingClientRect();if(!this.dragging)return;
@@ -656,17 +667,17 @@ export class FlowStudioComponent {
   if(!this.selectedId()||this.busy())return;
   this.busy.set(true);
   try{
-   await this.request('/api/admin/flows/'+this.selectedId()+'/runs/'+runId+'/cancel',{method:'POST'});
+   await this.request('/api/admin/flows/'+this.historyFlowId()+'/runs/'+runId+'/cancel',{method:'POST'});
    this.message.set('Run cancellation requested');
    await this.refreshRuns();
   }catch(e){this.message.set('Cannot cancel run: '+String(e))}
   finally{this.busy.set(false)}
  }
  async compareAgainst(runId:number){
-  if(!this.selectedId()||!runId){this.compareRun.set(0);this.comparedSteps.set([]);return}
+  if(!this.historyFlowId()||!runId){this.compareRun.set(0);this.comparedSteps.set([]);return}
   this.compareRun.set(runId);this.comparedSteps.set([]);
   try{
-   const data=await this.request('/api/admin/flows/'+this.selectedId()+'/runs/'+runId+'/steps');
+   const data=await this.request('/api/admin/flows/'+this.historyFlowId()+'/runs/'+runId+'/steps');
    this.comparedSteps.set(data.steps||[]);
   }catch(e){this.message.set('Cannot compare runs: '+String(e))}
  }
@@ -679,7 +690,7 @@ export class FlowStudioComponent {
   if(!this.selectedId())return;
   this.replaySteps.set([]);this.replaySource.set(runId);
   try{
-   const result=await this.request('/api/admin/flows/'+this.selectedId()+'/runs/'+runId+'/preview',{method:'POST',body:JSON.stringify({node:nodeId})});
+   const result=await this.request('/api/admin/flows/'+this.historyFlowId()+'/runs/'+runId+'/preview',{method:'POST',body:JSON.stringify({node:nodeId})});
    this.replaySteps.set(result.steps||[]);
    this.message.set('Preview only: no agents or side effects were executed. Uses the saved graph snapshot.');
   }catch(e){this.message.set('Replay preview unavailable: '+String(e))}
@@ -688,12 +699,15 @@ export class FlowStudioComponent {
   if(!this.selectedId())return;
   if(this.traceRunId()===runId){this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);return}
   this.traceRunId.set(runId);this.traceLoading.set(true);this.traceSteps.set([]);
-  try{const data=await this.request('/api/admin/flows/'+this.selectedId()+'/runs/'+runId+'/steps');
+  try{const data=await this.request('/api/admin/flows/'+this.historyFlowId()+'/runs/'+runId+'/steps');
       if(this.traceRunId()===runId)this.traceSteps.set(data.steps||[]);
   }catch(e){this.message.set('Could not load run trace: '+String(e))}
   finally{this.traceLoading.set(false)}
  }
- async refreshRuns(){if(!this.selectedId())return;try{const d=await this.request('/api/admin/flows/'+this.selectedId()+'/runs');this.runs.set(d.runs||[])}catch(e){this.message.set(String(e))}}
+ selectHistoryFlow(id:number):void{this.historyFlowId.set(id);this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);if(id)void this.refreshRuns()}
+  async refreshRuns(){const id=this.historyFlowId();if(!id)return;this.historyLoading.set(true);
+   try{const d=await this.request('/api/admin/flows/'+id+'/runs');if(this.historyFlowId()===id)this.runs.set(d.runs||[])}
+   catch(e){this.message.set(String(e))}finally{this.historyLoading.set(false)}}
  async confirmDeleteFlow(){
    const id=this.selectedId();
    if(!id||this.busy())return;
@@ -714,7 +728,7 @@ export class FlowStudioComponent {
  }
  async save(){this.busy.set(true);try{const id=this.selectedId();const body={name:this.name(),graph:this.graph(),enabled:this.enabled(),interval_minutes:this.interval(),event_key:this.eventKey()};
    const flow:SavedFlow=await this.request(id?'/api/admin/flows/'+id:'/api/admin/flows',{method:id?'PUT':'POST',body:JSON.stringify(body)});
-   this.selectedId.set(flow.id);this.message.set('Flow saved');await this.refresh()}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
- async run(){this.busy.set(true);try{await this.request('/api/admin/flows/'+this.selectedId()+'/run',{method:'POST'});this.message.set('Agent run queued; refresh history shortly');setTimeout(()=>void this.refreshRuns(),3000)}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
+   this.selectedId.set(flow.id);this.historyFlowId.set(flow.id);this.message.set('Flow saved');await this.refresh()}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
+ async run(){this.busy.set(true);try{await this.request('/api/admin/flows/'+this.selectedId()+'/run',{method:'POST'});this.historyFlowId.set(this.selectedId());this.message.set('Agent run queued; open Run history to see its progress');setTimeout(()=>void this.refreshRuns(),3000)}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
  async emitEvent(){this.busy.set(true);try{const definition=this.triggers().find(t=>t.event_key===this.eventKey());if(!definition)throw Error('Create the custom trigger first');let value:string|number|boolean=this.triggerValue();if(definition.payload_type==='number'){value=Number(value);if(!Number.isFinite(value))throw Error('Event requires a finite number')}if(definition.payload_type==='boolean'){if(value!=='true'&&value!=='false')throw Error('Use true or false for a boolean event');value=value==='true'}const data=await this.request('/api/admin/flow-events/'+encodeURIComponent(this.eventKey()),{method:'POST',body:JSON.stringify({value})});this.message.set(data.started+' flow(s) triggered');}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
 }
