@@ -51,7 +51,7 @@
 
   <nav class="workspace-tabs" aria-label="FloweySales workspace" role="tablist">
     @for (tab of workspaceTabs; track tab.id) {
-      @if ((!tab.adminOnly || !auth.enabled() || auth.user()?.role === 'SYS_ADMIN') && (tab.id !== 'files' || auth.enabled())) {
+      @if ((!tab.adminOnly || !auth.enabled() || auth.user()?.role === 'SYS_ADMIN') && (tab.id !== 'files' || auth.enabled()) && (tab.id !== 'api-settings' || auth.user()?.role === 'SYS_ADMIN')) {
         <button type="button" role="tab" class="workspace-tab"
           [id]="'workspace-tab-' + tab.id"
           [attr.aria-selected]="workspace() === tab.id"
