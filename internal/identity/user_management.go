@@ -64,3 +64,14 @@ func (s *Service) SetUserActive(ctx context.Context,id int64,active bool)error{
  _,err=s.db.ExecContext(ctx,"DELETE FROM auth_sessions WHERE user_id=?",id)
  return err
 }
+
+func (s *Service) RevokeInvitation(ctx context.Context,token string)error{
+ if len(token)!=43{return ErrInvalidCredentials}
+ tx,err:=s.db.BeginTx(ctx,nil);if err!=nil{return err};defer tx.Rollback()
+ var id int64
+ err=tx.QueryRowContext(ctx,"SELECT user_id FROM auth_invitations WHERE token_hash=? FOR UPDATE",TokenDigest(token)).Scan(&id)
+ if errors.Is(err,sql.ErrNoRows){return nil};if err!=nil{return err}
+ if _,err=tx.ExecContext(ctx,"DELETE FROM auth_invitations WHERE user_id=?",id);err!=nil{return err}
+ if _,err=tx.ExecContext(ctx,"DELETE FROM auth_users WHERE id=? AND active=FALSE",id);err!=nil{return err}
+ return tx.Commit()
+}
