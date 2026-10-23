@@ -1,5 +1,5 @@
 import { CanvasGestures } from './canvas-gestures';
-import { HostListener, Component, ChangeDetectionStrategy, signal } from '@angular/core';
+import { HostListener, Component, ChangeDetectionStrategy, signal, effect } from '@angular/core';
 import { MarkdownRunOutputComponent } from './markdown-run-output';
 import { UserspaceFilesComponent } from './userspace-files';
 import { CommonModule } from '@angular/common';
@@ -325,7 +325,7 @@ export class ConfirmDeleteFlowDialog {
      <label>Output view <select [ngModel]="logView()" (ngModelChange)="logView.set($event)">
        <option value="markdown">Markdown (default)</option><option value="raw">RAW</option><option value="json">Structured JSON</option>
      </select></label>
-     <button mat-stroked-button (click)="refreshRuns()" [disabled]="!historyFlowId()">Refresh history</button>
+     <button mat-stroked-button (click)="refreshRuns()" [disabled]="!historyFlowId()||historyLoading()">Refresh history</button>
      <label>Compare with run<select [ngModel]="compareRun()" (ngModelChange)="compareAgainst(+$event)">
       <option [ngValue]="0">No comparison</option>
       @for(other of runs();track other.id){<option [ngValue]="other.id">#{{other.id}} · {{other.status}}</option>}
@@ -334,6 +334,7 @@ export class ConfirmDeleteFlowDialog {
    @if(!historyFlowId()){<p class="muted">Select a flow above to view its history.</p>}
     @else if(!runs().length&&!historyLoading()){<p class="muted">No executions yet for this flow.</p>}
     @if(historyLoading()){<p role="status">Loading run history…</p>}
+    @if(runs().some(run=>run.status==='RUNNING')){<p class="muted" role="status">Active run detected · history refreshes automatically every 5 seconds while this tab is open.</p>}
     @if(historyFlowId()&&runs().length&&!filteredRuns().length){<p class="muted">No runs match your filters.</p>}
    @for(run of filteredRuns();track run.id){
     <details class="flow-run"><summary>#{{run.id}} · {{run.trigger}} · {{run.status}}</summary>
@@ -496,6 +497,7 @@ export class FlowStudioComponent {
   private currentSnapshot():string{return JSON.stringify({name:this.name(),graph:this.graph(),enabled:this.enabled(),interval:this.interval(),eventKey:this.eventKey()})}
   private allowDiscard():boolean{return !this.hasUnsavedChanges()||confirm('Discard unsaved changes to this flow?')}
   readonly historyLoading=signal(false);
+  private historyRequestVersion=0;
   readonly historyStatusFilter=signal('all');
   readonly historySearch=signal('');
   readonly filteredRuns=()=>this.runs().filter(run=>(this.historyStatusFilter()==='all'||run.status===this.historyStatusFilter())&&(!this.historySearch()||String(run.id).includes(this.historySearch().trim())||run.trigger.toLowerCase().includes(this.historySearch().trim().toLowerCase())));
@@ -509,7 +511,13 @@ export class FlowStudioComponent {
  readonly busy=signal(false);
  readonly message=signal('');
  private dragging:{id:string;startX:number;startY:number;x:number;y:number}|null=null;
- constructor(){this.savedSnapshot.set(this.currentSnapshot());void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN')void this.loadFunctions();void this.loadModels()}
+ constructor(){this.savedSnapshot.set(this.currentSnapshot());void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN')void this.loadFunctions();void this.loadModels();
+    effect((onCleanup)=>{
+      if(this.studioTab()!=='runs'||!this.historyFlowId()||!this.runs().some(run=>run.status==='RUNNING'))return;
+      const timer=setInterval(()=>void this.refreshRuns(),5000);
+      onCleanup(()=>clearInterval(timer));
+    });
+  }
  async loadModels():Promise<void>{
    try{
     const response=await fetch('/api/ai/models/available',{credentials:'same-origin'});
@@ -554,7 +562,7 @@ export class FlowStudioComponent {
  newFlow(){if(!this.allowDiscard())return;this.resetFlow()}
  private resetFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);this.message.set('');this.savedSnapshot.set(this.currentSnapshot())}
  loadFlow(id:number){if(!this.allowDiscard())return;const f=this.flows().find(x=>x.id===id);if(!f){this.resetFlow();return}
-  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);this.historyFlowId.set(f.id);this.savedSnapshot.set(this.currentSnapshot());void this.refreshRuns()}
+  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);this.savedSnapshot.set(this.currentSnapshot())}
  async loadFunctions(){try{const data=await this.request("/api/admin/blueprint-functions");this.functions.set(data.functions||[])}catch(e){this.message.set(String(e))}}
  addWebSearch():void {
   const count=this.graph().nodes.length;
@@ -708,18 +716,19 @@ export class FlowStudioComponent {
   }catch(e){this.message.set('Replay preview unavailable: '+String(e))}
  }
  async showRunSteps(runId:number){
-  if(!this.historyFlowId())return;
+  const flowId=this.historyFlowId();if(!flowId)return;
   if(this.traceRunId()===runId){this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);return}
   this.traceRunId.set(runId);this.traceLoading.set(true);this.traceSteps.set([]);
   try{const data=await this.request('/api/admin/flows/'+this.historyFlowId()+'/runs/'+runId+'/steps');
-      if(this.traceRunId()===runId)this.traceSteps.set(data.steps||[]);
+      if(this.historyFlowId()===flowId&&this.traceRunId()===runId)this.traceSteps.set(data.steps||[]);
   }catch(e){this.message.set('Could not load run trace: '+String(e))}
   finally{this.traceLoading.set(false)}
  }
- selectHistoryFlow(id:number):void{this.historyFlowId.set(id);this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);if(id)void this.refreshRuns()}
-  async refreshRuns(){const id=this.historyFlowId();if(!id)return;this.historyLoading.set(true);
-   try{const d=await this.request('/api/admin/flows/'+id+'/runs');if(this.historyFlowId()===id)this.runs.set(d.runs||[])}
-   catch(e){this.message.set(String(e))}finally{this.historyLoading.set(false)}}
+ selectHistoryFlow(id:number):void{this.historyFlowId.set(id);this.historyRequestVersion++;this.historyLoading.set(false);this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.traceLoading.set(false);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);if(id)void this.refreshRuns()}
+  async refreshRuns(){const id=this.historyFlowId();if(!id)return;const version=++this.historyRequestVersion;this.historyLoading.set(true);
+   try{const d=await this.request('/api/admin/flows/'+id+'/runs');if(this.historyFlowId()===id&&this.historyRequestVersion===version)this.runs.set(d.runs||[])}
+   catch(e){if(this.historyFlowId()===id&&this.historyRequestVersion===version)this.message.set('Could not refresh run history: '+String(e))}
+   finally{if(this.historyRequestVersion===version)this.historyLoading.set(false)}}
  async confirmDeleteFlow(){
    const id=this.selectedId();
    if(!id||this.busy())return;
