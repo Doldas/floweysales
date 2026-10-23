@@ -33,7 +33,7 @@ FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd -g 10001 flowey && useradd -m -u 10001 -g 10001 flowey \
- && mkdir -p /data && chown flowey:flowey /data
+ && mkdir -p /data /secrets && chown flowey:flowey /data /secrets
 WORKDIR /app
 COPY --from=go-builder /out/floweysales_backend /app/floweysales_backend
 USER flowey:flowey
