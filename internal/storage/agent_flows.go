@@ -16,12 +16,15 @@ type AgentFlow struct {
 	EventKey        string          `json:"event_key"`
 }
 type AgentFlowRun struct {
-	ID      int64  `json:"id"`
-	FlowID  int64  `json:"flow_id"`
-	Trigger string `json:"trigger"`
-	Status  string `json:"status"`
-	Output  string `json:"output"`
-	Error   string `json:"error"`
+	ID         int64   `json:"id"`
+	FlowID     int64   `json:"flow_id"`
+	Trigger    string  `json:"trigger"`
+	Status     string  `json:"status"`
+	Output     string  `json:"output"`
+	Error      string  `json:"error"`
+	StartedAt  string  `json:"started_at"`
+	FinishedAt *string `json:"finished_at"`
+	DurationMS *int64  `json:"duration_ms"`
 }
 
 func (d *Database) ListAgentFlows(ctx context.Context) ([]AgentFlow, error) {
@@ -99,7 +102,7 @@ func (d *Database) FinishAgentFlowRun(ctx context.Context, id int64, output stri
 	return err
 }
 func (d *Database) ListAgentFlowRuns(ctx context.Context, flowID int64) ([]AgentFlowRun, error) {
-	rows, err := d.db.QueryContext(ctx, "SELECT id,flow_id,trigger_type,status,COALESCE(output_json,''),COALESCE(error_message,'') FROM agent_flow_runs WHERE flow_id=? ORDER BY id DESC LIMIT 30", flowID)
+	rows, err := d.db.QueryContext(ctx, "SELECT id,flow_id,trigger_type,status,COALESCE(output_json,''),COALESCE(error_message,''),DATE_FORMAT(started_at,'%Y-%m-%dT%H:%i:%s.%fZ'),IF(finished_at IS NULL,NULL,DATE_FORMAT(finished_at,'%Y-%m-%dT%H:%i:%s.%fZ')),IF(finished_at IS NULL,NULL,TIMESTAMPDIFF(MICROSECOND,started_at,finished_at) DIV 1000) FROM agent_flow_runs WHERE flow_id=? ORDER BY id DESC LIMIT 30", flowID)
 	if err != nil {
 		return nil, err
 	}
@@ -107,8 +110,16 @@ func (d *Database) ListAgentFlowRuns(ctx context.Context, flowID int64) ([]Agent
 	result := []AgentFlowRun{}
 	for rows.Next() {
 		var x AgentFlowRun
-		if err := rows.Scan(&x.ID, &x.FlowID, &x.Trigger, &x.Status, &x.Output, &x.Error); err != nil {
+		var finishedAt sql.NullString
+		var durationMS sql.NullInt64
+		if err := rows.Scan(&x.ID, &x.FlowID, &x.Trigger, &x.Status, &x.Output, &x.Error, &x.StartedAt, &finishedAt, &durationMS); err != nil {
 			return nil, err
+		}
+		if finishedAt.Valid {
+			x.FinishedAt = &finishedAt.String
+		}
+		if durationMS.Valid {
+			x.DurationMS = &durationMS.Int64
 		}
 		result = append(result, x)
 	}
