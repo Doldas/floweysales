@@ -20,4 +20,5 @@
   <include file="016-api-integration-secrets.xml" relativeToChangelogFile="true"/>
   <include file="017-account-invitations.xml" relativeToChangelogFile="true"/>
   <include file="018-smtp-settings.xml" relativeToChangelogFile="true"/>
+  <include file="019-custom-roles-permissions.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
