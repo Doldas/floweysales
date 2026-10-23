@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="019-custom-roles-permissions" author="floweysales" dbms="mysql">
+  <sql>ALTER TABLE auth_users DROP CHECK ck_auth_users_role</sql>
+  <modifyDataType tableName="auth_users" columnName="role" newDataType="VARCHAR(40)"/>
+  <createTable tableName="auth_roles">
+   <column name="role_name" type="VARCHAR(40)"><constraints primaryKey="true" nullable="false"/></column>
+  </createTable>
+  <createTable tableName="auth_role_permissions">
+   <column name="role_name" type="VARCHAR(40)"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_role_permissions"/></column>
+   <column name="permission" type="VARCHAR(48)"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_role_permissions"/></column>
+  </createTable>
+  <sql>INSERT INTO auth_roles(role_name) VALUES ('USER'),('SYS_ADMIN'),('FLOW_EDITOR')</sql>
+  <sql>INSERT INTO auth_role_permissions(role_name,permission) VALUES ('USER','research.read'),('USER','ai.chat'),('USER','models.use'),('FLOW_EDITOR','research.read'),('FLOW_EDITOR','ai.chat'),('FLOW_EDITOR','models.use'),('FLOW_EDITOR','flows.read'),('FLOW_EDITOR','flows.write'),('FLOW_EDITOR','flows.run')</sql>
+  <rollback>
+   <dropTable tableName="auth_role_permissions"/>
+   <dropTable tableName="auth_roles"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>
