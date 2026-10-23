@@ -164,14 +164,14 @@ export class ConfirmDeleteFlowDialog {
      <strong>Add node</strong>
      <button type="button" role="menuitem" (click)="addAgent();closeCanvasMenu()">Research Agent</button>
      <button type="button" role="menuitem" (click)="addOutput();closeCanvasMenu()">Output Result</button>
-     <button type="button" role="menuitem" (click)="addSubflow();closeCanvasMenu()">Call Flow</button>
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addSubflow();closeCanvasMenu()">Call Flow</button>}
      <button type="button" role="menuitem" (click)="addConstant();closeCanvasMenu()">Value</button>
-     <button type="button" role="menuitem" (click)="addFunctionCall();closeCanvasMenu()">Function</button>
-     <button type="button" role="menuitem" (click)="addUtility('save_result');closeCanvasMenu()">Save Result</button>
-     <button type="button" role="menuitem" (click)="addUtility('load_result');closeCanvasMenu()">Load Result</button>
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addFunctionCall();closeCanvasMenu()">Function</button>}
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('save_result');closeCanvasMenu()">Save Result</button>}
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('load_result');closeCanvasMenu()">Load Result</button>}
      <button type="button" role="menuitem" (click)="addUtility('transform');closeCanvasMenu()">Transform Text</button>
-     <button type="button" role="menuitem" (click)="addUtility('workspace_read');closeCanvasMenu()">Read Workspace File</button>
-     <button type="button" role="menuitem" (click)="addUtility('workspace_write');closeCanvasMenu()">Write Workspace File</button>
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('workspace_read');closeCanvasMenu()">Read Workspace File</button>}
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('workspace_write');closeCanvasMenu()">Write Workspace File</button>}
      <button type="button" (click)="closeCanvasMenu()">Cancel</button>
    </div>}
    </div>
@@ -482,6 +482,7 @@ export class FlowStudioComponent {
     const from=this.connectingFrom();
     if(!from){this.message.set('Select an output port first.');return}
     if(from===id||this.node(id)?.type==='trigger')return;
+    if(this.graph().edges.some(e=>e.from===from&&e.to===id)){this.cancelConnecting();this.message.set('These nodes are already connected.');return}
     this.connect(from,id);this.chosen.set(id);this.connectingFrom.set('');
   }
   edgePath(e:FlowEdge):string{
@@ -637,8 +638,8 @@ export class FlowStudioComponent {
  }
  newFlow(){if(!this.allowDiscard())return;this.resetFlow()}
  private resetFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.message.set('');this.savedSnapshot.set(this.currentSnapshot())}
- loadFlow(id:number){if(!this.allowDiscard())return;const f=this.flows().find(x=>x.id===id);if(!f){this.resetFlow();return}
-  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.savedSnapshot.set(this.currentSnapshot())}
+ loadFlow(id:number){if(!this.allowDiscard())return;this.cancelConnecting();this.resetCanvas();const f=this.flows().find(x=>x.id===id);if(!f){this.resetFlow();return}
+  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.fitCanvas();this.chosen.set('');this.savedSnapshot.set(this.currentSnapshot())}
  async loadFunctions(){try{const data=await this.request("/api/admin/blueprint-functions");this.functions.set(data.functions||[])}catch(e){this.message.set(String(e))}}
  addWebSearch():void {
   const count=this.graph().nodes.length;
