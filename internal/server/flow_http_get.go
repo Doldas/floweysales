@@ -97,7 +97,11 @@ func flowFetchPublic(ctx context.Context, raw, format string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if format == "html" { req.Header.Set("Accept", "text/html") } else { req.Header.Set("Accept", "application/json, application/xml, text/xml") }
+	if format == "html" {
+		req.Header.Set("Accept", "text/html")
+	} else {
+		req.Header.Set("Accept", "application/json, application/xml, text/xml")
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("HTTP request failed: %w", err)
@@ -140,9 +144,9 @@ func flowFetchPublic(ctx context.Context, raw, format string) (string, error) {
 		}
 	}
 	if format == "html" {
-        if !strings.Contains(strings.ToLower(strings.Split(resp.Header.Get("Content-Type"),";")[0]),"text/html") {
-            return "", errors.New("crawler expected text/html")
-        }
-    }
+		if !strings.Contains(strings.ToLower(strings.Split(resp.Header.Get("Content-Type"), ";")[0]), "text/html") {
+			return "", errors.New("crawler expected text/html")
+		}
+	}
 	return string(body), nil
 }
