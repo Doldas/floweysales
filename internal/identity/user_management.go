@@ -106,7 +106,7 @@ func (s *Service) UpdateUserRole(ctx context.Context, id int64, role string) err
 	if id <= 0 || !s.RoleExists(ctx, role) {
 		return ErrInvalidBootstrap
 	}
-	_, err := s.db.ExecContext(ctx, "UPDATE auth_users SET role=? WHERE id=? AND active=TRUE", role, id)
+	_, err := s.db.ExecContext(ctx, "UPDATE auth_users SET role=? WHERE id=?", role, id)
 	if err != nil {
 		return err
 	}
