@@ -462,18 +462,24 @@ func (e *Engine) flowAuthorized(w http.ResponseWriter, r *http.Request, permissi
 	return true
 }
 func (e *Engine) configuredFlowModelsAllowed(ctx context.Context, graph flowGraph) error {
- models, err := e.db.ListAIModels(ctx)
- if err != nil { return fmt.Errorf("model catalog unavailable") }
- allowed := map[string]bool{}
- for _, model := range models { allowed[model.Model] = true }
- _, _, defaultModel := e.aiDefaults()
- if defaultModel != "" { allowed[defaultModel] = true }
- for _, node := range graph.Nodes {
-  if node.Type == "agent" && node.Model != "" && !allowed[node.Model] {
-   return fmt.Errorf("model %q is not registered by SYS_ADMIN", node.Model)
-  }
- }
- return nil
+	models, err := e.db.ListAIModels(ctx)
+	if err != nil {
+		return fmt.Errorf("model catalog unavailable")
+	}
+	allowed := map[string]bool{}
+	for _, model := range models {
+		allowed[model.Model] = true
+	}
+	_, _, defaultModel := e.aiDefaults()
+	if defaultModel != "" {
+		allowed[defaultModel] = true
+	}
+	for _, node := range graph.Nodes {
+		if node.Type == "agent" && node.Model != "" && !allowed[node.Model] {
+			return fmt.Errorf("model %q is not registered by SYS_ADMIN", node.Model)
+		}
+	}
+	return nil
 }
 func flowAllowedForNonAdmin(graph flowGraph) bool {
 	for _, node := range graph.Nodes {
