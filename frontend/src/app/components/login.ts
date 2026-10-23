@@ -16,7 +16,20 @@ import { AuthState } from '../auth.service';
     <mat-card class="auth-card">
       <mat-card-header><mat-card-title>FloweySales · Sign in</mat-card-title></mat-card-header>
       <mat-card-content>
-        <p class="auth-caption">Owner access to your local financial research terminal.</p>
+        @if(inviteToken()){
+          <p class="auth-caption">Set your password to activate your FloweySales account.</p>
+          <form (ngSubmit)="acceptInvitation()">
+           <mat-form-field appearance="outline"><mat-label>Password (at least 14 characters)</mat-label>
+            <input matInput name="invitePassword" type="password" autocomplete="new-password" [(ngModel)]="invitePassword" minlength="14" required>
+           </mat-form-field>
+           <mat-form-field appearance="outline"><mat-label>Confirm password</mat-label>
+            <input matInput name="confirmPassword" type="password" autocomplete="new-password" [(ngModel)]="confirmPassword" required>
+           </mat-form-field>
+           @if(message()){<p class="auth-error" role="alert">{{message()}}</p>}
+           <button mat-flat-button type="submit" [disabled]="busy()||invitePassword.length<14||invitePassword!==confirmPassword">Activate account</button>
+          </form>
+        } @else {
+        <p class="auth-caption">Sign in to your FloweySales account.</p>
         <form (ngSubmit)="submit()">
           <mat-form-field appearance="outline">
             <mat-label>Email</mat-label>
@@ -31,6 +44,7 @@ import { AuthState } from '../auth.service';
             {{ busy() ? 'Signing in…' : 'Sign in' }}
           </button>
         </form>
+        }
       </mat-card-content>
     </mat-card>
   </main>
@@ -51,6 +65,24 @@ export class LoginComponent {
   private readonly auth = inject(AuthState);
   readonly busy = signal(false);
   readonly message = signal('');
+  readonly inviteToken=signal(new URLSearchParams(typeof window==='undefined'?'':window.location.search).get('invite')||'');
+  invitePassword='';
+  confirmPassword='';
+  async acceptInvitation():Promise<void>{
+   if(this.busy()||!this.inviteToken()||this.invitePassword.length<14||this.invitePassword!==this.confirmPassword)return;
+   this.busy.set(true);this.message.set('');
+   try{
+    const response=await fetch('/api/auth/accept-invite',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
+      body:JSON.stringify({token:this.inviteToken(),password:this.invitePassword})});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(result.error||'Invitation could not be accepted');
+    this.inviteToken.set('');this.invitePassword='';this.confirmPassword='';
+    if(typeof window!=='undefined')window.history.replaceState({},'',window.location.pathname);
+    this.message.set('Account activated. Sign in with your email and password.');
+   }catch(e){this.message.set(e instanceof Error?e.message:'Invitation failed')}
+   finally{this.busy.set(false)}
+  }
+
   email = '';
   password = '';
   async submit(): Promise<void> {
