@@ -331,6 +331,12 @@
     </section>
   }
 
+  @if (auth.user()?.role === 'SYS_ADMIN' && workspace() === 'api-settings') {
+    <section id="workspace-panel-api-settings" role="tabpanel" aria-labelledby="workspace-tab-api-settings">
+      <fse-api-settings></fse-api-settings>
+    </section>
+  }
+
   <footer class="footer">
     Welfory AB • FloweySales Quantum Trading Protocol • Go Engine + Angular Terminal
   </footer>
