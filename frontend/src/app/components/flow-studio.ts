@@ -12,7 +12,7 @@ import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 import { AuthState } from '../auth.service';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'loop'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
@@ -77,6 +77,7 @@ export class ConfirmDeleteFlowDialog {
      <button mat-stroked-button (click)="addPureLoop()">+ Loop</button>
      <button mat-stroked-button (click)="addHTTPGet()">+ HTTP JSON/XML</button>
      <button mat-stroked-button (click)="addWebCrawler()">+ Web crawler</button>
+     <button mat-stroked-button (click)="addWebSearch()">+ Web search</button>
      <button mat-stroked-button (click)="addOutput()">+ Output</button>
      @if(auth.user()?.role==='SYS_ADMIN'){<button mat-stroked-button (click)="addSubflow()">+ Call Flow</button>}
      <button mat-stroked-button (click)="addConstant()">+ Value</button>
@@ -240,6 +241,10 @@ export class ConfirmDeleteFlowDialog {
          @if(n.transform==='prefix'||n.transform==='suffix'||n.transform==='replace'){
            <label>Operand <input [ngModel]="n.value||''" (ngModelChange)="updateUtility('value',$event)" maxlength="1000" [placeholder]="n.transform==='replace'?'find=>replacement':'Text to add'"></label>
          }
+       }
+       @if(n.type==='web_search'){
+        <label>Search query<input [ngModel]="n.value||''" (ngModelChange)="updateUtility('value',$event)" maxlength="400" placeholder="Quarterly earnings guidance"></label>
+        <p class="muted">Searches with the system administrator's Brave or Tavily configuration. Returns up to 5 sourced results as JSON. API keys never reach the browser or graph.</p>
        }
        @if(n.type==='web_crawl'){
         <label>Public start URL<input [ngModel]="n.value||''" (ngModelChange)="updateUtility('value',$event)" maxlength="2048" placeholder="https://example.com/research"></label>
@@ -533,6 +538,12 @@ export class FlowStudioComponent {
  loadFlow(id:number){const f=this.flows().find(x=>x.id===id);if(!f){this.newFlow();return}
   this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.chosen.set('');this.traceRunId.set(0);this.traceSteps.set([]);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);void this.refreshRuns()}
  async loadFunctions(){try{const data=await this.request("/api/admin/blueprint-functions");this.functions.set(data.functions||[])}catch(e){this.message.set(String(e))}}
+ addWebSearch():void {
+  const count=this.graph().nodes.length;
+  const id='web-search-'+Date.now().toString(36);
+  this.graph.update(g=>({...g,version:2,nodes:[...g.nodes,{id,type:'web_search',label:'Web search',value:'Quarterly earnings analysis',x:260+(count%4)*140,y:40+Math.floor(count/4)*100}]}));
+  this.chosen.set(id);
+ }
  addWebCrawler():void {
    const count=this.graph().nodes.length;
    const id='web-crawl-'+Date.now().toString(36);
