@@ -84,6 +84,10 @@ export class AiChatComponent implements OnInit, OnDestroy {
   readonly maxSteps = signal(12);
   readonly maxToolCalls = signal(48);
   readonly presets = signal<AiPreset[]>([]);
+  readonly catalog = signal<{id:number;model:string;label:string}[]>([]);
+  readonly chatModel = signal('');
+  readonly newCatalogModel = signal('');
+  readonly newCatalogLabel = signal('');
   readonly serverHasKey = signal(false);
 
   inputText = '';
@@ -141,12 +145,41 @@ export class AiChatComponent implements OnInit, OnDestroy {
       this.presets.set(cfg.presets || []);
       this.serverHasKey.set(!!cfg.has_server_key);
       this.model.set(cfg.model || "");
+      this.chatModel.set(cfg.model || "");
+      if(cfg.can_configure)void this.loadModelCatalog();
       this.maxSteps.set(cfg.max_steps || 12);
       this.maxToolCalls.set(cfg.max_tool_calls || 48);
       this.baseUrl.set(cfg.base_url || "");
     } catch {}
   }
 
+  private async loadModelCatalog():Promise<void>{
+    try{
+      const res=await fetch('/api/admin/ai/models',{credentials:'same-origin'});
+      if(!res.ok)return;
+      const data=await res.json();
+      this.catalog.set(data.models||[]);
+    }catch{}
+  }
+  async addCatalogModel():Promise<void>{
+    if(!this.canConfigure())return;
+    try{
+      const response=await fetch('/api/admin/ai/models',{method:'POST',credentials:'same-origin',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:this.newCatalogModel().trim(),label:this.newCatalogLabel().trim()})});
+      if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.error||'Could not add model')}
+      this.newCatalogModel.set('');this.newCatalogLabel.set('');
+      await this.loadModelCatalog();
+    }catch(err){this.flashError(err instanceof Error?err.message:'Model catalog update failed')}
+  }
+  async removeCatalogModel(id:number):Promise<void>{
+    if(!this.canConfigure())return;
+    try{
+      const response=await fetch('/api/admin/ai/models/'+id,{method:'DELETE',credentials:'same-origin'});
+      if(!response.ok)throw new Error('Could not remove model');
+      await this.loadModelCatalog();
+    }catch(err){this.flashError(err instanceof Error?err.message:'Model catalog update failed')}
+  }
   // ---- UI actions ----
 
   toggleMinimize(): void {
@@ -240,6 +273,7 @@ export class AiChatComponent implements OnInit, OnDestroy {
         signal: controller.signal,
         body: JSON.stringify({
           messages: history,
+          model: this.canConfigure()?this.chatModel():undefined,
           // Pass UI context so the agent knows what the user is looking at.
           symbol: this.contextSymbol(),
           provider: this.contextProvider(),

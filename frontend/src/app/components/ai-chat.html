@@ -12,7 +12,14 @@
       <header class="ai-chat-header">
         <mat-icon class="ai-logo">smart_toy</mat-icon>
         <h2 class="ai-title">FloweySales AI</h2>
-        <span class="ai-model" [title]="model()">{{ model() || 'not configured' }}</span>
+        @if(canConfigure()){
+          <select class="ai-model" aria-label="Active AI model" [ngModel]="chatModel()" (ngModelChange)="chatModel.set($event)">
+            <option [value]="model()">{{model()||'System default'}}</option>
+            @for(item of catalog();track item.id){@if(item.model!==model()){<option [value]="item.model">{{item.label}} ({{item.model}})</option>}}
+          </select>
+        }@else{
+          <span class="ai-model" [title]="model()">{{ model() || 'not configured' }}</span>
+        }
         <span class="header-spacer"></span>
         @if (canConfigure()) {
           <button mat-icon-button class="icon-btn" (click)="openSettings()" aria-label="Admin AI settings" title="Admin AI settings">
@@ -53,6 +60,19 @@
                    placeholder="gpt-4o-mini / llama3.1" />
           </label>
 
+          <section class="settings-row">
+            <span class="settings-label">Admin model catalog (configured endpoint)</span>
+            <p>Register models available at the currently configured AI endpoint, then select one in the assistant header.</p>
+            @for(item of catalog();track item.id){
+              <div class="model-entry">
+                <span>{{item.label}} · {{item.model}}</span>
+                <button type="button" (click)="removeCatalogModel(item.id)" [attr.aria-label]="'Remove '+item.label">Remove</button>
+              </div>
+            }
+            <label class="field"><span>Model identifier</span><input [ngModel]="newCatalogModel()" (ngModelChange)="newCatalogModel.set($event)" maxlength="120" placeholder="gpt-4o-mini"></label>
+            <label class="field"><span>Display name</span><input [ngModel]="newCatalogLabel()" (ngModelChange)="newCatalogLabel.set($event)" maxlength="120" placeholder="Fast model"></label>
+            <button type="button" (click)="addCatalogModel()" [disabled]="!newCatalogModel().trim()||!newCatalogLabel().trim()">Add model</button>
+          </section>
           <label class="field">
             <span>Max model rounds (1–32)</span>
             <input type="number" min="1" max="32" [ngModel]="maxSteps()" (ngModelChange)="maxSteps.set(+$event)" />

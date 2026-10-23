@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="018-ai-model-catalog" author="floweysales" dbms="mysql">
+  <createTable tableName="ai_model_catalog">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="model_name" type="VARCHAR(120)"><constraints nullable="false" unique="true" uniqueConstraintName="uq_ai_model_catalog_name"/></column>
+   <column name="display_name" type="VARCHAR(120)"><constraints nullable="false"/></column>
+   <column name="created_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"/>
+  </createTable>
+  <rollback><dropTable tableName="ai_model_catalog"/></rollback>
+ </changeSet>
+</databaseChangeLog>

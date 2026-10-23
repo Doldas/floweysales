@@ -494,3 +494,7 @@
   .ai-chat-header .icon-btn { min-width: 40px; padding: 6px; }
   .ai-title { font-size: 0.78rem; }
 }
+
+.ai-model-picker,.ai-model:is(select){max-width:185px;min-width:88px;border:1px solid #6a93af;border-radius:6px;background:#152d43;color:#eaf4ff;padding:5px;font:inherit}
+.model-entry{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0}
+.model-entry button{background:#284b65;border:1px solid #5f8baa;color:#fff;border-radius:6px;cursor:pointer;padding:5px 9px}
