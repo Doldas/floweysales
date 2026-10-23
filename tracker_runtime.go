@@ -17,6 +17,7 @@ import (
 func runActiveTrackers(ctx context.Context, config *server.SharedMarketConfig, db *storage.Database,
 	api *market.MarketApi, dispatch func(context.Context, string, string, string, string, string), cfg tracker.Config,
 	requestedInterval, cooldown time.Duration, finnhubKey string) {
+	_ = cooldown // Legacy global cooldown is superseded by per-user preferences.
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	workers := map[string]context.CancelFunc{}
@@ -86,7 +87,6 @@ func runOneTracker(ctx context.Context, target server.MarketTarget, db *storage.
 	defer intervalTicker.Stop()
 	var firstPrice float64
 	var previousRelation int
-	var lastAlert time.Time
 	// Immediate first poll, then fixed rate. Errors are deliberately not logged per
 	// tick; the provider status and previous successful tick remain queryable.
 	for {
@@ -115,14 +115,13 @@ func runOneTracker(ctx context.Context, target server.MarketTarget, db *storage.
 					} else {
 						state = "DEATH_CROSS"
 					}
-					if dispatch != nil && (lastAlert.IsZero() || time.Since(lastAlert) >= cooldown) {
+					if dispatch != nil {
 						label := "GOLDEN CROSS"
 						if relation == 1 {
 							label = "DEATH CROSS"
 						}
 						dispatch(ctx, target.Symbol, target.ProviderID, state, label+": "+target.Symbol, fmt.Sprintf("%s for %s. Fast EMA %.4f Slow EMA %.4f",
 							label, target.Symbol, fast, slow))
-						lastAlert = time.Now()
 					}
 				}
 				previousRelation = relation
@@ -131,7 +130,6 @@ func runOneTracker(ctx context.Context, target server.MarketTarget, db *storage.
 				state = "STOP_LOSS"
 				if dispatch != nil && (lastAlert.IsZero() || time.Since(lastAlert) >= cooldown) {
 					dispatch(ctx, target.Symbol, target.ProviderID, "STOP_LOSS", "STOP LOSS: "+target.Symbol, fmt.Sprintf("Stop triggered for %s at %.4f (initial %.4f)", target.Symbol, t.StopLoss(), firstPrice))
-					lastAlert = time.Now()
 				}
 			}
 			record := storage.TradingRecord{
