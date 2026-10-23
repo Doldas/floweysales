@@ -177,8 +177,11 @@ export class ConfirmDeleteFlowDialog {
        }
        <label>Label <input [ngModel]="n.label" (ngModelChange)="updateNode('label',$event)" maxlength="100"></label>
        @if(n.type==='agent') {
-        <label>AI Model (optional override)
-         <input [ngModel]="n.model||''" (ngModelChange)="updateNodeFor(n.id,'model',$event)" maxlength="120" placeholder="System default">
+        <label>AI Model
+         <select [ngModel]="n.model||''" (ngModelChange)="updateNodeFor(n.id,'model',$event)">
+          <option value="">System default ({{defaultAIModel()||'configured by administrator'}})</option>
+          @for(model of availableModels();track model.model){<option [value]="model.model">{{model.label}} · {{model.model}}</option>}
+         </select>
         </label>
         <p class="muted">Leave blank to use the system default. Overrides use the configured AI provider endpoint; the named model must exist there.</p>
         <label>Output format <select [ngModel]="n.output_mode||'markdown'" (ngModelChange)="updateNode('output_mode',$event)">
@@ -454,6 +457,8 @@ export class FlowStudioComponent {
  readonly logView=signal<'markdown'|'raw'|'json'>('markdown');
  readonly studioTab=signal<'editor'|'library'|'runs'|'files'>('editor');
  readonly flows=signal<SavedFlow[]>([]);
+ readonly availableModels=signal<{model:string;label:string}[]>([]);
+ readonly defaultAIModel=signal('');
  readonly functions=signal<{id:number;name:string}[]>([]);
  readonly selectedId=signal(0);
  readonly name=signal('Daily research');
@@ -476,7 +481,16 @@ export class FlowStudioComponent {
  readonly busy=signal(false);
  readonly message=signal('');
  private dragging:{id:string;startX:number;startY:number;x:number;y:number}|null=null;
- constructor(){void this.refresh();void this.loadFunctions()}
+ constructor(){void this.refresh();void this.loadFunctions();void this.loadModels()}
+ async loadModels():Promise<void>{
+   try{
+    const response=await fetch('/api/ai/models/available',{credentials:'same-origin'});
+    if(!response.ok)return;
+    const data=await response.json();
+    this.availableModels.set(data.models||[]);
+    this.defaultAIModel.set(data.default_model||'');
+   }catch{}
+ }
  private defaultGraph():FlowGraph{return {nodes:[
   {id:'start',type:'trigger',label:'Start',x:65,y:150},
   {id:'agent-1',type:'agent',label:'Research',prompt:'Analyze the current market and summarize significant opportunities, risks and evidence.',x:310,y:150}
