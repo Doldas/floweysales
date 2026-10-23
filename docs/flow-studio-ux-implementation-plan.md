@@ -20,7 +20,8 @@ Make flows easy to discover, build, run, inspect and troubleshoot without moving
 - [ ] Extend the picker with categories, richer descriptions and keyboard-first focus handling.
 - [ ] Introduce a consistent editor command bar and clear Save, Saved, Saving, Failed indicators.
 - [ ] Add graph validation (disconnected nodes, required inputs, invalid schema, trigger and output paths) before Run.
-- [ ] Support a large, effectively unbounded graph, fit-to-content and auto-layout without changing persisted semantics.
+- [x] Allow freely placed nodes, curved edges, clickable connection ports and Fit flow viewport control without changing graph serialization.
+- [ ] Add graph auto-layout, drag-to-connect gestures, port-specific branch/data mapping and robust connection validation.
 
 ## P1 — Run History and diagnostics
 - [ ] Backend: return pagination, start/end timestamps, duration, trigger, flow snapshot version, failure node and step totals.
