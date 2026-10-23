@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"floweysales/internal/identity"
-	"floweysales/internal/storage"
 )
 
 func sendInvitation(ctx context.Context, cfg identity.SMTPSettings, password, email, token string) error {
