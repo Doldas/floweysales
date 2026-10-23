@@ -79,7 +79,7 @@ func rateForProvider(requested time.Duration, provider market.Provider) time.Dur
 	return requested
 }
 func runOneTracker(ctx context.Context, target server.MarketTarget, db *storage.Database, api *market.MarketApi,
-	notifier *notify.EmailNotifier, cfg tracker.Config, interval, cooldown time.Duration, finnhubKey string) {
+	dispatch func(context.Context, string, string, string, string, string), cfg tracker.Config, interval, cooldown time.Duration, finnhubKey string) {
 	t := tracker.NewTracker(cfg)
 	seedTrackerFromHistory(t, target.Symbol, target.Provider, finnhubKey)
 	intervalTicker := time.NewTicker(interval)
