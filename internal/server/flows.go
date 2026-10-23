@@ -690,7 +690,13 @@ func (e *Engine) registerFlowRoutes() {
 			writeJSON(w, 404, map[string]string{"error": "Flow not found"})
 			return
 		}
-		if err := e.launchFlow(f, "manual"); err != nil {
+		current,_:=e.currentUser(r)
+        if current.Role!=identity.RoleSysAdmin{
+         graph,_,err:=validateFlow(f)
+         if err!=nil||!flowAllowedForNonAdmin(graph){writeJSON(w,403,map[string]string{"error":"Flow is not permitted for user execution"});return}
+         if err:=e.configuredFlowModelsAllowed(r.Context(),graph);err!=nil{writeJSON(w,403,map[string]string{"error":err.Error()});return}
+        }
+        if err := e.launchFlow(f, "manual"); err != nil {
 			writeJSON(w, 429, map[string]string{"error": err.Error()})
 			return
 		}
