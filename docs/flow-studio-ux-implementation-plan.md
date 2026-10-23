@@ -27,8 +27,8 @@ Make flows easy to discover, build, run, inspect and troubleshoot without moving
 - [ ] Backend: return pagination, start/end timestamps, duration, trigger, flow snapshot version, failure node and step totals.
 - [ ] Frontend: timestamped, paginated History table, status/date/trigger filters and explicit empty/error/loading states.
 - [ ] Live run updates using bounded polling/SSE with cleanup, rather than a single 3-second refresh.
-- [ ] Execution detail view: node input, output, error, attempt count, elapsed time and safely redacted secrets.
-- [ ] Execution graph overlay: success/failure/running/skipped badges on the graph snapshot for the selected run.
+- [ ] Complete execution detail: node input, error field, attempt count, elapsed time and safely redacted secrets (output inspection implemented in the graph).
+- [x] Execution graph overlay: render the immutable graph snapshot for the selected run, color nodes by recorded status, inspect node outputs and refresh live traces for active runs.
 - [ ] Side-by-side run comparison matching snapshot nodes with clear added/removed/modified annotations.
 - [ ] Replay preview with explicit non-side-effect mode and clear relationship to its saved graph snapshot.
 - [ ] Optionally aggregate success rate, duration and AI costs when backend data supports it.
