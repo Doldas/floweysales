@@ -785,9 +785,10 @@ func (e *Engine) saveFlow(w http.ResponseWriter, r *http.Request, id int64) {
 				writeJSON(w, 403, map[string]string{"error": "Flow contains admin-only or side-effecting nodes"})
 				return
 			}
-            if err:=e.configuredFlowModelsAllowed(r.Context(),graph);err!=nil{
-              writeJSON(w,403,map[string]string{"error":err.Error()});return
-            }
+			if err := e.configuredFlowModelsAllowed(r.Context(), graph); err != nil {
+				writeJSON(w, 403, map[string]string{"error": err.Error()})
+				return
+			}
 			if f.IntervalMinutes != 0 || f.Enabled || f.EventKey != "" {
 				writeJSON(w, 403, map[string]string{"error": "Scheduled and event-driven flows require system admin"})
 				return
