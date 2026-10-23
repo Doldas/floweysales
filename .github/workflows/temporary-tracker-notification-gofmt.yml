@@ -1,0 +1,20 @@
+name: Temporary Tracker Notification Gofmt
+on:
+  push:
+    branches: [feature/90-tracker-email-subscriptions]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          gofmt -w main.go tracker_runtime.go internal/server/auth.go internal/server/server.go internal/server/tracker_email_routes.go internal/storage/tracker_email_subscriptions.go internal/storage/tracker_email_subscriptions_test.go
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add main.go tracker_runtime.go internal/server/auth.go internal/server/server.go internal/server/tracker_email_routes.go internal/storage/tracker_email_subscriptions.go internal/storage/tracker_email_subscriptions_test.go
+            git commit -m "style(go): format tracker notification implementation"
+            git push
+          fi
