@@ -636,6 +636,46 @@ func (e *Engine) registerFlowRoutes() {
 		}
 		writeJSON(w, 200, map[string]any{"steps": steps})
 	})
+	// Return the immutable graph saved when a run started, not the current editor graph.
+	e.mux.HandleFunc("GET /api/admin/flows/{id}/runs/{run}/snapshot", func(w http.ResponseWriter, r *http.Request) {
+		if !e.flowAuthorized(w, r, "flows.read") {
+			return
+		}
+		flowID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil || flowID <= 0 {
+			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
+			return
+		}
+		runID, err := strconv.ParseInt(r.PathValue("run"), 10, 64)
+		if err != nil || runID <= 0 {
+			writeJSON(w, 400, map[string]string{"error": "Invalid run ID"})
+			return
+		}
+		// Match the steps API: only runs belonging to this flow and visible
+		// in the bounded recent history can be inspected.
+		runs, err := e.db.ListAgentFlowRuns(r.Context(), flowID)
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"error": "Run history unavailable"})
+			return
+		}
+		found := false
+		for _, run := range runs {
+			if run.ID == runID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			writeJSON(w, 404, map[string]string{"error": "Run not found in recent history"})
+			return
+		}
+		snapshot, err := e.db.GetAgentFlowRunSnapshot(r.Context(), flowID, runID)
+		if err != nil {
+			writeJSON(w, 404, map[string]string{"error": "Graph snapshot unavailable for this run"})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"graph": json.RawMessage(snapshot)})
+	})
 	e.mux.HandleFunc("POST /api/admin/flows/{id}/runs/{run}/preview", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAuthorized(w, r, "flows.read") {
 			return
