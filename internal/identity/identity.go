@@ -207,7 +207,7 @@ func (s *Service) Login(ctx context.Context, rawEmail, password string) (string,
 	if err != nil {
 		return "", User{}, err
 	}
-	if !VerifyPassword(stored, password) || !active || !s.RoleExists(ctx,u.Role) {
+	if !VerifyPassword(stored, password) || !active || !s.RoleExists(ctx, u.Role) {
 		return "", User{}, ErrInvalidCredentials
 	}
 	secret := make([]byte, 32)

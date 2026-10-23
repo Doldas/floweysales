@@ -115,22 +115,34 @@ func allowedAPI(role, method, path string) bool {
 	}
 }
 
-func (e *Engine) allowedUserAPI(r *http.Request,u identity.User)bool{
- if u.Role==identity.RoleSysAdmin{return true}
- method,path:=r.Method,r.URL.Path
- if strings.HasPrefix(path,"/api/admin/flows"){
-  permission:="flows.write"
-  if method==http.MethodGet{permission="flows.read"}
-  if strings.HasSuffix(path,"/run")||strings.HasSuffix(path,"/cancel"){permission="flows.run"}
-  if strings.HasSuffix(path,"/preview"){permission="flows.read"}
-  return e.authService.HasPermission(r.Context(),u.Role,permission)
- }
- if method==http.MethodGet && (path=="/api/search"||path=="/api/history"||path=="/api/financials"||path=="/api/providers"||path=="/api/provider/endpoints"||path=="/api/provider/research"||path=="/api/quote"||path=="/api/sec/filings"||path=="/api/sec/section"||path=="/api/sec/facts"||path=="/api/ai/config"||path=="/api/ai/tools"){
-  return e.authService.HasPermission(r.Context(),u.Role,"research.read")
- }
- if method==http.MethodPost && path=="/api/ai/chat" {return e.authService.HasPermission(r.Context(),u.Role,"ai.chat")}
- if method==http.MethodPost && path=="/api/valuation/dcf" {return e.authService.HasPermission(r.Context(),u.Role,"research.read")}
- return false
+func (e *Engine) allowedUserAPI(r *http.Request, u identity.User) bool {
+	if u.Role == identity.RoleSysAdmin {
+		return true
+	}
+	method, path := r.Method, r.URL.Path
+	if strings.HasPrefix(path, "/api/admin/flows") {
+		permission := "flows.write"
+		if method == http.MethodGet {
+			permission = "flows.read"
+		}
+		if strings.HasSuffix(path, "/run") || strings.HasSuffix(path, "/cancel") {
+			permission = "flows.run"
+		}
+		if strings.HasSuffix(path, "/preview") {
+			permission = "flows.read"
+		}
+		return e.authService.HasPermission(r.Context(), u.Role, permission)
+	}
+	if method == http.MethodGet && (path == "/api/search" || path == "/api/history" || path == "/api/financials" || path == "/api/providers" || path == "/api/provider/endpoints" || path == "/api/provider/research" || path == "/api/quote" || path == "/api/sec/filings" || path == "/api/sec/section" || path == "/api/sec/facts" || path == "/api/ai/config" || path == "/api/ai/tools") {
+		return e.authService.HasPermission(r.Context(), u.Role, "research.read")
+	}
+	if method == http.MethodPost && path == "/api/ai/chat" {
+		return e.authService.HasPermission(r.Context(), u.Role, "ai.chat")
+	}
+	if method == http.MethodPost && path == "/api/valuation/dcf" {
+		return e.authService.HasPermission(r.Context(), u.Role, "research.read")
+	}
+	return false
 }
 
 func (e *Engine) serveUserProvision(w http.ResponseWriter, r *http.Request) {
@@ -215,21 +227,39 @@ func (e *Engine) serveAuth(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusUnauthorized, map[string]any{"enabled": true, "error": "Authentication required"})
 			return
 		}
-		perms,_:=e.authService.PermissionsForRole(r.Context(),u.Role)
+		perms, _ := e.authService.PermissionsForRole(r.Context(), u.Role)
 		writeJSON(w, http.StatusOK, map[string]any{"enabled": true, "user": u, "permissions": perms})
 	case r.Method == "POST" && r.URL.Path == "/api/auth/accept-invite":
-        if e.authService==nil{writeJSON(w,404,map[string]string{"error":"Authentication disabled"});return}
-        addr,_,err:=net.SplitHostPort(r.RemoteAddr);if err!=nil{addr=r.RemoteAddr}
-        if !e.authLimiter.allow(addr){writeJSON(w,429,map[string]string{"error":"Too many attempts"});return}
-        r.Body=http.MaxBytesReader(w,r.Body,8192);defer r.Body.Close()
-        var req struct{Token string `json:"token"`;Password string `json:"password"`}
-        dec:=json.NewDecoder(r.Body);dec.DisallowUnknownFields()
-        if err:=dec.Decode(&req);err!=nil{writeJSON(w,400,map[string]string{"error":"Invalid invitation request"});return}
-        if err:=e.authService.AcceptInvitation(r.Context(),req.Token,req.Password);err!=nil{
-            writeJSON(w,400,map[string]string{"error":"Invitation invalid, expired or password fails policy (minimum 14 characters)"});return
-        }
-        writeJSON(w,200,map[string]bool{"accepted":true})
-    case r.Method == "POST" && r.URL.Path == "/api/auth/login":
+		if e.authService == nil {
+			writeJSON(w, 404, map[string]string{"error": "Authentication disabled"})
+			return
+		}
+		addr, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			addr = r.RemoteAddr
+		}
+		if !e.authLimiter.allow(addr) {
+			writeJSON(w, 429, map[string]string{"error": "Too many attempts"})
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 8192)
+		defer r.Body.Close()
+		var req struct {
+			Token    string `json:"token"`
+			Password string `json:"password"`
+		}
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&req); err != nil {
+			writeJSON(w, 400, map[string]string{"error": "Invalid invitation request"})
+			return
+		}
+		if err := e.authService.AcceptInvitation(r.Context(), req.Token, req.Password); err != nil {
+			writeJSON(w, 400, map[string]string{"error": "Invitation invalid, expired or password fails policy (minimum 14 characters)"})
+			return
+		}
+		writeJSON(w, 200, map[string]bool{"accepted": true})
+	case r.Method == "POST" && r.URL.Path == "/api/auth/login":
 		if e.authService == nil {
 			writeJSON(w, http.StatusNotFound, map[string]any{"error": "Authentication is disabled"})
 			return

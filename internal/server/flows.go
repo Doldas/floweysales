@@ -426,43 +426,64 @@ func (e *Engine) flowAdmin(w http.ResponseWriter, r *http.Request) bool {
 	}
 	return true
 }
-func (e *Engine) flowAuthorized(w http.ResponseWriter,r *http.Request,permission string)bool{
- if e.authService==nil{
-  writeJSON(w,403,map[string]string{"error":"Authentication required"});return false
- }
- user,ok:=e.currentUser(r)
- if !ok{writeJSON(w,401,map[string]string{"error":"Authentication required"});return false}
- if user.Role==identity.RoleSysAdmin{return true}
- if !e.authService.HasPermission(r.Context(),user.Role,permission){
-  writeJSON(w,403,map[string]string{"error":"Flow permission denied"});return false
- }
- if idValue:=r.PathValue("id");idValue!="" {
-  id,err:=strconv.ParseInt(idValue,10,64)
-  if err!=nil||id<=0{writeJSON(w,400,map[string]string{"error":"Invalid flow ID"});return false}
-  owned,err:=e.db.AgentFlowOwnedBy(r.Context(),id,user.ID)
-  if err!=nil{writeJSON(w,503,map[string]string{"error":"Flow ownership unavailable"});return false}
-  if !owned{writeJSON(w,404,map[string]string{"error":"Flow not found"});return false}
- }
- return true
+func (e *Engine) flowAuthorized(w http.ResponseWriter, r *http.Request, permission string) bool {
+	if e.authService == nil {
+		writeJSON(w, 403, map[string]string{"error": "Authentication required"})
+		return false
+	}
+	user, ok := e.currentUser(r)
+	if !ok {
+		writeJSON(w, 401, map[string]string{"error": "Authentication required"})
+		return false
+	}
+	if user.Role == identity.RoleSysAdmin {
+		return true
+	}
+	if !e.authService.HasPermission(r.Context(), user.Role, permission) {
+		writeJSON(w, 403, map[string]string{"error": "Flow permission denied"})
+		return false
+	}
+	if idValue := r.PathValue("id"); idValue != "" {
+		id, err := strconv.ParseInt(idValue, 10, 64)
+		if err != nil || id <= 0 {
+			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
+			return false
+		}
+		owned, err := e.db.AgentFlowOwnedBy(r.Context(), id, user.ID)
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"error": "Flow ownership unavailable"})
+			return false
+		}
+		if !owned {
+			writeJSON(w, 404, map[string]string{"error": "Flow not found"})
+			return false
+		}
+	}
+	return true
 }
-func flowAllowedForNonAdmin(graph flowGraph)bool{
- for _,node:=range graph.Nodes {
-  switch node.Type {
-  case "trigger","agent","constant","condition","merge","json_get","transform","loop","output","http_get","web_crawl":
-  default:return false
-  }
- }
- return true
+func flowAllowedForNonAdmin(graph flowGraph) bool {
+	for _, node := range graph.Nodes {
+		switch node.Type {
+		case "trigger", "agent", "constant", "condition", "merge", "json_get", "transform", "loop", "output", "http_get", "web_crawl":
+		default:
+			return false
+		}
+	}
+	return true
 }
 func (e *Engine) registerFlowRoutes() {
 	e.mux.HandleFunc("GET /api/admin/flows", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAuthorized(w, r, "flows.read") {
 			return
 		}
-		user,_:=e.currentUser(r)
-        var flows []storage.AgentFlow
-        var err error
-        if user.Role==identity.RoleSysAdmin{flows,err=e.db.ListAgentFlows(r.Context())}else{flows,err=e.db.ListAgentFlowsForUser(r.Context(),user.ID)}
+		user, _ := e.currentUser(r)
+		var flows []storage.AgentFlow
+		var err error
+		if user.Role == identity.RoleSysAdmin {
+			flows, err = e.db.ListAgentFlows(r.Context())
+		} else {
+			flows, err = e.db.ListAgentFlowsForUser(r.Context(), user.ID)
+		}
 		if err != nil {
 			writeJSON(w, 503, map[string]string{"error": "Flow storage unavailable"})
 			return
@@ -745,17 +766,19 @@ func (e *Engine) saveFlow(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	f.ID = id
-	if graph,_,err:=validateFlow(f);err==nil{
-        current,_:=e.currentUser(r)
-        if current.Role!=identity.RoleSysAdmin {
-            if !flowAllowedForNonAdmin(graph) {
-                writeJSON(w,403,map[string]string{"error":"Flow contains admin-only or side-effecting nodes"});return
-            }
-            if f.IntervalMinutes!=0||f.Enabled||f.EventKey!="" {
-                writeJSON(w,403,map[string]string{"error":"Scheduled and event-driven flows require system admin"});return
-            }
-        }
-    }
+	if graph, _, err := validateFlow(f); err == nil {
+		current, _ := e.currentUser(r)
+		if current.Role != identity.RoleSysAdmin {
+			if !flowAllowedForNonAdmin(graph) {
+				writeJSON(w, 403, map[string]string{"error": "Flow contains admin-only or side-effecting nodes"})
+				return
+			}
+			if f.IntervalMinutes != 0 || f.Enabled || f.EventKey != "" {
+				writeJSON(w, 403, map[string]string{"error": "Scheduled and event-driven flows require system admin"})
+				return
+			}
+		}
+	}
 	if _, _, err := validateFlow(f); err != nil {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})
 		return
