@@ -45,6 +45,12 @@ const (
 // DefaultCash is the starting account equity when nothing is configured.
 const DefaultCash = 100000.0
 
+// Bounds for how long a paper approval proposal stays usable.
+const (
+	DefaultApprovalTTLMinutes = 60
+	MaxApprovalTTLMinutes     = 7 * 24 * 60
+)
+
 // qtyEpsilon snaps float residue to a flat position.
 const qtyEpsilon = 1e-9
 
@@ -57,6 +63,7 @@ type Config struct {
 	MaxSymbolAllocationPct float64            `json:"max_symbol_allocation_pct"`
 	HaltNewOrders          bool               `json:"halt_new_orders"`
 	RequirePaperApproval   bool               `json:"require_paper_approval"`
+	ApprovalTTLMinutes     int                `json:"approval_ttl_minutes"`
 	MaxDrawdownPct         float64            `json:"max_drawdown_pct"`
 	MaxSectorAllocationPct float64            `json:"max_sector_allocation_pct"`
 	MaxDailyVolumePct      float64            `json:"max_daily_volume_pct"`
@@ -66,7 +73,17 @@ type Config struct {
 
 // DefaultConfig returns a plain cash account with no commissions.
 func DefaultConfig() Config {
-	return Config{BaseCash: DefaultCash}
+	return Config{BaseCash: DefaultCash, ApprovalTTLMinutes: DefaultApprovalTTLMinutes}
+}
+
+// ApprovalTTLSeconds returns the configured approval lifetime, falling back
+// to the default for unset or out-of-range values.
+func (c Config) ApprovalTTLSeconds() int {
+	minutes := c.ApprovalTTLMinutes
+	if minutes <= 0 || minutes > MaxApprovalTTLMinutes {
+		minutes = DefaultApprovalTTLMinutes
+	}
+	return minutes * 60
 }
 
 // Commission describes the cost charged per execution.

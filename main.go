@@ -107,6 +107,10 @@ func main() {
 	portfolio := trading.DefaultConfig()
 	portfolio.BaseCash = parseFloat(app.ResolveConfig("PORTFOLIO_CASH", "100000", defaults), portfolio.BaseCash)
 	portfolio.RequirePaperApproval = strings.EqualFold(app.ResolveConfig("PAPER_REQUIRE_APPROVAL", "false", defaults), "true")
+	portfolio.ApprovalTTLMinutes = parseInt(app.ResolveConfig("PAPER_APPROVAL_TTL_MINUTES", "60", defaults), trading.DefaultApprovalTTLMinutes)
+	if portfolio.ApprovalTTLMinutes <= 0 || portfolio.ApprovalTTLMinutes > trading.MaxApprovalTTLMinutes {
+		log.Fatalf("PAPER_APPROVAL_TTL_MINUTES must be between 1 and %d", trading.MaxApprovalTTLMinutes)
+	}
 	portfolio.HaltNewOrders = strings.EqualFold(app.ResolveConfig("PAPER_TRADING_HALT", "false", defaults), "true")
 	portfolio.MaxSymbolAllocationPct = parseFloat(app.ResolveConfig("PAPER_MAX_SYMBOL_ALLOCATION_PCT", "0", defaults), 0)
 	portfolio.MaxDrawdownPct = parseFloat(app.ResolveConfig("PAPER_MAX_DRAWDOWN_PCT", "0", defaults), 0)

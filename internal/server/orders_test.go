@@ -490,10 +490,12 @@ func TestPaperApprovalSingleUseAndExactPayload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := env.db.RequestPaperApproval(context.Background(), key, digest, `{"symbol":"GIB"}`, 12); err != nil {
+	proposal := storage.PaperApprovalProposal{Key: key, Digest: digest, Payload: `{"symbol":"GIB"}`, Rationale: "test", RequestedBy: 12, TTLSeconds: 3600}
+	if err := env.db.RequestPaperApproval(context.Background(), proposal); err != nil {
 		t.Fatal(err)
 	}
-	if err := env.db.RequestPaperApproval(context.Background(), key, "other-digest", `{"symbol":"GIB"}`, 12); err == nil {
+	proposal.Digest = "other-digest"
+	if err := env.db.RequestPaperApproval(context.Background(), proposal); err == nil {
 		t.Fatal("approval proposal must not change immutable request")
 	}
 	order := storage.Order{Symbol: "GIB", Side: "BUY", Type: "MARKET", TIF: "GTC", Quantity: 1, Price: 100, Status: "FILLED", FillPrice: 100, Timestamp: time.Now().Unix()}

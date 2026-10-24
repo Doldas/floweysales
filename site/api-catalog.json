@@ -169,6 +169,46 @@
       "surface": "APP REST"
     },
     {
+      "method": "POST",
+      "path": "/api/paper-approvals",
+      "description": "Föreslå en pappersorder för mänskligt godkännande; kräver rationale, valfri decision_source",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/paper-approvals",
+      "description": "Granskningskö: status=pending|approved|rejected|consumed|expired|all, limit 1–100",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/paper-approvals/{client_order_id}",
+      "description": "Revisionskedja: beslut, godkännande/avslag och resulterande order med händelser",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "POST",
+      "path": "/api/paper-approvals/{client_order_id}/approve",
+      "description": "Godkänn förslag; godkännaren måste vara en annan SYS_ADMIN än förslagsställaren",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "POST",
+      "path": "/api/paper-approvals/{client_order_id}/reject",
+      "description": "Avslå förslag eller återkalla oanvänt godkännande med reason",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
       "method": "GET",
       "path": "/api/positions",
       "description": "Positioner i delad motor",

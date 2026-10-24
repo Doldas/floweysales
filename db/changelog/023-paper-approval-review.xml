@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="023-paper-approval-review" author="floweysales" dbms="mysql">
+  <addColumn tableName="paper_order_approval_requests">
+   <column name="rationale" type="VARCHAR(2000)" remarks="Requester's decision rationale; NULL only for proposals created before this change"/>
+   <column name="decision_source" type="VARCHAR(128)" remarks="Origin of the recommendation, e.g. manual or flow-run:42"/>
+   <column name="expires_at" type="DATETIME(6)" remarks="UTC instant after which the proposal can no longer be approved or consumed; NULL is treated as expired"/>
+   <column name="rejected_by" type="BIGINT" remarks="SYS_ADMIN who rejected or revoked the proposal"/>
+   <column name="rejected_at" type="DATETIME(6)"/>
+   <column name="rejection_reason" type="VARCHAR(500)"/>
+  </addColumn>
+  <createIndex tableName="paper_order_approval_requests" indexName="idx_paper_approval_created">
+   <column name="created_at"/>
+  </createIndex>
+  <rollback>
+   <dropIndex tableName="paper_order_approval_requests" indexName="idx_paper_approval_created"/>
+   <dropColumn tableName="paper_order_approval_requests" columnName="rejection_reason"/>
+   <dropColumn tableName="paper_order_approval_requests" columnName="rejected_at"/>
+   <dropColumn tableName="paper_order_approval_requests" columnName="rejected_by"/>
+   <dropColumn tableName="paper_order_approval_requests" columnName="expires_at"/>
+   <dropColumn tableName="paper_order_approval_requests" columnName="decision_source"/>
+   <dropColumn tableName="paper_order_approval_requests" columnName="rationale"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>
