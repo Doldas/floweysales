@@ -160,6 +160,14 @@ func TestMySQLAuthGate(t *testing.T) {
 		t.Fatal("other user has no session")
 	}
 	assert(request("GET", fmt.Sprintf("/api/admin/flows/%d/runs", flowID), nil, otherCookies[0], ""), http.StatusNotFound)
+	// The owner can publish and roll back their flow; other users cannot see its revisions.
+	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/publish", flowID), map[string]string{"note": "first"}, userCookie, ""), http.StatusOK)
+	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/publish", flowID), nil, userCookie, ""), http.StatusConflict)
+	assert(request("GET", fmt.Sprintf("/api/admin/flows/%d/revisions", flowID), nil, userCookie, ""), http.StatusOK)
+	assert(request("GET", fmt.Sprintf("/api/admin/flows/%d/revisions", flowID), nil, otherCookies[0], ""), http.StatusNotFound)
+	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/revisions/1/activate", flowID), nil, otherCookies[0], ""), http.StatusNotFound)
+	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/revisions/1/activate", flowID), nil, userCookie, ""), http.StatusOK)
+	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/revisions/9/activate", flowID), nil, userCookie, ""), http.StatusNotFound)
 	// Only safe research routes are available to USER. No orders or global changes.
 	assert(request("GET", "/api/ai/tools", nil, userCookie, ""), http.StatusOK)
 	assert(request("GET", "/api/orders", nil, userCookie, ""), http.StatusForbidden)

@@ -167,5 +167,8 @@ func (e *Engine) saveBlueprintFunction(w http.ResponseWriter, r *http.Request, i
 		writeJSON(w, 503, map[string]string{"error": "Could not save function"})
 		return
 	}
+	if stored, err := e.db.GetBlueprintFunction(r.Context(), saved.ID); err == nil {
+		saved = stored
+	}
 	writeJSON(w, 200, saved)
 }

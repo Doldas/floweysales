@@ -13,13 +13,14 @@ import { BlueprintLibraryComponent } from './blueprint-library';
 import { AuthState } from '../auth.service';
 import { filterFlowRuns, pushHistorySnapshot } from './flow-history';
 import { listOverviewFlows } from './flow-overview';
+import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
-interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
+interface SavedFlow extends PublishState { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
 interface FlowRunStep {id:number;node:string;label:string;status:string;output:string;created_at?:string;duration_ms?:number|null;attempts?:number|null}
-interface FlowRun { id:number; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null; failed_node?:string|null }
+interface FlowRun { id:number; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null; failed_node?:string|null; flow_revision?:number|null }
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
 @Component({
@@ -75,6 +76,7 @@ export class ConfirmDeleteFlowDialog {
        @for(flow of listedFlows();track flow.id){<article class="overview-flow-card">
         <div class="overview-flow-top"><div><h3>{{flow.name}}</h3><p class="muted">{{flow.graph.nodes.length}} nodes · {{flow.graph.edges.length}} links</p></div><span class="overview-flow-status" [class.active]="flow.enabled">{{flow.enabled?'Enabled':'Disabled'}}</span></div>
         <p class="overview-flow-trigger">@if(flow.interval_minutes>0){Every {{flow.interval_minutes}} min}@else if(flow.event_key){Event: {{flow.event_key}}}@else{Manual execution}</p>
+        <p class="muted">{{publishStatusLabel(flow)}}</p>
         <div class="overview-actions"><button mat-flat-button color="primary" (click)="openFlowFromOverview(flow.id)">Edit</button><button mat-stroked-button (click)="openHistoryForFlow(flow.id)">History</button><button mat-stroked-button (click)="runSavedFlow(flow.id)" [disabled]="busy()">Run now</button></div>
        </article>}
       </div>}
@@ -281,10 +283,14 @@ export class ConfirmDeleteFlowDialog {
        }
        @if(n.type==='function'){
          <label>Reusable function <select [ngModel]="n.function_id||0" (ngModelChange)="updateFunctionReference(+$event)"><option [ngValue]="0">Choose saved function</option>@for(f of functions();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
+         @if(n.function_id){<label>Function revision <select [ngModel]="n.function_revision||0" (ngModelChange)="updateRevisionPin('function_revision',+$event)"><option [ngValue]="0">Follow active revision</option>@for(r of targetRevisions()['function:'+n.function_id]||[];track r.revision){<option [ngValue]="r.revision">{{revisionOptionLabel(r)}}</option>}</select></label>
+         <p class="muted">{{pinDescription(n.function_revision)}}</p>}
          <p class="muted">Applies the function to the preceding node's typed value; invalid inputs fail the run safely.</p>
        }
        @if(n.type==='flow'){
          <label>Reusable flow to call <select [ngModel]="n.flow_id||0" (ngModelChange)="updateFlowReference(+$event)"><option [ngValue]="0">Choose target flow</option>@for(f of flows();track f.id){@if(f.id!==selectedId()){<option [ngValue]="f.id">{{f.name}} (#{{f.id}})</option>}}</select></label>
+         @if(n.flow_id){<label>Flow revision <select [ngModel]="n.flow_revision||0" (ngModelChange)="updateRevisionPin('flow_revision',+$event)"><option [ngValue]="0">Follow active revision</option>@for(r of targetRevisions()['flow:'+n.flow_id]||[];track r.revision){<option [ngValue]="r.revision">{{revisionOptionLabel(r)}}</option>}</select></label>
+         <p class="muted">{{pinDescription(n.flow_revision)}}</p>}
          <p class="muted">Runs the selected graph as a function. Recursion is blocked and nesting is limited to 4 levels.</p>
        }
      </div>@if(n.type!=='trigger'){<button type="button" class="node-quick-delete" (click)="removeNode(n.id)">Delete node</button>}</section>}
@@ -319,11 +325,31 @@ export class ConfirmDeleteFlowDialog {
      <button mat-stroked-button type="button" (click)="redoGraph()" [disabled]="!canRedo()||busy()" aria-label="Redo graph change" title="Redo (Ctrl/Cmd+Shift+Z or Ctrl+Y)">↷ Redo</button>
      <button mat-flat-button color="primary" (click)="save()" [disabled]="busy()">Save flow</button>
       <span class="muted" role="status">{{hasUnsavedChanges()?'Unsaved changes':'All changes saved'}}</span>
-     <button mat-stroked-button (click)="run()" [disabled]="busy()||!selectedId()">Run now</button>
+     <button mat-stroked-button (click)="run()" [disabled]="busy()||!selectedId()" [title]="currentFlow()?.active_revision?'Runs the active revision':'Runs the saved draft'">Run now</button>
+     @if(currentFlow()?.active_revision&&currentFlow()?.has_unpublished_changes){<button mat-stroked-button (click)="run('draft')" [disabled]="busy()||hasUnsavedChanges()" title="Test unpublished edits without publishing them">Run draft</button>}
      <label>Event value <input [ngModel]="triggerValue()" (ngModelChange)="triggerValue.set($event)" placeholder="Value matching trigger type"></label>
      <button mat-stroked-button (click)="emitEvent()" [disabled]="busy()||!eventKey()">Trigger event</button>
      <button mat-stroked-button (click)="refresh()">Refresh</button>
    </div>
+   @if(currentFlow();as current){
+   <section class="flow-versions" aria-label="Published versions">
+     <header><strong>Versions</strong><span role="status">{{publishStatusLabel(current)}}</span></header>
+     <div class="flow-version-publish">
+       <label>Publish note <input [ngModel]="publishNote()" (ngModelChange)="publishNote.set($event)" maxlength="500" placeholder="What changed (optional)"></label>
+       <button mat-flat-button color="primary" (click)="publish()" [disabled]="busy()||!canPublish(current,hasUnsavedChanges())" [title]="hasUnsavedChanges()?'Save the draft before publishing':'Freeze the saved draft as the next revision and make it active'">Publish revision</button>
+     </div>
+     <p class="muted">Scheduled, event and manual runs use the active revision. Save edits freely; they reach runs only when published. Activate an older revision to roll back.</p>
+     @if(revisions().length){<ul class="flow-version-list">
+       @for(r of revisions();track r.revision){<li [class.active]="r.active">
+         <span><strong>Revision {{r.revision}}</strong>@if(r.active){ · active} · {{displayRunTime(r.published_at)}}@if(r.note){ · {{r.note}}}</span>
+         <span class="flow-version-actions">
+           <button mat-stroked-button (click)="activateRevision(r.revision)" [disabled]="busy()||r.active">Activate</button>
+           <button mat-stroked-button (click)="restoreRevision(r.revision)" [disabled]="busy()">Restore to draft</button>
+         </span>
+       </li>}
+     </ul>} @else {<p class="muted">No published revisions yet.</p>}
+   </section>
+   }
    @if(message()) { <p class="flow-message" role="status">{{message()}}</p> }
    }
    @if (studioTab()==='library') {
@@ -351,12 +377,13 @@ export class ConfirmDeleteFlowDialog {
     @if(historyFlowId()&&runs().length&&!filteredRuns().length){<p class="muted">No runs match your filters.</p>}
    @for(run of filteredRuns();track run.id){
     <details class="flow-run">
-      <summary><span class="run-summary-status" [class.run-success]="run.status==='SUCCESS'" [class.run-failed]="run.status==='FAILED'" [class.run-active]="run.status==='RUNNING'">{{run.status}}</span> #{{run.id}} · {{run.trigger}} <span class="muted">· {{displayRunTime(run.started_at)}} · {{displayRunDuration(run)}}</span></summary>
+      <summary><span class="run-summary-status" [class.run-success]="run.status==='SUCCESS'" [class.run-failed]="run.status==='FAILED'" [class.run-active]="run.status==='RUNNING'">{{run.status}}</span> #{{run.id}} · {{run.trigger}} · {{runRevisionLabel(run.flow_revision)}} <span class="muted">· {{displayRunTime(run.started_at)}} · {{displayRunDuration(run)}}</span></summary>
       <div class="run-diagnostics">
        <span><strong>Started:</strong> {{displayRunTime(run.started_at)}}</span>
        <span><strong>Finished:</strong> {{run.status==='RUNNING'?'In progress':displayRunTime(run.finished_at)}}</span>
        <span><strong>Duration:</strong> {{displayRunDuration(run)}}</span>
        <span><strong>Trigger:</strong> {{run.trigger}}</span>
+       <span><strong>Graph:</strong> {{runRevisionLabel(run.flow_revision)}}</span>
       </div>
       @if(run.status==='FAILED'&&run.error){
        <div class="run-error-panel" role="alert">
@@ -498,6 +525,14 @@ export class ConfirmDeleteFlowDialog {
  .graph-validation ul{padding-left:22px}.graph-validation li{padding:4px 0;overflow-wrap:anywhere}
  .graph-validation li button{background:none;border:0;text-decoration:underline;color:#aedfff;cursor:pointer;font:inherit;text-align:left;padding:2px 0}
  .flow-message{border-left:3px solid #73baff;padding-left:12px}
+ .flow-versions{border:1px solid #527590;border-radius:10px;padding:14px;margin:12px 0;background:#152b40}
+ .flow-versions header{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+ .flow-version-publish{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}
+ .flow-version-publish label{display:flex;flex-direction:column;gap:5px;flex:1;min-width:200px}
+ .flow-version-list{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:6px}
+ .flow-version-list li{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 10px;border:1px solid #3d5d77;border-radius:8px;overflow-wrap:anywhere}
+ .flow-version-list li.active{border-color:#73baff;background:#1b3854}
+ .flow-version-actions{display:flex;flex-wrap:wrap;gap:6px}
  .exec-graph{margin:14px 0;display:grid;gap:10px;padding:14px;border:1px solid #557c99;border-radius:12px;background:#12293d}
  .exec-graph-canvas{overflow:auto;border:1px solid #3c5d77;border-radius:8px;background:#0b1c2e}
  .exec-graph-canvas svg{min-width:0;width:100%;min-height:210px;max-height:520px;height:auto;cursor:default}
@@ -625,7 +660,7 @@ export class FlowStudioComponent {
  readonly flows=signal<SavedFlow[]>([]);
  readonly availableModels=signal<{model:string;label:string}[]>([]);
  readonly defaultAIModel=signal('');
- readonly functions=signal<{id:number;name:string}[]>([]);
+ readonly functions=signal<({id:number;name:string}&PublishState)[]>([]);
  readonly selectedId=signal(0);
  readonly name=signal('Daily research');
  readonly enabled=signal(false);
@@ -802,7 +837,10 @@ export class FlowStudioComponent {
  readonly busy=signal(false);
  readonly message=signal('');
  private dragging:{id:string;startX:number;startY:number;x:number;y:number}|null=null;
- constructor(){this.resetGraphHistory();this.savedSnapshot.set(this.currentSnapshot());void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN')void this.loadFunctions();void this.loadModels();
+ constructor(){
+  // Load the revision list of the selected call node's target for its pin selector.
+  effect(()=>{const n=this.selectedNode();if(n?.type==='flow'&&n.flow_id)void this.loadTargetRevisions('flow',n.flow_id);if(n?.type==='function'&&n.function_id)void this.loadTargetRevisions('function',n.function_id)});
+  this.resetGraphHistory();this.savedSnapshot.set(this.currentSnapshot());void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN')void this.loadFunctions();void this.loadModels();
     effect(()=>{
       const current=JSON.stringify(this.graph());
       if(current===this.lastGraphVersion||this.dragHistoryStart!==null)return;
@@ -858,10 +896,65 @@ export class FlowStudioComponent {
   this.message.set('Template copied as a new, disabled flow. Review nodes and save it to keep your own version.');
  }
  newFlow(){if(!this.allowDiscard())return;this.resetFlow()}
- private resetFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.resetGraphHistory();this.message.set('');this.savedSnapshot.set(this.currentSnapshot())}
+ private resetFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.resetGraphHistory();this.message.set('');this.savedSnapshot.set(this.currentSnapshot());this.revisions.set([])}
  loadFlow(id:number){if(!this.allowDiscard())return;this.cancelConnecting();this.resetCanvas();const f=this.flows().find(x=>x.id===id);if(!f){this.resetFlow();return}
-  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.resetGraphHistory();this.fitCanvas();this.chosen.set('');this.savedSnapshot.set(this.currentSnapshot())}
+  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.resetGraphHistory();this.fitCanvas();this.chosen.set('');this.savedSnapshot.set(this.currentSnapshot());this.publishNote.set('');void this.loadRevisions()}
  async loadFunctions(){try{const data=await this.request("/api/admin/blueprint-functions");this.functions.set(data.functions||[])}catch(e){this.message.set(String(e))}}
+ readonly publishStatusLabel=publishStatusLabel;
+ readonly canPublish=canPublish;
+ readonly runRevisionLabel=runRevisionLabel;
+ readonly revisionOptionLabel=revisionOptionLabel;
+ readonly pinDescription=pinDescription;
+ readonly currentFlow=()=>this.flows().find(f=>f.id===this.selectedId());
+ readonly revisions=signal<RevisionSummary[]>([]);
+ readonly publishNote=signal('');
+ /** Revisions of call targets, keyed "flow:<id>" or "function:<id>", for pin selectors. */
+ readonly targetRevisions=signal<Record<string,RevisionSummary[]>>({});
+ async loadRevisions(){
+  const id=this.selectedId();
+  if(!id){this.revisions.set([]);return}
+  try{const data=await this.request('/api/admin/flows/'+id+'/revisions');if(this.selectedId()===id)this.revisions.set(data.revisions||[])}
+  catch(e){this.revisions.set([]);this.message.set(String(e))}
+ }
+ async loadTargetRevisions(kind:'flow'|'function',id:number){
+  if(!id)return;
+  const url=kind==='flow'?'/api/admin/flows/'+id+'/revisions':'/api/admin/blueprint-functions/'+id+'/revisions';
+  try{const data=await this.request(url);this.targetRevisions.update(m=>({...m,[kind+':'+id]:data.revisions||[]}))}
+  catch{this.targetRevisions.update(m=>({...m,[kind+':'+id]:[]}))}
+ }
+ updateRevisionPin(field:'flow_revision'|'function_revision',revision:number){
+  this.graph.update(g=>({...g,nodes:g.nodes.map(n=>{
+   if(n.id!==this.chosen())return n;
+   const next={...n};
+   if(revision>0)next[field]=revision;else delete next[field];
+   return next;
+  })}));
+ }
+ async publish(){
+  const id=this.selectedId();
+  if(!id||this.hasUnsavedChanges()){this.message.set('Save the draft before publishing.');return}
+  this.busy.set(true);
+  try{const data=await this.request('/api/admin/flows/'+id+'/publish',{method:'POST',body:JSON.stringify({note:this.publishNote().trim()})});this.publishNote.set('');this.message.set('Published revision '+data.active_revision+'; runs now use it.');await this.refresh();await this.loadRevisions()}
+  catch(e){this.message.set(String(e))}finally{this.busy.set(false)}
+ }
+ async activateRevision(revision:number){
+  const id=this.selectedId();
+  if(!id||!confirm('Make revision '+revision+' active? Scheduled, event and manual runs will use it.'))return;
+  this.busy.set(true);
+  try{await this.request('/api/admin/flows/'+id+'/revisions/'+revision+'/activate',{method:'POST'});this.message.set('Revision '+revision+' is now active.');await this.refresh();await this.loadRevisions()}
+  catch(e){this.message.set(String(e))}finally{this.busy.set(false)}
+ }
+ async restoreRevision(revision:number){
+  const id=this.selectedId();
+  if(!id||!this.allowDiscard())return;
+  if(!confirm('Replace the draft with revision '+revision+'? The active revision does not change.'))return;
+  this.busy.set(true);
+  try{const flow:SavedFlow=await this.request('/api/admin/flows/'+id+'/revisions/'+revision+'/restore',{method:'POST'});
+   this.flows.update(list=>list.map(f=>f.id===id?flow:f));
+   this.savedSnapshot.set(this.currentSnapshot());this.loadFlow(id);await this.loadRevisions();
+   this.message.set('Draft restored from revision '+revision+'. Publish it to make it the next revision.')}
+  catch(e){this.message.set(String(e))}finally{this.busy.set(false)}
+ }
  addWebSearch():void {
   const count=this.graph().nodes.length;
   const id='web-search-'+Date.now().toString(36);
@@ -904,12 +997,12 @@ export class FlowStudioComponent {
    try{return JSON.stringify(JSON.parse(raw),null,2)}catch{return raw}
  }
  addFunctionCall(){const n=this.graph().nodes;const id="fn-"+Date.now().toString(36);this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:"function",label:"Call function",function_id:0,x:260+(n.length%4)*140,y:40+Math.floor(n.length/4)*100}]}));this.chosen.set(id)}
- updateFunctionReference(target:number){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,function_id:target}:n)}))}
+ updateFunctionReference(target:number){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>{if(n.id!==this.chosen())return n;const next={...n,function_id:target};delete next.function_revision;return next})}))}
  addConstant(){const n=this.graph().nodes;const id='value-'+Date.now().toString(36);this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'constant',label:'Value',value_type:'text',value:'Research this signal',x:260+(n.length%4)*140,y:40+Math.floor(n.length/4)*100}]}));this.chosen.set(id)}
  updateConstant(field:'value_type'|'value',value:string){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,[field]:value}:n)}))}
  connectValue(from:string,to:string){if(!to||this.node(from)?.value_type!=='text'){this.message.set('Typed link requires a text value and an agent or flow input');return}if(this.graph().edges.some(e=>e.from===from&&e.to===to))return;this.graph.update(g=>({...g,edges:[...g.edges,{from,to,from_port:'value',to_port:'input'}]}))}
  addSubflow(){const n=this.graph().nodes;const id='flow-'+Date.now().toString(36);this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'flow',label:'Call flow',flow_id:0,x:260+(n.length%4)*140,y:40+Math.floor(n.length/4)*100}]}));this.chosen.set(id)}
- updateFlowReference(target:number){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,flow_id:target}:n)}))}
+ updateFlowReference(target:number){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>{if(n.id!==this.chosen())return n;const next={...n,flow_id:target};delete next.flow_revision;return next})}))}
  updateAgentPolicy(id:string,field:'timeout_seconds'|'max_retries',value:number):void {
    const max=field==='max_retries'?2:90;
    const safe=Number.isFinite(value)?Math.max(0,Math.min(max,Math.trunc(value))):0;
@@ -1067,11 +1160,11 @@ export class FlowStudioComponent {
  }
  async save(){this.busy.set(true);try{const id=this.selectedId();const body={name:this.name(),graph:this.graph(),enabled:this.enabled(),interval_minutes:this.interval(),event_key:this.eventKey()};
    const flow:SavedFlow=await this.request(id?'/api/admin/flows/'+id:'/api/admin/flows',{method:id?'PUT':'POST',body:JSON.stringify(body)});
-   this.selectedId.set(flow.id);this.historyFlowId.set(flow.id);this.savedSnapshot.set(this.currentSnapshot());this.message.set('Flow saved');await this.refresh()}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
- async run(){
+   this.selectedId.set(flow.id);this.historyFlowId.set(flow.id);this.savedSnapshot.set(this.currentSnapshot());this.message.set(flow.active_revision?'Draft saved; publish it to change what runs.':'Flow saved');await this.refresh();await this.loadRevisions()}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
+ async run(target:'active'|'draft'='active'){
    const issues=this.graphIssues();
    if(issues.length){this.message.set('Resolve '+issues.length+' graph issue(s) before running.');return}
    if(this.hasUnsavedChanges()){this.message.set('Save current edits before running.');return}
-   this.busy.set(true);try{await this.request('/api/admin/flows/'+this.selectedId()+'/run',{method:'POST'});this.historyFlowId.set(this.selectedId());this.message.set('Agent run queued; open Run history to see its progress');setTimeout(()=>void this.refreshRuns(),3000)}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
+   this.busy.set(true);try{const queued=await this.request('/api/admin/flows/'+this.selectedId()+'/run',{method:'POST',body:JSON.stringify({target})});this.historyFlowId.set(this.selectedId());this.message.set('Agent run queued ('+runRevisionLabel(queued.flow_revision)+'); open Run history to see its progress');setTimeout(()=>void this.refreshRuns(),3000)}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
  async emitEvent(){this.busy.set(true);try{const definition=this.triggers().find(t=>t.event_key===this.eventKey());if(!definition)throw Error('Create the custom trigger first');let value:string|number|boolean=this.triggerValue();if(definition.payload_type==='number'){value=Number(value);if(!Number.isFinite(value))throw Error('Event requires a finite number')}if(definition.payload_type==='boolean'){if(value!=='true'&&value!=='false')throw Error('Use true or false for a boolean event');value=value==='true'}const data=await this.request('/api/admin/flow-events/'+encodeURIComponent(this.eventKey()),{method:'POST',body:JSON.stringify({value})});this.message.set(data.started+' flow(s) triggered');}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
 }
