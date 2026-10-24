@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -233,5 +234,47 @@ func TestExpiredApprovalCannotBeApprovedOrConsumed(t *testing.T) {
 	_, orders := env.do(t, "GET", "/api/orders", nil)
 	if len(listOf(t, orders)) != 0 {
 		t.Fatalf("expired approvals must leave funds untouched: %v", orders)
+	}
+}
+
+// TestPaperOrderStorageOutageLeavesFundsUnchanged simulates the database
+// disappearing during submission: the order must fail closed, and a retry
+// with the same key after recovery must execute exactly once.
+func TestPaperOrderStorageOutageLeavesFundsUnchanged(t *testing.T) {
+	env := newTestEnv(t)
+	env.seed("GIB", 100)
+	payload := map[string]any{"symbol": "GIB", "side": "BUY", "quantity": 2, "price": 100,
+		"client_order_id": fmt.Sprintf("outage-%d", time.Now().UnixNano())}
+
+	if err := env.db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if code, raw := env.do(t, "POST", "/api/orders", payload); code == http.StatusOK {
+		t.Fatalf("order accepted while storage was down: %v", raw)
+	}
+
+	recovered, err := storage.Open(os.Getenv("STORAGE_TEST_MYSQL_DSN"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { recovered.Close() })
+	env.engine.db = recovered
+	env.db = recovered
+
+	_, orders := env.do(t, "GET", "/api/orders", nil)
+	if len(listOf(t, orders)) != 0 {
+		t.Fatalf("outage left a partial order behind: %v", orders)
+	}
+	code, first := env.do(t, "POST", "/api/orders", payload)
+	if code != http.StatusOK {
+		t.Fatalf("retry after recovery: %d %v", code, first)
+	}
+	code, second := env.do(t, "POST", "/api/orders", payload)
+	if code != http.StatusOK || mapOf(t, second)["replayed"] != true {
+		t.Fatalf("second retry must replay, not execute: %d %v", code, second)
+	}
+	_, orders = env.do(t, "GET", "/api/orders", nil)
+	if len(listOf(t, orders)) != 1 {
+		t.Fatalf("expected exactly one executed order after outage and retries: %v", orders)
 	}
 }
