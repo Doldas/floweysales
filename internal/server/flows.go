@@ -969,6 +969,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 	var workspaceOwner int64
 	variables := map[string]string{}
 	results := []map[string]string{}
+	var stepStarted time.Time
 	record := func(step map[string]string) {
 		results = append(results, step)
 		if runID, ok := ctx.Value(flowTraceRunKey{}).(int64); ok && depth == 0 {
@@ -976,13 +977,19 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			if status == "" {
 				status = "SUCCESS"
 			}
-			if err := e.db.AppendAgentFlowRunStep(ctx, runID, step["node"], step["label"], status, step["output"]); err != nil {
+			var durationMS *int64
+			if status != "SKIPPED" && !stepStarted.IsZero() {
+				elapsed := time.Since(stepStarted).Milliseconds()
+				durationMS = &elapsed
+			}
+			if err := e.db.AppendAgentFlowRunStepTimed(ctx, runID, step["node"], step["label"], status, step["output"], durationMS); err != nil {
 				log.Printf("[Flows] Node trace persistence failed: %v", err)
 			}
 		}
 	}
 	lastNodeID := "start"
 	for _, id := range order {
+		stepStarted = time.Now()
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}

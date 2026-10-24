@@ -16,7 +16,7 @@ interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'functi
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
-interface FlowRunStep {id:number;node:string;label:string;status:string;output:string;created_at?:string}
+interface FlowRunStep {id:number;node:string;label:string;status:string;output:string;created_at?:string;duration_ms?:number|null}
 interface FlowRun { id:number; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null }
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
@@ -389,8 +389,8 @@ export class ConfirmDeleteFlowDialog {
           @if(executionSelectedNode();as nodeId){
             <div class="exec-selected">
               <strong>{{executionNodeLabel(nodeId)}} · {{executionNodeStatus(nodeId)}}</strong>
-              @if(executionStep(nodeId);as selectedStep){<p class="muted">Recorded {{displayRunTime(selectedStep.created_at)}}</p>}
-              <p class="muted">Only persisted output previews are displayed. Raw inputs, per-node durations and retry counts are not available in historical records.</p>
+              @if(executionStep(nodeId);as selectedStep){<p class="muted">Recorded {{displayRunTime(selectedStep.created_at)}} · Duration: {{selectedStep.duration_ms==null?'Unavailable':displayStepDuration(selectedStep.duration_ms)}}</p>}
+              <p class="muted">Only persisted output previews are displayed. Raw inputs and retry counts are not available in historical records. Older runs may lack duration data.</p>
               @if(activeRunError();as failure){<div class="exec-error-hint"><strong>Run error:</strong> {{failure}}</div>}
               @if(executionStep(nodeId);as step){@if(step.output){<pre>{{step.output}}</pre>}@else{<p class="muted">No recorded output.</p>}}
               @else{<p class="muted">No recorded step for this node.</p>}
@@ -404,7 +404,7 @@ export class ConfirmDeleteFlowDialog {
         <div class="run-step-list" aria-label="Node execution trace">
          @for(step of traceSteps();track step.id){
           <details class="run-step">
-           <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}} · {{displayRunTime(step.created_at)}}</span>
+           <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}} · {{displayRunTime(step.created_at)}} · {{step.duration_ms==null?'Duration unavailable':displayStepDuration(step.duration_ms)}}</span>
             @if(compareRun()&&compareRun()!==run.id){<span class="muted"> · {{compareStatus(step.node,step.status,step.output)}}</span>}
            </summary>
            @if(step.output){<pre>{{step.output}}</pre>}
@@ -762,6 +762,11 @@ export class FlowStudioComponent {
    if(!value)return 'Unavailable';
    const date=new Date(value);
    return Number.isNaN(date.getTime())?'Unavailable':date.toLocaleString();
+ }
+ displayStepDuration(ms:number|null|undefined):string{
+   if(ms==null)return 'Unavailable';
+   const value=Math.max(0,ms);
+   return value<1000?value+' ms':value<60000?(value/1000).toFixed(1)+' s':Math.floor(value/60000)+' min '+Math.round(value%60000/1000)+' s';
  }
  displayRunDuration(run:FlowRun):string{
    if(run.duration_ms==null)return run.status==='RUNNING'?'In progress':'Unavailable';
