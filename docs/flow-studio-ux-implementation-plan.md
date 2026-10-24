@@ -24,8 +24,10 @@ Make flows easy to discover, build, run, inspect and troubleshoot without moving
 - [ ] Add graph auto-layout, drag-to-connect gestures, port-specific branch/data mapping and robust connection validation.
 
 ## P1 — Run History and diagnostics
-- [ ] Backend: return pagination, start/end timestamps, duration, trigger, flow snapshot version, failure node and step totals.
-- [ ] Frontend: timestamped, paginated History table, status/date/trigger filters and explicit empty/error/loading states.
+- [x] Backend: return run start/end timestamps, total duration, and recorded node step timestamps from existing database columns.
+- [ ] Backend: add pagination, flow snapshot version, structured failure node, attempt counts and per-node timing.
+- [x] Frontend: display run timing metadata, status labels and step timestamps; show error context in the execution graph.
+- [ ] Frontend: add paginated History table, date/trigger filtering, and dedicated failure-node navigation informed by structured backend metadata.
 - [ ] Live run updates using bounded polling/SSE with cleanup, rather than a single 3-second refresh.
 - [ ] Complete execution detail: node input, error field, attempt count, elapsed time and safely redacted secrets (output inspection implemented in the graph).
 - [x] Execution graph overlay: render the immutable graph snapshot for the selected run, color nodes by recorded status, inspect node outputs and refresh live traces for active runs.

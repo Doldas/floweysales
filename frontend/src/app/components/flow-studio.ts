@@ -16,8 +16,8 @@ interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'functi
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
-interface FlowRunStep {id:number;node:string;label:string;status:string;output:string}
-interface FlowRun { id:number; trigger:string; status:string; output:string; error:string }
+interface FlowRunStep {id:number;node:string;label:string;status:string;output:string;created_at?:string}
+interface FlowRun { id:number; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null }
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
 @Component({
@@ -356,7 +356,23 @@ export class ConfirmDeleteFlowDialog {
     @if(runs().some(run=>run.status==='RUNNING')){<p class="muted" role="status">Active run detected · history refreshes automatically every 5 seconds while this tab is open.</p>}
     @if(historyFlowId()&&runs().length&&!filteredRuns().length){<p class="muted">No runs match your filters.</p>}
    @for(run of filteredRuns();track run.id){
-    <details class="flow-run"><summary>#{{run.id}} · {{run.trigger}} · {{run.status}}</summary>
+    <details class="flow-run">
+      <summary><span class="run-summary-status" [class.run-success]="run.status==='SUCCESS'" [class.run-failed]="run.status==='FAILED'" [class.run-active]="run.status==='RUNNING'">{{run.status}}</span> #{{run.id}} · {{run.trigger}} <span class="muted">· {{displayRunTime(run.started_at)}} · {{displayRunDuration(run)}}</span></summary>
+      <div class="run-diagnostics">
+       <span><strong>Started:</strong> {{displayRunTime(run.started_at)}}</span>
+       <span><strong>Finished:</strong> {{run.status==='RUNNING'?'In progress':displayRunTime(run.finished_at)}}</span>
+       <span><strong>Duration:</strong> {{displayRunDuration(run)}}</span>
+       <span><strong>Trigger:</strong> {{run.trigger}}</span>
+      </div>
+      @if(run.status==='FAILED'&&run.error){
+       <div class="run-error-panel" role="alert">
+        <strong>Execution failed</strong>
+        <p>{{run.error}}</p>
+        @if(suspectedFailedNode(run);as nodeId){
+          <button mat-stroked-button (click)="inspectFailedNode(run.id,nodeId)">Inspect suspected node: {{nodeId}}</button>
+        }
+       </div>
+      }
       @if(run.status==='RUNNING'){<button mat-stroked-button color="warn" (click)="cancelRun(run.id)" [disabled]="busy()">Cancel run</button>}
       <button mat-stroked-button (click)="showRunSteps(run.id)">{{traceRunId()===run.id?'Hide node trace':'Inspect nodes'}}</button>
       @if(traceRunId()===run.id){
@@ -381,6 +397,9 @@ export class ConfirmDeleteFlowDialog {
           @if(executionSelectedNode();as nodeId){
             <div class="exec-selected">
               <strong>{{executionNodeLabel(nodeId)}} · {{executionNodeStatus(nodeId)}}</strong>
+              @if(executionStep(nodeId);as selectedStep){<p class="muted">Recorded {{displayRunTime(selectedStep.created_at)}}</p>}
+              <p class="muted">Only persisted output previews are displayed. Raw inputs, per-node durations and retry counts are not available in historical records.</p>
+              @if(activeRunError();as failure){<div class="exec-error-hint"><strong>Run error:</strong> {{failure}}</div>}
               @if(executionStep(nodeId);as step){@if(step.output){<pre>{{step.output}}</pre>}@else{<p class="muted">No recorded output.</p>}}
               @else{<p class="muted">No recorded step for this node.</p>}
             </div>
@@ -393,7 +412,7 @@ export class ConfirmDeleteFlowDialog {
         <div class="run-step-list" aria-label="Node execution trace">
          @for(step of traceSteps();track step.id){
           <details class="run-step">
-           <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}}</span>
+           <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}} · {{displayRunTime(step.created_at)}}</span>
             @if(compareRun()&&compareRun()!==run.id){<span class="muted"> · {{compareStatus(step.node,step.status,step.output)}}</span>}
            </summary>
            @if(step.output){<pre>{{step.output}}</pre>}
@@ -488,6 +507,10 @@ export class ConfirmDeleteFlowDialog {
  .run-history-heading{display:flex;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:14px}
  .run-history-heading h3{margin:0}
  .run-history-heading label{flex:0 1 220px}
+ .run-diagnostics{display:flex;flex-wrap:wrap;gap:10px 18px;padding:12px;margin:12px 0;border:1px solid #48647e;border-radius:8px;font-size:12px}
+ .run-summary-status{font-weight:700;color:#bbc7d5}.run-success{color:#79e0a7}.run-failed{color:#ff9da7}.run-active{color:#f4d686}
+ .run-error-panel{border-left:4px solid #d26c79;background:#442c39;padding:12px;margin:12px 0;border-radius:6px}
+ .run-error-panel p{overflow-wrap:anywhere;white-space:pre-wrap}
  .flow-run{padding:10px;border-top:1px solid #3d5268}.run-step-list{display:flex;flex-direction:column;gap:5px;margin:12px 0;padding:10px;border:1px solid #50738e;border-radius:8px}.run-step{padding:9px;background:#162d40;border-radius:6px}.run-step summary{cursor:pointer}.step-skipped{opacity:.6}.flow-run pre{white-space:pre-wrap;word-break:break-word;max-height:250px;overflow:auto}
  `]
 })
@@ -616,6 +639,30 @@ export class FlowStudioComponent {
  readonly executionGraph=signal<FlowGraph|null>(null);
  readonly executionSnapshotUnavailable=signal(false);
  readonly executionSelectedNode=signal('');
+ activeRunError():string{
+   return this.runs().find(r=>r.id===this.traceRunId()&&r.status==='FAILED')?.error||'';
+ }
+ displayRunTime(value?:string|null):string{
+   if(!value)return 'Unavailable';
+   const date=new Date(value);
+   return Number.isNaN(date.getTime())?'Unavailable':date.toLocaleString();
+ }
+ displayRunDuration(run:FlowRun):string{
+   if(run.duration_ms==null)return run.status==='RUNNING'?'In progress':'Unavailable';
+   const ms=Math.max(0,run.duration_ms);
+   return ms<1000?ms+' ms':ms<60000?(ms/1000).toFixed(1)+' s':Math.floor(ms/60000)+' min '+Math.round(ms%60000/1000)+' s';
+ }
+ suspectedFailedNode(run:FlowRun):string{
+   if(run.status!=='FAILED'||!run.error||!this.executionGraph())return '';
+   // Failure messages can name a node without an explicit persisted FAILED step.
+   // We show this as a hint, never as a confirmed node status.
+   return this.executionGraph()!.nodes.find(n=>run.error.includes('node '+n.id+':')||run.error.includes('node '+n.id+' '))?.id||'';
+ }
+ async inspectFailedNode(runId:number,nodeId:string):Promise<void>{
+   if(this.traceRunId()!==runId)await this.showRunSteps(runId);
+   if(this.traceRunId()===runId&&this.executionGraph()?.nodes.some(n=>n.id===nodeId))
+     this.executionSelectedNode.set(nodeId);
+ }
  executionStep(id:string):FlowRunStep|undefined{const steps=this.traceSteps().filter(s=>s.node===id);return steps[steps.length-1]}
  executionNodeStatus(id:string):string{return this.executionStep(id)?.status||'NOT RECORDED'}
  executionNodeColor(id:string):string{switch(this.executionNodeStatus(id)){case 'SUCCESS':return '#176349';case 'FAILED':return '#953643';case 'RUNNING':return '#8e6927';case 'SKIPPED':return '#596374';default:return '#24394f'}}
