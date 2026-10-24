@@ -33,12 +33,14 @@ Make flows easy to discover, build, run, inspect and troubleshoot without moving
 
 ## P1 — Run History and diagnostics
 - [x] Backend: return run start/end timestamps, total duration, and recorded node step timestamps from existing database columns.
-- [ ] Backend: add pagination, flow snapshot version, structured failure node, attempt counts and per-node timing.
+- [x] Record elapsed wall-clock duration for completed node steps (nullable for legacy or skipped steps); migration 021.
+- [ ] Backend: pagination, flow snapshot version, structured failure node and per-attempt timing/retry data.
 - [x] Frontend: display run timing metadata, status labels and step timestamps; show error context in the execution graph.
 - [ ] Frontend: add paginated History table, date/trigger filtering, and dedicated failure-node navigation informed by structured backend metadata.
 - [x] Bounded active-run polling in History with cleanup, including node trace updates (#97, #101).
 - [ ] Add complete run lifecycle events/SSE and richer live diagnostics.
-- [ ] Complete execution detail: node input, error field, attempt count, elapsed time and safely redacted secrets (output inspection implemented in the graph).
+- [x] Show recorded per-step duration in Run History and execution graph, with legacy data fallback.
+- [ ] Complete execution detail: node input, structured errors, attempt counts and safely redacted secrets.
 - [x] Execution graph overlay: render the immutable graph snapshot for the selected run, color nodes by recorded status, inspect node outputs and refresh live traces for active runs.
 - [ ] Side-by-side run comparison matching snapshot nodes with clear added/removed/modified annotations.
 - [x] Side-effect-free replay preview based on a saved graph snapshot.
