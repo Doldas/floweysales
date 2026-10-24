@@ -11,7 +11,9 @@ Make flows easy to discover, build, run, inspect and troubleshoot without moving
 - [x] Add a visible unsaved-changes indicator and confirm before replacing a flow or applying a template.
 - [x] Add a History search and status filter.
 - [x] Add bounded graph Undo/Redo controls (40 snapshot states; #103).
-- [ ] Add keyboard shortcuts, coalesced drag transactions and undo for flow metadata.
+- [x] Add Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl+Y and Escape keyboard shortcuts in the editor, without hijacking text inputs.
+- [x] Coalesce one node drag into one bounded Undo step (including redo invalidation).
+- [ ] Extend undo history to flow metadata and add dedicated interactive regression coverage.
 - [ ] Separate draft from active flow: save draft, validate and explicitly publish/enable.
 - [x] Protect run-list and selected node-trace History responses from stale selections (#97, #101).
 - [ ] Add consistent stale-response guards for replay previews and comparisons.
