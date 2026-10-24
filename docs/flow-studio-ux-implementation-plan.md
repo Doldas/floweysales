@@ -26,7 +26,8 @@ Make flows easy to discover, build, run, inspect and troubleshoot without moving
 - [ ] Extend the picker with categories, richer descriptions and keyboard-first focus handling.
 - [ ] Introduce a consistent editor command bar and clear Save, Saved, Saving, Failed indicators.
 - [x] Add inline preflight validation for graph size, node connectivity, unreachable/cyclic nodes, prompts, identifiers and selected required configuration, with click-through node fixes.
-- [ ] Extend validation to backend-parity typed edges, JSON schema semantics and branching/output path requirements.
+- [x] Expand preflight checks for v2 typed/branch ports, JSON-field mappings, constant types, run variables and Workspace paths (PR stacked after keyboard Undo/Redo).
+- [ ] Reach full backend parity for JSON schema semantics, route/output validation, advanced node constraints and exact authorization.
 - [x] Allow freely placed nodes, curved edges, clickable connection ports and Fit flow viewport control without changing graph serialization.
 - [ ] Add graph auto-layout, drag-to-connect gestures, port-specific branch/data mapping and robust connection validation.
 
