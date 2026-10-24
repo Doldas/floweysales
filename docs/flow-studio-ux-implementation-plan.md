@@ -19,7 +19,8 @@ Make flows easy to discover, build, run, inspect and troubleshoot without moving
 - [x] Replace dense add-node toolbar with a searchable, role-aware node picker using existing node creation actions.
 - [ ] Extend the picker with categories, richer descriptions and keyboard-first focus handling.
 - [ ] Introduce a consistent editor command bar and clear Save, Saved, Saving, Failed indicators.
-- [ ] Add graph validation (disconnected nodes, required inputs, invalid schema, trigger and output paths) before Run.
+- [x] Add inline preflight validation for graph size, node connectivity, unreachable/cyclic nodes, prompts, identifiers and selected required configuration, with click-through node fixes.
+- [ ] Extend validation to backend-parity typed edges, JSON schema semantics and branching/output path requirements.
 - [x] Allow freely placed nodes, curved edges, clickable connection ports and Fit flow viewport control without changing graph serialization.
 - [ ] Add graph auto-layout, drag-to-connect gestures, port-specific branch/data mapping and robust connection validation.
 
@@ -61,3 +62,8 @@ The first P0 improvements are implemented in the companion PR. Other tasks above
 - [x] Add bounded graph Undo/Redo in Flow Editor, with history cleared on flow/template changes.
 - [x] Add explicit recursive folder deletion to My Workspace with confirmation, owner scoping and a single database transaction.
 - [ ] Extend Undo/Redo to flow metadata changes and add richer graph validation before running.
+
+## Consolidated node editing
+- [x] Put every per-node inspector field, node-to-node links, typed mapping and Delete node into an expanded canvas tooltip.
+- [x] Remove the standalone selected-node Details panel to give the graph the full editor width.
+- [ ] Consider extracting the full tooltip into a standalone inspector component without reintroducing a permanent sidebar.

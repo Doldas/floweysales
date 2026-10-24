@@ -145,40 +145,7 @@ export class ConfirmDeleteFlowDialog {
      }
     </svg>
    </div>
-   @if(quickNode();as q){<div class="node-quick-tooltip" (click)="$event.stopPropagation()" aria-label="Quick node settings">
-     <div class="quick-tooltip-title"><strong>⚙ {{q.label}}</strong><button type="button" class="quick-tooltip-close" (click)="closeQuickNode()" aria-label="Close quick settings" title="Close">×</button></div>
-     <label>Name <input [ngModel]="q.label" (ngModelChange)="updateNodeFor(q.id,'label',$event)" maxlength="100"></label>
-     @if(q.type==='agent'){
-       <label>Format <select [ngModel]="q.output_mode||'markdown'" (ngModelChange)="updateNodeFor(q.id,'output_mode',$event)">
-         <option value="markdown">Markdown</option><option value="json">JSON only</option>
-       </select></label>
-       <label>Prompt <textarea rows="3" [ngModel]="q.prompt||''" (ngModelChange)="updateNodeFor(q.id,'prompt',$event)" maxlength="2000"></textarea></label>
-     }
-     @if(q.type==='constant'||q.type==='workspace_read'||q.type==='workspace_write'){
-       <label>{{q.type==='constant'?'Value':'File path'}} <input [ngModel]="q.value||''" (ngModelChange)="updateNodeFor(q.id,'value',$event)"></label>
-     }
-     <button type="button" (click)="select(q.id);hoveredNode.set('')">Full details</button>
-     @if(q.type!=='trigger'){<button type="button" class="node-quick-delete" (click)="removeNode(q.id)">Delete node</button>}
-   </div>}
-   @if(canvasMenu()){<div class="canvas-context-menu" role="menu" aria-label="Create node">
-     <strong>Add node</strong>
-     <button type="button" role="menuitem" (click)="addAgent();closeCanvasMenu()">Research Agent</button>
-     <button type="button" role="menuitem" (click)="addOutput();closeCanvasMenu()">Output Result</button>
-     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addSubflow();closeCanvasMenu()">Call Flow</button>}
-     <button type="button" role="menuitem" (click)="addConstant();closeCanvasMenu()">Value</button>
-     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addFunctionCall();closeCanvasMenu()">Function</button>}
-     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('save_result');closeCanvasMenu()">Save Result</button>}
-     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('load_result');closeCanvasMenu()">Load Result</button>}
-     <button type="button" role="menuitem" (click)="addUtility('transform');closeCanvasMenu()">Transform Text</button>
-     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('workspace_read');closeCanvasMenu()">Read Workspace File</button>}
-     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('workspace_write');closeCanvasMenu()">Write Workspace File</button>}
-     <button type="button" (click)="closeCanvasMenu()">Cancel</button>
-   </div>}
-   </div>
-   <aside class="flow-node-editor" aria-label="Node details" aria-live="polite">
-   <header class="inspector-heading"><span>DETAILS</span><strong>{{ selectedNode()?.label || 'No node selected' }}</strong></header>
-   @if(selectedNode();as n){
-     <div class="inspector-fields">
+   @if(quickNode();as n){<section class="node-quick-tooltip node-full-tooltip" role="region" aria-label="Complete node settings" (click)="$event.stopPropagation()"><header class="quick-tooltip-title"><strong>⚙ {{n.label}} · {{n.type}}</strong><button type="button" class="quick-tooltip-close" (click)="closeQuickNode()" aria-label="Close node settings">×</button></header><div class="inspector-fields">
        @if(n.type!=='trigger'){
          <label>Connect output from <select #nodeSource><option value="">Choose upstream node</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id&&other.type!=='output'){<option [value]="other.id">{{other.label}}</option>}}</select></label>
          <button mat-stroked-button (click)="connect(nodeSource.value,n.id)" [disabled]="!nodeSource.value">Connect nodes</button>
@@ -318,10 +285,33 @@ export class ConfirmDeleteFlowDialog {
          <label>Reusable flow to call <select [ngModel]="n.flow_id||0" (ngModelChange)="updateFlowReference(+$event)"><option [ngValue]="0">Choose target flow</option>@for(f of flows();track f.id){@if(f.id!==selectedId()){<option [ngValue]="f.id">{{f.name}} (#{{f.id}})</option>}}</select></label>
          <p class="muted">Runs the selected graph as a function. Recursion is blocked and nesting is limited to 4 levels.</p>
        }
-     </div>
-   } @else { <p class="muted">Select a node in the graph to edit its properties here.</p> }
-   </aside>
+     </div>@if(n.type!=='trigger'){<button type="button" class="node-quick-delete" (click)="removeNode(n.id)">Delete node</button>}</section>}
+    @if(canvasMenu()){<div class="canvas-context-menu" role="menu" aria-label="Create node">
+     <strong>Add node</strong>
+     <button type="button" role="menuitem" (click)="addAgent();closeCanvasMenu()">Research Agent</button>
+     <button type="button" role="menuitem" (click)="addOutput();closeCanvasMenu()">Output Result</button>
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addSubflow();closeCanvasMenu()">Call Flow</button>}
+     <button type="button" role="menuitem" (click)="addConstant();closeCanvasMenu()">Value</button>
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addFunctionCall();closeCanvasMenu()">Function</button>}
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('save_result');closeCanvasMenu()">Save Result</button>}
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('load_result');closeCanvasMenu()">Load Result</button>}
+     <button type="button" role="menuitem" (click)="addUtility('transform');closeCanvasMenu()">Transform Text</button>
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('workspace_read');closeCanvasMenu()">Read Workspace File</button>}
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('workspace_write');closeCanvasMenu()">Write Workspace File</button>}
+     <button type="button" (click)="closeCanvasMenu()">Cancel</button>
+   </div>}
    </div>
+   
+   </div>
+   <section class="graph-validation" aria-label="Flow graph validation">
+     <header><strong>Graph validation</strong><span role="status">{{graphIssues().length?graphIssues().length+' issues':'No structural issues'}}</span></header>
+     @if(graphIssues().length){<p>Fix these issues before saving and running:</p><ul>
+       @for(issue of graphIssues();track $index){<li>
+         @if(issue.nodeId){<button type="button" (click)="openValidationIssue(issue.nodeId)">{{issue.message}} · Edit node</button>}
+         @else{ {{issue.message}} }
+       </li>}
+     </ul>} @else {<p class="muted">The server will perform final validation when saving or running.</p>}
+   </section>
    <div class="flow-actions">
      <button mat-stroked-button type="button" (click)="undoGraph()" [disabled]="!canUndo()||busy()" aria-label="Undo graph change">↶ Undo</button>
      <button mat-stroked-button type="button" (click)="redoGraph()" [disabled]="!canRedo()||busy()" aria-label="Redo graph change">↷ Redo</button>
@@ -477,15 +467,15 @@ export class ConfirmDeleteFlowDialog {
   .canvas-connect-hint{display:flex;align-items:center;gap:8px;font-size:12px;color:#ffe19a;margin-left:auto}.canvas-connect-hint button{background:#3b3540;color:#ffe19a;border:1px solid #ae8c67;border-radius:5px;cursor:pointer;padding:5px}
   .flow-workspace{background:radial-gradient(#294057 1px,transparent 1px) 0 0/20px 20px,#0d1b2a;border:1px solid #45627b;overflow:auto;border-radius:12px}
  svg{min-width:660px;width:100%;height:auto;display:block;touch-action:none;cursor:grab}
- .node-quick-tooltip{position:absolute;right:14px;top:62px;z-index:7;display:flex;flex-direction:column;gap:8px;padding:12px;width:min(290px,85%);max-height:65vh;overflow:auto;background:rgba(26,51,74,.89);backdrop-filter:blur(10px);border:1px solid #8abce4;box-shadow:0 12px 28px #000a;border-radius:10px}
+ .node-quick-tooltip{position:absolute;right:14px;top:62px;z-index:7;display:flex;flex-direction:column;gap:8px;padding:12px;width:min(480px,calc(100% - 28px));box-sizing:border-box;max-height:min(78vh,780px);overflow:auto;background:rgba(26,51,74,.89);backdrop-filter:blur(10px);border:1px solid #8abce4;box-shadow:0 12px 28px #000a;border-radius:10px}
  .quick-tooltip-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
  .quick-tooltip-close{width:26px;height:26px;min-height:26px!important;padding:0!important;flex:0 0 auto;color:#fff!important;background:#b52b38!important;border:1px solid #e15d66!important;border-radius:5px!important;font-size:20px!important;line-height:1!important;cursor:pointer}
  .quick-tooltip-close:hover{background:#db3545!important}
- .node-quick-tooltip label{display:flex;flex-direction:column;gap:4px;min-width:0}
+ .node-full-tooltip .inspector-fields{display:flex;flex-direction:column;gap:12px}.node-quick-tooltip label{display:flex;flex-direction:column;gap:4px;min-width:0}
  .node-quick-tooltip input,.node-quick-tooltip textarea,.node-quick-tooltip select{width:100%;box-sizing:border-box}
  .node-quick-tooltip button{min-height:32px}
   .node-quick-delete{background:#562632;color:#ffe5e5;border:1px solid #b65f6b;border-radius:6px;padding:8px;cursor:pointer}
- .blueprint-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(270px,315px);align-items:stretch;gap:12px;min-height:470px}
+ .blueprint-layout{display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch;gap:12px;min-height:470px}
  .blueprint-layout .flow-workspace{min-width:0;min-height:470px}
  .flow-node-editor{margin:0;padding:16px;border:1px solid #355a75;border-radius:10px;background:#142438;min-width:0;max-height:min(75vh,780px);overflow-y:auto}
  .inspector-heading{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid #355a75;padding-bottom:12px;margin-bottom:14px}
@@ -497,9 +487,13 @@ export class ConfirmDeleteFlowDialog {
  .mapped-edge button{color:#bce3ff;background:#1b3850;border:1px solid #527b99;border-radius:5px;padding:5px}
  .inspector-fields label{min-width:0;width:100%;flex:auto}
  .inspector-fields input,.inspector-fields select,.inspector-fields textarea{box-sizing:border-box;width:100%;min-width:0}
- @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .flow-workspace{min-height:280px}.flow-node-editor{max-height:360px}}
+ @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .flow-workspace{min-height:280px}.node-full-tooltip{width:calc(100% - 16px);right:8px}}
 
-.flow-message{border-left:3px solid #73baff;padding-left:12px}
+.graph-validation{border:1px solid #527590;border-radius:10px;padding:14px;margin:12px 0;background:#152b40}
+ .graph-validation header{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+ .graph-validation ul{padding-left:22px}.graph-validation li{padding:4px 0;overflow-wrap:anywhere}
+ .graph-validation li button{background:none;border:0;text-decoration:underline;color:#aedfff;cursor:pointer;font:inherit;text-align:left;padding:2px 0}
+ .flow-message{border-left:3px solid #73baff;padding-left:12px}
  .exec-graph{margin:14px 0;display:grid;gap:10px;padding:14px;border:1px solid #557c99;border-radius:12px;background:#12293d}
  .exec-graph-canvas{overflow:auto;border:1px solid #3c5d77;border-radius:8px;background:#0b1c2e}
  .exec-graph-canvas svg{min-width:0;width:100%;min-height:210px;max-height:520px;height:auto;cursor:default}
@@ -658,6 +652,50 @@ export class FlowStudioComponent {
   readonly hasUnsavedChanges=()=>this.savedSnapshot()!==this.currentSnapshot();
   private currentSnapshot():string{return JSON.stringify({name:this.name(),graph:this.graph(),enabled:this.enabled(),interval:this.interval(),eventKey:this.eventKey()})}
   private allowDiscard():boolean{return !this.hasUnsavedChanges()||confirm('Discard unsaved changes to this flow?')}
+  readonly graphIssues=():{nodeId?:string;message:string}[]=>{
+    const g=this.graph(),issues:{nodeId?:string;message:string}[]=[];
+    const add=(message:string,nodeId?:string)=>issues.push({message,nodeId});
+    const nodes=new Map(g.nodes.map(n=>[n.id,n]));
+    if(this.name().trim().length<2||this.name().length>120)add('Flow name must be 2–120 characters.');
+    if(this.interval()!==0&&(this.interval()<5||this.interval()>10080))add('Schedule interval must be off or 5–10080 minutes.');
+    if(g.nodes.length<2||g.nodes.length>16)add('A flow needs 2–16 nodes.');
+    if(g.edges.length<1||g.edges.length>32)add('A flow needs 1–32 connections.');
+    const triggers=g.nodes.filter(n=>n.type==='trigger');
+    if(triggers.length!==1)add('Exactly one trigger node is required.');
+    const ids=new Set<string>();
+    for(const n of g.nodes){
+      if(!n.id||n.id.length>48||ids.has(n.id))add('Duplicate or invalid node ID: '+n.id,n.id);
+      ids.add(n.id);
+      if(n.type==='agent'&&(n.prompt||'').trim().length<5)add('Agent needs research instructions: '+n.label,n.id);
+      if(n.type==='flow'&&!n.flow_id)add('Select a saved flow: '+n.label,n.id);
+      if(n.type==='function'&&!n.function_id)add('Select a saved function: '+n.label,n.id);
+      if(n.type==='json_get'&&!/^[A-Za-z_][A-Za-z0-9_]*$/.test(n.property||''))add('Enter a valid JSON property: '+n.label,n.id);
+      if(n.type==='condition'&&!['equals','not_equals','contains','greater_than','less_than'].includes(n.operator||''))add('Select a condition operator: '+n.label,n.id);
+      if(n.type==='loop'&&(!n.loop_limit||n.loop_limit<1||n.loop_limit>100))add('Set loop limit from 1 to 100: '+n.label,n.id);
+      if(n.type==='agent'&&n.output_mode==='json'&&n.json_contract){try{
+        const contract=JSON.parse(n.json_contract);if(!contract||typeof contract!=='object'||Array.isArray(contract))throw Error('Invalid schema');
+      }catch{add('JSON output contract is invalid: '+n.label,n.id)}}
+    }
+    const adjacency=new Map(g.nodes.map(n=>[n.id,[] as string[]]));
+    const incoming=new Map(g.nodes.map(n=>[n.id,0]));
+    for(const e of g.edges){
+      if(!nodes.has(e.from)||!nodes.has(e.to)||e.from===e.to){add('Connection references a missing node or itself.');continue}
+      if(nodes.get(e.to)?.type==='trigger')add('Trigger cannot have incoming connections.',e.to);
+      adjacency.get(e.from)?.push(e.to);incoming.set(e.to,(incoming.get(e.to)||0)+1);
+    }
+    for(const n of g.nodes)if(n.type!=='trigger'&&!incoming.get(n.id))add('Disconnected node: '+n.label,n.id);
+    const visited=new Set<string>(),active=new Set<string>();let cycle=false;
+    const dfs=(id:string):void=>{
+      if(active.has(id)){cycle=true;return}
+      if(visited.has(id))return;
+      visited.add(id);active.add(id);for(const to of adjacency.get(id)||[])dfs(to);active.delete(id);
+    };
+    if(triggers.length===1)dfs(triggers[0].id);
+    if(cycle)add('Graph contains a cycle.');
+    for(const n of g.nodes)if(!visited.has(n.id))add('Unreachable node: '+n.label,n.id);
+    return issues;
+  };
+  openValidationIssue(id:string):void{if(this.node(id))this.openQuickNode(id)}
   readonly historyLoading=signal(false);
   private historyRequestVersion=0;
   readonly historyStatusFilter=signal('all');
@@ -967,6 +1005,10 @@ export class FlowStudioComponent {
  async save(){this.busy.set(true);try{const id=this.selectedId();const body={name:this.name(),graph:this.graph(),enabled:this.enabled(),interval_minutes:this.interval(),event_key:this.eventKey()};
    const flow:SavedFlow=await this.request(id?'/api/admin/flows/'+id:'/api/admin/flows',{method:id?'PUT':'POST',body:JSON.stringify(body)});
    this.selectedId.set(flow.id);this.historyFlowId.set(flow.id);this.savedSnapshot.set(this.currentSnapshot());this.message.set('Flow saved');await this.refresh()}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
- async run(){this.busy.set(true);try{await this.request('/api/admin/flows/'+this.selectedId()+'/run',{method:'POST'});this.historyFlowId.set(this.selectedId());this.message.set('Agent run queued; open Run history to see its progress');setTimeout(()=>void this.refreshRuns(),3000)}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
+ async run(){
+   const issues=this.graphIssues();
+   if(issues.length){this.message.set('Resolve '+issues.length+' graph issue(s) before running.');return}
+   if(this.hasUnsavedChanges()){this.message.set('Save current edits before running.');return}
+   this.busy.set(true);try{await this.request('/api/admin/flows/'+this.selectedId()+'/run',{method:'POST'});this.historyFlowId.set(this.selectedId());this.message.set('Agent run queued; open Run history to see its progress');setTimeout(()=>void this.refreshRuns(),3000)}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
  async emitEvent(){this.busy.set(true);try{const definition=this.triggers().find(t=>t.event_key===this.eventKey());if(!definition)throw Error('Create the custom trigger first');let value:string|number|boolean=this.triggerValue();if(definition.payload_type==='number'){value=Number(value);if(!Number.isFinite(value))throw Error('Event requires a finite number')}if(definition.payload_type==='boolean'){if(value!=='true'&&value!=='false')throw Error('Use true or false for a boolean event');value=value==='true'}const data=await this.request('/api/admin/flow-events/'+encodeURIComponent(this.eventKey()),{method:'POST',body:JSON.stringify({value})});this.message.set(data.started+' flow(s) triggered');}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
 }
