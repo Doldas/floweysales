@@ -1,15 +1,15 @@
-# Agent Flow Studio (first increment)
+# Agent Flow Studio — user guide and execution model
 
-The authenticated SYS_ADMIN dashboard now includes a visual graph editor. It saves graphs in the Liquibase-managed `agent_flows` table and preserves each execution in `agent_flow_runs`.
+Authenticated Flow Studio includes a **My Flows** dashboard, visual graph editor, Run History and My Workspace. Saved graphs live in the Liquibase-managed `agent_flows` table, run metadata in `agent_flow_runs`, and bounded node traces and per-run graph snapshots in separate tables. SYS_ADMIN can manage scheduled/event flows and privileged nodes; ordinary users can create and run their own manual-only flows. See [the merged UX progress log](flow-studio-progress.md).
 
 ## Supported nodes and triggers
 
-- One **Trigger** root plus 1–15 **Research Agent** nodes connected by directed edges; no cycles or disconnected nodes.
+- Exactly one **Trigger** root and 2–16 total nodes / 1–32 edges; the server rejects cycles and disconnected nodes. Besides agents, versioned graphs support conditions, merge, JSON field extraction, bounded data loops, value/transform/output, HTTP/web research and privileged function/subflow and Workspace nodes.
 - **Manual:** click Run now on a saved flow.
 - **Interval schedule:** enable the flow and set `interval_minutes` to 5–10080. The Go scheduler polls every 30 seconds, and the DB atomically claims due intervals across service replicas.
 - **Event key:** enable a flow with a key such as `market.close`; authenticated SYS_ADMIN can call `POST /api/admin/flow-events/market.close`. This is an administrator-triggered event hook, not a public unauthenticated webhook. Automated source adapters can be added later behind a separately secured event-ingress layer.
 
-The editor supports positioning nodes, editing prompts, linking nodes, saving, running and reading recent run traces. The initial executor validates that the graph is a DAG, executes research nodes in topological order, and passes the previous agent's output to the next. Execution uses the configured OpenAI-compatible model with a two-minute timeout and a maximum of two concurrent runs per server instance.
+The editor supports a searchable role-aware node picker, free positioning, zoom/pan, **Fit flow**, curved links, accessible click-to-connect ports and bounded **Undo/Redo** of graph changes. Selecting a node opens the **complete floating settings tooltip** (the former permanent Details panel was removed). Graph preflight reports core structural/configuration problems with click-to-node fixes; the server remains authoritative for all execution and permission checks. Version 2 execution routes values along edges and selects conditional branches in topological order.
 
 ## Safety and remaining work
 
@@ -17,9 +17,9 @@ The editor supports positioning nodes, editing prompts, linking nodes, saving, r
 - Flows **never execute live trades**. An admin must separately enable authentication and configure an AI endpoint/model.
 - Schedule polling and execution are bounded, with durable completed/failed run history. Scheduling claims are durable but not an at-least-once queue: a process death after claiming a run but before inserting it can miss that interval. Runs interrupted after insertion are eventually marked failed.
 - The flow graph rejects cycles. Recurring loops happen at the scheduler level, not through unbounded edges.
-- Next iterations should include per-step persisted checkpoints, retries/dead-letter queues, condition/branch nodes, configurable evidence-backed read-only tools, trigger adapters, replay and cancellation controls, versioned graph revisions, run ownership and more adversarial integration tests.
+- **Already available:** conditional/branch nodes, bounded agent retries/timeouts, owner-scoped manual flows, cancellation, recorded node steps, immutable run graph snapshots, execution timestamps and preview-only replay. **Still planned:** durable checkpoints/dead-letter queues, general trigger adapters, draft/publish revisions, richer per-step timing/attempt data and adversarial/accessibility tests.
 
-To start, log in as SYS_ADMIN, scroll to Agent Flow Studio at the top of the terminal, create a flow, adjust prompts and graph links, save it, and either run it manually or enable a schedule.
+To start, sign in and open **My Flows → New flow / Edit**. Add nodes with **+ Add node**, select a graph node to configure all fields in its floating tooltip, check **Graph validation**, then **Save flow** before **Run now**. Use **Run history → Inspect nodes** to view recorded steps, status-colored historical graph snapshots, duration and errors. Scheduling and typed event triggers require SYS_ADMIN.
 
 ## Blueprint-style reusable flow calls (next increment)
 
@@ -48,3 +48,7 @@ SYS_ADMIN can open the Function Library under Flow Studio to create bounded, pur
 Custom triggers are registered as unique event keys with text, numeric or boolean payloads. An administrator can enable flows with the matching event key and publish a value through `POST /api/admin/flow-events/{key}` with `{"value":"example"}` for text, `{"value":42}` for numbers or `{"value":true}` for boolean triggers. Triggers require authenticated SYS_ADMIN and matching value types; they are not public inbound webhooks. A flow can subscribe by setting its Event key and Enabled toggle.
 
 **Remaining limitations:** A function graph currently exposes one typed input and one typed output; branch logic selects a value rather than controlling separate execution wires. The flow graph uses the previous node's output as function input. Graph revisions are not pinned; trigger delivery and downstream starts are best-effort and are not durable outbox events. Agent research is read-only, with tool access disabled. Extensible trigger adapters, multiple typed pins and durable propagation remain in #59.
+
+## Current UX delivery
+
+The [October 2026 delivery log](flow-studio-progress.md) covers merged PRs #96–#104: independent History, My Flows, node search, canvas and connection improvements, historical execution graph, run timestamps/failure context, Undo/Redo, Workspace folder deletion, full node tooltip and preflight validation. This does **not** imply automatic node layout, editor draft publishing or complete per-node input/timing capture. The [UX implementation plan](flow-studio-ux-implementation-plan.md) lists remaining work.

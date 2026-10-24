@@ -13,3 +13,7 @@ This is a prioritized, evolving engineering plan—not a promise of delivery dat
 | P4 Broker automation (future) | Consent-gated execution gateway, kill switch, idempotency, limits, human review, regulatory assessment | Separate security/compliance design approval; *not enabled by default* |
 
 The first pass should deepen market-data reliability, not maximize the number of endpoints indiscriminately.
+
+## Flow Studio / Run History UX progress (2026-10-24)
+
+Nine incremental PRs [#96–#104](flow-studio-progress.md) are merged: independent History, My Flows, node search, canvas improvements, execution graph snapshots, run timing, graph Undo/Redo, Workspace folder deletion, inline preflight and full floating node settings replacing the persistent Details pane. Tracking issue [#95](https://github.com/Doldas/floweysales/issues/95) is still open for typed-edge validation parity, accessibility and UI tests, automatic layout, draft/publish revisions, and more complete diagnostics. See the [progress report](flow-studio-progress.md) for distinctions between delivered functionality and remaining work.
