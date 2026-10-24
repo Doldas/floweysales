@@ -31,6 +31,14 @@ interface TreeItem { name:string; path:string; depth:number; }
    <button type="button" (click)="navigate('/')">Workspace</button>
    @for(crumb of crumbs();track crumb.path){<span aria-hidden="true">›</span><button type="button" (click)="navigate(crumb.path)">{{crumb.name}}</button>}
   </div>
+  @if(folderDeleteTarget();as target){
+   <div class="delete-confirm folder-delete-confirm" role="alertdialog" aria-modal="true" aria-label="Confirm folder deletion">
+    <strong>Delete folder {{target}}?</strong>
+    <p>This permanently deletes all {{folderDeleteFileCount()}} files in this folder and its subfolders. This cannot be undone.</p>
+    <button mat-stroked-button type="button" (click)="folderDeleteTarget.set('')">Cancel</button>
+    <button mat-flat-button type="button" [disabled]="busy()" (click)="removeFolder()">Delete folder and contents</button>
+   </div>
+  }
   <div class="explorer-grid">
    <nav class="folder-tree" aria-label="Folders">
     <strong>Folders</strong>
@@ -43,6 +51,7 @@ interface TreeItem { name:string; path:string; depth:number; }
       <div class="folder-item" [style.padding-left.px]="dir.depth*16">
        <button type="button" class="folder-toggle" (click)="toggleDirectory(dir.path)" [attr.aria-expanded]="!isCollapsed(dir.path)" [attr.aria-label]="'Toggle '+dir.name">{{isCollapsed(dir.path)?'▸':'▾'}}</button>
        <button type="button" [class.active]="folder()===dir.path" (click)="navigate(dir.path)">{{dir.name}}</button>
+       <button type="button" class="folder-delete" [disabled]="busy()" (click)="requestFolderDelete(dir.path)" [attr.aria-label]="'Delete folder '+dir.name" title="Delete folder and contents">×</button>
       </div>
      }
     }
@@ -52,7 +61,10 @@ interface TreeItem { name:string; path:string; depth:number; }
     <div class="file-table">
      <div class="file-row heading"><span>Name</span><span>Type</span><span>Size</span></div>
      @for(dir of childFolders();track dir.path){
-      <button type="button" class="file-row" (click)="navigate(dir.path)"><span>📁 {{dir.name}}</span><span>Folder</span><span>—</span></button>
+      <div class="folder-row">
+       <button type="button" class="file-row" (click)="navigate(dir.path)"><span>📁 {{dir.name}}</span><span>Folder</span><span>—</span></button>
+       <button type="button" class="folder-delete" [disabled]="busy()" (click)="requestFolderDelete(dir.path)" [attr.aria-label]="'Delete folder '+dir.name" title="Delete folder and contents">×</button>
+      </div>
      }
      @for(file of visibleFiles();track file.path){
       <button type="button" class="file-row" [class.active]="path()===file.path" (click)="open(file.path)">
@@ -117,6 +129,11 @@ interface TreeItem { name:string; path:string; depth:number; }
  .folder-item{display:flex;align-items:center;min-width:0;gap:0}
  .folder-item button:not(.folder-toggle){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
  .folder-tree .folder-toggle{flex:0 0 28px;text-align:center;padding:7px 4px}
+ .folder-item .folder-delete{flex:0 0 30px;padding:5px;color:#ffb6c1;text-align:center}
+ .folder-row{display:flex;align-items:center;gap:6px}.folder-row .file-row{flex:1;min-width:0}.folder-row .folder-delete{flex:0 0 30px}
+ .folder-delete{color:#ffb6c1;background:#402631;border:1px solid #a36a77;border-radius:6px;cursor:pointer;padding:5px 9px}
+ .folder-delete:disabled{opacity:.5;cursor:default}
+ .folder-delete-confirm{margin:12px 16px;background:#372532}.folder-delete-confirm button{margin-right:8px}
  .folder-creator{display:flex;flex-wrap:wrap;align-items:end;gap:10px;padding:12px 16px;background:#172d42;border-bottom:1px solid #36556b}
  .folder-creator label{flex:1;min-width:180px}
  .folder-tree button{background:transparent;border:0;text-align:left;white-space:nowrap;color:inherit;padding:7px 10px;cursor:pointer;border-radius:5px}
@@ -150,6 +167,24 @@ export class UserspaceFilesComponent {
  readonly message=signal('');
  readonly busy=signal(false);
  readonly deleteRequested=signal(false);
+ readonly folderDeleteTarget=signal('');
+ readonly folderDeleteFileCount=computed(()=>this.files().filter(f=>f.path.startsWith(this.folderDeleteTarget()+'/')).length);
+ requestFolderDelete(path:string){if(this.busy()||path==='/'||!this.directories().some(d=>d.path===path))return;this.folderDeleteTarget.set(path);this.deleteRequested.set(false)}
+ async removeFolder():Promise<void>{
+  const target=this.folderDeleteTarget();
+  if(this.busy()||!target||target==='/'||!this.directories().some(d=>d.path===target))return;
+  this.busy.set(true);
+  try{
+   const result=await this.api('/api/userspace/folder?path='+encodeURIComponent(target),{method:'DELETE'});
+   this.folderDeleteTarget.set('');
+   if(this.folder()===target||this.folder().startsWith(target+'/'))this.navigate(this.parent(target));
+   if(this.path().startsWith(target+'/')){this.path.set('');this.content.set('')}
+   this.collapsedDirectories.update(list=>list.filter(dir=>dir!==target&&!dir.startsWith(target+'/')));
+   await this.refresh();
+   this.message.set('Folder deleted ('+result.files_deleted+' files removed).');
+  }catch(e){this.message.set('Could not delete folder: '+String(e))}
+  finally{this.busy.set(false)}
+ }
  readonly directories=computed<TreeItem[]>(()=>{
   const seen=new Set<string>();
   for(const file of this.files()){
