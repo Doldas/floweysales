@@ -313,8 +313,8 @@ export class ConfirmDeleteFlowDialog {
      </ul>} @else {<p class="muted">The server will perform final validation when saving or running.</p>}
    </section>
    <div class="flow-actions">
-     <button mat-stroked-button type="button" (click)="undoGraph()" [disabled]="!canUndo()||busy()" aria-label="Undo graph change">↶ Undo</button>
-     <button mat-stroked-button type="button" (click)="redoGraph()" [disabled]="!canRedo()||busy()" aria-label="Redo graph change">↷ Redo</button>
+     <button mat-stroked-button type="button" (click)="undoGraph()" [disabled]="!canUndo()||busy()" aria-label="Undo graph change" title="Undo (Ctrl/Cmd+Z)">↶ Undo</button>
+     <button mat-stroked-button type="button" (click)="redoGraph()" [disabled]="!canRedo()||busy()" aria-label="Redo graph change" title="Redo (Ctrl/Cmd+Shift+Z or Ctrl+Y)">↷ Redo</button>
      <button mat-flat-button color="primary" (click)="save()" [disabled]="busy()">Save flow</button>
       <span class="muted" role="status">{{hasUnsavedChanges()?'Unsaved changes':'All changes saved'}}</span>
      <button mat-stroked-button (click)="run()" [disabled]="busy()||!selectedId()">Run now</button>
@@ -518,6 +518,20 @@ export class FlowStudioComponent {
  openQuickNode(id:string):void {this.select(id);this.hoveredNode.set(id);}
  // Closing the quick panel never changes the selected graph node.
  closeQuickNode():void {this.hoveredNode.set('');}
+ @HostListener('document:keydown',['$event'])
+ onEditorKeydown(event:KeyboardEvent):void{
+  if(event.key==='Escape'){
+   if(this.studioTab()==='editor'){this.closeQuickNode();this.closeCanvasMenu();this.cancelConnecting();}
+   return;
+  }
+  if(this.studioTab()!=='editor'||this.busy()||event.altKey)return;
+  const target=event.target;
+  if(target instanceof Element&&target.closest('input,textarea,select,[contenteditable="true"],[role="textbox"]'))return;
+  if(!(event.ctrlKey||event.metaKey))return;
+  const key=event.key.toLowerCase();
+  if(key==='z'&&!event.shiftKey&&this.canUndo()){event.preventDefault();this.undoGraph();}
+  else if(((key==='z'&&event.shiftKey)||key==='y')&&this.canRedo()){event.preventDefault();this.redoGraph();}
+ }
  @HostListener('document:click',['$event'])
  onDocumentClick(event:MouseEvent):void {
   const el=event.target;
@@ -622,6 +636,7 @@ export class FlowStudioComponent {
  readonly canUndo=()=>this.undoHistory().length>0;
  readonly canRedo=()=>this.redoHistory().length>0;
  private lastGraphVersion='';
+ private dragHistoryStart:string|null=null;
  private resetGraphHistory():void{
    this.lastGraphVersion=JSON.stringify(this.graph());
    this.undoHistory.set([]);this.redoHistory.set([]);
@@ -747,7 +762,7 @@ export class FlowStudioComponent {
  constructor(){this.resetGraphHistory();this.savedSnapshot.set(this.currentSnapshot());void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN')void this.loadFunctions();void this.loadModels();
     effect(()=>{
       const current=JSON.stringify(this.graph());
-      if(current===this.lastGraphVersion)return;
+      if(current===this.lastGraphVersion||this.dragHistoryStart!==null)return;
       if(this.lastGraphVersion)this.undoHistory.update(items=>[...items.slice(-39),this.lastGraphVersion]);
       this.lastGraphVersion=current;this.redoHistory.set([]);
     });
@@ -903,12 +918,17 @@ export class FlowStudioComponent {
     if(this.chosen()===id)this.chosen.set('');
     this.closeQuickNode();this.message.set('Node removed; save the flow to persist.');
   }
- dragStart(ev:PointerEvent,id:string){if(ev.button!==0||ev.pointerType==='touch')return;const n=this.node(id);if(!n)return;this.chosen.set(id);this.dragging={id,startX:ev.clientX,startY:ev.clientY,x:n.x,y:n.y};
+ dragStart(ev:PointerEvent,id:string){if(ev.button!==0||ev.pointerType==='touch')return;const n=this.node(id);if(!n)return;this.chosen.set(id);this.dragHistoryStart=JSON.stringify(this.graph());this.dragging={id,startX:ev.clientX,startY:ev.clientY,x:n.x,y:n.y};
   const svg=(ev.currentTarget as SVGGElement).ownerSVGElement;if(!svg)return;
   const move=(event:PointerEvent)=>{const box=svg.getBoundingClientRect();if(!this.dragging)return;
    const view=this.canvasView();const dx=(event.clientX-this.dragging.startX)*view.width/box.width,dy=(event.clientY-this.dragging.startY)*view.height/box.height;
    this.graph.update(g=>({...g,nodes:g.nodes.map(node=>node.id===id?{...node,x:Math.round(this.dragging!.x+dx),y:Math.round(this.dragging!.y+dy)}:node)}))}
-  const stop=()=>{svg.removeEventListener('pointermove',move);svg.removeEventListener('pointerup',stop);svg.removeEventListener('pointercancel',stop);this.dragging=null}
+  const stop=()=>{
+   svg.removeEventListener('pointermove',move);svg.removeEventListener('pointerup',stop);svg.removeEventListener('pointercancel',stop);
+   const before=this.dragHistoryStart,after=JSON.stringify(this.graph());
+   if(before!==null&&before!==after){this.undoHistory.update(items=>[...items.slice(-39),before]);this.redoHistory.set([]);}
+   this.lastGraphVersion=after;this.dragHistoryStart=null;this.dragging=null;
+  }
   svg.addEventListener('pointermove',move);svg.addEventListener('pointerup',stop);svg.addEventListener('pointercancel',stop);
  }
  private async request(url:string,options?:RequestInit):Promise<any>{const r=await fetch(url,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...options?.headers}});
