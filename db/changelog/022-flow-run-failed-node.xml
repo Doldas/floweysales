@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="022-flow-run-failed-node" author="floweysales" dbms="mysql">
+  <addColumn tableName="agent_flow_runs">
+   <column name="failed_node_id" type="VARCHAR(48)" remarks="Top-level graph node that raised the run error; NULL for success, cancellation and flow-level errors"/>
+  </addColumn>
+  <addColumn tableName="agent_flow_run_steps">
+   <column name="attempts" type="INT" remarks="Execution attempts for a FAILED retryable node; NULL when not tracked"/>
+  </addColumn>
+  <rollback>
+   <dropColumn tableName="agent_flow_run_steps" columnName="attempts"/>
+   <dropColumn tableName="agent_flow_runs" columnName="failed_node_id"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

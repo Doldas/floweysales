@@ -25,6 +25,7 @@ type AgentFlowRun struct {
 	StartedAt  string  `json:"started_at"`
 	FinishedAt *string `json:"finished_at"`
 	DurationMS *int64  `json:"duration_ms"`
+	FailedNode *string `json:"failed_node"`
 }
 
 func (d *Database) ListAgentFlows(ctx context.Context) ([]AgentFlow, error) {
@@ -86,6 +87,11 @@ func (d *Database) CreateAgentFlowRun(ctx context.Context, id int64, trigger str
 	return res.LastInsertId()
 }
 func (d *Database) FinishAgentFlowRun(ctx context.Context, id int64, output string, runErr error) error {
+	return d.FinishAgentFlowRunWithNode(ctx, id, output, runErr, "")
+}
+
+// FinishAgentFlowRunWithNode stores failedNode only for failed runs; an empty value means flow-level.
+func (d *Database) FinishAgentFlowRunWithNode(ctx context.Context, id int64, output string, runErr error, failedNode string) error {
 	status := "SUCCESS"
 	message := ""
 	if runErr != nil {
@@ -98,11 +104,15 @@ func (d *Database) FinishAgentFlowRun(ctx context.Context, id int64, output stri
 	if len(message) > 2000 {
 		message = message[:2000]
 	}
-	_, err := d.db.ExecContext(ctx, "UPDATE agent_flow_runs SET status=?,output_json=?,error_message=?,finished_at=UTC_TIMESTAMP(6) WHERE id=? AND status='RUNNING'", status, output, message, id)
+	var node *string
+	if runErr != nil && failedNode != "" {
+		node = &failedNode
+	}
+	_, err := d.db.ExecContext(ctx, "UPDATE agent_flow_runs SET status=?,output_json=?,error_message=?,failed_node_id=?,finished_at=UTC_TIMESTAMP(6) WHERE id=? AND status='RUNNING'", status, output, message, node, id)
 	return err
 }
 func (d *Database) ListAgentFlowRuns(ctx context.Context, flowID int64) ([]AgentFlowRun, error) {
-	rows, err := d.db.QueryContext(ctx, "SELECT id,flow_id,trigger_type,status,COALESCE(output_json,''),COALESCE(error_message,''),DATE_FORMAT(started_at,'%Y-%m-%dT%H:%i:%s.%fZ'),IF(finished_at IS NULL,NULL,DATE_FORMAT(finished_at,'%Y-%m-%dT%H:%i:%s.%fZ')),IF(finished_at IS NULL,NULL,TIMESTAMPDIFF(MICROSECOND,started_at,finished_at) DIV 1000) FROM agent_flow_runs WHERE flow_id=? ORDER BY id DESC LIMIT 30", flowID)
+	rows, err := d.db.QueryContext(ctx, "SELECT id,flow_id,trigger_type,status,COALESCE(output_json,''),COALESCE(error_message,''),DATE_FORMAT(started_at,'%Y-%m-%dT%H:%i:%s.%fZ'),IF(finished_at IS NULL,NULL,DATE_FORMAT(finished_at,'%Y-%m-%dT%H:%i:%s.%fZ')),IF(finished_at IS NULL,NULL,TIMESTAMPDIFF(MICROSECOND,started_at,finished_at) DIV 1000),failed_node_id FROM agent_flow_runs WHERE flow_id=? ORDER BY id DESC LIMIT 30", flowID)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +122,8 @@ func (d *Database) ListAgentFlowRuns(ctx context.Context, flowID int64) ([]Agent
 		var x AgentFlowRun
 		var finishedAt sql.NullString
 		var durationMS sql.NullInt64
-		if err := rows.Scan(&x.ID, &x.FlowID, &x.Trigger, &x.Status, &x.Output, &x.Error, &x.StartedAt, &finishedAt, &durationMS); err != nil {
+		var failedNode sql.NullString
+		if err := rows.Scan(&x.ID, &x.FlowID, &x.Trigger, &x.Status, &x.Output, &x.Error, &x.StartedAt, &finishedAt, &durationMS, &failedNode); err != nil {
 			return nil, err
 		}
 		if finishedAt.Valid {
@@ -120,6 +131,9 @@ func (d *Database) ListAgentFlowRuns(ctx context.Context, flowID int64) ([]Agent
 		}
 		if durationMS.Valid {
 			x.DurationMS = &durationMS.Int64
+		}
+		if failedNode.Valid {
+			x.FailedNode = &failedNode.String
 		}
 		result = append(result, x)
 	}

@@ -18,8 +18,8 @@ interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'functi
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
-interface FlowRunStep {id:number;node:string;label:string;status:string;output:string;created_at?:string;duration_ms?:number|null}
-interface FlowRun { id:number; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null }
+interface FlowRunStep {id:number;node:string;label:string;status:string;output:string;created_at?:string;duration_ms?:number|null;attempts?:number|null}
+interface FlowRun { id:number; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null; failed_node?:string|null }
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
 @Component({
@@ -362,7 +362,9 @@ export class ConfirmDeleteFlowDialog {
        <div class="run-error-panel" role="alert">
         <strong>Execution failed</strong>
         <p>{{run.error}}</p>
-        @if(suspectedFailedNode(run);as nodeId){
+        @if(run.failed_node){
+          <button mat-stroked-button (click)="inspectFailedNode(run.id,run.failed_node)">Inspect failed node: {{run.failed_node}}</button>
+        }@else if(suspectedFailedNode(run);as nodeId){
           <button mat-stroked-button (click)="inspectFailedNode(run.id,nodeId)">Inspect suspected node: {{nodeId}}</button>
         }
        </div>
@@ -391,7 +393,7 @@ export class ConfirmDeleteFlowDialog {
           @if(executionSelectedNode();as nodeId){
             <div class="exec-selected">
               <strong>{{executionNodeLabel(nodeId)}} · {{executionNodeStatus(nodeId)}}</strong>
-              @if(executionStep(nodeId);as selectedStep){<p class="muted">Recorded {{displayRunTime(selectedStep.created_at)}} · Duration: {{selectedStep.duration_ms==null?'Unavailable':displayStepDuration(selectedStep.duration_ms)}}</p>}
+              @if(executionStep(nodeId);as selectedStep){<p class="muted">Recorded {{displayRunTime(selectedStep.created_at)}} · Duration: {{selectedStep.duration_ms==null?'Unavailable':displayStepDuration(selectedStep.duration_ms)}}@if(selectedStep.attempts!=null){ · Attempts: {{selectedStep.attempts}}}</p>}
               <p class="muted">Only persisted output previews are displayed. Raw inputs and retry counts are not available in historical records. Older runs may lack duration data.</p>
               @if(activeRunError();as failure){<div class="exec-error-hint"><strong>Run error:</strong> {{failure}}</div>}
               @if(executionStep(nodeId);as step){@if(step.output){<pre>{{step.output}}</pre>}@else{<p class="muted">No recorded output.</p>}}
@@ -406,7 +408,7 @@ export class ConfirmDeleteFlowDialog {
         <div class="run-step-list" aria-label="Node execution trace">
          @for(step of traceSteps();track step.id){
           <details class="run-step">
-           <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}} · {{displayRunTime(step.created_at)}} · {{step.duration_ms==null?'Duration unavailable':displayStepDuration(step.duration_ms)}}</span>
+           <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}} · {{displayRunTime(step.created_at)}} · {{step.duration_ms==null?'Duration unavailable':displayStepDuration(step.duration_ms)}}@if(step.attempts!=null){ · {{step.attempts}} attempt(s)}</span>
             @if(compareRun()&&compareRun()!==run.id){<span class="muted"> · {{compareStatus(step.node,step.status,step.output)}}</span>}
            </summary>
            @if(step.output){<pre>{{step.output}}</pre>}
@@ -775,7 +777,8 @@ export class FlowStudioComponent {
    return ms<1000?ms+' ms':ms<60000?(ms/1000).toFixed(1)+' s':Math.floor(ms/60000)+' min '+Math.round(ms%60000/1000)+' s';
  }
  suspectedFailedNode(run:FlowRun):string{
-   if(run.status!=='FAILED'||!run.error||!this.executionGraph())return '';
+   if(run.status!=='FAILED'||!run.error||run.failed_node||!this.executionGraph())return '';
+   // Runs from before structured failed-node attribution only carry the message.
    // Failure messages can name a node without an explicit persisted FAILED step.
    // We show this as a hint, never as a confirmed node status.
    return this.executionGraph()!.nodes.find(n=>run.error.includes('node '+n.id+':')||run.error.includes('node '+n.id+' '))?.id||'';
