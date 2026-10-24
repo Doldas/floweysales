@@ -23,6 +23,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test policy guardrails
         run: bash scripts/test-pr-policy.sh
+      - name: Test repository gate audit
+        run: node --test scripts/audit-repository-gates.test.mjs
       - name: Check branch naming and linked issue
         env:
           HEAD_BRANCH: ${{ github.head_ref }}
