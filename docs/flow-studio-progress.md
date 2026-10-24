@@ -30,7 +30,7 @@
 - History selection is separate from the flow being edited; switching History should not overwrite unsaved editor state.
 - Search and filter recent runs by text/status, inspect node traces, and compare recorded steps. Active runs refresh with bounded polling while History is open.
 - Expand **Inspect nodes** to see the **immutable graph snapshot captured when that run started**. Nodes are colored by recorded SUCCESS/FAILED/RUNNING/SKIPPED status (or not recorded). Select a node to see its persisted status/output preview; old runs lacking snapshots fall back to the trace.
-- View run start/finish times, total elapsed time and node-step recording timestamps. Errors have a visible panel and can suggest a node based on a message containing that node ID; this is a hint, not a guaranteed structured failure attribution.
+- View run start/finish times, total elapsed time and node-step recording timestamps. Errors have a visible panel with **Inspect failed node** for the recorded failing node; runs recorded before structured attribution show a message-based suspected-node hint instead.
 - Side-effect-free replay previews and basic run comparison exist. They are **not** equivalent to a complete deterministic debugger, versioned editor drafts, or replay with real external effects.
 
 ### Work with private documents
@@ -42,7 +42,7 @@
 
 - **Authorization:** Ordinary users may create/run their own manual flows; SYS_ADMIN controls privileged shared functions/subflows, Workspace nodes and scheduled/event-triggered flows. The backend enforces ownership and permissions; hiding a UI control is not the security boundary.
 - **Graph semantics:** The server validates flow graphs, cycles, typed edges and allowed node types. UI preflight is advisory and only blocks directly initiated Run now from the editor when issues or unsaved changes exist; it does not replace server-side validation or establish a publish workflow.
-- **Run tracing:** Saved node steps contain a bounded output preview and recording timestamp. They do **not** provide complete raw input, exact per-node duration, attempt count or a structured failed-node identifier. Output previews may contain sensitive research text; avoid putting secrets into flows.
+- **Run tracing:** Saved node steps contain a bounded output preview, recording timestamp and per-node duration. Since migration 022 a failed run stores the top-level node that raised the error (`failed_node`), and that node gets a FAILED step with its error, duration and, for retryable agent nodes, the attempt count. Errors inside a subflow are attributed to the calling node; cancellations and flow-level errors (validation, snapshot) stay unattributed. Older runs fall back to the message-based "suspected node" hint. Complete raw node input is still not recorded. Output previews may contain sensitive research text; avoid putting secrets into flows.
 - **History:** Recent run listings are bounded; full pagination and a permanent event journal are not yet available. Historical graphs cannot be reconstructed for runs from before snapshots were introduced.
 - **Execution:** Flow agents remain bounded and research-oriented; no automatic live trading. Function/subflow execution, loops, event triggers, web research and Workspace operations each retain their existing backend policy and limits.
 
@@ -50,7 +50,7 @@
 
 1. **Validator parity:** typed-edge and port checks, JSON contract semantics, branch/output paths, and accessible inline messages that match backend results.
 2. **Editor correctness and accessibility:** keyboard shortcuts, transactional drag history, focus and Escape handling for full tooltips, mobile/touch experience, and automated Angular visual/accessibility regression coverage.
-3. **History observability:** structured failed-node metadata, per-step duration/attempt metrics and safe redacted diagnostics; pagination and richer filters.
+3. **History observability:** safe redacted input diagnostics, attempt metrics for successful retried nodes, pagination and richer filters (structured failed-node attribution and per-step duration are delivered).
 4. **Graph usability:** auto-layout, true drag-to-connect gestures, branch-specific ports, and standardized node categories.
 5. **Publishing/data lifecycle:** separate draft/publish/enable states, versioned revisions, safe rollback, optional Workspace trash/restore and scoped permissions.
 

@@ -916,12 +916,21 @@ func (e *Engine) launchFlowWithInput(f storage.AgentFlow, trigger, input string)
 		output, runErr := e.executeFlowNestedWithInput(context.WithValue(ctx, flowTraceRunKey{}, id), f, map[int64]bool{}, 0, input)
 		finishCtx, finishCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer finishCancel()
+		failedNode := ""
 		if runErr != nil {
-			if traceErr := e.db.AppendAgentFlowRunStep(finishCtx, id, "flow", "Flow execution", "FAILED", runErr.Error()); traceErr != nil {
+			var nodeErr *flowNodeError
+			var traceErr error
+			if errors.As(runErr, &nodeErr) {
+				failedNode = nodeErr.NodeID
+				traceErr = e.db.AppendAgentFlowRunStepAttempts(finishCtx, id, nodeErr.NodeID, nodeErr.Label, "FAILED", runErr.Error(), &nodeErr.DurationMS, nodeErr.Attempts)
+			} else {
+				traceErr = e.db.AppendAgentFlowRunStep(finishCtx, id, "flow", "Flow execution", "FAILED", runErr.Error())
+			}
+			if traceErr != nil {
 				log.Printf("[Flows] Failed run trace persistence: %v", traceErr)
 			}
 		}
-		if err := e.db.FinishAgentFlowRun(finishCtx, id, output, runErr); err != nil {
+		if err := e.db.FinishAgentFlowRunWithNode(finishCtx, id, output, runErr, failedNode); err != nil {
 			log.Printf("[Flows] Cannot persist run: %v", err)
 		}
 	}()
@@ -937,7 +946,21 @@ func (e *Engine) executeFlowNested(ctx context.Context, f storage.AgentFlow, par
 
 type flowTraceRunKey struct{}
 
-func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.AgentFlow, parents map[int64]bool, depth int, input string) (string, error) {
+// flowNodeError attributes a run failure to the top-level graph node that was
+// executing, so History can show a confirmed failed node instead of guessing
+// from the error text. Errors inside subflows are attributed to the calling node.
+type flowNodeError struct {
+	NodeID     string
+	Label      string
+	DurationMS int64
+	Attempts   *int
+	Err        error
+}
+
+func (e *flowNodeError) Error() string { return e.Err.Error() }
+func (e *flowNodeError) Unwrap() error { return e.Err }
+
+func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.AgentFlow, parents map[int64]bool, depth int, input string) (flowOutput string, flowErr error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
@@ -970,6 +993,20 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 	variables := map[string]string{}
 	results := []map[string]string{}
 	var stepStarted time.Time
+	var currentNode *flowNode
+	var nodeAttempts int
+	defer func() {
+		// Cancellation is a user action, not a node failure.
+		if flowErr == nil || depth != 0 || currentNode == nil || errors.Is(flowErr, context.Canceled) {
+			return
+		}
+		nodeErr := &flowNodeError{NodeID: currentNode.ID, Label: currentNode.Label, DurationMS: time.Since(stepStarted).Milliseconds(), Err: flowErr}
+		if nodeAttempts > 0 {
+			attempts := nodeAttempts
+			nodeErr.Attempts = &attempts
+		}
+		flowErr = nodeErr
+	}()
 	record := func(step map[string]string) {
 		results = append(results, step)
 		if runID, ok := ctx.Value(flowTraceRunKey{}).(int64); ok && depth == 0 {
@@ -990,6 +1027,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 	lastNodeID := "start"
 	for _, id := range order {
 		stepStarted = time.Now()
+		currentNode = nil
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
@@ -1006,6 +1044,8 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			continue
 		}
 		lastNodeID = n.ID
+		currentNode = &n
+		nodeAttempts = 0
 		if v2 {
 			if ctx.Err() != nil {
 				return "", ctx.Err()
@@ -1233,6 +1273,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			if err := ctx.Err(); err != nil {
 				return "", err
 			}
+			nodeAttempts = attempt + 1
 			nodeCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 			var result strings.Builder
 			var agentError error
@@ -1296,6 +1337,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 		}
 		record(map[string]string{"node": n.ID, "label": n.Label, "output": previous})
 	}
+	currentNode = nil
 	if v2 && lastNodeID != "start" && state.Active[lastNodeID] {
 		state.Values[lastNodeID] = previous
 	}
