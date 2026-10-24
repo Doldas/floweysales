@@ -303,6 +303,15 @@ export class ConfirmDeleteFlowDialog {
    </div>
    
    </div>
+   <section class="graph-validation" aria-label="Flow graph validation">
+     <header><strong>Graph validation</strong><span role="status">{{graphIssues().length?graphIssues().length+' issues':'No structural issues'}}</span></header>
+     @if(graphIssues().length){<p>Fix these issues before saving and running:</p><ul>
+       @for(issue of graphIssues();track $index){<li>
+         @if(issue.nodeId){<button type="button" (click)="openValidationIssue(issue.nodeId)">{{issue.message}} · Edit node</button>}
+         @else{ {{issue.message}} }
+       </li>}
+     </ul>} @else {<p class="muted">The server will perform final validation when saving or running.</p>}
+   </section>
    <div class="flow-actions">
      <button mat-stroked-button type="button" (click)="undoGraph()" [disabled]="!canUndo()||busy()" aria-label="Undo graph change">↶ Undo</button>
      <button mat-stroked-button type="button" (click)="redoGraph()" [disabled]="!canRedo()||busy()" aria-label="Redo graph change">↷ Redo</button>
@@ -480,7 +489,11 @@ export class ConfirmDeleteFlowDialog {
  .inspector-fields input,.inspector-fields select,.inspector-fields textarea{box-sizing:border-box;width:100%;min-width:0}
  @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .flow-workspace{min-height:280px}.node-full-tooltip{width:calc(100% - 16px);right:8px}}
 
-.flow-message{border-left:3px solid #73baff;padding-left:12px}
+.graph-validation{border:1px solid #527590;border-radius:10px;padding:14px;margin:12px 0;background:#152b40}
+ .graph-validation header{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+ .graph-validation ul{padding-left:22px}.graph-validation li{padding:4px 0;overflow-wrap:anywhere}
+ .graph-validation li button{background:none;border:0;text-decoration:underline;color:#aedfff;cursor:pointer;font:inherit;text-align:left;padding:2px 0}
+ .flow-message{border-left:3px solid #73baff;padding-left:12px}
  .exec-graph{margin:14px 0;display:grid;gap:10px;padding:14px;border:1px solid #557c99;border-radius:12px;background:#12293d}
  .exec-graph-canvas{overflow:auto;border:1px solid #3c5d77;border-radius:8px;background:#0b1c2e}
  .exec-graph-canvas svg{min-width:0;width:100%;min-height:210px;max-height:520px;height:auto;cursor:default}
@@ -639,6 +652,50 @@ export class FlowStudioComponent {
   readonly hasUnsavedChanges=()=>this.savedSnapshot()!==this.currentSnapshot();
   private currentSnapshot():string{return JSON.stringify({name:this.name(),graph:this.graph(),enabled:this.enabled(),interval:this.interval(),eventKey:this.eventKey()})}
   private allowDiscard():boolean{return !this.hasUnsavedChanges()||confirm('Discard unsaved changes to this flow?')}
+  readonly graphIssues=():{nodeId?:string;message:string}[]=>{
+    const g=this.graph(),issues:{nodeId?:string;message:string}[]=[];
+    const add=(message:string,nodeId?:string)=>issues.push({message,nodeId});
+    const nodes=new Map(g.nodes.map(n=>[n.id,n]));
+    if(this.name().trim().length<2||this.name().length>120)add('Flow name must be 2–120 characters.');
+    if(this.interval()!==0&&(this.interval()<5||this.interval()>10080))add('Schedule interval must be off or 5–10080 minutes.');
+    if(g.nodes.length<2||g.nodes.length>16)add('A flow needs 2–16 nodes.');
+    if(g.edges.length<1||g.edges.length>32)add('A flow needs 1–32 connections.');
+    const triggers=g.nodes.filter(n=>n.type==='trigger');
+    if(triggers.length!==1)add('Exactly one trigger node is required.');
+    const ids=new Set<string>();
+    for(const n of g.nodes){
+      if(!n.id||n.id.length>48||ids.has(n.id))add('Duplicate or invalid node ID: '+n.id,n.id);
+      ids.add(n.id);
+      if(n.type==='agent'&&(n.prompt||'').trim().length<5)add('Agent needs research instructions: '+n.label,n.id);
+      if(n.type==='flow'&&!n.flow_id)add('Select a saved flow: '+n.label,n.id);
+      if(n.type==='function'&&!n.function_id)add('Select a saved function: '+n.label,n.id);
+      if(n.type==='json_get'&&!/^[A-Za-z_][A-Za-z0-9_]*$/.test(n.property||''))add('Enter a valid JSON property: '+n.label,n.id);
+      if(n.type==='condition'&&!['equals','not_equals','contains','greater_than','less_than'].includes(n.operator||''))add('Select a condition operator: '+n.label,n.id);
+      if(n.type==='loop'&&(!n.loop_limit||n.loop_limit<1||n.loop_limit>100))add('Set loop limit from 1 to 100: '+n.label,n.id);
+      if(n.type==='agent'&&n.output_mode==='json'&&n.json_contract){try{
+        const contract=JSON.parse(n.json_contract);if(!contract||typeof contract!=='object'||Array.isArray(contract))throw Error('Invalid schema');
+      }catch{add('JSON output contract is invalid: '+n.label,n.id)}}
+    }
+    const adjacency=new Map(g.nodes.map(n=>[n.id,[] as string[]]));
+    const incoming=new Map(g.nodes.map(n=>[n.id,0]));
+    for(const e of g.edges){
+      if(!nodes.has(e.from)||!nodes.has(e.to)||e.from===e.to){add('Connection references a missing node or itself.');continue}
+      if(nodes.get(e.to)?.type==='trigger')add('Trigger cannot have incoming connections.',e.to);
+      adjacency.get(e.from)?.push(e.to);incoming.set(e.to,(incoming.get(e.to)||0)+1);
+    }
+    for(const n of g.nodes)if(n.type!=='trigger'&&!incoming.get(n.id))add('Disconnected node: '+n.label,n.id);
+    const visited=new Set<string>(),active=new Set<string>();let cycle=false;
+    const dfs=(id:string):void=>{
+      if(active.has(id)){cycle=true;return}
+      if(visited.has(id))return;
+      visited.add(id);active.add(id);for(const to of adjacency.get(id)||[])dfs(to);active.delete(id);
+    };
+    if(triggers.length===1)dfs(triggers[0].id);
+    if(cycle)add('Graph contains a cycle.');
+    for(const n of g.nodes)if(!visited.has(n.id))add('Unreachable node: '+n.label,n.id);
+    return issues;
+  };
+  openValidationIssue(id:string):void{if(this.node(id))this.openQuickNode(id)}
   readonly historyLoading=signal(false);
   private historyRequestVersion=0;
   readonly historyStatusFilter=signal('all');
@@ -948,6 +1005,10 @@ export class FlowStudioComponent {
  async save(){this.busy.set(true);try{const id=this.selectedId();const body={name:this.name(),graph:this.graph(),enabled:this.enabled(),interval_minutes:this.interval(),event_key:this.eventKey()};
    const flow:SavedFlow=await this.request(id?'/api/admin/flows/'+id:'/api/admin/flows',{method:id?'PUT':'POST',body:JSON.stringify(body)});
    this.selectedId.set(flow.id);this.historyFlowId.set(flow.id);this.savedSnapshot.set(this.currentSnapshot());this.message.set('Flow saved');await this.refresh()}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
- async run(){this.busy.set(true);try{await this.request('/api/admin/flows/'+this.selectedId()+'/run',{method:'POST'});this.historyFlowId.set(this.selectedId());this.message.set('Agent run queued; open Run history to see its progress');setTimeout(()=>void this.refreshRuns(),3000)}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
+ async run(){
+   const issues=this.graphIssues();
+   if(issues.length){this.message.set('Resolve '+issues.length+' graph issue(s) before running.');return}
+   if(this.hasUnsavedChanges()){this.message.set('Save current edits before running.');return}
+   this.busy.set(true);try{await this.request('/api/admin/flows/'+this.selectedId()+'/run',{method:'POST'});this.historyFlowId.set(this.selectedId());this.message.set('Agent run queued; open Run history to see its progress');setTimeout(()=>void this.refreshRuns(),3000)}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
  async emitEvent(){this.busy.set(true);try{const definition=this.triggers().find(t=>t.event_key===this.eventKey());if(!definition)throw Error('Create the custom trigger first');let value:string|number|boolean=this.triggerValue();if(definition.payload_type==='number'){value=Number(value);if(!Number.isFinite(value))throw Error('Event requires a finite number')}if(definition.payload_type==='boolean'){if(value!=='true'&&value!=='false')throw Error('Use true or false for a boolean event');value=value==='true'}const data=await this.request('/api/admin/flow-events/'+encodeURIComponent(this.eventKey()),{method:'POST',body:JSON.stringify({value})});this.message.set(data.started+' flow(s) triggered');}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
 }
