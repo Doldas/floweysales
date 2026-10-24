@@ -3,11 +3,11 @@ package storage
 import "context"
 
 type AgentFlowRunStep struct {
-	ID     int64  `json:"id"`
-	Node   string `json:"node"`
-	Label  string `json:"label"`
-	Status string `json:"status"`
-	Output string `json:"output"`
+	ID        int64  `json:"id"`
+	Node      string `json:"node"`
+	Label     string `json:"label"`
+	Status    string `json:"status"`
+	Output    string `json:"output"`
 	CreatedAt string `json:"created_at"`
 }
 
