@@ -28,3 +28,27 @@ func TestUserspaceFileSizeLimit(t *testing.T) {
 		t.Fatal("oversized file should be rejected by size guard")
 	}
 }
+
+func TestUserspaceFolderPrefix(t *testing.T) {
+	for _, bad := range []string{"/", "", "/../secret", "/x/./y", "relative"} {
+		if _, err := userspaceFolderPrefix(bad); err == nil {
+			t.Errorf("unsafe folder path accepted: %q", bad)
+		}
+	}
+	prefix, err := userspaceFolderPrefix("/reports")
+	if err != nil || prefix != "/reports/" {
+		t.Fatalf("unexpected prefix: %q, %v", prefix, err)
+	}
+	// Folder deletion must not target a sibling with a shared name.
+	for path, want := range map[string]bool{
+		"/reports/.folder":            true,
+		"/reports/2026/report.md":     true,
+		"/reports-old/2026/report.md": false,
+		"/reports":                    false,
+		"/other/reports/file":         false,
+	} {
+		if got := len(path) >= len(prefix) && path[:len(prefix)] == prefix; got != want {
+			t.Errorf("path %q matched %q: got %v want %v", path, prefix, got, want)
+		}
+	}
+}

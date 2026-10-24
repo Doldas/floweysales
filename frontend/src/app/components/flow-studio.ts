@@ -323,6 +323,8 @@ export class ConfirmDeleteFlowDialog {
    </aside>
    </div>
    <div class="flow-actions">
+     <button mat-stroked-button type="button" (click)="undoGraph()" [disabled]="!canUndo()||busy()" aria-label="Undo graph change">↶ Undo</button>
+     <button mat-stroked-button type="button" (click)="redoGraph()" [disabled]="!canRedo()||busy()" aria-label="Redo graph change">↷ Redo</button>
      <button mat-flat-button color="primary" (click)="save()" [disabled]="busy()">Save flow</button>
       <span class="muted" role="status">{{hasUnsavedChanges()?'Unsaved changes':'All changes saved'}}</span>
      <button mat-stroked-button (click)="run()" [disabled]="busy()||!selectedId()">Run now</button>
@@ -621,6 +623,33 @@ export class FlowStudioComponent {
  readonly triggerValue=signal('');
  readonly triggers=signal<TriggerDefinition[]>([]);
  readonly graph=signal<FlowGraph>(this.defaultGraph());
+ readonly undoHistory=signal<string[]>([]);
+ readonly redoHistory=signal<string[]>([]);
+ readonly canUndo=()=>this.undoHistory().length>0;
+ readonly canRedo=()=>this.redoHistory().length>0;
+ private lastGraphVersion='';
+ private resetGraphHistory():void{
+   this.lastGraphVersion=JSON.stringify(this.graph());
+   this.undoHistory.set([]);this.redoHistory.set([]);
+ }
+ undoGraph():void{
+   const history=this.undoHistory();if(!history.length||this.busy())return;
+   const previous=history[history.length-1],current=JSON.stringify(this.graph());
+   this.undoHistory.set(history.slice(0,-1));
+   this.redoHistory.update(items=>[...items.slice(-39),current]);
+   this.lastGraphVersion=previous;
+   this.graph.set(JSON.parse(previous) as FlowGraph);
+   this.chosen.set('');this.closeQuickNode();this.cancelConnecting();
+ }
+ redoGraph():void{
+   const history=this.redoHistory();if(!history.length||this.busy())return;
+   const next=history[history.length-1],current=JSON.stringify(this.graph());
+   this.redoHistory.set(history.slice(0,-1));
+   this.undoHistory.update(items=>[...items.slice(-39),current]);
+   this.lastGraphVersion=next;
+   this.graph.set(JSON.parse(next) as FlowGraph);
+   this.chosen.set('');this.closeQuickNode();this.cancelConnecting();
+ }
  readonly chosen=signal('');
  readonly selectedNode=()=>this.graph().nodes.find(n=>n.id===this.chosen());
  readonly runs=signal<FlowRun[]>([]);
@@ -677,7 +706,13 @@ export class FlowStudioComponent {
  readonly busy=signal(false);
  readonly message=signal('');
  private dragging:{id:string;startX:number;startY:number;x:number;y:number}|null=null;
- constructor(){this.savedSnapshot.set(this.currentSnapshot());void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN')void this.loadFunctions();void this.loadModels();
+ constructor(){this.resetGraphHistory();this.savedSnapshot.set(this.currentSnapshot());void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN')void this.loadFunctions();void this.loadModels();
+    effect(()=>{
+      const current=JSON.stringify(this.graph());
+      if(current===this.lastGraphVersion)return;
+      if(this.lastGraphVersion)this.undoHistory.update(items=>[...items.slice(-39),this.lastGraphVersion]);
+      this.lastGraphVersion=current;this.redoHistory.set([]);
+    });
     effect((onCleanup)=>{
       if(this.studioTab()!=='runs'||!this.historyFlowId()||!this.runs().some(run=>run.status==='RUNNING'))return;
       const timer=setInterval(()=>void this.refreshRuns(),5000);
@@ -723,12 +758,13 @@ export class FlowStudioComponent {
   }
   this.enabled.set(false);
   this.interval.set(0);
+  this.resetGraphHistory();
   this.message.set('Template copied as a new, disabled flow. Review nodes and save it to keep your own version.');
  }
  newFlow(){if(!this.allowDiscard())return;this.resetFlow()}
- private resetFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.message.set('');this.savedSnapshot.set(this.currentSnapshot())}
+ private resetFlow(){this.selectedId.set(0);this.name.set('New research flow');this.interval.set(0);this.eventKey.set('');this.enabled.set(false);this.graph.set(this.defaultGraph());this.resetGraphHistory();this.message.set('');this.savedSnapshot.set(this.currentSnapshot())}
  loadFlow(id:number){if(!this.allowDiscard())return;this.cancelConnecting();this.resetCanvas();const f=this.flows().find(x=>x.id===id);if(!f){this.resetFlow();return}
-  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.fitCanvas();this.chosen.set('');this.savedSnapshot.set(this.currentSnapshot())}
+  this.selectedId.set(f.id);this.name.set(f.name);this.interval.set(f.interval_minutes);this.eventKey.set(f.event_key||'');this.enabled.set(f.enabled);this.graph.set(structuredClone(f.graph));this.resetGraphHistory();this.fitCanvas();this.chosen.set('');this.savedSnapshot.set(this.currentSnapshot())}
  async loadFunctions(){try{const data=await this.request("/api/admin/blueprint-functions");this.functions.set(data.functions||[])}catch(e){this.message.set(String(e))}}
  addWebSearch():void {
   const count=this.graph().nodes.length;

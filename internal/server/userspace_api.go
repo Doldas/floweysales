@@ -87,6 +87,22 @@ func (e *Engine) registerUserspaceRoutes() {
 		}
 		writeJSON(w, 200, map[string]any{"saved": true, "path": data.Path})
 	})
+	e.mux.HandleFunc("DELETE /api/userspace/folder", func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticate(w, r)
+		if !ok {
+			return
+		}
+		count, err := e.db.DeleteUserspaceFolder(r.Context(), owner, r.URL.Query().Get("path"))
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, 404, map[string]string{"error": "Folder not found"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, 400, map[string]string{"error": "Invalid folder path or delete failure"})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"deleted": true, "files_deleted": count})
+	})
 	e.mux.HandleFunc("DELETE /api/userspace/file", func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticate(w, r)
 		if !ok {
