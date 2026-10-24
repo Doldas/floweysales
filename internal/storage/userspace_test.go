@@ -41,11 +41,11 @@ func TestUserspaceFolderPrefix(t *testing.T) {
 	}
 	// Folder deletion must not target a sibling with a shared name.
 	for path, want := range map[string]bool{
-		"/reports/.folder": true,
-		"/reports/2026/report.md": true,
+		"/reports/.folder":            true,
+		"/reports/2026/report.md":     true,
 		"/reports-old/2026/report.md": false,
-		"/reports": false,
-		"/other/reports/file": false,
+		"/reports":                    false,
+		"/other/reports/file":         false,
 	} {
 		if got := len(path) >= len(prefix) && path[:len(prefix)] == prefix; got != want {
 			t.Errorf("path %q matched %q: got %v want %v", path, prefix, got, want)
