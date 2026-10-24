@@ -119,6 +119,47 @@ func (d *Database) DeleteUserspaceFile(ctx context.Context, owner int64, rawPath
 	return nil
 }
 
+// DeleteUserspaceFolder removes a folder marker and every file below the
+// exact logical path. The prefix comparison deliberately avoids SQL LIKE,
+// where folder names containing '_' or '%' would otherwise act as wildcards.
+func (d *Database) DeleteUserspaceFolder(ctx context.Context, owner int64, rawPath string) (int64, error) {
+	p, err := CleanUserspacePath(rawPath)
+	if err != nil {
+		return 0, err
+	}
+	if owner <= 0 {
+		return 0, errors.New("invalid owner")
+	}
+	prefix := p + "/"
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	// Share the account lock with concurrent file writes to serialize deletion.
+	var id int64
+	if err := tx.QueryRowContext(ctx, "SELECT id FROM auth_users WHERE id=? FOR UPDATE", owner).Scan(&id); err != nil {
+		return 0, err
+	}
+	res, err := tx.ExecContext(ctx,
+		"DELETE FROM userspace_files WHERE owner_id=? AND LEFT(path,CHAR_LENGTH(?))=?",
+		owner, prefix, prefix)
+	if err != nil {
+		return 0, err
+	}
+	deleted, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if deleted == 0 {
+		return 0, sql.ErrNoRows
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return deleted, nil
+}
+
 func (d *Database) FlowOwner(ctx context.Context, flowID int64) (int64, error) {
 	var owner int64
 	err := d.db.QueryRowContext(ctx, "SELECT created_by FROM agent_flows WHERE id=?", flowID).Scan(&owner)
