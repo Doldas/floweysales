@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="021-flow-run-step-duration" author="floweysales" dbms="mysql">
+  <addColumn tableName="agent_flow_run_steps">
+   <column name="duration_ms" type="BIGINT" remarks="Elapsed wall time for a completed node; NULL for legacy/synthetic steps"/>
+  </addColumn>
+  <rollback><dropColumn tableName="agent_flow_run_steps" columnName="duration_ms"/></rollback>
+ </changeSet>
+</databaseChangeLog>
