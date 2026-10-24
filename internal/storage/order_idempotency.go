@@ -80,12 +80,13 @@ func (d *Database) createPaperOrderOnce(order Order, key, digest string, require
 	if requireApproval {
 		var approved int
 		err := tx.QueryRow(`SELECT COUNT(*) FROM paper_order_approval_requests
-			WHERE client_order_id=? AND request_hash=? AND approved_by IS NOT NULL AND consumed_order_id IS NULL`, key, digest).Scan(&approved)
+			WHERE client_order_id=? AND request_hash=? AND approved_by IS NOT NULL AND consumed_order_id IS NULL
+			  AND rejected_by IS NULL AND expires_at > UTC_TIMESTAMP(6)`, key, digest).Scan(&approved)
 		if err != nil {
 			return Order{}, false, err
 		}
 		if approved != 1 {
-			return Order{}, false, fmt.Errorf("paper order requires an unused human approval for its exact parameters")
+			return Order{}, false, fmt.Errorf("paper order requires an unused, unexpired and unrejected human approval for its exact parameters")
 		}
 	}
 
@@ -106,7 +107,8 @@ func (d *Database) createPaperOrderOnce(order Order, key, digest string, require
 	}
 	if requireApproval {
 		res, err := tx.Exec(`UPDATE paper_order_approval_requests SET consumed_order_id=?
-			WHERE client_order_id=? AND request_hash=? AND approved_by IS NOT NULL AND consumed_order_id IS NULL`, id, key, digest)
+			WHERE client_order_id=? AND request_hash=? AND approved_by IS NOT NULL AND consumed_order_id IS NULL
+			  AND rejected_by IS NULL AND expires_at > UTC_TIMESTAMP(6)`, id, key, digest)
 		if err != nil {
 			return Order{}, false, err
 		}

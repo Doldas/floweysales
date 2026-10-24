@@ -2,13 +2,9 @@ package server
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -119,22 +115,14 @@ func (e *Engine) registerOrderRoutes() {
 		}
 		digest := ""
 		if key != "" {
-			if len(key) > 128 || !regexp.MustCompile("^[A-Za-z0-9._:-]+$").MatchString(key) {
+			if !paperApprovalKey.MatchString(key) {
 				writeOrderError(w, http.StatusBadRequest, "invalid client_order_id")
 				return
 			}
-			canonical := make(map[string]any, len(j))
-			for name, value := range j {
-				if name != "client_order_id" {
-					canonical[name] = value
-				}
-			}
-			bytes, err := json.Marshal(canonical)
-			if err != nil {
+			if digest, err = paperRequestDigest(j); err != nil {
 				writeOrderError(w, http.StatusBadRequest, "invalid order parameters")
 				return
 			}
-			digest = fmt.Sprintf("%x", sha256.Sum256(bytes))
 			existing, found, err := e.db.FindPaperOrderRequest(key, digest)
 			if err != nil {
 				writeOrderError(w, http.StatusConflict, err.Error())

@@ -245,13 +245,48 @@ authenticated administrator and a valid `client_order_id`. The workflow is:
    unused approval and inserts the idempotent paper order. Replays with the
    same key return the existing order without another execution.
 
-Changing any field after approval invalidates the request hash. A failed risk
+Changing any order field after approval invalidates the request hash. A failed risk
 check does not consume approval. There is **no live broker integration**.
 The default is disabled to retain the legacy paper-ticket behavior. When
 enabled without authentication, order creation fails closed rather than
-bypassing approval. This first workflow does not enforce a second distinct
-approver, expiry windows, or transaction-wide cash/exposure reservations;
-those are required before issue #7 can be considered fully complete.
+bypassing approval. Cash reservations are transactional (see below).
+
+### Review policy: four eyes, expiry, rejection and decision provenance
+
+Liquibase change 023 extends the approval table. The rules are enforced by
+conditional MySQL updates, not only by the HTTP layer:
+
+- **Decision provenance.** A proposal must include a non-empty `rationale`
+  (at most 2000 characters) and may include `decision_source` (for example
+  `manual`, the default, or `flow-run:42`). Both are stored with the
+  request and shown in its audit record. They are review context, not order
+  parameters, so they are excluded from the request hash; `POST /api/orders`
+  may repeat or omit them.
+- **Distinct approver.** The SYS_ADMIN who proposed an order cannot approve
+  it (HTTP 403). A deployment that wants to use the gate therefore needs at
+  least two SYS_ADMIN accounts.
+- **Expiry.** Each proposal expires `PAPER_APPROVAL_TTL_MINUTES` after it was
+  proposed (default 60, valid 1–10080). An expired proposal can no longer be
+  approved, and an expired approval can no longer be consumed by an order.
+  Requests created before change 023 have no expiry time and are treated as
+  expired; propose them again.
+- **Rejection and revocation.** Any SYS_ADMIN, including the requester, can
+  call `POST /api/paper-approvals/{client_order_id}/reject` with
+  `{"reason": "..."}` (at most 500 characters) to reject a pending proposal or
+  revoke an approval that has not been used yet. Rejection is final. A
+  rejection that commits before an order submission prevents that order; a
+  consumed approval cannot be rejected.
+- **Review queue.** `GET /api/paper-approvals?status=pending` lists up to 100
+  requests (`limit`, 1–100, default 50), newest first. `status` is one of
+  `pending` (default), `approved`, `rejected`, `consumed`, `expired` or `all`.
+- **Audit chain.** `GET /api/paper-approvals/{client_order_id}` returns the
+  decision (payload, rationale, source, requester, creation and expiry time),
+  the approval or rejection (actor, time, reason), the derived `status` and,
+  once consumed, the resulting simulated `order` and its `order_events`.
+
+These controls apply to the simulated paper account only. They do not
+authorize broker connectivity or real-money execution, which remains gated by
+issue #8.
 
 
 ## Serialized paper cash reservations (issue #7)
