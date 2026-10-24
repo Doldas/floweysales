@@ -119,18 +119,25 @@ func (d *Database) DeleteUserspaceFile(ctx context.Context, owner int64, rawPath
 	return nil
 }
 
+func userspaceFolderPrefix(rawPath string) (string, error) {
+	p, err := CleanUserspacePath(rawPath)
+	if err != nil {
+		return "", err
+	}
+	return p + "/", nil
+}
+
 // DeleteUserspaceFolder removes a folder marker and every file below the
 // exact logical path. The prefix comparison deliberately avoids SQL LIKE,
 // where folder names containing '_' or '%' would otherwise act as wildcards.
 func (d *Database) DeleteUserspaceFolder(ctx context.Context, owner int64, rawPath string) (int64, error) {
-	p, err := CleanUserspacePath(rawPath)
+	prefix, err := userspaceFolderPrefix(rawPath)
 	if err != nil {
 		return 0, err
 	}
 	if owner <= 0 {
 		return 0, errors.New("invalid owner")
 	}
-	prefix := p + "/"
 	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
