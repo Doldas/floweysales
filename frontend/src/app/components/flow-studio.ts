@@ -12,6 +12,7 @@ import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 import { AuthState } from '../auth.service';
 import { filterFlowRuns, pushHistorySnapshot } from './flow-history';
+import { listOverviewFlows } from './flow-overview';
 
 interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
@@ -605,8 +606,7 @@ export class FlowStudioComponent {
   readonly studioTab=signal<'overview'|'editor'|'library'|'runs'|'files'>('overview');
   readonly flowSearch=signal('');readonly flowFilter=signal('all');readonly flowSort=signal('name');
   readonly listedFlows=()=>{
-    const q=this.flowSearch().trim().toLowerCase(), filter=this.flowFilter(),sort=this.flowSort();
-    return this.flows().filter(f=>(!q||f.name.toLowerCase().includes(q)||(f.event_key||'').toLowerCase().includes(q))&&(filter==='all'||filter==='enabled'&&f.enabled||filter==='disabled'&&!f.enabled||filter==='scheduled'&&f.interval_minutes>0||filter==='manual'&&f.interval_minutes===0)).sort((a,b)=>sort==='newest'?b.id-a.id:sort==='oldest'?a.id-b.id:sort==='name-desc'?b.name.localeCompare(a.name):a.name.localeCompare(b.name));
+    return listOverviewFlows(this.flows(),this.flowSearch(),this.flowFilter(),this.flowSort());
   };
   enabledFlowCount(){return this.flows().filter(f=>f.enabled).length}
   scheduledFlowCount(){return this.flows().filter(f=>f.interval_minutes>0).length}
