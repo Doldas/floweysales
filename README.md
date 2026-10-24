@@ -22,6 +22,12 @@ FloweySales is an open-source, local-first research application with Go market a
 
 Data and model outputs are research aids, not investment advice. Fully automatic live trading is **not supported**; future work requires separate security, compliance and risk gates.
 
+## Flow Studio progress (October 2026)
+
+Merged PRs **#96–#104** introduce a searchable **My Flows** dashboard; a role-aware node picker; a full-width canvas with **Fit flow**, movable nodes and click-to-connect ports; a complete floating node settings tooltip replacing the permanent Details panel; bounded graph **Undo/Redo** and inline preflight validation. **Run History** retains independent flow selection, immutable execution graph snapshots, node-level recorded status/output and run timing. **My Workspace** supports confirmed, owner-scoped recursive folder deletion.
+
+Read [Flow Studio delivery progress](docs/flow-studio-progress.md), the [UX implementation plan](docs/flow-studio-ux-implementation-plan.md), [Flow Studio guide](docs/agent-flow-studio.md) and [Workspace architecture](docs/userspace-architecture.md). These merged changes do not complete automatic layout, all backend validation checks in the UI, draft/publish revisions, complete node-level diagnostics or accessibility testing. Privileged nodes and event/scheduled flows remain admin-controlled; automatic live trading is not enabled.
+
 ## Common commands
 
 | Command            | What it does                                        |
