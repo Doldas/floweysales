@@ -56,3 +56,8 @@ Implement backend metadata and APIs in backward-compatible increments. Add compo
 
 ## Current implementation scope
 The first P0 improvements are implemented in the companion PR. Other tasks above remain planned and should not be considered shipped.
+
+## Follow-up increment — editor safety and Workspace folders
+- [x] Add bounded graph Undo/Redo in Flow Editor, with history cleared on flow/template changes.
+- [x] Add explicit recursive folder deletion to My Workspace with confirmation, owner scoping and a single database transaction.
+- [ ] Extend Undo/Redo to flow metadata changes and add richer graph validation before running.
