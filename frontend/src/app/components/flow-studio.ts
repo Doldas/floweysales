@@ -684,18 +684,52 @@ export class FlowStudioComponent {
       if(n.type==='agent'&&(n.prompt||'').trim().length<5)add('Agent needs research instructions: '+n.label,n.id);
       if(n.type==='flow'&&!n.flow_id)add('Select a saved flow: '+n.label,n.id);
       if(n.type==='function'&&!n.function_id)add('Select a saved function: '+n.label,n.id);
-      if(n.type==='json_get'&&!/^[A-Za-z_][A-Za-z0-9_]*$/.test(n.property||''))add('Enter a valid JSON property: '+n.label,n.id);
+      if(n.type==='json_get'&&!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(n.property||''))add('Enter a valid JSON property: '+n.label,n.id);
       if(n.type==='condition'&&!['equals','not_equals','contains','greater_than','less_than'].includes(n.operator||''))add('Select a condition operator: '+n.label,n.id);
       if(n.type==='loop'&&(!n.loop_limit||n.loop_limit<1||n.loop_limit>100))add('Set loop limit from 1 to 100: '+n.label,n.id);
+      if((n.type==='save_result'||n.type==='load_result')&&!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(n.variable||''))add('Run variable must start with a letter and be at most 48 characters: '+n.label,n.id);
+      if(n.type==='agent'&&(n.timeout_seconds||0)>90)add('Agent timeout exceeds 90 seconds: '+n.label,n.id);
+      if(n.type==='agent'&&(n.max_retries||0)>2)add('Agent retries exceed 2: '+n.label,n.id);
+      if(n.type==='constant'&&n.value_type==='boolean'&&n.value!=='true'&&n.value!=='false')add('Boolean value must be true or false: '+n.label,n.id);
+      if(n.type==='constant'&&n.value_type==='number'&&(!n.value?.trim()||!Number.isFinite(Number(n.value))))add('Number constant must be finite: '+n.label,n.id);
+      if(n.type==='workspace_read'||n.type==='workspace_write'){
+        const path=n.value||'';
+        if(!path.startsWith('/')||path==='/'||path.includes('\\')||path.split('/').some(p=>p==='.'||p==='..')||path.length>512)add('Workspace path must be an absolute safe file path: '+n.label,n.id);
+      }
       if(n.type==='agent'&&n.output_mode==='json'&&n.json_contract){try{
         const contract=JSON.parse(n.json_contract);if(!contract||typeof contract!=='object'||Array.isArray(contract))throw Error('Invalid schema');
       }catch{add('JSON output contract is invalid: '+n.label,n.id)}}
     }
+    if(g.version!==2&&g.edges.some(e=>!!e.from_port||!!e.to_port))add('Typed ports and branch selectors require graph version 2.');
     const adjacency=new Map(g.nodes.map(n=>[n.id,[] as string[]]));
     const incoming=new Map(g.nodes.map(n=>[n.id,0]));
     for(const e of g.edges){
       if(!nodes.has(e.from)||!nodes.has(e.to)||e.from===e.to){add('Connection references a missing node or itself.');continue}
       if(nodes.get(e.to)?.type==='trigger')add('Trigger cannot have incoming connections.',e.to);
+      const from=nodes.get(e.from)!,to=nodes.get(e.to)!;
+      if(e.from_port||e.to_port){
+        if(e.from_port?.startsWith('field:')&&e.to_port==='input'){
+          const field=e.from_port.slice(6);
+          if(!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(field))add('Mapped JSON field name is invalid: '+field,e.from);
+          if(['trigger','condition','output'].includes(from.type))add('This node cannot expose a mapped JSON field: '+from.label,e.from);
+          if(['trigger','constant'].includes(to.type))add('This node cannot accept a mapped value: '+to.label,e.to);
+          if(from.type==='agent'){
+            if(from.output_mode!=='json')add('Agent must use JSON-only output to map a field: '+from.label,e.from);
+            if(from.json_contract){try{
+              const contract=JSON.parse(from.json_contract);
+              if(contract?.properties&&typeof contract.properties==='object'&&!Object.prototype.hasOwnProperty.call(contract.properties,field))
+                add('Mapped field is absent from JSON contract: '+field,e.from);
+            }catch{/* invalid contract is reported by the node validator */}
+            }
+          }
+        }else if(from.type==='condition'&&(e.from_port==='true'||e.from_port==='false')&&!e.to_port){
+          // Valid v2 branch selector.
+        }else if(e.from_port==='value'&&e.to_port==='input'){
+          if(from.type==='trigger')add('Trigger has no typed value output.',e.from);
+          if(to.type==='trigger'||to.type==='constant')add('Target cannot accept typed input: '+to.label,e.to);
+          if(from.type==='constant'&&from.value_type!=='text')add('Convert number/boolean constants to text before connecting: '+from.label,e.from);
+        }else add('Unsupported connection port combination: '+(e.from_port||'default')+' → '+(e.to_port||'default'),e.from);
+      }
       adjacency.get(e.from)?.push(e.to);incoming.set(e.to,(incoming.get(e.to)||0)+1);
     }
     for(const n of g.nodes)if(n.type!=='trigger'&&!incoming.get(n.id))add('Disconnected node: '+n.label,n.id);
