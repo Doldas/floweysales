@@ -10,6 +10,7 @@ type BlueprintFunction struct {
 	ID    int64           `json:"id"`
 	Name  string          `json:"name"`
 	Graph json.RawMessage `json:"graph"`
+	PublishState
 }
 type BlueprintTrigger struct {
 	ID          int64  `json:"id"`
@@ -17,30 +18,35 @@ type BlueprintTrigger struct {
 	PayloadType string `json:"payload_type"`
 }
 
+var blueprintFunctionSelect = "SELECT p.id,p.name,p.graph_json" + revisionColumns(functionRevisions) +
+	" FROM blueprint_functions" + revisionJoin(functionRevisions)
+
+func scanBlueprintFunction(row rowScanner) (BlueprintFunction, error) {
+	var f BlueprintFunction
+	var raw string
+	err := row.Scan(append([]any{&f.ID, &f.Name, &raw}, f.PublishState.scanTargets()...)...)
+	f.Graph = json.RawMessage(raw)
+	return f, err
+}
+
 func (d *Database) ListBlueprintFunctions(ctx context.Context) ([]BlueprintFunction, error) {
-	rows, err := d.db.QueryContext(ctx, "SELECT id,name,graph_json FROM blueprint_functions ORDER BY id DESC LIMIT 100")
+	rows, err := d.db.QueryContext(ctx, blueprintFunctionSelect+" ORDER BY p.id DESC LIMIT 100")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := []BlueprintFunction{}
 	for rows.Next() {
-		var f BlueprintFunction
-		var raw string
-		if err := rows.Scan(&f.ID, &f.Name, &raw); err != nil {
+		f, err := scanBlueprintFunction(rows)
+		if err != nil {
 			return nil, err
 		}
-		f.Graph = json.RawMessage(raw)
 		out = append(out, f)
 	}
 	return out, rows.Err()
 }
 func (d *Database) GetBlueprintFunction(ctx context.Context, id int64) (BlueprintFunction, error) {
-	var f BlueprintFunction
-	var raw string
-	err := d.db.QueryRowContext(ctx, "SELECT id,name,graph_json FROM blueprint_functions WHERE id=?", id).Scan(&f.ID, &f.Name, &raw)
-	f.Graph = json.RawMessage(raw)
-	return f, err
+	return scanBlueprintFunction(d.db.QueryRowContext(ctx, blueprintFunctionSelect+" WHERE p.id=?", id))
 }
 func (d *Database) SaveBlueprintFunction(ctx context.Context, f BlueprintFunction, admin int64) (BlueprintFunction, error) {
 	if f.ID == 0 {

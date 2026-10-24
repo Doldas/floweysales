@@ -20,29 +20,31 @@ import (
 )
 
 type flowNode struct {
-	ID             string  `json:"id"`
-	Type           string  `json:"type"`
-	Label          string  `json:"label"`
-	Prompt         string  `json:"prompt,omitempty"`
-	OutputMode     string  `json:"output_mode,omitempty"`
-	Model          string  `json:"model,omitempty"`
-	JSONContract   string  `json:"json_contract,omitempty"`
-	TimeoutSeconds int     `json:"timeout_seconds,omitempty"`
-	MaxRetries     int     `json:"max_retries,omitempty"`
-	FlowID         int64   `json:"flow_id,omitempty"`
-	FunctionID     int64   `json:"function_id,omitempty"`
-	ValueType      string  `json:"value_type,omitempty"`
-	Value          string  `json:"value,omitempty"`
-	ContentType    string  `json:"content_type,omitempty"`
-	Variable       string  `json:"variable,omitempty"`
-	Transform      string  `json:"transform,omitempty"`
-	LoopMode       string  `json:"loop_mode,omitempty"`
-	LoopLimit      int     `json:"loop_limit,omitempty"`
-	LoopCondition  string  `json:"loop_condition,omitempty"`
-	Operator       string  `json:"operator,omitempty"`
-	Property       string  `json:"property,omitempty"`
-	X              float64 `json:"x"`
-	Y              float64 `json:"y"`
+	ID               string  `json:"id"`
+	Type             string  `json:"type"`
+	Label            string  `json:"label"`
+	Prompt           string  `json:"prompt,omitempty"`
+	OutputMode       string  `json:"output_mode,omitempty"`
+	Model            string  `json:"model,omitempty"`
+	JSONContract     string  `json:"json_contract,omitempty"`
+	TimeoutSeconds   int     `json:"timeout_seconds,omitempty"`
+	MaxRetries       int     `json:"max_retries,omitempty"`
+	FlowID           int64   `json:"flow_id,omitempty"`
+	FlowRevision     int     `json:"flow_revision,omitempty"`
+	FunctionID       int64   `json:"function_id,omitempty"`
+	FunctionRevision int     `json:"function_revision,omitempty"`
+	ValueType        string  `json:"value_type,omitempty"`
+	Value            string  `json:"value,omitempty"`
+	ContentType      string  `json:"content_type,omitempty"`
+	Variable         string  `json:"variable,omitempty"`
+	Transform        string  `json:"transform,omitempty"`
+	LoopMode         string  `json:"loop_mode,omitempty"`
+	LoopLimit        int     `json:"loop_limit,omitempty"`
+	LoopCondition    string  `json:"loop_condition,omitempty"`
+	Operator         string  `json:"operator,omitempty"`
+	Property         string  `json:"property,omitempty"`
+	X                float64 `json:"x"`
+	Y                float64 `json:"y"`
 }
 type flowEdge struct {
 	From     string `json:"from"`
@@ -138,6 +140,10 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		}
 		if _, ok := nodes[n.ID]; ok {
 			return g, nil, fmt.Errorf("duplicate node")
+		}
+		// Revision pins belong only to call nodes; 0 follows the active revision.
+		if n.FlowRevision < 0 || n.FunctionRevision < 0 || (n.FlowRevision != 0 && n.Type != "flow") || (n.FunctionRevision != 0 && n.Type != "function") {
+			return g, nil, fmt.Errorf("revision pins are only valid on call flow and function nodes")
 		}
 		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" && n.Type != "output" && (g.Version != 2 || n.Type != "loop") && n.Type != "http_get" && (g.Version != 2 || n.Type != "web_search") && (g.Version != 2 || n.Type != "web_crawl") && (g.Version != 2 || (n.Type != "condition" && n.Type != "merge" && n.Type != "json_get")) {
 			return g, nil, fmt.Errorf("only trigger, research agent, constant and subflow nodes are allowed")
@@ -755,9 +761,34 @@ func (e *Engine) registerFlowRoutes() {
 			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
 			return
 		}
-		f, err := e.db.GetAgentFlow(r.Context(), id)
-		if err != nil {
+		// An optional {"target":"draft"} runs unpublished edits; the default
+		// is the active revision (or the draft of a never-published flow).
+		r.Body = http.MaxBytesReader(w, r.Body, 1024)
+		var request struct {
+			Target string `json:"target"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil && !errors.Is(err, io.EOF) {
+			writeJSON(w, 400, map[string]string{"error": "Invalid run request"})
+			return
+		}
+		if request.Target != "" && request.Target != "active" && request.Target != "draft" {
+			writeJSON(w, 400, map[string]string{"error": "target must be active or draft"})
+			return
+		}
+		var f storage.AgentFlow
+		var revision *int
+		var err error
+		if request.Target == "draft" {
+			f, err = e.db.GetAgentFlow(r.Context(), id)
+		} else {
+			f, revision, err = e.db.ResolveAgentFlow(r.Context(), id, 0)
+		}
+		if errors.Is(err, sql.ErrNoRows) {
 			writeJSON(w, 404, map[string]string{"error": "Flow not found"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"error": "Flow storage unavailable"})
 			return
 		}
 		current, _ := e.currentUser(r)
@@ -772,11 +803,11 @@ func (e *Engine) registerFlowRoutes() {
 				return
 			}
 		}
-		if err := e.launchFlow(f, "manual"); err != nil {
+		if err := e.launchResolvedFlow(f, revision, "manual", ""); err != nil {
 			writeJSON(w, 429, map[string]string{"error": err.Error()})
 			return
 		}
-		writeJSON(w, 202, map[string]any{"status": "queued", "flow_id": id})
+		writeJSON(w, 202, map[string]any{"status": "queued", "flow_id": id, "flow_revision": revision})
 	})
 	e.mux.HandleFunc("POST /api/admin/flow-events/{key}", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {
@@ -865,8 +896,13 @@ func (e *Engine) saveFlow(w http.ResponseWriter, r *http.Request, id int64) {
 			}
 		}
 	}
-	if _, _, err := validateFlow(f); err != nil {
+	graph, _, err := validateFlow(f)
+	if err != nil {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})
+		return
+	}
+	if err := e.checkCallReferences(r.Context(), graph); err != nil {
+		writeReferenceError(w, err)
 		return
 	}
 	user, _ := e.currentUser(r)
@@ -874,6 +910,10 @@ func (e *Engine) saveFlow(w http.ResponseWriter, r *http.Request, id int64) {
 	if err != nil {
 		writeJSON(w, 503, map[string]string{"error": "Unable to save flow"})
 		return
+	}
+	// Re-read so the response carries the current publish state.
+	if stored, err := e.db.GetAgentFlow(r.Context(), saved.ID); err == nil {
+		saved = stored
 	}
 	writeJSON(w, 200, saved)
 }
@@ -883,7 +923,22 @@ func (e *Engine) saveFlow(w http.ResponseWriter, r *http.Request, id int64) {
 func (e *Engine) launchFlow(f storage.AgentFlow, trigger string) error {
 	return e.launchFlowWithInput(f, trigger, "")
 }
+
+// launchFlowWithInput runs the flow's active revision, or its draft when it
+// has never been published. Scheduled and event runs always go through here.
 func (e *Engine) launchFlowWithInput(f storage.AgentFlow, trigger, input string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	resolved, revision, err := e.db.ResolveAgentFlow(ctx, f.ID, 0)
+	cancel()
+	if err != nil {
+		return fmt.Errorf("flow %d revision unavailable: %w", f.ID, err)
+	}
+	return e.launchResolvedFlow(resolved, revision, trigger, input)
+}
+
+// launchResolvedFlow executes exactly the graph in f and records revision
+// (nil for the draft) on the run.
+func (e *Engine) launchResolvedFlow(f storage.AgentFlow, revision *int, trigger, input string) error {
 	select {
 	case e.flowSlots <- struct{}{}:
 	default:
@@ -893,7 +948,7 @@ func (e *Engine) launchFlowWithInput(f storage.AgentFlow, trigger, input string)
 		defer func() { <-e.flowSlots }()
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		id, err := e.db.CreateAgentFlowRun(ctx, f.ID, trigger)
+		id, err := e.db.CreateAgentFlowRunRevision(ctx, f.ID, trigger, revision)
 		if err != nil {
 			log.Printf("[Flows] Could not create run: %v", err)
 			return
@@ -1199,7 +1254,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			continue
 		}
 		if n.Type == "function" {
-			definition, err := e.db.GetBlueprintFunction(ctx, n.FunctionID)
+			definition, _, err := e.db.ResolveBlueprintFunction(ctx, n.FunctionID, n.FunctionRevision)
 			if err != nil {
 				return "", fmt.Errorf("function %d unavailable: %w", n.FunctionID, err)
 			}
@@ -1227,7 +1282,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			continue
 		}
 		if n.Type == "flow" {
-			child, err := e.db.GetAgentFlow(ctx, n.FlowID)
+			child, _, err := e.db.ResolveAgentFlow(ctx, n.FlowID, n.FlowRevision)
 			if err != nil {
 				return "", fmt.Errorf("subflow %d unavailable: %w", n.FlowID, err)
 			}

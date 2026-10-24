@@ -14,6 +14,7 @@ type AgentFlow struct {
 	Enabled         bool            `json:"enabled"`
 	IntervalMinutes int             `json:"interval_minutes"`
 	EventKey        string          `json:"event_key"`
+	PublishState
 }
 type AgentFlowRun struct {
 	ID         int64   `json:"id"`
@@ -26,32 +27,43 @@ type AgentFlowRun struct {
 	FinishedAt *string `json:"finished_at"`
 	DurationMS *int64  `json:"duration_ms"`
 	FailedNode *string `json:"failed_node"`
+	Revision   *int    `json:"flow_revision"`
 }
 
-func (d *Database) ListAgentFlows(ctx context.Context) ([]AgentFlow, error) {
-	rows, err := d.db.QueryContext(ctx, "SELECT id,name,graph_json,enabled,interval_minutes,COALESCE(event_key,'') FROM agent_flows ORDER BY id DESC LIMIT 100")
+var agentFlowSelect = "SELECT p.id,p.name,p.graph_json,p.enabled,p.interval_minutes,COALESCE(p.event_key,'')" +
+	revisionColumns(flowRevisions) + " FROM agent_flows" + revisionJoin(flowRevisions)
+
+func scanAgentFlow(row rowScanner) (AgentFlow, error) {
+	var f AgentFlow
+	var graph string
+	targets := append([]any{&f.ID, &f.Name, &graph, &f.Enabled, &f.IntervalMinutes, &f.EventKey}, f.PublishState.scanTargets()...)
+	err := row.Scan(targets...)
+	f.Graph = json.RawMessage(graph)
+	return f, err
+}
+
+func (d *Database) queryAgentFlows(ctx context.Context, where string, args ...any) ([]AgentFlow, error) {
+	rows, err := d.db.QueryContext(ctx, agentFlowSelect+where+" ORDER BY p.id DESC LIMIT 100", args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	result := []AgentFlow{}
 	for rows.Next() {
-		var f AgentFlow
-		var graph string
-		if err := rows.Scan(&f.ID, &f.Name, &graph, &f.Enabled, &f.IntervalMinutes, &f.EventKey); err != nil {
+		f, err := scanAgentFlow(rows)
+		if err != nil {
 			return nil, err
 		}
-		f.Graph = json.RawMessage(graph)
 		result = append(result, f)
 	}
 	return result, rows.Err()
 }
+
+func (d *Database) ListAgentFlows(ctx context.Context) ([]AgentFlow, error) {
+	return d.queryAgentFlows(ctx, "")
+}
 func (d *Database) GetAgentFlow(ctx context.Context, id int64) (AgentFlow, error) {
-	var f AgentFlow
-	var graph string
-	err := d.db.QueryRowContext(ctx, "SELECT id,name,graph_json,enabled,interval_minutes,COALESCE(event_key,'') FROM agent_flows WHERE id=?", id).Scan(&f.ID, &f.Name, &graph, &f.Enabled, &f.IntervalMinutes, &f.EventKey)
-	f.Graph = json.RawMessage(graph)
-	return f, err
+	return scanAgentFlow(d.db.QueryRowContext(ctx, agentFlowSelect+" WHERE p.id=?", id))
 }
 func (d *Database) SaveAgentFlow(ctx context.Context, f AgentFlow, admin int64) (AgentFlow, error) {
 	if f.ID == 0 {
@@ -80,7 +92,12 @@ func (d *Database) SaveAgentFlow(ctx context.Context, f AgentFlow, admin int64) 
 	return f, nil
 }
 func (d *Database) CreateAgentFlowRun(ctx context.Context, id int64, trigger string) (int64, error) {
-	res, err := d.db.ExecContext(ctx, "INSERT INTO agent_flow_runs(flow_id,trigger_type,status) VALUES(?,?,'RUNNING')", id, trigger)
+	return d.CreateAgentFlowRunRevision(ctx, id, trigger, nil)
+}
+
+// CreateAgentFlowRunRevision records which published revision a run executes; nil means the draft.
+func (d *Database) CreateAgentFlowRunRevision(ctx context.Context, id int64, trigger string, revision *int) (int64, error) {
+	res, err := d.db.ExecContext(ctx, "INSERT INTO agent_flow_runs(flow_id,trigger_type,status,flow_revision) VALUES(?,?,'RUNNING',?)", id, trigger, revision)
 	if err != nil {
 		return 0, err
 	}
@@ -112,7 +129,7 @@ func (d *Database) FinishAgentFlowRunWithNode(ctx context.Context, id int64, out
 	return err
 }
 func (d *Database) ListAgentFlowRuns(ctx context.Context, flowID int64) ([]AgentFlowRun, error) {
-	rows, err := d.db.QueryContext(ctx, "SELECT id,flow_id,trigger_type,status,COALESCE(output_json,''),COALESCE(error_message,''),DATE_FORMAT(started_at,'%Y-%m-%dT%H:%i:%s.%fZ'),IF(finished_at IS NULL,NULL,DATE_FORMAT(finished_at,'%Y-%m-%dT%H:%i:%s.%fZ')),IF(finished_at IS NULL,NULL,TIMESTAMPDIFF(MICROSECOND,started_at,finished_at) DIV 1000),failed_node_id FROM agent_flow_runs WHERE flow_id=? ORDER BY id DESC LIMIT 30", flowID)
+	rows, err := d.db.QueryContext(ctx, "SELECT id,flow_id,trigger_type,status,COALESCE(output_json,''),COALESCE(error_message,''),DATE_FORMAT(started_at,'%Y-%m-%dT%H:%i:%s.%fZ'),IF(finished_at IS NULL,NULL,DATE_FORMAT(finished_at,'%Y-%m-%dT%H:%i:%s.%fZ')),IF(finished_at IS NULL,NULL,TIMESTAMPDIFF(MICROSECOND,started_at,finished_at) DIV 1000),failed_node_id,flow_revision FROM agent_flow_runs WHERE flow_id=? ORDER BY id DESC LIMIT 30", flowID)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +140,7 @@ func (d *Database) ListAgentFlowRuns(ctx context.Context, flowID int64) ([]Agent
 		var finishedAt sql.NullString
 		var durationMS sql.NullInt64
 		var failedNode sql.NullString
-		if err := rows.Scan(&x.ID, &x.FlowID, &x.Trigger, &x.Status, &x.Output, &x.Error, &x.StartedAt, &finishedAt, &durationMS, &failedNode); err != nil {
+		if err := rows.Scan(&x.ID, &x.FlowID, &x.Trigger, &x.Status, &x.Output, &x.Error, &x.StartedAt, &finishedAt, &durationMS, &failedNode, &x.Revision); err != nil {
 			return nil, err
 		}
 		if finishedAt.Valid {
@@ -230,22 +247,7 @@ func (d *Database) CancelAgentFlowRun(ctx context.Context, flowID, runID int64) 
 }
 
 func (d *Database) ListAgentFlowsForUser(ctx context.Context, userID int64) ([]AgentFlow, error) {
-	rows, err := d.db.QueryContext(ctx, "SELECT id,name,graph_json,enabled,interval_minutes,COALESCE(event_key,'') FROM agent_flows WHERE created_by=? ORDER BY id DESC LIMIT 100", userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	result := []AgentFlow{}
-	for rows.Next() {
-		var f AgentFlow
-		var graph string
-		if err := rows.Scan(&f.ID, &f.Name, &graph, &f.Enabled, &f.IntervalMinutes, &f.EventKey); err != nil {
-			return nil, err
-		}
-		f.Graph = json.RawMessage(graph)
-		result = append(result, f)
-	}
-	return result, rows.Err()
+	return d.queryAgentFlows(ctx, " WHERE p.created_by=?", userID)
 }
 func (d *Database) AgentFlowOwnedBy(ctx context.Context, flowID, userID int64) (bool, error) {
 	var count int

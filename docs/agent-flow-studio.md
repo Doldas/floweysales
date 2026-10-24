@@ -17,15 +17,29 @@ The editor supports a searchable role-aware node picker, free positioning, zoom/
 - Flows **never execute live trades**. An admin must separately enable authentication and configure an AI endpoint/model.
 - Schedule polling and execution are bounded, with durable completed/failed run history. Scheduling claims are durable but not an at-least-once queue: a process death after claiming a run but before inserting it can miss that interval. Runs interrupted after insertion are eventually marked failed.
 - The flow graph rejects cycles. Recurring loops happen at the scheduler level, not through unbounded edges.
-- **Already available:** conditional/branch nodes, bounded agent retries/timeouts, owner-scoped manual flows, cancellation, recorded node steps, immutable run graph snapshots, execution timestamps and preview-only replay. **Still planned:** durable checkpoints/dead-letter queues, general trigger adapters, draft/publish revisions, richer per-step timing/attempt data and adversarial/accessibility tests.
+- **Already available:** conditional/branch nodes, bounded agent retries/timeouts, owner-scoped manual flows, cancellation, recorded node steps, immutable run graph snapshots, execution timestamps, preview-only replay and draft/publish revisions with rollback and call pinning (see below). **Still planned:** durable checkpoints/dead-letter queues, general trigger adapters, richer per-step timing/attempt data and adversarial/accessibility tests.
 
 To start, sign in and open **My Flows → New flow / Edit**. Add nodes with **+ Add node**, select a graph node to configure all fields in its floating tooltip, check **Graph validation**, then **Save flow** before **Run now**. Use **Run history → Inspect nodes** to view recorded steps, status-colored historical graph snapshots, duration and errors. Scheduling and typed event triggers require SYS_ADMIN.
+
+## Drafts, published revisions and rollback
+
+Every flow and Blueprint function has an editable **draft** (what **Save** writes) and, once published, immutable numbered **revisions** (Liquibase change 024: `agent_flow_revisions`, `blueprint_function_revisions`).
+
+- **Publish revision** freezes the saved draft as the next revision (1, 2, 3, …) with an optional note and makes it **active**. It is refused when the draft has unsaved changes in the editor, matches the latest revision, fails validation, or references a missing flow, function or pinned revision. Concurrent publishes of the same draft produce one revision.
+- **What runs:** scheduled, event and manual runs execute the **active revision**. A flow that was never published keeps running its draft, so existing flows behave as before until their first publish. **Run draft** tests unpublished edits of a published flow without publishing them (`POST /api/admin/flows/{id}/run` with `{"target":"draft"}`).
+- **Rollback:** **Activate** on any older revision makes it the active one immediately. **Restore to draft** copies a revision into the draft for further editing without changing what runs.
+- **Pinning calls:** a Call Flow or Function node follows the target's active revision by default (or its draft if never published). Select a specific revision in the node settings to pin it (`flow_revision` / `function_revision`); later publishes or rollbacks of the target then no longer change that call. Missing pinned revisions fail validation on save/publish and fail the run safely.
+- **Run History** shows which revision each run executed (`flow_revision`, or *draft*), next to the graph snapshot it already stores.
+- **Not versioned:** the enabled flag, schedule interval and event key are live flow settings; changing them takes effect without publishing. Saving now also rejects call nodes whose target flow/function or pinned revision does not exist.
+- **Permissions:** owners with `flows.write` publish, activate and restore their own flows under the same restrictions as saving. Functions remain SYS_ADMIN-only. Revisions are deleted with their flow or function.
+
+API: `POST …/publish` (`{"note": "…"}`, ≤500 characters), `GET …/revisions`, `GET …/revisions/{rev}`, `POST …/revisions/{rev}/activate`, `POST …/revisions/{rev}/restore`, under both `/api/admin/flows/{id}` and `/api/admin/blueprint-functions/{id}`. Listings report `active_revision`, `latest_revision` and `has_unpublished_changes`.
 
 ## Blueprint-style reusable flow calls (next increment)
 
 Add **Call Flow** nodes in the graph editor and select another saved flow by ID. When the parent flow runs, the selected flow is executed as a nested research function, and its serialized output feeds the following node. Nesting is bounded to four levels and a flow cannot call itself recursively, directly or indirectly. Subflows inherit the parent run's time limit and the read-only/no-tools policy. Missing references fail the run safely.
 
-This is the **first building block**, not yet a full Unreal Engine Blueprint-equivalent visual language. Strongly typed value pins, declared input/output ports, independent user-authored function libraries, parameter binding, graph revision pinning, custom trigger constructors and step-by-step debugging remain tracked under #59. Nested flow calls currently share the parent run log rather than creating child run records.
+This is the **first building block**, not yet a full Unreal Engine Blueprint-equivalent visual language. Strongly typed value pins, declared input/output ports, independent user-authored function libraries, parameter binding, custom trigger constructors and step-by-step debugging remain tracked under #59. Nested flow calls currently share the parent run log rather than creating child run records.
 
 ## Typed value nodes (Blueprint milestone)
 

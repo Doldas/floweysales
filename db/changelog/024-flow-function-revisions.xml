@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="024-flow-function-revisions" author="floweysales" dbms="mysql">
+  <createTable tableName="agent_flow_revisions" remarks="Immutable published snapshots of a flow's draft">
+   <column name="flow_id" type="BIGINT"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="revision" type="INT"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="name" type="VARCHAR(120)"><constraints nullable="false"/></column>
+   <column name="graph_json" type="LONGTEXT"><constraints nullable="false"/></column>
+   <column name="note" type="VARCHAR(500)"/>
+   <column name="published_by" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="published_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <addForeignKeyConstraint baseTableName="agent_flow_revisions" baseColumnNames="flow_id"
+   referencedTableName="agent_flows" referencedColumnNames="id" constraintName="fk_flow_revision_flow" onDelete="CASCADE"/>
+  <createTable tableName="blueprint_function_revisions" remarks="Immutable published snapshots of a function's draft">
+   <column name="function_id" type="BIGINT"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="revision" type="INT"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="name" type="VARCHAR(120)"><constraints nullable="false"/></column>
+   <column name="graph_json" type="LONGTEXT"><constraints nullable="false"/></column>
+   <column name="note" type="VARCHAR(500)"/>
+   <column name="published_by" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="published_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <addForeignKeyConstraint baseTableName="blueprint_function_revisions" baseColumnNames="function_id"
+   referencedTableName="blueprint_functions" referencedColumnNames="id" constraintName="fk_function_revision_function" onDelete="CASCADE"/>
+  <addColumn tableName="agent_flows">
+   <column name="active_revision" type="INT" remarks="Published revision used by runs; NULL runs the draft (never published)"/>
+  </addColumn>
+  <addColumn tableName="blueprint_functions">
+   <column name="active_revision" type="INT" remarks="Published revision used by unpinned calls; NULL uses the draft"/>
+  </addColumn>
+  <addColumn tableName="agent_flow_runs">
+   <column name="flow_revision" type="INT" remarks="Published revision executed; NULL when the draft ran"/>
+  </addColumn>
+  <rollback>
+   <dropColumn tableName="agent_flow_runs" columnName="flow_revision"/>
+   <dropColumn tableName="blueprint_functions" columnName="active_revision"/>
+   <dropColumn tableName="agent_flows" columnName="active_revision"/>
+   <dropTable tableName="blueprint_function_revisions"/>
+   <dropTable tableName="agent_flow_revisions"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

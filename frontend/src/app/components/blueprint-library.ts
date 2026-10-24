@@ -3,11 +3,12 @@ import { HostListener, Component, EventEmitter, Output, signal } from '@angular/
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { PublishState, RevisionSummary, canPublish, publishStatusLabel } from './flow-versions';
 
 type Kind='text'|'number'|'boolean';
 interface Node {id:string;type:'input'|'output'|'constant'|'operation';value_type?:Kind;value?:string;operation?:string;x:number;y:number}
 interface Edge {from:string;to:string;to_port?:string}
-interface Definition {id:number;name:string;graph:{nodes:Node[];edges:Edge[]}}
+interface Definition extends PublishState {id:number;name:string;graph:{nodes:Node[];edges:Edge[]}}
 interface Trigger {id:number;event_key:string;payload_type:Kind}
 @Component({
  selector:'fse-blueprint-library',standalone:true,
@@ -91,7 +92,23 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
   } @else {<p>Select a node to edit its pins and properties.</p>}
  </aside>
  </div>
- <div class="toolbar"><button mat-flat-button (click)="save()" [disabled]="busy()">Save function</button></div>
+ <div class="toolbar"><button mat-flat-button (click)="save()" [disabled]="busy()">Save function</button>
+  @if(current();as c){
+   <label>Publish note <input [ngModel]="publishNote()" (ngModelChange)="publishNote.set($event)" maxlength="500" placeholder="What changed (optional)"></label>
+   <button mat-stroked-button (click)="publish()" [disabled]="busy()||!canPublish(c,hasUnsavedChanges())" [title]="hasUnsavedChanges()?'Save the function before publishing':'Freeze the saved draft as the next revision'">Publish revision</button>
+  }
+ </div>
+ @if(current();as c){
+  <section class="versions" aria-label="Published function versions">
+   <p role="status"><strong>{{publishStatusLabel(c)}}</strong>@if(hasUnsavedChanges()){ · unsaved edits}</p>
+   <p class="muted">Flow nodes that follow the active revision use it; pinned nodes keep their revision.</p>
+   @if(revisions().length){<ul>
+    @for(r of revisions();track r.revision){<li [class.active]="r.active"><span>Revision {{r.revision}}@if(r.active){ · active}@if(r.note){ · {{r.note}}}</span>
+     <span><button mat-stroked-button (click)="activateRevision(r.revision)" [disabled]="busy()||r.active">Activate</button>
+     <button mat-stroked-button (click)="restoreRevision(r.revision)" [disabled]="busy()">Restore to draft</button></span></li>}
+   </ul>}
+  </section>
+ }
  <h3>Event trigger starters</h3>
  <div class="toolbar">
   <label>Trigger template<select [ngModel]="''" (ngModelChange)="useTriggerTemplate($event)">
@@ -132,7 +149,8 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
  .inspector-heading span{font-size:11px;letter-spacing:.14em;opacity:.75}
  .panel label,.panel input,.panel select{min-width:0;width:100%;box-sizing:border-box}
  @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .canvas{min-height:280px}.panel{max-height:360px}}
-.panel strong{width:100%}label{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}input,select{background:#14263a;color:#ecf6ff;border:1px solid #68859b;border-radius:6px;padding:8px}.canvas{overflow:auto;border:1px solid #45627b;background:#102032;border-radius:8px}svg{display:block;min-width:650px;width:100%;height:auto;touch-action:none;cursor:grab}.triggers span{padding:8px;border:1px solid #50738e;border-radius:12px}`]
+.panel strong{width:100%}label{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}input,select{background:#14263a;color:#ecf6ff;border:1px solid #68859b;border-radius:6px;padding:8px}.canvas{overflow:auto;border:1px solid #45627b;background:#102032;border-radius:8px}svg{display:block;min-width:650px;width:100%;height:auto;touch-action:none;cursor:grab}.triggers span{padding:8px;border:1px solid #50738e;border-radius:12px}
+ .versions ul{list-style:none;padding:0;display:flex;flex-direction:column;gap:6px}.versions li{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;padding:8px;border:1px solid #3d5d77;border-radius:8px}.versions li.active{border-color:#73baff;background:#1b3854}.muted{opacity:.75}`]
 })
 export class BlueprintLibraryComponent {
  readonly canvasView = signal({ x: 0, y: 0, width: 850, height: 340 });
@@ -191,6 +209,22 @@ export class BlueprintLibraryComponent {
  readonly payloadType=signal<Kind>('text');
  readonly busy=signal(false);
  readonly status=signal('');
+ readonly publishStatusLabel=publishStatusLabel;
+ readonly canPublish=canPublish;
+ readonly revisions=signal<RevisionSummary[]>([]);
+ readonly publishNote=signal('');
+ readonly current=()=>this.functions().find(f=>f.id===this.currentId());
+ private draftSnapshot():string{return JSON.stringify({name:this.name(),nodes:this.nodes(),edges:this.edges()})}
+ private savedDraft=signal('');
+ readonly hasUnsavedChanges=()=>this.savedDraft()!==this.draftSnapshot();
+ async loadRevisions(){const id=this.currentId();if(!id){this.revisions.set([]);return}
+  try{const data=await this.api('/api/admin/blueprint-functions/'+id+'/revisions');if(this.currentId()===id)this.revisions.set(data.revisions||[])}catch(e){this.revisions.set([]);this.status.set(String(e))}}
+ async publish(){const id=this.currentId();if(!id||this.hasUnsavedChanges()){this.status.set('Save the function before publishing');return}
+  this.busy.set(true);try{const data=await this.api('/api/admin/blueprint-functions/'+id+'/publish',{method:'POST',body:JSON.stringify({note:this.publishNote().trim()})});this.publishNote.set('');this.status.set('Published revision '+data.active_revision);await this.refresh();await this.loadRevisions();this.functionsChanged.emit()}catch(e){this.status.set(String(e))}finally{this.busy.set(false)}}
+ async activateRevision(revision:number){const id=this.currentId();if(!id||!confirm('Make revision '+revision+' active for unpinned calls?'))return;
+  this.busy.set(true);try{await this.api('/api/admin/blueprint-functions/'+id+'/revisions/'+revision+'/activate',{method:'POST'});this.status.set('Revision '+revision+' is now active');await this.refresh();await this.loadRevisions();this.functionsChanged.emit()}catch(e){this.status.set(String(e))}finally{this.busy.set(false)}}
+ async restoreRevision(revision:number){const id=this.currentId();if(!id||!confirm('Replace the draft with revision '+revision+'?'+(this.hasUnsavedChanges()?' Unsaved edits will be lost.':'')))return;
+  this.busy.set(true);try{const restored:Definition=await this.api('/api/admin/blueprint-functions/'+id+'/revisions/'+revision+'/restore',{method:'POST'});this.functions.update(list=>list.map(f=>f.id===id?restored:f));this.choose(id);this.status.set('Draft restored from revision '+revision+'; publish it to make it the next revision');await this.loadRevisions()}catch(e){this.status.set(String(e))}finally{this.busy.set(false)}}
  constructor(){void this.refresh()}
  private initialNodes():Node[]{return [{id:'input',type:'input',value_type:'number',x:30,y:150},{id:'output',type:'output',value_type:'number',x:690,y:150}]}
  node(id:string){return this.nodes().find(n=>n.id===id)}
@@ -212,14 +246,14 @@ export class BlueprintLibraryComponent {
   this.eventKey.set(key);this.payloadType.set('text');
   this.status.set('Trigger template selected. Create trigger to activate this event key.');
  }
- newFunction(){this.currentId.set(0);this.name.set('My function');this.nodes.set(this.initialNodes());this.edges.set([]);this.selected.set('')}
- choose(id:number){const f=this.functions().find(x=>x.id===id);if(!f){this.newFunction();return}this.currentId.set(id);this.name.set(f.name);this.nodes.set(structuredClone(f.graph.nodes));this.edges.set(structuredClone(f.graph.edges));this.selected.set('')}
+ newFunction(){this.currentId.set(0);this.name.set('My function');this.nodes.set(this.initialNodes());this.edges.set([]);this.selected.set('');this.revisions.set([])}
+ choose(id:number){const f=this.functions().find(x=>x.id===id);if(!f){this.newFunction();return}this.currentId.set(id);this.name.set(f.name);this.nodes.set(structuredClone(f.graph.nodes));this.edges.set(structuredClone(f.graph.edges));this.selected.set('');this.savedDraft.set(this.draftSnapshot());this.publishNote.set('');void this.loadRevisions()}
  add(type:'constant'|'operation'){const id=type+'-'+Date.now().toString(36);this.nodes.update(n=>[...n,{id,type,x:240+(n.length%3)*95,y:35+(n.length%3)*90,...(type==='operation'?{operation:'add'}:{value_type:'number' as Kind,value:'1'})}]);this.selected.set(id)}
  edit(field:'value_type'|'value'|'operation',value:string){this.nodes.update(nodes=>nodes.map(n=>n.id===this.selected()?{...n,[field]:value}:n))}
  connect(from:string,to:string,port:string){if(!from||from===to)return;this.edges.update(es=>[...es.filter(e=>!(e.to===to&&(e.to_port||'a')===port)),{from,to,to_port:port}])}
  removeNode(id:string){this.nodes.update(ns=>ns.filter(n=>n.id!==id));this.edges.update(es=>es.filter(e=>e.from!==id&&e.to!==id));this.selected.set('')}
  private async api(url:string,init?:RequestInit):Promise<any>{const res=await fetch(url,{credentials:'same-origin',...init,headers:{'Content-Type':'application/json',...init?.headers}});const data=await res.json();if(!res.ok)throw Error(data.error||'Request failed');return data}
  async refresh(){try{const [f,t]=await Promise.all([this.api('/api/admin/blueprint-functions'),this.api('/api/admin/blueprint-triggers')]);this.functions.set(f.functions||[]);this.triggers.set(t.triggers||[])}catch(e){this.status.set(String(e))}}
- async save(){this.busy.set(true);try{const id=this.currentId();const res:Definition=await this.api(id?'/api/admin/blueprint-functions/'+id:'/api/admin/blueprint-functions',{method:id?'PUT':'POST',body:JSON.stringify({name:this.name(),graph:{nodes:this.nodes(),edges:this.edges()}})});this.currentId.set(res.id);this.status.set('Function saved');await this.refresh();this.functionsChanged.emit()}catch(e){this.status.set(String(e))}finally{this.busy.set(false)}}
+ async save(){this.busy.set(true);try{const id=this.currentId();const res:Definition=await this.api(id?'/api/admin/blueprint-functions/'+id:'/api/admin/blueprint-functions',{method:id?'PUT':'POST',body:JSON.stringify({name:this.name(),graph:{nodes:this.nodes(),edges:this.edges()}})});this.currentId.set(res.id);this.savedDraft.set(this.draftSnapshot());this.status.set(res.active_revision?'Draft saved; publish it to change unpinned calls':'Function saved');await this.refresh();await this.loadRevisions();this.functionsChanged.emit()}catch(e){this.status.set(String(e))}finally{this.busy.set(false)}}
  async createTrigger(){this.busy.set(true);try{await this.api('/api/admin/blueprint-triggers',{method:'POST',body:JSON.stringify({event_key:this.eventKey(),payload_type:this.payloadType()})});this.status.set('Trigger created');await this.refresh()}catch(e){this.status.set(String(e))}finally{this.busy.set(false)}}
 }
