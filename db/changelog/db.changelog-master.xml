@@ -22,4 +22,5 @@
   <include file="018-smtp-settings.xml" relativeToChangelogFile="true"/>
   <include file="019-custom-roles-permissions.xml" relativeToChangelogFile="true"/>
   <include file="020-tracker-email-subscriptions.xml" relativeToChangelogFile="true"/>
+  <include file="021-flow-run-step-duration.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

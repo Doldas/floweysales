@@ -16,7 +16,7 @@ interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'functi
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
-interface FlowRunStep {id:number;node:string;label:string;status:string;output:string;created_at?:string}
+interface FlowRunStep {id:number;node:string;label:string;status:string;output:string;created_at?:string;duration_ms?:number|null}
 interface FlowRun { id:number; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null }
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
@@ -389,8 +389,8 @@ export class ConfirmDeleteFlowDialog {
           @if(executionSelectedNode();as nodeId){
             <div class="exec-selected">
               <strong>{{executionNodeLabel(nodeId)}} · {{executionNodeStatus(nodeId)}}</strong>
-              @if(executionStep(nodeId);as selectedStep){<p class="muted">Recorded {{displayRunTime(selectedStep.created_at)}}</p>}
-              <p class="muted">Only persisted output previews are displayed. Raw inputs, per-node durations and retry counts are not available in historical records.</p>
+              @if(executionStep(nodeId);as selectedStep){<p class="muted">Recorded {{displayRunTime(selectedStep.created_at)}} · Duration: {{selectedStep.duration_ms==null?'Unavailable':displayStepDuration(selectedStep.duration_ms)}}</p>}
+              <p class="muted">Only persisted output previews are displayed. Raw inputs and retry counts are not available in historical records. Older runs may lack duration data.</p>
               @if(activeRunError();as failure){<div class="exec-error-hint"><strong>Run error:</strong> {{failure}}</div>}
               @if(executionStep(nodeId);as step){@if(step.output){<pre>{{step.output}}</pre>}@else{<p class="muted">No recorded output.</p>}}
               @else{<p class="muted">No recorded step for this node.</p>}
@@ -404,7 +404,7 @@ export class ConfirmDeleteFlowDialog {
         <div class="run-step-list" aria-label="Node execution trace">
          @for(step of traceSteps();track step.id){
           <details class="run-step">
-           <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}} · {{displayRunTime(step.created_at)}}</span>
+           <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}} · {{displayRunTime(step.created_at)}} · {{step.duration_ms==null?'Duration unavailable':displayStepDuration(step.duration_ms)}}</span>
             @if(compareRun()&&compareRun()!==run.id){<span class="muted"> · {{compareStatus(step.node,step.status,step.output)}}</span>}
            </summary>
            @if(step.output){<pre>{{step.output}}</pre>}
@@ -684,18 +684,52 @@ export class FlowStudioComponent {
       if(n.type==='agent'&&(n.prompt||'').trim().length<5)add('Agent needs research instructions: '+n.label,n.id);
       if(n.type==='flow'&&!n.flow_id)add('Select a saved flow: '+n.label,n.id);
       if(n.type==='function'&&!n.function_id)add('Select a saved function: '+n.label,n.id);
-      if(n.type==='json_get'&&!/^[A-Za-z_][A-Za-z0-9_]*$/.test(n.property||''))add('Enter a valid JSON property: '+n.label,n.id);
+      if(n.type==='json_get'&&!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(n.property||''))add('Enter a valid JSON property: '+n.label,n.id);
       if(n.type==='condition'&&!['equals','not_equals','contains','greater_than','less_than'].includes(n.operator||''))add('Select a condition operator: '+n.label,n.id);
       if(n.type==='loop'&&(!n.loop_limit||n.loop_limit<1||n.loop_limit>100))add('Set loop limit from 1 to 100: '+n.label,n.id);
+      if((n.type==='save_result'||n.type==='load_result')&&!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(n.variable||''))add('Run variable must start with a letter and be at most 48 characters: '+n.label,n.id);
+      if(n.type==='agent'&&(n.timeout_seconds||0)>90)add('Agent timeout exceeds 90 seconds: '+n.label,n.id);
+      if(n.type==='agent'&&(n.max_retries||0)>2)add('Agent retries exceed 2: '+n.label,n.id);
+      if(n.type==='constant'&&n.value_type==='boolean'&&n.value!=='true'&&n.value!=='false')add('Boolean value must be true or false: '+n.label,n.id);
+      if(n.type==='constant'&&n.value_type==='number'&&(!n.value?.trim()||!Number.isFinite(Number(n.value))))add('Number constant must be finite: '+n.label,n.id);
+      if(n.type==='workspace_read'||n.type==='workspace_write'){
+        const path=n.value||'';
+        if(!path.startsWith('/')||path==='/'||path.includes('\\')||path.split('/').some(p=>p==='.'||p==='..')||path.length>512)add('Workspace path must be an absolute safe file path: '+n.label,n.id);
+      }
       if(n.type==='agent'&&n.output_mode==='json'&&n.json_contract){try{
         const contract=JSON.parse(n.json_contract);if(!contract||typeof contract!=='object'||Array.isArray(contract))throw Error('Invalid schema');
       }catch{add('JSON output contract is invalid: '+n.label,n.id)}}
     }
+    if(g.version!==2&&g.edges.some(e=>!!e.from_port||!!e.to_port))add('Typed ports and branch selectors require graph version 2.');
     const adjacency=new Map(g.nodes.map(n=>[n.id,[] as string[]]));
     const incoming=new Map(g.nodes.map(n=>[n.id,0]));
     for(const e of g.edges){
       if(!nodes.has(e.from)||!nodes.has(e.to)||e.from===e.to){add('Connection references a missing node or itself.');continue}
       if(nodes.get(e.to)?.type==='trigger')add('Trigger cannot have incoming connections.',e.to);
+      const from=nodes.get(e.from)!,to=nodes.get(e.to)!;
+      if(e.from_port||e.to_port){
+        if(e.from_port?.startsWith('field:')&&e.to_port==='input'){
+          const field=e.from_port.slice(6);
+          if(!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(field))add('Mapped JSON field name is invalid: '+field,e.from);
+          if(['trigger','condition','output'].includes(from.type))add('This node cannot expose a mapped JSON field: '+from.label,e.from);
+          if(['trigger','constant'].includes(to.type))add('This node cannot accept a mapped value: '+to.label,e.to);
+          if(from.type==='agent'){
+            if(from.output_mode!=='json')add('Agent must use JSON-only output to map a field: '+from.label,e.from);
+            if(from.json_contract){try{
+              const contract=JSON.parse(from.json_contract);
+              if(contract?.properties&&typeof contract.properties==='object'&&!Object.prototype.hasOwnProperty.call(contract.properties,field))
+                add('Mapped field is absent from JSON contract: '+field,e.from);
+            }catch{/* invalid contract is reported by the node validator */}
+            }
+          }
+        }else if(from.type==='condition'&&(e.from_port==='true'||e.from_port==='false')&&!e.to_port){
+          // Valid v2 branch selector.
+        }else if(e.from_port==='value'&&e.to_port==='input'){
+          if(from.type==='trigger')add('Trigger has no typed value output.',e.from);
+          if(to.type==='trigger'||to.type==='constant')add('Target cannot accept typed input: '+to.label,e.to);
+          if(from.type==='constant'&&from.value_type!=='text')add('Convert number/boolean constants to text before connecting: '+from.label,e.from);
+        }else add('Unsupported connection port combination: '+(e.from_port||'default')+' → '+(e.to_port||'default'),e.from);
+      }
       adjacency.get(e.from)?.push(e.to);incoming.set(e.to,(incoming.get(e.to)||0)+1);
     }
     for(const n of g.nodes)if(n.type!=='trigger'&&!incoming.get(n.id))add('Disconnected node: '+n.label,n.id);
@@ -728,6 +762,11 @@ export class FlowStudioComponent {
    if(!value)return 'Unavailable';
    const date=new Date(value);
    return Number.isNaN(date.getTime())?'Unavailable':date.toLocaleString();
+ }
+ displayStepDuration(ms:number|null|undefined):string{
+   if(ms==null)return 'Unavailable';
+   const value=Math.max(0,ms);
+   return value<1000?value+' ms':value<60000?(value/1000).toFixed(1)+' s':Math.floor(value/60000)+' min '+Math.round(value%60000/1000)+' s';
  }
  displayRunDuration(run:FlowRun):string{
    if(run.duration_ms==null)return run.status==='RUNNING'?'In progress':'Unavailable';

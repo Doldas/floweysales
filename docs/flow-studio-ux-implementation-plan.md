@@ -26,18 +26,21 @@ Make flows easy to discover, build, run, inspect and troubleshoot without moving
 - [ ] Extend the picker with categories, richer descriptions and keyboard-first focus handling.
 - [ ] Introduce a consistent editor command bar and clear Save, Saved, Saving, Failed indicators.
 - [x] Add inline preflight validation for graph size, node connectivity, unreachable/cyclic nodes, prompts, identifiers and selected required configuration, with click-through node fixes.
-- [ ] Extend validation to backend-parity typed edges, JSON schema semantics and branching/output path requirements.
+- [x] Expand preflight checks for v2 typed/branch ports, JSON-field mappings, constant types, run variables and Workspace paths (PR stacked after keyboard Undo/Redo).
+- [ ] Reach full backend parity for JSON schema semantics, route/output validation, advanced node constraints and exact authorization.
 - [x] Allow freely placed nodes, curved edges, clickable connection ports and Fit flow viewport control without changing graph serialization.
 - [ ] Add graph auto-layout, drag-to-connect gestures, port-specific branch/data mapping and robust connection validation.
 
 ## P1 — Run History and diagnostics
 - [x] Backend: return run start/end timestamps, total duration, and recorded node step timestamps from existing database columns.
-- [ ] Backend: add pagination, flow snapshot version, structured failure node, attempt counts and per-node timing.
+- [x] Record elapsed wall-clock duration for completed node steps (nullable for legacy or skipped steps); migration 021.
+- [ ] Backend: pagination, flow snapshot version, structured failure node and per-attempt timing/retry data.
 - [x] Frontend: display run timing metadata, status labels and step timestamps; show error context in the execution graph.
 - [ ] Frontend: add paginated History table, date/trigger filtering, and dedicated failure-node navigation informed by structured backend metadata.
 - [x] Bounded active-run polling in History with cleanup, including node trace updates (#97, #101).
 - [ ] Add complete run lifecycle events/SSE and richer live diagnostics.
-- [ ] Complete execution detail: node input, error field, attempt count, elapsed time and safely redacted secrets (output inspection implemented in the graph).
+- [x] Show recorded per-step duration in Run History and execution graph, with legacy data fallback.
+- [ ] Complete execution detail: node input, structured errors, attempt counts and safely redacted secrets.
 - [x] Execution graph overlay: render the immutable graph snapshot for the selected run, color nodes by recorded status, inspect node outputs and refresh live traces for active runs.
 - [ ] Side-by-side run comparison matching snapshot nodes with clear added/removed/modified annotations.
 - [x] Side-effect-free replay preview based on a saved graph snapshot.
