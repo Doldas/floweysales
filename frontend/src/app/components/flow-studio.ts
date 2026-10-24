@@ -145,40 +145,7 @@ export class ConfirmDeleteFlowDialog {
      }
     </svg>
    </div>
-   @if(quickNode();as q){<div class="node-quick-tooltip" (click)="$event.stopPropagation()" aria-label="Quick node settings">
-     <div class="quick-tooltip-title"><strong>⚙ {{q.label}}</strong><button type="button" class="quick-tooltip-close" (click)="closeQuickNode()" aria-label="Close quick settings" title="Close">×</button></div>
-     <label>Name <input [ngModel]="q.label" (ngModelChange)="updateNodeFor(q.id,'label',$event)" maxlength="100"></label>
-     @if(q.type==='agent'){
-       <label>Format <select [ngModel]="q.output_mode||'markdown'" (ngModelChange)="updateNodeFor(q.id,'output_mode',$event)">
-         <option value="markdown">Markdown</option><option value="json">JSON only</option>
-       </select></label>
-       <label>Prompt <textarea rows="3" [ngModel]="q.prompt||''" (ngModelChange)="updateNodeFor(q.id,'prompt',$event)" maxlength="2000"></textarea></label>
-     }
-     @if(q.type==='constant'||q.type==='workspace_read'||q.type==='workspace_write'){
-       <label>{{q.type==='constant'?'Value':'File path'}} <input [ngModel]="q.value||''" (ngModelChange)="updateNodeFor(q.id,'value',$event)"></label>
-     }
-     <button type="button" (click)="select(q.id);hoveredNode.set('')">Full details</button>
-     @if(q.type!=='trigger'){<button type="button" class="node-quick-delete" (click)="removeNode(q.id)">Delete node</button>}
-   </div>}
-   @if(canvasMenu()){<div class="canvas-context-menu" role="menu" aria-label="Create node">
-     <strong>Add node</strong>
-     <button type="button" role="menuitem" (click)="addAgent();closeCanvasMenu()">Research Agent</button>
-     <button type="button" role="menuitem" (click)="addOutput();closeCanvasMenu()">Output Result</button>
-     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addSubflow();closeCanvasMenu()">Call Flow</button>}
-     <button type="button" role="menuitem" (click)="addConstant();closeCanvasMenu()">Value</button>
-     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addFunctionCall();closeCanvasMenu()">Function</button>}
-     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('save_result');closeCanvasMenu()">Save Result</button>}
-     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('load_result');closeCanvasMenu()">Load Result</button>}
-     <button type="button" role="menuitem" (click)="addUtility('transform');closeCanvasMenu()">Transform Text</button>
-     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('workspace_read');closeCanvasMenu()">Read Workspace File</button>}
-     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('workspace_write');closeCanvasMenu()">Write Workspace File</button>}
-     <button type="button" (click)="closeCanvasMenu()">Cancel</button>
-   </div>}
-   </div>
-   <aside class="flow-node-editor" aria-label="Node details" aria-live="polite">
-   <header class="inspector-heading"><span>DETAILS</span><strong>{{ selectedNode()?.label || 'No node selected' }}</strong></header>
-   @if(selectedNode();as n){
-     <div class="inspector-fields">
+   @if(quickNode();as n){<section class="node-quick-tooltip node-full-tooltip" role="region" aria-label="Complete node settings" (click)="$event.stopPropagation()"><header class="quick-tooltip-title"><strong>⚙ {{n.label}} · {{n.type}}</strong><button type="button" class="quick-tooltip-close" (click)="closeQuickNode()" aria-label="Close node settings">×</button></header><div class="inspector-fields">
        @if(n.type!=='trigger'){
          <label>Connect output from <select #nodeSource><option value="">Choose upstream node</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id&&other.type!=='output'){<option [value]="other.id">{{other.label}}</option>}}</select></label>
          <button mat-stroked-button (click)="connect(nodeSource.value,n.id)" [disabled]="!nodeSource.value">Connect nodes</button>
@@ -318,9 +285,23 @@ export class ConfirmDeleteFlowDialog {
          <label>Reusable flow to call <select [ngModel]="n.flow_id||0" (ngModelChange)="updateFlowReference(+$event)"><option [ngValue]="0">Choose target flow</option>@for(f of flows();track f.id){@if(f.id!==selectedId()){<option [ngValue]="f.id">{{f.name}} (#{{f.id}})</option>}}</select></label>
          <p class="muted">Runs the selected graph as a function. Recursion is blocked and nesting is limited to 4 levels.</p>
        }
-     </div>
-   } @else { <p class="muted">Select a node in the graph to edit its properties here.</p> }
-   </aside>
+     </div>@if(n.type!=='trigger'){<button type="button" class="node-quick-delete" (click)="removeNode(n.id)">Delete node</button>}</section>}
+    @if(canvasMenu()){<div class="canvas-context-menu" role="menu" aria-label="Create node">
+     <strong>Add node</strong>
+     <button type="button" role="menuitem" (click)="addAgent();closeCanvasMenu()">Research Agent</button>
+     <button type="button" role="menuitem" (click)="addOutput();closeCanvasMenu()">Output Result</button>
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addSubflow();closeCanvasMenu()">Call Flow</button>}
+     <button type="button" role="menuitem" (click)="addConstant();closeCanvasMenu()">Value</button>
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addFunctionCall();closeCanvasMenu()">Function</button>}
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('save_result');closeCanvasMenu()">Save Result</button>}
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('load_result');closeCanvasMenu()">Load Result</button>}
+     <button type="button" role="menuitem" (click)="addUtility('transform');closeCanvasMenu()">Transform Text</button>
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('workspace_read');closeCanvasMenu()">Read Workspace File</button>}
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('workspace_write');closeCanvasMenu()">Write Workspace File</button>}
+     <button type="button" (click)="closeCanvasMenu()">Cancel</button>
+   </div>}
+   </div>
+   
    </div>
    <div class="flow-actions">
      <button mat-stroked-button type="button" (click)="undoGraph()" [disabled]="!canUndo()||busy()" aria-label="Undo graph change">↶ Undo</button>
@@ -477,15 +458,15 @@ export class ConfirmDeleteFlowDialog {
   .canvas-connect-hint{display:flex;align-items:center;gap:8px;font-size:12px;color:#ffe19a;margin-left:auto}.canvas-connect-hint button{background:#3b3540;color:#ffe19a;border:1px solid #ae8c67;border-radius:5px;cursor:pointer;padding:5px}
   .flow-workspace{background:radial-gradient(#294057 1px,transparent 1px) 0 0/20px 20px,#0d1b2a;border:1px solid #45627b;overflow:auto;border-radius:12px}
  svg{min-width:660px;width:100%;height:auto;display:block;touch-action:none;cursor:grab}
- .node-quick-tooltip{position:absolute;right:14px;top:62px;z-index:7;display:flex;flex-direction:column;gap:8px;padding:12px;width:min(290px,85%);max-height:65vh;overflow:auto;background:rgba(26,51,74,.89);backdrop-filter:blur(10px);border:1px solid #8abce4;box-shadow:0 12px 28px #000a;border-radius:10px}
+ .node-quick-tooltip{position:absolute;right:14px;top:62px;z-index:7;display:flex;flex-direction:column;gap:8px;padding:12px;width:min(480px,calc(100% - 28px));box-sizing:border-box;max-height:min(78vh,780px);overflow:auto;background:rgba(26,51,74,.89);backdrop-filter:blur(10px);border:1px solid #8abce4;box-shadow:0 12px 28px #000a;border-radius:10px}
  .quick-tooltip-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
  .quick-tooltip-close{width:26px;height:26px;min-height:26px!important;padding:0!important;flex:0 0 auto;color:#fff!important;background:#b52b38!important;border:1px solid #e15d66!important;border-radius:5px!important;font-size:20px!important;line-height:1!important;cursor:pointer}
  .quick-tooltip-close:hover{background:#db3545!important}
- .node-quick-tooltip label{display:flex;flex-direction:column;gap:4px;min-width:0}
+ .node-full-tooltip .inspector-fields{display:flex;flex-direction:column;gap:12px}.node-quick-tooltip label{display:flex;flex-direction:column;gap:4px;min-width:0}
  .node-quick-tooltip input,.node-quick-tooltip textarea,.node-quick-tooltip select{width:100%;box-sizing:border-box}
  .node-quick-tooltip button{min-height:32px}
   .node-quick-delete{background:#562632;color:#ffe5e5;border:1px solid #b65f6b;border-radius:6px;padding:8px;cursor:pointer}
- .blueprint-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(270px,315px);align-items:stretch;gap:12px;min-height:470px}
+ .blueprint-layout{display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch;gap:12px;min-height:470px}
  .blueprint-layout .flow-workspace{min-width:0;min-height:470px}
  .flow-node-editor{margin:0;padding:16px;border:1px solid #355a75;border-radius:10px;background:#142438;min-width:0;max-height:min(75vh,780px);overflow-y:auto}
  .inspector-heading{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid #355a75;padding-bottom:12px;margin-bottom:14px}
@@ -497,7 +478,7 @@ export class ConfirmDeleteFlowDialog {
  .mapped-edge button{color:#bce3ff;background:#1b3850;border:1px solid #527b99;border-radius:5px;padding:5px}
  .inspector-fields label{min-width:0;width:100%;flex:auto}
  .inspector-fields input,.inspector-fields select,.inspector-fields textarea{box-sizing:border-box;width:100%;min-width:0}
- @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .flow-workspace{min-height:280px}.flow-node-editor{max-height:360px}}
+ @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .flow-workspace{min-height:280px}.node-full-tooltip{width:calc(100% - 16px);right:8px}}
 
 .flow-message{border-left:3px solid #73baff;padding-left:12px}
  .exec-graph{margin:14px 0;display:grid;gap:10px;padding:14px;border:1px solid #557c99;border-radius:12px;background:#12293d}
