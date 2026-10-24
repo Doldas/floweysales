@@ -12,7 +12,7 @@ type AgentFlowRunStep struct {
 	Status     string  `json:"status"`
 	Output     string  `json:"output"`
 	CreatedAt  string  `json:"created_at"`
-	DurationMS *int64  `json:"duration_ms"`
+	DurationMS *int64 `json:"duration_ms"`
 }
 
 func (d *Database) AppendAgentFlowRunStep(ctx context.Context, runID int64, node, label, status, output string) error {
