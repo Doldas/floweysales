@@ -112,6 +112,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frozen dependencies
         run: npm ci --prefix frontend
+      - name: Unit tests for Flow Studio helpers
+        run: node --test frontend/src/app/components/flow-history.spec.ts
       - name: Production Angular build
         run: npm run build --prefix frontend
       - name: Install headless Chromium for responsive layout tests

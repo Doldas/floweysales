@@ -11,6 +11,7 @@ import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angu
 import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 import { AuthState } from '../auth.service';
+import { filterFlowRuns, pushHistorySnapshot } from './flow-history';
 
 interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; function_id?:number; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
@@ -645,7 +646,7 @@ export class FlowStudioComponent {
    const history=this.undoHistory();if(!history.length||this.busy())return;
    const previous=history[history.length-1],current=JSON.stringify(this.graph());
    this.undoHistory.set(history.slice(0,-1));
-   this.redoHistory.update(items=>[...items.slice(-39),current]);
+   this.redoHistory.update(items=>pushHistorySnapshot(items,current));
    this.lastGraphVersion=previous;
    this.graph.set(JSON.parse(previous) as FlowGraph);
    this.chosen.set('');this.closeQuickNode();this.cancelConnecting();
@@ -654,7 +655,7 @@ export class FlowStudioComponent {
    const history=this.redoHistory();if(!history.length||this.busy())return;
    const next=history[history.length-1],current=JSON.stringify(this.graph());
    this.redoHistory.set(history.slice(0,-1));
-   this.undoHistory.update(items=>[...items.slice(-39),current]);
+   this.undoHistory.update(items=>pushHistorySnapshot(items,current));
    this.lastGraphVersion=next;
    this.graph.set(JSON.parse(next) as FlowGraph);
    this.chosen.set('');this.closeQuickNode();this.cancelConnecting();
@@ -749,7 +750,7 @@ export class FlowStudioComponent {
   private historyRequestVersion=0;
   readonly historyStatusFilter=signal('all');
   readonly historySearch=signal('');
-  readonly filteredRuns=()=>this.runs().filter(run=>(this.historyStatusFilter()==='all'||run.status===this.historyStatusFilter())&&(!this.historySearch()||String(run.id).includes(this.historySearch().trim())||run.trigger.toLowerCase().includes(this.historySearch().trim().toLowerCase())));
+  readonly filteredRuns=()=>filterFlowRuns(this.runs(),this.historyStatusFilter(),this.historySearch());
  readonly traceRunId=signal(0);
  readonly traceSteps=signal<FlowRunStep[]>([]);
  readonly executionGraph=signal<FlowGraph|null>(null);
@@ -802,7 +803,7 @@ export class FlowStudioComponent {
     effect(()=>{
       const current=JSON.stringify(this.graph());
       if(current===this.lastGraphVersion||this.dragHistoryStart!==null)return;
-      if(this.lastGraphVersion)this.undoHistory.update(items=>[...items.slice(-39),this.lastGraphVersion]);
+      if(this.lastGraphVersion)this.undoHistory.update(items=>pushHistorySnapshot(items,this.lastGraphVersion));
       this.lastGraphVersion=current;this.redoHistory.set([]);
     });
     effect((onCleanup)=>{
@@ -965,7 +966,7 @@ export class FlowStudioComponent {
   const stop=()=>{
    svg.removeEventListener('pointermove',move);svg.removeEventListener('pointerup',stop);svg.removeEventListener('pointercancel',stop);
    const before=this.dragHistoryStart,after=JSON.stringify(this.graph());
-   if(before!==null&&before!==after){this.undoHistory.update(items=>[...items.slice(-39),before]);this.redoHistory.set([]);}
+   if(before!==null&&before!==after){this.undoHistory.update(items=>pushHistorySnapshot(items,before));this.redoHistory.set([]);}
    this.lastGraphVersion=after;this.dragHistoryStart=null;this.dragging=null;
   }
   svg.addEventListener('pointermove',move);svg.addEventListener('pointerup',stop);svg.addEventListener('pointercancel',stop);
