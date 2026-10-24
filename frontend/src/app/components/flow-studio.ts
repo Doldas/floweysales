@@ -389,7 +389,7 @@ export class ConfirmDeleteFlowDialog {
           @if(executionSelectedNode();as nodeId){
             <div class="exec-selected">
               <strong>{{executionNodeLabel(nodeId)}} · {{executionNodeStatus(nodeId)}}</strong>
-              @if(executionStep(nodeId);as selectedStep){<p class="muted">Recorded {{displayRunTime(selectedStep.created_at)}} · Duration: {{selectedStep.duration_ms==null?'Unavailable':displayRunDuration(selectedStep.duration_ms)}}</p>}
+              @if(executionStep(nodeId);as selectedStep){<p class="muted">Recorded {{displayRunTime(selectedStep.created_at)}} · Duration: {{selectedStep.duration_ms==null?'Unavailable':displayStepDuration(selectedStep.duration_ms)}}</p>}
               <p class="muted">Only persisted output previews are displayed. Raw inputs and retry counts are not available in historical records. Older runs may lack duration data.</p>
               @if(activeRunError();as failure){<div class="exec-error-hint"><strong>Run error:</strong> {{failure}}</div>}
               @if(executionStep(nodeId);as step){@if(step.output){<pre>{{step.output}}</pre>}@else{<p class="muted">No recorded output.</p>}}
@@ -404,7 +404,7 @@ export class ConfirmDeleteFlowDialog {
         <div class="run-step-list" aria-label="Node execution trace">
          @for(step of traceSteps();track step.id){
           <details class="run-step">
-           <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}} · {{displayRunTime(step.created_at)}} · {{step.duration_ms==null?'Duration unavailable':displayRunDuration(step.duration_ms)}}</span>
+           <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}} · {{displayRunTime(step.created_at)}} · {{step.duration_ms==null?'Duration unavailable':displayStepDuration(step.duration_ms)}}</span>
             @if(compareRun()&&compareRun()!==run.id){<span class="muted"> · {{compareStatus(step.node,step.status,step.output)}}</span>}
            </summary>
            @if(step.output){<pre>{{step.output}}</pre>}
@@ -762,6 +762,11 @@ export class FlowStudioComponent {
    if(!value)return 'Unavailable';
    const date=new Date(value);
    return Number.isNaN(date.getTime())?'Unavailable':date.toLocaleString();
+ }
+ displayStepDuration(ms:number|null|undefined):string{
+   if(ms==null)return 'Unavailable';
+   const value=Math.max(0,ms);
+   return value<1000?value+' ms':value<60000?(value/1000).toFixed(1)+' s':Math.floor(value/60000)+' min '+Math.round(value%60000/1000)+' s';
  }
  displayRunDuration(run:FlowRun):string{
    if(run.duration_ms==null)return run.status==='RUNNING'?'In progress':'Unavailable';
