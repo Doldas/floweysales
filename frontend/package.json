@@ -33,7 +33,7 @@
     "tslib": "^2.3.0"
   },
   "devDependencies": {
-    "@angular/build": "^22.2.3",
+    "@angular/build": "^22.2.4",
     "@angular/cli": "^22.2.3",
     "@angular/compiler-cli": "^22.2.0",
     "playwright": "^1.64.1",
