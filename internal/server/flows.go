@@ -972,10 +972,15 @@ type flowTraceRunKey struct{}
 type flowNodeError struct {
 	NodeID     string
 	Label      string
+	Input      string
+	StartedAt  time.Time
 	DurationMS int64
 	Attempts   *int
 	Err        error
 }
+
+// flowAttemptKey carries the queue claim (worker attempt) executing a run.
+type flowAttemptKey struct{}
 
 func (e *flowNodeError) Error() string { return e.Err.Error() }
 func (e *flowNodeError) Unwrap() error { return e.Err }
@@ -1013,6 +1018,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 	variables := map[string]string{}
 	results := []map[string]string{}
 	var stepStarted time.Time
+	var nodeInput string
 	var currentNode *flowNode
 	var nodeAttempts int
 	defer func() {
@@ -1020,7 +1026,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 		if flowErr == nil || depth != 0 || currentNode == nil || errors.Is(flowErr, context.Canceled) {
 			return
 		}
-		nodeErr := &flowNodeError{NodeID: currentNode.ID, Label: currentNode.Label, DurationMS: time.Since(stepStarted).Milliseconds(), Err: flowErr}
+		nodeErr := &flowNodeError{NodeID: currentNode.ID, Label: currentNode.Label, Input: nodeInput, StartedAt: stepStarted, DurationMS: time.Since(stepStarted).Milliseconds(), Err: flowErr}
 		if nodeAttempts > 0 {
 			attempts := nodeAttempts
 			nodeErr.Attempts = &attempts
@@ -1035,11 +1041,18 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				status = "SUCCESS"
 			}
 			var durationMS *int64
-			if status != "SKIPPED" && !stepStarted.IsZero() {
+			input := nodeInput
+			if status == "SKIPPED" {
+				input = ""
+			} else if !stepStarted.IsZero() {
 				elapsed := time.Since(stepStarted).Milliseconds()
 				durationMS = &elapsed
 			}
-			if err := e.db.AppendAgentFlowRunStepTimed(ctx, runID, step["node"], step["label"], status, step["output"], durationMS); err != nil {
+			attempt, _ := ctx.Value(flowAttemptKey{}).(int)
+			if err := e.db.AppendAgentFlowRunStepRecord(ctx, runID, storage.FlowRunStepRecord{
+				Node: step["node"], Label: step["label"], Status: status, Input: input, Output: step["output"],
+				StartedAt: stepStarted, DurationMS: durationMS, WorkerAttempt: attempt,
+			}); err != nil {
 				log.Printf("[Flows] Node trace persistence failed: %v", err)
 			}
 		}
@@ -1064,6 +1077,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 	for i := startIndex; i < len(order); i++ {
 		id := order[i]
 		stepStarted = time.Now()
+		nodeInput = ""
 		currentNode = nil
 		if err := ctx.Err(); err != nil {
 			return "", err
@@ -1113,6 +1127,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				continue
 			}
 			state.Active[n.ID] = true
+			nodeInput = previous
 			if n.Type == "condition" {
 				matched, err := flowV2Condition(previous, n.Operator, n.Value)
 				if err != nil {
@@ -1142,6 +1157,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 					}
 				}
 			}
+			nodeInput = previous
 		}
 
 		if n.Type == "web_search" {

@@ -79,7 +79,7 @@ func (e *Engine) RestoreAPISecrets(ctx context.Context) error {
 		} else {
 			e.integrationMu.Lock()
 			e.webSearchProvider = entry.Provider
-			e.webSearchAPIKey = secret
+			e.webSearchAPIKey = registeredSecret(secret)
 			e.integrationMu.Unlock()
 		}
 	}
@@ -158,7 +158,7 @@ func (e *Engine) registerIntegrationSettingsRoutes() {
 		} else {
 			e.integrationMu.Lock()
 			e.webSearchProvider = body.Provider
-			e.webSearchAPIKey = body.APIKey
+			e.webSearchAPIKey = registeredSecret(body.APIKey)
 			e.integrationMu.Unlock()
 		}
 		writeJSON(w, 200, map[string]any{"saved": true, "has_key": true, "provider": body.Provider})

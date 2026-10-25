@@ -3,7 +3,7 @@
 // No extra test dependencies are required.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { UNDO_HISTORY_LIMIT, canRetryRun, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history.ts';
+import { UNDO_HISTORY_LIMIT, canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history.ts';
 
 const runs = [
   { id: 1, trigger: 'manual', status: 'SUCCESS' },
@@ -89,4 +89,42 @@ test('run status and attempt labels', () => {
   assert.equal(runAttemptLabel(1, 3), '');
   assert.equal(runAttemptLabel(undefined, undefined), '');
   assert.equal(runAttemptLabel(2, 3), 'attempt 2 of 3 (resumed from checkpoint)');
+});
+
+test('run comparison reports the most significant change per node', () => {
+  const baseline = [
+    { node: 'a', label: 'A', status: 'SUCCESS', input: 'x', output: '1', duration_ms: 100 },
+    { node: 'b', label: 'B', status: 'SUCCESS', input: '1', output: '2', duration_ms: 50 },
+    { node: 'c', label: 'C', status: 'SUCCESS', input: '2', output: '3', duration_ms: 10 },
+    { node: 'gone', label: 'Gone', status: 'SUCCESS', output: '' },
+  ];
+  const current = [
+    { node: 'flow', label: 'Resumed', status: 'RESUMED', output: 'note' },
+    { node: 'a', label: 'A', status: 'SUCCESS', input: 'x', output: '1', duration_ms: 130 },
+    { node: 'b', label: 'B', status: 'SUCCESS', input: '1', output: 'different', duration_ms: 50 },
+    { node: 'c', label: 'C', status: 'FAILED', input: 'different', duration_ms: null },
+    { node: 'new', label: 'New', status: 'SUCCESS', output: '' },
+  ];
+  const rows = compareRunSteps(current, baseline);
+  assert.deepEqual(rows.map(r => [r.node, r.change]), [['a', 'unchanged'], ['b', 'output'], ['c', 'status'], ['new', 'added'], ['gone', 'removed']]);
+  assert.equal(rows[0].durationDeltaMs, 30);
+  assert.equal(rows[2].durationDeltaMs, null);
+});
+
+test('input changes are detected when status matches', () => {
+  const rows = compareRunSteps([{ node: 'a', status: 'SUCCESS', input: 'new', output: 'same' }], [{ node: 'a', status: 'SUCCESS', input: 'old', output: 'same' }]);
+  assert.equal(rows[0].change, 'input');
+});
+
+test('the last recorded step of a retried node is compared', () => {
+  const rows = compareRunSteps(
+    [{ node: 'a', status: 'FAILED' }, { node: 'a', status: 'SUCCESS', output: 'ok' }],
+    [{ node: 'a', status: 'SUCCESS', output: 'ok' }]);
+  assert.equal(rows[0].change, 'unchanged');
+});
+
+test('executed node order skips flow markers and repeats', () => {
+  assert.deepEqual(executedNodeOrder([
+    { node: 'a', status: 'SUCCESS' }, { node: 'flow', status: 'RESUMED' }, { node: 'b', status: 'FAILED' }, { node: 'b', status: 'SUCCESS' },
+  ]), ['a', 'b']);
 });

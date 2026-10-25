@@ -11,7 +11,7 @@ import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angu
 import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 import { AuthState } from '../auth.service';
-import { canRetryRun, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history';
+import { canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history';
 import { listOverviewFlows } from './flow-overview';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 
@@ -19,7 +19,7 @@ interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'functi
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow extends PublishState { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
-interface FlowRunStep {id:number;node:string;label:string;status:string;output:string;created_at?:string;duration_ms?:number|null;attempts?:number|null}
+interface FlowRunStep {id:number;node:string;label:string;status:string;input?:string;output:string;error?:string;started_at?:string;created_at?:string;duration_ms?:number|null;attempts?:number|null;worker_attempt?:number|null}
 interface FlowRun { id:number; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null; failed_node?:string|null; flow_revision?:number|null; attempts?:number; max_attempts?:number; queued_at?:string|null }
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
@@ -424,12 +424,32 @@ export class ConfirmDeleteFlowDialog {
           </div>
           @if(executionSelectedNode();as nodeId){
             <div class="exec-selected">
-              <strong>{{executionNodeLabel(nodeId)}} · {{executionNodeStatus(nodeId)}}</strong>
-              @if(executionStep(nodeId);as selectedStep){<p class="muted">Recorded {{displayRunTime(selectedStep.created_at)}} · Duration: {{selectedStep.duration_ms==null?'Unavailable':displayStepDuration(selectedStep.duration_ms)}}@if(selectedStep.attempts!=null){ · Attempts: {{selectedStep.attempts}}}</p>}
-              <p class="muted">Only persisted output previews are displayed. Raw inputs and retry counts are not available in historical records. Older runs may lack duration data.</p>
-              @if(activeRunError();as failure){<div class="exec-error-hint"><strong>Run error:</strong> {{failure}}</div>}
-              @if(executionStep(nodeId);as step){@if(step.output){<pre>{{step.output}}</pre>}@else{<p class="muted">No recorded output.</p>}}
-              @else{<p class="muted">No recorded step for this node.</p>}
+              <div class="debug-head">
+                <strong>{{executionNodeLabel(nodeId)}} · {{executionNodeStatus(nodeId)}}</strong>
+                @if(executedNodes().length>1){<span class="debug-nav">
+                  <button mat-stroked-button type="button" (click)="stepExecution(-1)" [disabled]="executedIndex(nodeId)<=0" aria-label="Previous executed node">◀ Previous</button>
+                  <span class="muted">Step {{executedIndex(nodeId)+1}} of {{executedNodes().length}}</span>
+                  <button mat-stroked-button type="button" (click)="stepExecution(1)" [disabled]="executedIndex(nodeId)<0||executedIndex(nodeId)>=executedNodes().length-1" aria-label="Next executed node">Next ▶</button>
+                </span>}
+              </div>
+              @if(executionStep(nodeId);as step){
+                <dl class="debug-meta">
+                  <dt>Started</dt><dd>{{step.started_at?displayRunTime(step.started_at):'Not recorded'}}</dd>
+                  <dt>Duration</dt><dd>{{step.duration_ms==null?'Unavailable':displayStepDuration(step.duration_ms)}}</dd>
+                  @if(step.attempts!=null){<dt>Node attempts</dt><dd>{{step.attempts}}</dd>}
+                  @if(step.worker_attempt!=null){<dt>Worker attempt</dt><dd>{{step.worker_attempt}}</dd>}
+                </dl>
+                @if(step.error){<div class="exec-error-hint" role="alert"><strong>Error</strong><pre>{{step.error}}</pre></div>}
+                <div class="debug-io">
+                  <section><h5>Input</h5>@if(step.input){<pre>{{step.input}}</pre>}@else{<p class="muted">{{step.status==='SKIPPED'?'Skipped: no active input branch.':'No input recorded (start node or a run recorded before input capture).'}}</p>}</section>
+                  <section><h5>Output</h5>@if(step.output){<pre>{{step.output}}</pre>}@else{<p class="muted">No output.</p>}</section>
+                </div>
+                <p class="muted">Credentials are masked and previews are capped at 4,000 characters.</p>
+              }
+              @else{
+                @if(activeRunError();as failure){<div class="exec-error-hint"><strong>Run error:</strong> {{failure}}</div>}
+                <p class="muted">No recorded step for this node.</p>
+              }
             </div>
           }
         </section>
@@ -437,13 +457,28 @@ export class ConfirmDeleteFlowDialog {
        @if(traceLoading()){<p role="status">Loading node trace…</p>}
        @else if(!traceSteps().length){<p class="muted">No node trace available for this run. Earlier runs may predate node tracing.</p>}
        @else{
+        @if(compareRun()&&compareRun()!==run.id&&comparedSteps().length){
+         <div class="run-compare" role="region" [attr.aria-label]="'Comparison of run '+run.id+' with run '+compareRun()">
+          <strong>Run #{{run.id}} compared with #{{compareRun()}}</strong>
+          <div class="run-compare-scroll"><table>
+           <thead><tr><th scope="col">Node</th><th scope="col">This run</th><th scope="col">#{{compareRun()}}</th><th scope="col">Duration change</th><th scope="col">Difference</th></tr></thead>
+           <tbody>@for(row of stepComparison();track row.node){<tr [class]="'change-'+row.change">
+            <td>{{row.label}}</td><td>{{row.status||'—'}}</td><td>{{row.baselineStatus||'—'}}</td>
+            <td>{{durationDelta(row.durationDeltaMs)}}</td>
+            <td>{{changeLabel(row.change)}}</td></tr>}</tbody>
+          </table></div>
+         </div>
+        }
         <div class="run-step-list" aria-label="Node execution trace">
          @for(step of traceSteps();track step.id){
           <details class="run-step">
            <summary><strong [class.step-skipped]="step.status==='SKIPPED'">{{step.status}}</strong> · {{step.label||step.node}} <span class="muted">{{step.node}} · {{displayRunTime(step.created_at)}} · {{step.duration_ms==null?'Duration unavailable':displayStepDuration(step.duration_ms)}}@if(step.attempts!=null){ · {{step.attempts}} attempt(s)}</span>
             @if(compareRun()&&compareRun()!==run.id){<span class="muted"> · {{compareStatus(step.node,step.status,step.output)}}</span>}
            </summary>
-           @if(step.output){<pre>{{step.output}}</pre>}
+           @if(step.worker_attempt!=null&&step.worker_attempt>1){<p class="muted">Worker attempt {{step.worker_attempt}}</p>}
+           @if(step.error){<p><strong>Error</strong></p><pre>{{step.error}}</pre>}
+           @if(step.input){<p><strong>Input</strong></p><pre>{{step.input}}</pre>}
+           @if(step.output){<p><strong>Output</strong></p><pre>{{step.output}}</pre>}
            @if(step.status==='SUCCESS'&&step.output&&step.output.length<4000){
             <button mat-stroked-button (click)="previewReplay(run.id,step.node)">Replay preview from this node</button>
            }
@@ -530,6 +565,17 @@ export class ConfirmDeleteFlowDialog {
  .graph-validation ul{padding-left:22px}.graph-validation li{padding:4px 0;overflow-wrap:anywhere}
  .graph-validation li button{background:none;border:0;text-decoration:underline;color:#aedfff;cursor:pointer;font:inherit;text-align:left;padding:2px 0}
  .flow-message{border-left:3px solid #73baff;padding-left:12px}
+ .debug-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+ .debug-nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+ .debug-meta{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;margin:8px 0}.debug-meta dt{opacity:.75}.debug-meta dd{margin:0}
+ .debug-io{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:10px}
+ .debug-io section{min-width:0}.debug-io h5{margin:4px 0}.debug-io pre,.exec-error-hint pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto}
+ .run-compare{border:1px solid #3d5d77;border-radius:8px;padding:10px;margin:8px 0}
+ .run-compare-scroll{overflow-x:auto}
+ .run-compare table{border-collapse:collapse;width:100%;min-width:480px;font-size:13px}
+ .run-compare th,.run-compare td{text-align:left;padding:5px 8px;border-bottom:1px solid #2e4a61}
+ .run-compare tr.change-status td,.run-compare tr.change-removed td{color:#ffb3bb}
+ .run-compare tr.change-input td,.run-compare tr.change-output td,.run-compare tr.change-added td{color:#f4d686}
  .flow-versions{border:1px solid #527590;border-radius:10px;padding:14px;margin:12px 0;background:#152b40}
  .flow-versions header{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
  .flow-version-publish{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}
@@ -839,7 +885,7 @@ export class FlowStudioComponent {
  readonly replaySteps=signal<{node:string;label:string;status:string;input?:string;output?:string}[]>([]);
  readonly replaySource=signal(0);
  readonly compareRun=signal(0);
- readonly comparedSteps=signal<{node:string;status:string;output:string}[]>([]);
+ readonly comparedSteps=signal<FlowRunStep[]>([]);
  readonly busy=signal(false);
  readonly message=signal('');
  private dragging:{id:string;startX:number;startY:number;x:number;y:number}|null=null;
@@ -1117,6 +1163,15 @@ export class FlowStudioComponent {
    this.comparedSteps.set(data.steps||[]);
   }catch(e){this.message.set('Cannot compare runs: '+String(e))}
  }
+ readonly executedNodes=()=>executedNodeOrder(this.traceSteps());
+ executedIndex(nodeId:string):number{return this.executedNodes().indexOf(nodeId)}
+ stepExecution(delta:number):void{
+  const order=this.executedNodes();const index=this.executedIndex(this.executionSelectedNode());
+  const next=order[index<0?0:index+delta];if(next)this.executionSelectedNode.set(next);
+ }
+ readonly stepComparison=()=>compareRunSteps(this.traceSteps(),this.comparedSteps());
+ durationDelta(ms:number|null):string{if(ms==null)return '—';if(ms===0)return 'Same';return (ms>0?'+':'−')+this.displayStepDuration(Math.abs(ms))}
+ changeLabel(change:string):string{switch(change){case 'unchanged':return 'Unchanged';case 'status':return 'Status changed';case 'input':return 'Input changed';case 'output':return 'Output changed';case 'added':return 'Only in this run';case 'removed':return 'Only in baseline'}return change}
  compareStatus(node:string,status:string,output:string):string{
    const other=this.comparedSteps().find(x=>x.node===node);
    if(!this.compareRun()||!other)return 'No baseline';

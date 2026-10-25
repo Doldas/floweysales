@@ -218,7 +218,7 @@ func (e *Engine) runClaimedFlow(workerCtx context.Context, c *storage.ClaimedFlo
 			log.Printf("[Flows] Resume trace for run %d not saved: %v", c.RunID, err)
 		}
 	}
-	runCtx := context.WithValue(context.WithValue(ctx, flowTraceRunKey{}, c.RunID), flowCheckpointKey{}, checkpointer)
+	runCtx := context.WithValue(context.WithValue(context.WithValue(ctx, flowTraceRunKey{}, c.RunID), flowCheckpointKey{}, checkpointer), flowAttemptKey{}, c.Attempt)
 	output, runErr := e.executeFlowNestedWithInput(runCtx, f, map[int64]bool{}, 0, c.Input)
 
 	switch {
@@ -240,9 +240,14 @@ func (e *Engine) runClaimedFlow(workerCtx context.Context, c *storage.ClaimedFlo
 		var traceErr error
 		if errors.As(runErr, &nodeErr) {
 			failedNode = nodeErr.NodeID
-			traceErr = e.db.AppendAgentFlowRunStepAttempts(traceCtx, c.RunID, nodeErr.NodeID, nodeErr.Label, "FAILED", runErr.Error(), &nodeErr.DurationMS, nodeErr.Attempts)
+			traceErr = e.db.AppendAgentFlowRunStepRecord(traceCtx, c.RunID, storage.FlowRunStepRecord{
+				Node: nodeErr.NodeID, Label: nodeErr.Label, Status: "FAILED", Input: nodeErr.Input, Error: runErr.Error(),
+				StartedAt: nodeErr.StartedAt, DurationMS: &nodeErr.DurationMS, Attempts: nodeErr.Attempts, WorkerAttempt: c.Attempt,
+			})
 		} else {
-			traceErr = e.db.AppendAgentFlowRunStep(traceCtx, c.RunID, "flow", "Flow execution", "FAILED", runErr.Error())
+			traceErr = e.db.AppendAgentFlowRunStepRecord(traceCtx, c.RunID, storage.FlowRunStepRecord{
+				Node: "flow", Label: "Flow execution", Status: "FAILED", Error: runErr.Error(), WorkerAttempt: c.Attempt,
+			})
 		}
 		traceCancel()
 		if traceErr != nil {

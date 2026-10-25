@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="026-flow-run-step-diagnostics" author="floweysales" dbms="mysql">
+  <addColumn tableName="agent_flow_run_steps">
+   <column name="input_preview" type="TEXT" remarks="Redacted, bounded value the node received; NULL for steps recorded before this change"/>
+   <column name="error_message" type="TEXT" remarks="Redacted error of a FAILED step; earlier runs kept it in output_preview"/>
+   <column name="started_at" type="DATETIME(6)" remarks="When the node began executing"/>
+   <column name="worker_attempt" type="INT" remarks="Queue claim (worker attempt) that executed the node"/>
+  </addColumn>
+  <rollback>
+   <dropColumn tableName="agent_flow_run_steps" columnName="worker_attempt"/>
+   <dropColumn tableName="agent_flow_run_steps" columnName="started_at"/>
+   <dropColumn tableName="agent_flow_run_steps" columnName="error_message"/>
+   <dropColumn tableName="agent_flow_run_steps" columnName="input_preview"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>
