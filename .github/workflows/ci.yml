@@ -113,7 +113,7 @@ jobs:
       - name: Install frozen dependencies
         run: npm ci --prefix frontend
       - name: Unit tests for Flow Studio helpers
-        run: node --test frontend/src/app/components/flow-history.spec.ts frontend/src/app/components/flow-overview.spec.ts frontend/src/app/components/flow-versions.spec.ts
+        run: node --test frontend/src/app/components/flow-history.spec.ts frontend/src/app/components/flow-overview.spec.ts frontend/src/app/components/flow-versions.spec.ts frontend/src/app/components/update-status.spec.ts
       - name: Production Angular build
         run: npm run build --prefix frontend
       - name: Install headless Chromium for responsive layout tests
@@ -184,6 +184,8 @@ jobs:
           docker compose -f compose.yml config --quiet
           docker compose -f compose.deploy.yml config --quiet
           bash -n scripts/auto-update.sh scripts/install-auto-update.sh
+      - name: Test host updater (backup, migrate, restart, rollback) with a stub engine
+        run: bash scripts/test-auto-update.sh
       - name: Build production application image
         run: docker build -t floweysales:ci .
       - name: Build packaged Liquibase migration image

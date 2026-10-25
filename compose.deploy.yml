@@ -89,12 +89,22 @@ services:
       PAPER_REQUIRE_APPROVAL: ${PAPER_REQUIRE_APPROVAL:-false}
       PAPER_APPROVAL_TTL_MINUTES: ${PAPER_APPROVAL_TTL_MINUTES:-60}
       ENABLE_TRACK_ALERT_EMAIL: ${ENABLE_TRACK_ALERT_EMAIL:-false}
+      # Settings → Updates: compare against this tag and hand requests to the host updater.
+      UPDATE_TAG: ${FLOWEYSALES_TAG:-stable}
+      UPDATE_CONTROL_DIR: /update-control
+      UPDATE_CHECK_INTERVAL_HOURS: ${UPDATE_CHECK_INTERVAL_HOURS:-12}
 
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:8080"
     volumes:
       - trading_data:/data:ro
       - secrets_data:/secrets
+      # Created by scripts/install-auto-update.sh; only request/status files live here.
+      - type: bind
+        source: ./update-control
+        target: /update-control
+        bind:
+          create_host_path: true
     security_opt:
       - no-new-privileges:true
     cap_drop:

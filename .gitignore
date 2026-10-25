@@ -34,3 +34,7 @@ tmp-*
 *.db
 *.db-shm
 *.db-wal
+
+# Host updater state and pre-update database backups
+update-control/
+backups/

@@ -45,7 +45,8 @@ jobs:
           mkdir -p dist
           suffix=""
           [ "$GOOS" = windows ] && suffix=".exe"
-          go build -trimpath -o "dist/floweysales_backend-${GOOS}-${GOARCH}${suffix}" .
+          ldflags="-X floweysales/internal/app.BuildCommit=${GITHUB_SHA} -X floweysales/internal/app.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          go build -trimpath -ldflags "$ldflags" -o "dist/floweysales_backend-${GOOS}-${GOARCH}${suffix}" .
           go build -trimpath -o "dist/floweysales_mcp-${GOOS}-${GOARCH}${suffix}" ./cmd/mcp
           cd dist && sha256sum * > "SHA256SUMS-${GOOS}-${GOARCH}.txt"
       - uses: actions/upload-artifact@v4

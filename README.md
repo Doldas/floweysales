@@ -224,7 +224,7 @@ environment variable of the same name.
 - `SYS_ADMIN` configures bounded AI model rounds and tool calls in the UI (persisted by Liquibase).
 - Optional `search_web` tool uses the Brave Search API with a server-side `BRAVE_SEARCH_API_KEY`; returned public URLs should be independently verified.
 - P/E uses matching TTM per-share EPS and share price or market cap and TTM earnings; P/FCF requires market cap divided by TTM total FCF.
-- For unattended Docker / Podman updates from **successful CI-published GHCR images**, see [auto-updates](docs/auto-updates.md). The scheduled updater preserves `.env`, MySQL and SQLite volumes and does not auto-upgrade MySQL.
+- For unattended Docker / Podman updates from **successful CI-published GHCR images**, see [auto-updates](docs/auto-updates.md). SYS_ADMIN can also check for, review (changes and database migrations) and install updates from **Settings → Updates**. The updater backs up MySQL, migrates, restarts, health-checks and rolls back the image if needed; it preserves `.env`, MySQL and SQLite volumes and does not auto-upgrade MySQL.
 
 
 ### System Admin: AI and web-search API credentials

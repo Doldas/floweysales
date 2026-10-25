@@ -1,5 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { AdminAccessSettingsComponent } from './admin-access-settings';
+import { UpdateSettingsComponent } from './update-settings';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -11,7 +12,7 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
 @Component({
  selector:'fse-api-settings',
  standalone:true,
- imports:[FormsModule,MatButtonModule,MatCardModule,AdminAccessSettingsComponent],
+ imports:[FormsModule,MatButtonModule,MatCardModule,AdminAccessSettingsComponent,UpdateSettingsComponent],
  template:`
  <div class="api-settings">
   <header><h2>System Admin · Settings</h2>
@@ -27,6 +28,7 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
     <button type="button" [class.active]="tab()==='roles'" (click)="tab.set('roles')">Role management</button>
     <button type="button" [class.active]="tab()==='permissions'" (click)="tab.set('permissions')">Permission management</button>
     <button type="button" [class.active]="tab()==='mail'" (click)="tab.set('mail')">Mail configuration</button>
+    <button type="button" [class.active]="tab()==='updates'" (click)="tab.set('updates')">Updates</button>
   </nav>
   @if(tab()==='integrations'){
   <div class="cards">
@@ -83,6 +85,8 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
     <p class="muted">Provider credentials are configured here for upcoming web-search nodes. Crawling public HTML pages does not require a search API key. Search execution is not yet implemented by this settings change.</p>
    </mat-card>
   </div>
+  } @else if(tab()==='updates'){
+    <fse-update-settings></fse-update-settings>
   } @else {
     <fse-admin-access-settings [tab]="tab()"></fse-admin-access-settings>
   }

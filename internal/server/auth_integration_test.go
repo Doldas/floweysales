@@ -14,6 +14,7 @@ import (
 	"floweysales/internal/market"
 	"floweysales/internal/storage"
 	"floweysales/internal/tracker"
+	"floweysales/internal/updates"
 )
 
 // TestMySQLAuthGate runs against ephemeral MySQL provisioned by Liquibase in CI.
@@ -40,6 +41,17 @@ func TestMySQLAuthGate(t *testing.T) {
 	engine := NewEngine(store, &SharedMarketConfig{Symbol: "NVDA", Provider: market.ParseProvider("YAHOO")}, nil, "", tracker.DefaultConfig())
 	engine.ConfigureAuth(auth, false) // Test is local HTTP only.
 	engine.ConfigureAI("http://localhost:11434/v1", "", "test-model")
+	// Unreachable registry: checks fail closed and nothing can be applied.
+	controlDir := t.TempDir()
+	if err := os.Mkdir(controlDir+"/inbox", 0o777); err != nil {
+		t.Fatal(err)
+	}
+	updateService, err := updates.NewService(updates.Config{Image: "ghcr.io/doldas/floweysales", Tag: "stable", Repository: "Doldas/floweysales", ControlDir: controlDir},
+		"", "", updates.Registry{BaseURL: "http://127.0.0.1:1"}, updates.GitHub{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine.ConfigureUpdates(updateService)
 	server := httptest.NewServer(engine.Handler())
 	defer server.Close()
 
@@ -178,6 +190,24 @@ func TestMySQLAuthGate(t *testing.T) {
 		"messages": []map[string]string{{"role": "user", "content": "hello"}},
 		"base_url": "http://untrusted.example",
 	}, userCookie, ""), http.StatusForbidden)
+
+	// Only SYS_ADMIN may see or trigger updates.
+	assert(request("GET", "/api/admin/updates", nil, userCookie, ""), http.StatusForbidden)
+	assert(request("POST", "/api/admin/updates/apply", nil, userCookie, ""), http.StatusForbidden)
+	assert(request("GET", "/api/admin/updates", nil, cookies[0], ""), http.StatusOK)
+	checked := request("POST", "/api/admin/updates/check", nil, cookies[0], "")
+	var overview map[string]any
+	if err := json.NewDecoder(checked.Body).Decode(&overview); err != nil {
+		t.Fatal(err)
+	}
+	checked.Body.Close()
+	if check, _ := overview["check"].(map[string]any); check["comparison"] != updates.CheckFailed || overview["can_apply"] != false || overview["agent_error"] == "" {
+		t.Fatalf("unreachable registry must fail closed: %v", overview)
+	}
+	assert(request("POST", "/api/admin/updates/apply", map[string]string{"commit": ""}, cookies[0], ""), http.StatusConflict)
+	if entries, _ := os.ReadDir(controlDir + "/inbox"); len(entries) != 0 {
+		t.Fatalf("no update request may be written: %v", entries)
+	}
 
 	// USER cannot inspect or modify admin-only endpoint URL.
 	response := request("GET", "/api/ai/config", nil, userCookie, "")

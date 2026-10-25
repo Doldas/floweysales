@@ -19,6 +19,7 @@ import (
 	"floweysales/internal/storage"
 	"floweysales/internal/tracker"
 	"floweysales/internal/trading"
+	"floweysales/internal/updates"
 )
 
 // The web dashboard is compiled into the binary so assets render regardless
@@ -190,6 +191,22 @@ func main() {
 	restAPI.ConfigureTrading(portfolio)
 	db.SetOnRecordInserted(restAPI.BroadcastTick)
 
+	updateService, err := updates.NewService(updates.Config{
+		Image:      app.ResolveConfig("UPDATE_IMAGE", "ghcr.io/doldas/floweysales", defaults),
+		Tag:        app.ResolveConfig("UPDATE_TAG", "stable", defaults),
+		Repository: app.ResolveConfig("UPDATE_REPOSITORY", "Doldas/floweysales", defaults),
+		ControlDir: app.ResolveConfig("UPDATE_CONTROL_DIR", "", defaults),
+	}, app.BuildCommit, app.BuildTime, updates.Registry{}, updates.GitHub{})
+	if err != nil {
+		log.Fatalf("invalid update configuration: %v", err)
+	}
+	restAPI.ConfigureUpdates(updateService)
+	updateCheckHours := parseInt(app.ResolveConfig("UPDATE_CHECK_INTERVAL_HOURS", "0", defaults), 0)
+	if updateCheckHours < 0 || updateCheckHours > 168 {
+		log.Fatal("UPDATE_CHECK_INTERVAL_HOURS must be between 0 (manual only) and 168")
+	}
+	log.Printf("[Updates] Running build %q; checking %s:%s", app.BuildCommit, updateService.Build().Image, updateService.Build().Tag)
+
 	defaultSymbol, defaultProvider := sharedConfig.Get()
 	if err := db.BootstrapDefaultTracker(defaultSymbol, defaultProvider.ID()); err != nil {
 		log.Fatalf("initialize tracker registry: %v", err)
@@ -215,6 +232,7 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go updateService.Run(ctx, time.Duration(updateCheckHours)*time.Hour)
 	runActiveTrackers(ctx, sharedConfig, db, api, restAPI.DispatchTrackerAlert, cfg, updateRate, emailCooldownDuration, finnhubAPIKey)
 	restAPI.Stop()
 }

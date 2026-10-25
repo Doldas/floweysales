@@ -12,7 +12,12 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=frontend /src/www/browser ./www/browser
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/floweysales_backend .
+# Published images pass the commit so Settings → Updates can compare versions.
+ARG GIT_COMMIT=""
+ARG BUILD_TIME=""
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
+    -ldflags="-s -w -X floweysales/internal/app.BuildCommit=${GIT_COMMIT} -X floweysales/internal/app.BuildTime=${BUILD_TIME}" \
+    -o /out/floweysales_backend .
 
 FROM golang:1.27.1-bookworm AS legacy-import-builder
 WORKDIR /src
@@ -30,6 +35,11 @@ USER flowey:flowey
 ENTRYPOINT ["/app/migrate-sqlite"]
 
 FROM debian:bookworm-slim AS runtime
+ARG GIT_COMMIT=""
+ARG BUILD_TIME=""
+LABEL org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_TIME}" \
+      org.opencontainers.image.source="https://github.com/Doldas/floweysales"
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd -g 10001 flowey && useradd -m -u 10001 -g 10001 flowey \
