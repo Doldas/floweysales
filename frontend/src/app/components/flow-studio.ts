@@ -2,6 +2,8 @@ import { CanvasGestures } from './canvas-gestures';
 import { HostListener, Component, ChangeDetectionStrategy, signal, effect } from '@angular/core';
 import { MarkdownRunOutputComponent } from './markdown-run-output';
 import { UserspaceFilesComponent } from './userspace-files';
+import { FlowSideEffectsComponent } from './flow-side-effects';
+import { capabilityManifest, describeCapability, nodeCapability } from './side-effects';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -11,16 +13,20 @@ import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angu
 import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 import { AuthState } from '../auth.service';
-import { canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history';
+import { canCancelRun, canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history';
 import { listOverviewFlows } from './flow-overview';
+import { semanticIssues } from './flow-semantics';
+import { nearestPort, portPoints, wireFromDrag, edgeKey, wirePath, type PortPoint } from './wire-drag';
+import { bindInputPin, declaredPins, mixesPinAndPlainInputs, pinBindings, pinEdgeProblem, pinOffset, routeOutputPin, unboundInputPins } from './function-pins';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'; label:string; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
+interface FunctionDef { id:number; name:string; graph?:unknown }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow extends PublishState { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
 interface FlowRunStep {id:number;node:string;label:string;status:string;input?:string;output:string;error?:string;started_at?:string;created_at?:string;duration_ms?:number|null;attempts?:number|null;worker_attempt?:number|null}
-interface FlowRun { id:number; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null; failed_node?:string|null; flow_revision?:number|null; attempts?:number; max_attempts?:number; queued_at?:string|null }
+interface FlowRun { id:number; parent_run_id?:number|null; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null; failed_node?:string|null; flow_revision?:number|null; attempts?:number; max_attempts?:number; queued_at?:string|null }
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
 @Component({
@@ -45,7 +51,7 @@ export class ConfirmDeleteFlowDialog {
 
 @Component({
  selector:'fse-flow-studio', standalone:true,
- imports:[CommonModule,FormsModule,MatButtonModule,MatCardModule,MatIconModule,MatDialogModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,UserspaceFilesComponent],
+ imports:[CommonModule,FormsModule,MatButtonModule,MatCardModule,MatIconModule,MatDialogModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,UserspaceFilesComponent,FlowSideEffectsComponent],
  changeDetection:ChangeDetectionStrategy.Default,
  template:`
  <mat-card class="flow-studio glass">
@@ -60,6 +66,7 @@ export class ConfirmDeleteFlowDialog {
      }
      <button type="button" role="tab" [attr.aria-selected]="studioTab()==='files'" [class.selected]="studioTab()==='files'" (click)="studioTab.set('files')">My Workspace</button>
      <button type="button" role="tab" [attr.aria-selected]="studioTab()==='runs'" [class.selected]="studioTab()==='runs'" (click)="studioTab.set('runs')">Run history</button>
+     <button type="button" role="tab" [attr.aria-selected]="studioTab()==='approvals'" [class.selected]="studioTab()==='approvals'" (click)="studioTab.set('approvals')">Approvals &amp; audit</button>
    </nav>
    @if(studioTab()==='overview'){
     <section class="flows-overview" aria-label="My Flows">
@@ -132,19 +139,22 @@ export class ConfirmDeleteFlowDialog {
     <div class="flow-workspace" aria-label="Agent flow graph editor">
     <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (pointerdown)="onCanvasPointerDown($event)" (click)="closeQuickNodeOnCanvas($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="onCanvasPointerEnd($event)" (pointercancel)="onCanvasPointerEnd($event)" (contextmenu)="onCanvasContextMenu($event)" role="img" aria-label="Agent nodes and directed connections">
      <defs><marker id="flow-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#72b7ef"/></marker></defs>
-     @for(edge of graph().edges;track edge.from+edge.to){
+     @for(edge of graph().edges;track edgeKey(edge)){
        <path [attr.d]="edgePath(edge)" fill="none" stroke="#72b7ef" stroke-width="2.5" marker-end="url(#flow-arrow)"/>
      }
+     @if(wireDrag();as w){<path class="wire-ghost" [attr.d]="wireGhostPath()" fill="none" stroke="#ffe19a" stroke-width="2.5" stroke-dasharray="6 4" pointer-events="none"/>@if(w.target;as t){<circle [attr.cx]="t.x" [attr.cy]="t.y" r="10" fill="none" stroke="#ffe19a" stroke-width="3" pointer-events="none"/>}}
      @for(n of graph().nodes;track n.id){
        <g data-canvas-node (click)="$event.stopPropagation();openQuickNode(n.id)" (pointerdown)="dragStart($event,n.id)" style="cursor:move" tabindex="0"
           (keydown.enter)="openQuickNode(n.id)" [attr.aria-label]="'Select '+n.label">
          <rect [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="12"
            [attr.fill]="n.id===selectedNode()?.id?'#244970':'#1c2a3b'"
            [attr.stroke]="n.id===selectedNode()?.id?'#94caff':'#607993'" stroke-width="2"/>
-         <text [attr.x]="n.x+12" [attr.y]="n.y+24" fill="#dceaf8" font-size="13">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':n.type==='workspace_read'?'▤ READ FILE':n.type==='workspace_write'?'▣ WRITE FILE':n.type==='output'?'→ OUTPUT':n.type==='condition'?'◇ IF / ELSE':n.type==='merge'?'⇉ MERGE':n.type==='json_get'?'{} JSON FIELD':'✦ AGENT'}}</text>
+         <text [attr.x]="n.x+12" [attr.y]="n.y+24" fill="#dceaf8" font-size="13">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':n.type==='workspace_read'?'▤ READ FILE':n.type==='workspace_write'?'▣ WRITE FILE':n.type==='output'?'→ OUTPUT':n.type==='condition'?'◇ IF / ELSE':n.type==='merge'?'⇉ MERGE':n.type==='json_get'?'{} JSON FIELD':n.type==='emit_event'?'⇢ EMIT EVENT':'✦ AGENT'}}</text>
          <text [attr.x]="n.x+12" [attr.y]="n.y+48" fill="#dceaf8" font-size="12">{{n.label.slice(0,16)}}</text>
-          @if(n.type!=='trigger'){<circle class="canvas-port input-port" [attr.cx]="n.x" [attr.cy]="n.y+35" r="8" tabindex="0" role="button" [attr.aria-label]="'Connect into '+n.label" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation();chooseInputPort(n.id)" (keydown.enter)="$event.stopPropagation();chooseInputPort(n.id)"/>}
-          @if(n.type!=='output'){<circle class="canvas-port output-port" [class.port-active]="connectingFrom()===n.id" [attr.cx]="n.x+125" [attr.cy]="n.y+35" r="8" tabindex="0" role="button" [attr.aria-label]="'Start connection from '+n.label" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation();chooseOutputPort(n.id)" (keydown.enter)="$event.stopPropagation();chooseOutputPort(n.id)"/>}
+          @for(pin of functionPins(n).inputs;track pin.name;let i=$index){<g><circle class="canvas-port pin-port" [attr.cx]="n.x" [attr.cy]="n.y+pinOffset(i,functionPins(n).inputs.length,70)" r="6" fill="#2d7fb8" stroke="#bfe2ff" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation()"><title>Input {{pin.name}} ({{pin.type}})</title></circle><text [attr.x]="n.x+8" [attr.y]="n.y+pinOffset(i,functionPins(n).inputs.length,70)+3" font-size="8" fill="#9fc4e4">{{pin.name.slice(0,8)}}</text></g>}
+          @for(pin of functionPins(n).outputs;track pin.name;let i=$index){<g><circle class="canvas-port pin-port" [attr.cx]="n.x+125" [attr.cy]="n.y+pinOffset(i,functionPins(n).outputs.length,70)" r="6" fill="#2da07a" stroke="#bff0dc" (pointerdown)="startWire($event,n.id,pin.name)" (click)="$event.stopPropagation()"><title>Output {{pin.name}} ({{pin.type}})</title></circle><text [attr.x]="n.x+117" [attr.y]="n.y+pinOffset(i,functionPins(n).outputs.length,70)+3" font-size="8" fill="#9fe0c4" text-anchor="end">{{pin.name.slice(0,8)}}</text></g>}
+          @if(n.type!=='trigger'&&!functionPins(n).inputs.length){<circle class="canvas-port input-port" [attr.cx]="n.x" [attr.cy]="n.y+35" r="8" tabindex="0" role="button" [attr.aria-label]="'Connect into '+n.label" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation();onInputPortClick(n.id)" (keydown.enter)="$event.stopPropagation();chooseInputPort(n.id)"/>}
+          @if(n.type!=='output'&&!functionPins(n).outputs.length){<circle class="canvas-port output-port" [class.port-active]="connectingFrom()===n.id" [attr.cx]="n.x+125" [attr.cy]="n.y+35" r="8" tabindex="0" role="button" [attr.aria-label]="'Start connection from '+n.label" (pointerdown)="startWire($event,n.id)" (click)="$event.stopPropagation();onOutputPortClick(n.id)" (keydown.enter)="$event.stopPropagation();chooseOutputPort(n.id)"/>}
        </g>
      }
     </svg>
@@ -232,6 +242,21 @@ export class ConfirmDeleteFlowDialog {
            <label>Operand <input [ngModel]="n.value||''" (ngModelChange)="updateUtility('value',$event)" maxlength="1000" [placeholder]="n.transform==='replace'?'find=>replacement':'Text to add'"></label>
          }
        }
+       @if(nodeCapability(n);as cap){
+        <fieldset class="capability-box">
+         <legend>Side effect · {{cap.capability}}</legend>
+         <p class="muted">{{describeCapability(cap.capability,cap.target)}}. This is the only change the node can make, and every run that makes it is recorded under Approvals &amp; audit.</p>
+         <label class="checkbox-row"><input type="checkbox" [checked]="n.approval==='required'" (change)="setApproval($any($event.target).checked)"> Require SYS_ADMIN approval before this runs</label>
+         @if(n.approval==='required'){<p class="muted">The run pauses here and resumes only after the exact content is approved. Unapproved requests expire after 7 days. Not available inside flows used as a Call Flow.</p>}
+        </fieldset>
+       }
+       @if(n.type==='emit_event'){
+        <label>Event to emit <select [ngModel]="n.event||''" (ngModelChange)="updateUtility('event',$event)">
+          <option value="">Choose a custom trigger</option>
+          @for(t of triggers();track t.event_key){<option [value]="t.event_key">{{t.event_key}} ({{t.payload_type}})</option>}
+        </select></label>
+        <p class="muted">Queues one run of every other enabled flow subscribed to this event, with this node's input as the payload (checked against the trigger's type). The input passes on unchanged. Event chains stop after {{maxEventDepth}} levels and each emission reaches at most 10 flows; a retried run never queues a subscriber twice. Define events under Function library &amp; triggers.</p>
+       }
        @if(n.type==='web_search'){
         <label>Search query<input [ngModel]="n.value||''" (ngModelChange)="updateUtility('value',$event)" maxlength="400" placeholder="Quarterly earnings guidance"></label>
         <p class="muted">Searches with the system administrator's Brave or Tavily configuration. Returns up to 5 sourced results as JSON. API keys never reach the browser or graph.</p>
@@ -283,6 +308,26 @@ export class ConfirmDeleteFlowDialog {
        }
        @if(n.type==='function'){
          <label>Reusable function <select [ngModel]="n.function_id||0" (ngModelChange)="updateFunctionReference(+$event)"><option [ngValue]="0">Choose saved function</option>@for(f of functions();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
+         @if(functionPins(n).inputs.length||functionPins(n).outputs.length){
+          <div class="field-mapper">
+           <strong>Typed input pins</strong>
+           @for(pin of functionPins(n).inputs;track pin.name){
+            <label>{{pin.name}} ({{pin.type}})<select [ngModel]="pinSources(n)[pin.name]||''" (ngModelChange)="bindPin(pin.name,$event)">
+             <option value="">Not connected</option>
+             @for(other of graph().nodes;track other.id){@if(other.id!==n.id&&other.type!=='output'){<option [value]="other.id">{{other.label}}</option>}}
+            </select></label>
+           }
+           <strong>Typed output pins</strong>
+           @for(pin of functionPins(n).outputs;track pin.name){
+            <label>{{pin.name}} ({{pin.type}}) → <select #pinTarget (change)="routePin(pin.name,pinTarget.value)">
+             <option value="">Send to node…</option>
+             @for(other of graph().nodes;track other.id){@if(other.id!==n.id&&other.type!=='trigger'){<option [value]="other.id">{{other.label}}</option>}}
+            </select></label>
+            @if(pinTargets(n,pin.name).length){<p class="muted">Routed to: {{pinTargets(n,pin.name).join(', ')}}</p>}
+           }
+           <p class="muted">Each declared input must be connected. Outputs are read from the function's result by name; unrouted outputs are simply not used. Types are checked when you save or publish.</p>
+          </div>
+         }
          @if(n.function_id){<label>Function revision <select [ngModel]="n.function_revision||0" (ngModelChange)="updateRevisionPin('function_revision',+$event)"><option [ngValue]="0">Follow active revision</option>@for(r of targetRevisions()['function:'+n.function_id]||[];track r.revision){<option [ngValue]="r.revision">{{revisionOptionLabel(r)}}</option>}</select></label>
          <p class="muted">{{pinDescription(n.function_revision)}}</p>}
          <p class="muted">Applies the function to the preceding node's typed value; invalid inputs fail the run safely.</p>
@@ -301,6 +346,7 @@ export class ConfirmDeleteFlowDialog {
      @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addSubflow();closeCanvasMenu()">Call Flow</button>}
      <button type="button" role="menuitem" (click)="addConstant();closeCanvasMenu()">Value</button>
      @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addFunctionCall();closeCanvasMenu()">Function</button>}
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addEmitEvent();closeCanvasMenu()">Emit Event</button>}
      @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('save_result');closeCanvasMenu()">Save Result</button>}
      @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('load_result');closeCanvasMenu()">Load Result</button>}
      <button type="button" role="menuitem" (click)="addUtility('transform');closeCanvasMenu()">Transform Text</button>
@@ -311,6 +357,7 @@ export class ConfirmDeleteFlowDialog {
    </div>
    
    </div>
+   @if(sideEffects().length){<section class="capability-summary" aria-label="Side effects this flow can perform"><strong>Side effects</strong><ul>@for(use of sideEffects();track use.node){<li><button type="button" (click)="openQuickNode(use.node)">{{use.label}}</button>: {{describeCapability(use.capability,use.target)}}{{use.approvalRequired?' · approval required':' · runs without approval'}}</li>}</ul></section>}
    <section class="graph-validation" aria-label="Flow graph validation">
      <header><strong>Graph validation</strong><span role="status">{{graphIssues().length?graphIssues().length+' issues':'No structural issues'}}</span></header>
      @if(graphIssues().length){<p>Fix these issues before saving and running:</p><ul>
@@ -356,11 +403,12 @@ export class ConfirmDeleteFlowDialog {
      <fse-blueprint-library (functionsChanged)="loadFunctions()"></fse-blueprint-library>
    }
    @if (studioTab()==='files') { <fse-userspace-files></fse-userspace-files> }
+   @if (studioTab()==='approvals') { <fse-flow-side-effects></fse-flow-side-effects> }
    @if (studioTab()==='runs') {
    <div class="run-history-heading"><h3>Recent runs</h3>
      <label>Flow <select [ngModel]="historyFlowId()" (ngModelChange)="selectHistoryFlow(+$event)" aria-label="Select flow for history"><option [ngValue]="0">Select a flow…</option>@for(f of flows();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
      <label>Find run <input [ngModel]="historySearch()" (ngModelChange)="historySearch.set($event)" placeholder="Run ID or trigger"></label>
-     <label>Status <select [ngModel]="historyStatusFilter()" (ngModelChange)="historyStatusFilter.set($event)"><option value="all">All statuses</option><option value="SUCCESS">Success</option><option value="FAILED">Failed</option><option value="QUEUED">Queued</option><option value="RUNNING">Running</option><option value="CANCELLED">Cancelled</option><option value="DEAD">Dead-lettered</option></select></label>
+     <label>Status <select [ngModel]="historyStatusFilter()" (ngModelChange)="historyStatusFilter.set($event)"><option value="all">All statuses</option><option value="SUCCESS">Success</option><option value="FAILED">Failed</option><option value="QUEUED">Queued</option><option value="RUNNING">Running</option><option value="AWAITING_APPROVAL">Awaiting approval</option><option value="CANCELLED">Cancelled</option><option value="DEAD">Dead-lettered</option></select></label>
      <label>Output view <select [ngModel]="logView()" (ngModelChange)="logView.set($event)">
        <option value="markdown">Markdown (default)</option><option value="raw">RAW</option><option value="json">Structured JSON</option>
      </select></label>
@@ -378,14 +426,14 @@ export class ConfirmDeleteFlowDialog {
     @if(historyFlowId()&&runs().length&&!filteredRuns().length){<p class="muted">No runs match your filters.</p>}
    @for(run of filteredRuns();track run.id){
     <details class="flow-run">
-      <summary><span class="run-summary-status" [class.run-success]="run.status==='SUCCESS'" [class.run-failed]="run.status==='FAILED'||run.status==='DEAD'" [class.run-active]="isActiveRun(run.status)">{{runStatusLabel(run.status)}}</span> #{{run.id}} · {{run.trigger}} · {{runRevisionLabel(run.flow_revision)}}@if(runAttemptLabel(run.attempts,run.max_attempts);as attempt){ · {{attempt}}} <span class="muted">· {{displayRunTime(run.status==='QUEUED'?run.queued_at:run.started_at)}} · {{displayRunDuration(run)}}</span></summary>
+      <summary><span class="run-summary-status" [class.run-success]="run.status==='SUCCESS'" [class.run-failed]="run.status==='FAILED'||run.status==='DEAD'" [class.run-active]="canCancelRun(run.status)">{{runStatusLabel(run.status)}}</span> #{{run.id}} · {{run.trigger}} · {{runRevisionLabel(run.flow_revision)}}@if(runAttemptLabel(run.attempts,run.max_attempts);as attempt){ · {{attempt}}} <span class="muted">· {{displayRunTime(run.status==='QUEUED'?run.queued_at:run.started_at)}} · {{displayRunDuration(run)}}</span></summary>
       <div class="run-diagnostics">
        @if(run.queued_at){<span><strong>Queued:</strong> {{displayRunTime(run.queued_at)}}</span>}
        <span><strong>Started:</strong> {{run.status==='QUEUED'&&!run.attempts?'Waiting for a worker':displayRunTime(run.started_at)}}</span>
-       <span><strong>Finished:</strong> {{isActiveRun(run.status)?'In progress':displayRunTime(run.finished_at)}}</span>
+       <span><strong>Finished:</strong> {{run.status==='AWAITING_APPROVAL'?'Waiting for approval':isActiveRun(run.status)?'In progress':displayRunTime(run.finished_at)}}</span>
        @if(run.attempts){<span><strong>Worker attempts:</strong> {{run.attempts}} of {{run.max_attempts}}</span>}
        <span><strong>Duration:</strong> {{displayRunDuration(run)}}</span>
-       <span><strong>Trigger:</strong> {{run.trigger}}</span>
+       <span><strong>Trigger:</strong> {{run.trigger}}@if(run.parent_run_id){ · triggered by run #{{run.parent_run_id}}}</span>
        <span><strong>Graph:</strong> {{runRevisionLabel(run.flow_revision)}}</span>
       </div>
       @if(run.status==='QUEUED'&&run.error){<p class="muted" role="status">{{run.error}}</p>}
@@ -400,7 +448,8 @@ export class ConfirmDeleteFlowDialog {
         }
        </div>
       }
-      @if(isActiveRun(run.status)){<button mat-stroked-button color="warn" (click)="cancelRun(run.id)" [disabled]="busy()">{{run.status==='QUEUED'?'Remove from queue':'Cancel run'}}</button>}
+      @if(run.status==='AWAITING_APPROVAL'){<button mat-stroked-button type="button" (click)="studioTab.set('approvals')">Review in Approvals &amp; audit</button>}
+      @if(canCancelRun(run.status)){<button mat-stroked-button color="warn" (click)="cancelRun(run.id)" [disabled]="busy()">{{run.status==='QUEUED'?'Remove from queue':'Cancel run'}}</button>}
       @if(canRetryRun(run.status)){<button mat-stroked-button (click)="retryRun(run.id)" [disabled]="busy()" title="Queue this run again; it resumes from its last checkpoint">Retry from checkpoint</button>}
       <button mat-stroked-button (click)="showRunSteps(run.id)">{{traceRunId()===run.id?'Hide node trace':'Inspect nodes'}}</button>
       @if(traceRunId()===run.id){
@@ -534,7 +583,7 @@ export class ConfirmDeleteFlowDialog {
  label{display:flex;flex-direction:column;gap:4px;font-size:13px;flex:1;min-width:160px}
  input,select,textarea{background:#14263a;color:#e5f3ff;border:1px solid #5e7b93;border-radius:6px;padding:9px;font:inherit}
  textarea{width:100%}.flow-check{flex-direction:row;align-items:center}.flow-check input{width:18px;height:18px}
- .canvas-port{stroke:#c6edff;stroke-width:2;cursor:crosshair}.input-port{fill:#2c789a}.output-port{fill:#329f78}.port-active{stroke:#ffe19a;stroke-width:4}.canvas-port:focus-visible{stroke:#ffe19a;stroke-width:4;outline:none}
+ .flow-workspace svg{user-select:none;-webkit-user-select:none}.canvas-port{touch-action:none;stroke:#c6edff;stroke-width:2;cursor:crosshair}.input-port{fill:#2c789a}.output-port{fill:#329f78}.port-active{stroke:#ffe19a;stroke-width:4}.canvas-port:focus-visible{stroke:#ffe19a;stroke-width:4;outline:none}
   .canvas-connect-hint{display:flex;align-items:center;gap:8px;font-size:12px;color:#ffe19a;margin-left:auto}.canvas-connect-hint button{background:#3b3540;color:#ffe19a;border:1px solid #ae8c67;border-radius:5px;cursor:pointer;padding:5px}
   .flow-workspace{background:radial-gradient(#294057 1px,transparent 1px) 0 0/20px 20px,#0d1b2a;border:1px solid #45627b;overflow:auto;border-radius:12px}
  svg{min-width:660px;width:100%;height:auto;display:block;touch-action:none;cursor:grab}
@@ -554,6 +603,9 @@ export class ConfirmDeleteFlowDialog {
  .inspector-fields{display:flex;flex-direction:column;gap:12px}
  .field-mapper{display:flex;flex-direction:column;gap:8px;border:1px solid #4b718b;border-radius:8px;padding:10px}
  .field-mapper strong{font-size:13px}
+ .capability-box{border:1px solid #ae8c67;border-radius:8px;padding:8px 10px;margin:6px 0}.capability-box legend{color:#ffe19a;font-weight:700;padding:0 4px}
+ .checkbox-row{display:flex!important;gap:8px;align-items:center}
+ .capability-summary{border:1px solid #50738e;border-radius:8px;padding:10px;margin:10px 0}.capability-summary ul{margin:6px 0 0;padding-left:18px}.capability-summary li{overflow-wrap:anywhere}.capability-summary button{background:none;border:0;text-decoration:underline;color:#aedfff;cursor:pointer;font:inherit;padding:0}
  .mapped-edge{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:12px;overflow-wrap:anywhere}
  .mapped-edge button{color:#bce3ff;background:#1b3850;border:1px solid #527b99;border-radius:5px;padding:5px}
  .inspector-fields label{min-width:0;width:100%;flex:auto}
@@ -641,9 +693,63 @@ export class FlowStudioComponent {
     if(this.graph().edges.some(e=>e.from===from&&e.to===id)){this.cancelConnecting();this.message.set('These nodes are already connected.');return}
     this.connect(from,id);this.chosen.set(id);this.connectingFrom.set('');
   }
+  /** Declared pins of the function a node calls (empty for other nodes and legacy functions). */
+  functionPins(n:FlowNode){return n.type==='function'?declaredPins(this.functions().find(f=>f.id===n.function_id)?.graph):{inputs:[],outputs:[]}}
+  /** Vertical position of a wire end on a node; typed pins are spread along its edge. */
+  pinY(n:FlowNode,side:'in'|'out',port?:string):number{
+    const prefix=side==='in'?'in:':'out:';
+    if(n.type==='function'&&port?.startsWith(prefix)){
+      const pins=side==='in'?this.functionPins(n).inputs:this.functionPins(n).outputs;
+      const i=pins.findIndex(p=>p.name===port.slice(prefix.length));
+      if(i>=0)return pinOffset(i,pins.length,70);
+    }
+    return 35;
+  }
+  readonly pinOffset=pinOffset;
+  readonly edgeKey=edgeKey;
+  /** Wire being dragged from an output port; `target` is the input port it would snap to. */
+  readonly wireDrag=signal<{source:PortPoint;x:number;y:number;target:PortPoint|null}|null>(null);
+  private suppressPortClick=false;
+  private ports():PortPoint[]{return portPoints(this.graph().nodes,n=>this.functionPins(n as FlowNode))}
+  wireGhostPath():string{const w=this.wireDrag();return w?wirePath(w.source.x,w.source.y,w.target?.x??w.x,w.target?.y??w.y):''}
+  onOutputPortClick(id:string):void{if(this.suppressPortClick)return;this.chooseOutputPort(id)}
+  onInputPortClick(id:string):void{if(this.suppressPortClick)return;this.chooseInputPort(id)}
+  /** Starts dragging a wire from an output port (or a typed output pin); dropping on an input port connects them. */
+  startWire(ev:PointerEvent,nodeId:string,pin?:string):void{
+    ev.stopPropagation();
+    if(ev.button!==0)return;
+    ev.preventDefault();
+    const source=this.ports().find(p=>p.side==='out'&&p.nodeId===nodeId&&p.pin===pin);
+    const svg=(ev.currentTarget as SVGElement).ownerSVGElement;
+    if(!source||!svg)return;
+    const at=(e:PointerEvent)=>{const m=svg.getScreenCTM();if(!m)return {x:source.x,y:source.y};const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(m.inverse());return {x:p.x,y:p.y}};
+    let moved=false;const origin=at(ev);
+    const move=(e:PointerEvent)=>{
+      const p=at(e);if(Math.hypot(p.x-origin.x,p.y-origin.y)>4)moved=true;if(!moved)return;
+      this.wireDrag.set({source,x:p.x,y:p.y,target:nearestPort(this.ports(),p.x,p.y,'in')});
+    };
+    const stop=(e:PointerEvent)=>{
+      svg.removeEventListener('pointermove',move);svg.removeEventListener('pointerup',stop);svg.removeEventListener('pointercancel',stop);
+      const target=e.type==='pointerup'&&moved?this.wireDrag()?.target??null:null;
+      this.wireDrag.set(null);
+      if(!moved)return;
+      this.suppressPortClick=true;setTimeout(()=>this.suppressPortClick=false,0);
+      if(!target)return;
+      const result=wireFromDrag(this.graph().edges,source,target);
+      if('problem' in result){this.message.set(result.problem);return}
+      this.graph.update(g=>({...g,version:source.pin||target.pin?2:g.version,edges:result.edges}));
+      this.chosen.set(target.nodeId);this.cancelConnecting();
+      if(!this.warnAboutInputs(target.nodeId))this.message.set('Connected '+(this.node(source.nodeId)?.label||source.nodeId)+(source.pin?'.'+source.pin:'')+' → '+(this.node(target.nodeId)?.label||target.nodeId)+(target.pin?'.'+target.pin:'')+'; save the flow to persist.');
+    };
+    svg.addEventListener('pointermove',move);svg.addEventListener('pointerup',stop);svg.addEventListener('pointercancel',stop);
+  }
+  pinSources(n:FlowNode):Record<string,string>{return pinBindings(this.graph().edges,n.id)}
+  bindPin(pin:string,source:string){this.graph.update(g=>({...g,version:2,edges:bindInputPin(g.edges,this.chosen(),pin,source)}))}
+  routePin(pin:string,target:string){this.graph.update(g=>({...g,version:2,edges:routeOutputPin(g.edges,this.chosen(),pin,target)}))}
+  pinTargets(n:FlowNode,pin:string):string[]{return this.graph().edges.filter(e=>e.from===n.id&&e.from_port==='out:'+pin).map(e=>e.to)}
   edgePath(e:FlowEdge):string{
     const a=this.node(e.from),b=this.node(e.to);if(!a||!b)return '';
-    const x1=a.x+125,y1=a.y+35,x2=b.x,y2=b.y+35,d=Math.max(45,Math.abs(x2-x1)*0.45);
+    const x1=a.x+125,y1=a.y+this.pinY(a,'out',e.from_port),x2=b.x,y2=b.y+this.pinY(b,'in',e.to_port),d=Math.max(45,Math.abs(x2-x1)*0.45);
     return 'M '+x1+' '+y1+' C '+(x1+d)+' '+y1+', '+(x2-d)+' '+y2+', '+x2+' '+y2;
   }
   fitCanvas():void{
@@ -683,15 +789,15 @@ export class FlowStudioComponent {
  readonly logView=signal<'markdown'|'raw'|'json'>('markdown');
  readonly nodePickerOpen=signal(false);
   readonly nodePickerQuery=signal('');
-  readonly nodeTypes=[{"id":0,"label":"Agent","admin":false},{"id":1,"label":"If / Else","admin":false},{"id":2,"label":"Merge","admin":false},{"id":3,"label":"JSON Field","admin":false},{"id":4,"label":"Loop","admin":false},{"id":5,"label":"HTTP JSON/XML","admin":false},{"id":6,"label":"Web crawler","admin":false},{"id":7,"label":"Web search","admin":false},{"id":8,"label":"Output","admin":false},{"id":9,"label":"Call Flow","admin":true},{"id":10,"label":"Value","admin":false},{"id":11,"label":"Function","admin":true},{"id":12,"label":"Save Result","admin":true},{"id":13,"label":"Load Result","admin":true},{"id":14,"label":"Transform","admin":false},{"id":15,"label":"Read File","admin":true},{"id":16,"label":"Write File","admin":true}];
+  readonly nodeTypes=[{"id":0,"label":"Agent","admin":false},{"id":1,"label":"If / Else","admin":false},{"id":2,"label":"Merge","admin":false},{"id":3,"label":"JSON Field","admin":false},{"id":4,"label":"Loop","admin":false},{"id":5,"label":"HTTP JSON/XML","admin":false},{"id":6,"label":"Web crawler","admin":false},{"id":7,"label":"Web search","admin":false},{"id":8,"label":"Output","admin":false},{"id":9,"label":"Call Flow","admin":true},{"id":10,"label":"Value","admin":false},{"id":11,"label":"Function","admin":true},{"id":12,"label":"Save Result","admin":true},{"id":13,"label":"Load Result","admin":true},{"id":14,"label":"Transform","admin":false},{"id":15,"label":"Read File","admin":true},{"id":16,"label":"Write File","admin":true},{"id":17,"label":"Emit Event","admin":true}];
   readonly visibleNodeTypes=()=>this.nodeTypes.filter(n=>(!n.admin||this.auth.user()?.role==='SYS_ADMIN')&&n.label.toLowerCase().includes(this.nodePickerQuery().trim().toLowerCase()));
   toggleNodePicker(){this.nodePickerOpen.update(v=>!v);this.nodePickerQuery.set('')}
   addPickedNode(id:number){
     if(!this.visibleNodeTypes().some(n=>n.id===id))return;
-    switch(id){case 0:this.addAgent();break;case 1:this.addV2Node('condition');break;case 2:this.addV2Node('merge');break;case 3:this.addV2Node('json_get');break;case 4:this.addPureLoop();break;case 5:this.addHTTPGet();break;case 6:this.addWebCrawler();break;case 7:this.addWebSearch();break;case 8:this.addOutput();break;case 9:this.addSubflow();break;case 10:this.addConstant();break;case 11:this.addFunctionCall();break;case 12:this.addUtility('save_result');break;case 13:this.addUtility('load_result');break;case 14:this.addUtility('transform');break;case 15:this.addUtility('workspace_read');break;case 16:this.addUtility('workspace_write');break;default:return;}
+    switch(id){case 0:this.addAgent();break;case 1:this.addV2Node('condition');break;case 2:this.addV2Node('merge');break;case 3:this.addV2Node('json_get');break;case 4:this.addPureLoop();break;case 5:this.addHTTPGet();break;case 6:this.addWebCrawler();break;case 7:this.addWebSearch();break;case 8:this.addOutput();break;case 9:this.addSubflow();break;case 10:this.addConstant();break;case 11:this.addFunctionCall();break;case 12:this.addUtility('save_result');break;case 13:this.addUtility('load_result');break;case 14:this.addUtility('transform');break;case 15:this.addUtility('workspace_read');break;case 16:this.addUtility('workspace_write');break;case 17:this.addEmitEvent();break;default:return;}
     this.nodePickerOpen.set(false);
   }
-  readonly studioTab=signal<'overview'|'editor'|'library'|'runs'|'files'>('overview');
+  readonly studioTab=signal<'overview'|'editor'|'library'|'runs'|'files'|'approvals'>('overview');
   readonly flowSearch=signal('');readonly flowFilter=signal('all');readonly flowSort=signal('name');
   readonly listedFlows=()=>{
     return listOverviewFlows(this.flows(),this.flowSearch(),this.flowFilter(),this.flowSort());
@@ -711,7 +817,7 @@ export class FlowStudioComponent {
  readonly flows=signal<SavedFlow[]>([]);
  readonly availableModels=signal<{model:string;label:string}[]>([]);
  readonly defaultAIModel=signal('');
- readonly functions=signal<({id:number;name:string}&PublishState)[]>([]);
+ readonly functions=signal<(FunctionDef&PublishState)[]>([]);
  readonly selectedId=signal(0);
  readonly name=signal('Daily research');
  readonly enabled=signal(false);
@@ -773,6 +879,8 @@ export class FlowStudioComponent {
       if(n.type==='agent'&&(n.prompt||'').trim().length<5)add('Agent needs research instructions: '+n.label,n.id);
       if(n.type==='flow'&&!n.flow_id)add('Select a saved flow: '+n.label,n.id);
       if(n.type==='function'&&!n.function_id)add('Select a saved function: '+n.label,n.id);
+      if(n.type==='emit_event'&&!n.event)add('Choose the event to emit: '+n.label,n.id);
+      else if(n.type==='emit_event'&&this.auth.user()?.role==='SYS_ADMIN'&&!this.triggers().some(t=>t.event_key===n.event))add('Event '+n.event+' is not defined; create it under Function library & triggers: '+n.label,n.id);
       if(n.type==='json_get'&&!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(n.property||''))add('Enter a valid JSON property: '+n.label,n.id);
       if(n.type==='condition'&&!['equals','not_equals','contains','greater_than','less_than'].includes(n.operator||''))add('Select a condition operator: '+n.label,n.id);
       if(n.type==='loop'&&(!n.loop_limit||n.loop_limit<1||n.loop_limit>100))add('Set loop limit from 1 to 100: '+n.label,n.id);
@@ -817,11 +925,22 @@ export class FlowStudioComponent {
           if(from.type==='trigger')add('Trigger has no typed value output.',e.from);
           if(to.type==='trigger'||to.type==='constant')add('Target cannot accept typed input: '+to.label,e.to);
           if(from.type==='constant'&&from.value_type!=='text')add('Convert number/boolean constants to text before connecting: '+from.label,e.from);
+        }else if(e.to_port?.startsWith('in:')||e.from_port?.startsWith('out:')){
+          const problem=pinEdgeProblem(e,from.type,to.type,this.functionPins(from).outputs,this.functionPins(to).inputs);
+          if(problem)add(problem+' ('+from.label+' → '+to.label+')',problem.includes('input')?e.to:e.from);
         }else add('Unsupported connection port combination: '+(e.from_port||'default')+' → '+(e.to_port||'default'),e.from);
       }
       adjacency.get(e.from)?.push(e.to);incoming.set(e.to,(incoming.get(e.to)||0)+1);
     }
     for(const n of g.nodes)if(n.type!=='trigger'&&!incoming.get(n.id))add('Disconnected node: '+n.label,n.id);
+    for(const n of g.nodes){
+      if(n.type!=='function')continue;
+      const pins=this.functionPins(n).inputs;
+      if(mixesPinAndPlainInputs(g.edges,n.id))add('Connect every input of this function to a typed pin, not a mix: '+n.label,n.id);
+      else if(pins.length>1||(pins.length===1&&pinBindings(g.edges,n.id)[pins[0].name]===undefined&&g.edges.some(e=>e.to===n.id&&e.to_port?.startsWith('in:')))){
+        for(const pin of unboundInputPins(g.edges,n.id,pins))add('Connect input pin "'+pin.name+'" ('+pin.type+'): '+n.label,n.id);
+      }
+    }
     const visited=new Set<string>(),active=new Set<string>();let cycle=false;
     const dfs=(id:string):void=>{
       if(active.has(id)){cycle=true;return}
@@ -831,6 +950,7 @@ export class FlowStudioComponent {
     if(triggers.length===1)dfs(triggers[0].id);
     if(cycle)add('Graph contains a cycle.');
     for(const n of g.nodes)if(!visited.has(n.id))add('Unreachable node: '+n.label,n.id);
+    for(const issue of semanticIssues(g.version,g.nodes,g.edges,n=>this.functionPins(n as FlowNode)))add(issue.message,issue.nodeId);
     return issues;
   };
   openValidationIssue(id:string):void{if(this.node(id))this.openQuickNode(id)}
@@ -1007,6 +1127,14 @@ export class FlowStudioComponent {
    this.message.set('Draft restored from revision '+revision+'. Publish it to make it the next revision.')}
   catch(e){this.message.set(String(e))}finally{this.busy.set(false)}
  }
+ readonly maxEventDepth=3;
+ addEmitEvent():void {
+  const count=this.graph().nodes.length;
+  const id='emit-'+Date.now().toString(36);
+  const event=this.triggers()[0]?.event_key||'';
+  this.graph.update(g=>({...g,version:2,nodes:[...g.nodes,{id,type:'emit_event',label:'Emit event',event,x:260+(count%4)*140,y:40+Math.floor(count/4)*100}]}));
+  this.chosen.set(id);
+ }
  addWebSearch():void {
   const count=this.graph().nodes.length;
   const id='web-search-'+Date.now().toString(36);
@@ -1042,7 +1170,11 @@ export class FlowStudioComponent {
    this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type,label,variable:'summary',transform:'trim',content_type:'text/plain',value:type==='workspace_read'||type==='workspace_write'?'/research/summary.md':'',x:260+(count%4)*140,y:40+Math.floor(count/4)*100}]}));
    this.chosen.set(id);
  }
- updateUtility(field:'variable'|'transform'|'value'|'content_type'|'value_type',value:string){
+ readonly nodeCapability=nodeCapability;
+ readonly describeCapability=describeCapability;
+ readonly sideEffects=()=>capabilityManifest(this.graph().nodes);
+ setApproval(required:boolean){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>{if(n.id!==this.chosen())return n;const {approval,...rest}=n;return required?{...rest,approval:'required' as const}:rest})}))}
+ updateUtility(field:'variable'|'transform'|'value'|'content_type'|'value_type'|'event',value:string){
    this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,[field]:value}:n)}));
  }
  formattedRunJSON(raw:string):string{
@@ -1098,7 +1230,13 @@ export class FlowStudioComponent {
    this.graph.update(g=>({...g,edges:g.edges.filter(e=>e!==edge)}));
  }
   connect(from:string,to:string){if(!from||from===to||this.graph().edges.some(e=>e.from===from&&e.to===to))return;
-  this.graph.update(g=>({...g,edges:[...g.edges,{from,to}]}))}
+  this.graph.update(g=>({...g,edges:[...g.edges,{from,to}]}));this.warnAboutInputs(to)}
+  /** Points out right away when a new connection breaks the branch/merge rules for its target. */
+  private warnAboutInputs(nodeId:string):boolean{
+    const g=this.graph(),issue=semanticIssues(g.version,g.nodes,g.edges,n=>this.functionPins(n as FlowNode)).find(i=>i.nodeId===nodeId);
+    if(issue)this.message.set(issue.message);
+    return !!issue;
+  }
  linkSelected(){const target=this.selectedNode();if(!target)return;const last=this.graph().nodes.find(x=>x.id!==target.id&&x.type==='agent');if(last)this.connect(last.id,target.id)}
  removeSelected(){this.removeNode(this.chosen())}
   removeNode(id:string){const n=this.node(id);if(!n||n.type==='trigger')return;
@@ -1132,6 +1270,7 @@ export class FlowStudioComponent {
   }catch(e){this.message.set(String(e))}
  }
  readonly isActiveRun=isActiveRun;
+ readonly canCancelRun=canCancelRun;
  readonly canRetryRun=canRetryRun;
  readonly runStatusLabel=runStatusLabel;
  readonly runAttemptLabel=runAttemptLabel;

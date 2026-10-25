@@ -3,7 +3,7 @@
 // No extra test dependencies are required.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { UNDO_HISTORY_LIMIT, canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history.ts';
+import { UNDO_HISTORY_LIMIT, canCancelRun, canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history.ts';
 
 const runs = [
   { id: 1, trigger: 'manual', status: 'SUCCESS' },
@@ -84,6 +84,10 @@ test('queued and running runs are active; failed and dead runs can be retried', 
 
 test('run status and attempt labels', () => {
   assert.equal(runStatusLabel('DEAD'), 'Dead-lettered');
+  assert.equal(runStatusLabel('AWAITING_APPROVAL'), 'Awaiting approval');
+  // A parked run is not polled but can still be cancelled.
+  assert.equal(isActiveRun('AWAITING_APPROVAL'), false);
+  assert.deepEqual(['QUEUED', 'RUNNING', 'AWAITING_APPROVAL', 'SUCCESS', 'FAILED'].map(canCancelRun), [true, true, true, false, false]);
   assert.equal(runStatusLabel('QUEUED'), 'Queued');
   assert.equal(runStatusLabel('CUSTOM'), 'CUSTOM');
   assert.equal(runAttemptLabel(1, 3), '');

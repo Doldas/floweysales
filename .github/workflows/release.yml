@@ -20,7 +20,7 @@ jobs:
           - {os: linux, arch: arm64}
           - {os: windows, arch: amd64}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -49,7 +49,7 @@ jobs:
           go build -trimpath -ldflags "$ldflags" -o "dist/floweysales_backend-${GOOS}-${GOARCH}${suffix}" .
           go build -trimpath -o "dist/floweysales_mcp-${GOOS}-${GOARCH}${suffix}" ./cmd/mcp
           cd dist && sha256sum * > "SHA256SUMS-${GOOS}-${GOARCH}.txt"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.os }}-${{ matrix.arch }}
           path: dist/

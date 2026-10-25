@@ -3,7 +3,7 @@ module floweysales
 go 1.27.1
 
 require (
-	github.com/go-sql-driver/mysql v1.9.3
+	github.com/go-sql-driver/mysql v1.10.1
 	modernc.org/sqlite v1.61.0
 )
 

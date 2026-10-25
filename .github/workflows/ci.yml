@@ -20,7 +20,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Test policy guardrails
         run: bash scripts/test-pr-policy.sh
       - name: Test repository gate audit
@@ -38,8 +38,8 @@ jobs:
     needs: frontend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: frontend-preview
           path: www/browser
@@ -94,7 +94,7 @@ jobs:
           mkdir -p dist
           go build -trimpath -o dist/floweysales_backend .
           go build -trimpath -o dist/floweysales_mcp ./cmd/mcp
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: go-linux-amd64
           path: dist/
@@ -104,7 +104,7 @@ jobs:
     name: frontend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -113,7 +113,7 @@ jobs:
       - name: Install frozen dependencies
         run: npm ci --prefix frontend
       - name: Unit tests for Flow Studio helpers
-        run: node --test frontend/src/app/components/flow-history.spec.ts frontend/src/app/components/flow-overview.spec.ts frontend/src/app/components/flow-versions.spec.ts frontend/src/app/components/update-status.spec.ts
+        run: node --test frontend/src/app/components/flow-history.spec.ts frontend/src/app/components/flow-overview.spec.ts frontend/src/app/components/flow-versions.spec.ts frontend/src/app/components/update-status.spec.ts frontend/src/app/components/function-pins.spec.ts frontend/src/app/components/wire-drag.spec.ts frontend/src/app/components/flow-semantics.spec.ts frontend/src/app/components/side-effects.spec.ts
       - name: Production Angular build
         run: npm run build --prefix frontend
       - name: Install headless Chromium for responsive layout tests
@@ -129,7 +129,7 @@ jobs:
             sleep 1
           done
           npm run smoke:responsive --prefix frontend
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: frontend-preview
           path: www/browser/
@@ -140,7 +140,7 @@ jobs:
     name: identity-schema
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Validate and apply MySQL identity schema
         env:
           MYSQL_PASSWORD: ci-only-identity-password
@@ -173,7 +173,7 @@ jobs:
     name: container-image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Validate Compose model (no committed secrets)
         env:
           MYSQL_PASSWORD: ci-only-mysql-pass

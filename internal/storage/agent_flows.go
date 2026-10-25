@@ -31,6 +31,7 @@ type AgentFlowRun struct {
 	Attempts   int     `json:"attempts"`
 	MaxClaims  int     `json:"max_attempts"`
 	QueuedAt   *string `json:"queued_at"`
+	ParentRun  *int64  `json:"parent_run_id"`
 }
 
 var agentFlowSelect = "SELECT p.id,p.name,p.graph_json,p.enabled,p.interval_minutes,COALESCE(p.event_key,'')" +
@@ -132,7 +133,7 @@ func (d *Database) FinishAgentFlowRunWithNode(ctx context.Context, id int64, out
 	return err
 }
 func (d *Database) ListAgentFlowRuns(ctx context.Context, flowID int64) ([]AgentFlowRun, error) {
-	rows, err := d.db.QueryContext(ctx, "SELECT id,flow_id,trigger_type,status,COALESCE(output_json,''),COALESCE(error_message,''),DATE_FORMAT(started_at,'%Y-%m-%dT%H:%i:%s.%fZ'),IF(finished_at IS NULL,NULL,DATE_FORMAT(finished_at,'%Y-%m-%dT%H:%i:%s.%fZ')),IF(finished_at IS NULL,NULL,TIMESTAMPDIFF(MICROSECOND,started_at,finished_at) DIV 1000),failed_node_id,flow_revision,attempts,max_attempts,IF(queued_at IS NULL,NULL,DATE_FORMAT(queued_at,'%Y-%m-%dT%H:%i:%s.%fZ')) FROM agent_flow_runs WHERE flow_id=? ORDER BY id DESC LIMIT 30", flowID)
+	rows, err := d.db.QueryContext(ctx, "SELECT id,flow_id,trigger_type,status,COALESCE(output_json,''),COALESCE(error_message,''),DATE_FORMAT(started_at,'%Y-%m-%dT%H:%i:%s.%fZ'),IF(finished_at IS NULL,NULL,DATE_FORMAT(finished_at,'%Y-%m-%dT%H:%i:%s.%fZ')),IF(finished_at IS NULL,NULL,TIMESTAMPDIFF(MICROSECOND,started_at,finished_at) DIV 1000),failed_node_id,flow_revision,attempts,max_attempts,IF(queued_at IS NULL,NULL,DATE_FORMAT(queued_at,'%Y-%m-%dT%H:%i:%s.%fZ')),parent_run_id FROM agent_flow_runs WHERE flow_id=? ORDER BY id DESC LIMIT 30", flowID)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +144,7 @@ func (d *Database) ListAgentFlowRuns(ctx context.Context, flowID int64) ([]Agent
 		var finishedAt sql.NullString
 		var durationMS sql.NullInt64
 		var failedNode sql.NullString
-		if err := rows.Scan(&x.ID, &x.FlowID, &x.Trigger, &x.Status, &x.Output, &x.Error, &x.StartedAt, &finishedAt, &durationMS, &failedNode, &x.Revision, &x.Attempts, &x.MaxClaims, &x.QueuedAt); err != nil {
+		if err := rows.Scan(&x.ID, &x.FlowID, &x.Trigger, &x.Status, &x.Output, &x.Error, &x.StartedAt, &finishedAt, &durationMS, &failedNode, &x.Revision, &x.Attempts, &x.MaxClaims, &x.QueuedAt, &x.ParentRun); err != nil {
 			return nil, err
 		}
 		if finishedAt.Valid {
@@ -160,18 +161,9 @@ func (d *Database) ListAgentFlowRuns(ctx context.Context, flowID int64) ([]Agent
 	return result, rows.Err()
 }
 
+// FindEventAgentFlows returns the enabled flows subscribed to key.
 func (d *Database) FindEventAgentFlows(ctx context.Context, key string) ([]AgentFlow, error) {
-	flows, err := d.ListAgentFlows(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := []AgentFlow{}
-	for _, f := range flows {
-		if f.Enabled && f.EventKey == key {
-			out = append(out, f)
-		}
-	}
-	return out, nil
+	return d.queryAgentFlows(ctx, " WHERE p.enabled=TRUE AND p.event_key=?", key)
 }
 
 // ErrAgentFlowRunning prevents deleting a flow while a worker is active.
@@ -196,6 +188,9 @@ func (d *Database) DeleteAgentFlow(ctx context.Context, id int64) error {
 	if running != 0 {
 		return ErrAgentFlowRunning
 	}
+	if err := cancelSideEffects(ctx, tx, "flow_id=?", id); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM agent_flow_runs WHERE flow_id=?", id); err != nil {
 		return err
 	}
@@ -209,13 +204,24 @@ func (d *Database) DeleteAgentFlow(ctx context.Context, id int64) error {
 // its flow. The worker's lease renewal then fails, so it stops, and its
 // completion cannot overwrite CANCELLED.
 func (d *Database) CancelAgentFlowRun(ctx context.Context, flowID, runID int64) (bool, error) {
-	result, err := d.db.ExecContext(ctx, `UPDATE agent_flow_runs SET status='CANCELLED',error_message='Cancelled by administrator',
-		finished_at=UTC_TIMESTAMP(6),lease_owner=NULL,lease_expires_at=NULL WHERE id=? AND flow_id=? AND status IN ('QUEUED','RUNNING')`, runID, flowID)
+	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, err
 	}
-	affected, err := result.RowsAffected()
-	return affected == 1, err
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `UPDATE agent_flow_runs SET status='CANCELLED',error_message='Cancelled by administrator',
+		finished_at=UTC_TIMESTAMP(6),lease_owner=NULL,lease_expires_at=NULL WHERE id=? AND flow_id=? AND status IN ('QUEUED','RUNNING','AWAITING_APPROVAL')`, runID, flowID)
+	if err != nil {
+		return false, err
+	}
+	if affected, err := result.RowsAffected(); err != nil || affected != 1 {
+		return false, err
+	}
+	// A cancelled run never applies a pending or approved side effect.
+	if err := cancelSideEffects(ctx, tx, "id=?", runID); err != nil {
+		return false, err
+	}
+	return true, tx.Commit()
 }
 
 func (d *Database) ListAgentFlowsForUser(ctx context.Context, userID int64) ([]AgentFlow, error) {

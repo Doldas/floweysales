@@ -20,6 +20,7 @@ import (
 // or function and that pinned revisions exist, so a published graph cannot
 // freeze a dangling reference.
 func (e *Engine) checkCallReferences(ctx context.Context, g flowGraph) error {
+	pinInputs, pinOutputs := map[string][]blueprintV2Port{}, map[string][]blueprintV2Port{}
 	for _, n := range g.Nodes {
 		switch n.Type {
 		case "flow":
@@ -35,22 +36,34 @@ func (e *Engine) checkCallReferences(ctx context.Context, g flowGraph) error {
 			if err != nil {
 				return err
 			}
-		case "function":
-			var err error
-			if n.FunctionRevision > 0 {
-				_, err = e.db.GetBlueprintFunctionRevision(ctx, n.FunctionID, n.FunctionRevision)
-			} else {
-				_, err = e.db.GetBlueprintFunction(ctx, n.FunctionID)
+		case "emit_event":
+			_, err := e.db.GetBlueprintTrigger(ctx, n.Event)
+			if errors.Is(err, sql.ErrNoRows) {
+				return referenceError{fmt.Sprintf("node %s emits event %s, which is not defined", n.ID, n.Event)}
 			}
+			if err != nil {
+				return err
+			}
+		case "function":
+			definition, _, err := e.db.ResolveBlueprintFunction(ctx, n.FunctionID, n.FunctionRevision)
 			if errors.Is(err, sql.ErrNoRows) {
 				return referenceError{fmt.Sprintf("node %s calls function %d%s, which does not exist", n.ID, n.FunctionID, revisionSuffix(n.FunctionRevision))}
 			}
 			if err != nil {
 				return err
 			}
+			// Pins are checked against the revision that will actually run.
+			if err := checkFunctionPins(g, n, definition); err != nil {
+				return err
+			}
+			if functionGraphVersion(definition) == 2 {
+				if pinInputs[n.ID], pinOutputs[n.ID], err = functionV2Ports(definition); err != nil {
+					return referenceError{fmt.Sprintf("function %d has an unreadable graph", n.FunctionID)}
+				}
+			}
 		}
 	}
-	return nil
+	return checkPinTypes(g, pinInputs, pinOutputs)
 }
 
 // referenceError is a client error; other checkCallReferences errors mean storage failed.

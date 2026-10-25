@@ -218,8 +218,23 @@ func (e *Engine) runClaimedFlow(workerCtx context.Context, c *storage.ClaimedFlo
 			log.Printf("[Flows] Resume trace for run %d not saved: %v", c.RunID, err)
 		}
 	}
-	runCtx := context.WithValue(context.WithValue(context.WithValue(ctx, flowTraceRunKey{}, c.RunID), flowCheckpointKey{}, checkpointer), flowAttemptKey{}, c.Attempt)
+	runCtx := context.WithValue(ctx, flowTraceRunKey{}, c.RunID)
+	runCtx = context.WithValue(runCtx, flowCheckpointKey{}, checkpointer)
+	runCtx = context.WithValue(runCtx, flowAttemptKey{}, c.Attempt)
+	runCtx = context.WithValue(runCtx, flowEventDepthKey{}, c.EventDepth)
 	output, runErr := e.executeFlowNestedWithInput(runCtx, f, map[int64]bool{}, 0, c.Input)
+	if errors.Is(runErr, errFlowAwaitingApproval) {
+		// The run is parked in storage; approval requeues it at this node.
+		var nodeErr *flowNodeError
+		if errors.As(runErr, &nodeErr) {
+			traceCtx, traceCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			if err := e.db.AppendAgentFlowRunStep(traceCtx, c.RunID, nodeErr.NodeID, nodeErr.Label, "WAITING", "Waiting for a SYS_ADMIN to approve this side effect"); err != nil {
+				log.Printf("[Flows] Approval trace for run %d not saved: %v", c.RunID, err)
+			}
+			traceCancel()
+		}
+		return
+	}
 
 	switch {
 	case workerCtx.Err() != nil:
@@ -261,6 +276,7 @@ func (e *Engine) runClaimedFlow(workerCtx context.Context, c *storage.ClaimedFlo
 func (e *Engine) recoverFlowRuns(ctx context.Context) {
 	recoverCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	e.expireSideEffectApprovals(recoverCtx)
 	requeued, dead, err := e.db.RecoverExpiredAgentFlowRuns(recoverCtx)
 	if err != nil {
 		log.Printf("[Flows] Run recovery failed: %v", err)

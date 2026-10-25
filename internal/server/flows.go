@@ -43,6 +43,8 @@ type flowNode struct {
 	LoopCondition    string  `json:"loop_condition,omitempty"`
 	Operator         string  `json:"operator,omitempty"`
 	Property         string  `json:"property,omitempty"`
+	Event            string  `json:"event,omitempty"`
+	Approval         string  `json:"approval,omitempty"`
 	X                float64 `json:"x"`
 	Y                float64 `json:"y"`
 }
@@ -145,7 +147,7 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		if n.FlowRevision < 0 || n.FunctionRevision < 0 || (n.FlowRevision != 0 && n.Type != "flow") || (n.FunctionRevision != 0 && n.Type != "function") {
 			return g, nil, fmt.Errorf("revision pins are only valid on call flow and function nodes")
 		}
-		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" && n.Type != "output" && (g.Version != 2 || n.Type != "loop") && n.Type != "http_get" && (g.Version != 2 || n.Type != "web_search") && (g.Version != 2 || n.Type != "web_crawl") && (g.Version != 2 || (n.Type != "condition" && n.Type != "merge" && n.Type != "json_get")) {
+		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" && n.Type != "output" && (g.Version != 2 || n.Type != "loop") && n.Type != "http_get" && (g.Version != 2 || n.Type != "web_search") && (g.Version != 2 || n.Type != "web_crawl") && (g.Version != 2 || (n.Type != "condition" && n.Type != "merge" && n.Type != "json_get")) && (g.Version != 2 || n.Type != "emit_event") {
 			return g, nil, fmt.Errorf("only trigger, research agent, constant and subflow nodes are allowed")
 		}
 		if g.Version == 2 && (n.Type == "condition" || n.Type == "merge" || n.Type == "json_get") {
@@ -270,6 +272,18 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 				return g, nil, fmt.Errorf("unsupported workspace file format")
 			}
 		}
+		if err := validateFlowApproval(n); err != nil {
+			return g, nil, err
+		}
+		if n.Event != "" && n.Type != "emit_event" {
+			return g, nil, fmt.Errorf("only Emit Event nodes name an event")
+		}
+		if n.Type == "emit_event" {
+			utilities++
+			if n.Prompt != "" || n.FlowID != 0 || n.FunctionID != 0 || !flowEventPattern.MatchString(n.Event) {
+				return g, nil, fmt.Errorf("Emit Event needs a valid event key and no prompt or call")
+			}
+		}
 		if n.Type == "save_result" || n.Type == "load_result" || n.Type == "transform" {
 			utilities++
 			if n.Prompt != "" || n.FlowID != 0 || n.FunctionID != 0 {
@@ -349,6 +363,17 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		if from.Type == "agent" && edge.To == edge.From {
 			return g, nil, fmt.Errorf("cycle")
 		}
+		// Typed function pins: in:<pin> binds a function input, out:<pin>
+		// reads one function output. Pin names are checked against the
+		// function definition when the flow is saved or published.
+		if g.Version == 2 && (strings.HasPrefix(edge.ToPort, "in:") || strings.HasPrefix(edge.FromPort, "out:")) {
+			if err := validateFunctionPinEdge(edge, from, nodes[edge.To]); err != nil {
+				return g, nil, err
+			}
+			degrees[edge.To]++
+			next[edge.From] = append(next[edge.From], edge.To)
+			continue
+		}
 		if g.Version == 2 && strings.HasPrefix(edge.FromPort, "field:") && edge.ToPort == "input" {
 			property := strings.TrimPrefix(edge.FromPort, "field:")
 			if !flowVariablePattern.MatchString(property) {
@@ -426,6 +451,9 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 	}
 	if len(order) != len(g.Nodes) {
 		return g, nil, fmt.Errorf("graph has a cycle or unreachable nodes")
+	}
+	if err := checkFlowSemantics(g, order); err != nil {
+		return g, nil, err
 	}
 	return g, order, nil
 }
@@ -867,19 +895,19 @@ func (e *Engine) registerFlowRoutes() {
 			writeJSON(w, 400, map[string]string{"error": "Trigger event requires a JSON value"})
 			return
 		}
-		eventInput := string(payload.Value)
-		if def.PayloadType == "number" || def.PayloadType == "boolean" {
-			if _, err := parseTyped(def.PayloadType, string(payload.Value)); err != nil {
-				writeJSON(w, 400, map[string]string{"error": "Event payload type mismatch"})
-				return
-			}
-		} else {
+		raw := string(payload.Value)
+		if def.PayloadType != "number" && def.PayloadType != "boolean" {
 			var value string
-			if json.Unmarshal(payload.Value, &value) != nil || len(value) > 2000 {
+			if json.Unmarshal(payload.Value, &value) != nil {
 				writeJSON(w, 400, map[string]string{"error": "Event expects a text value"})
 				return
 			}
-			eventInput = value
+			raw = value
+		}
+		eventInput, err := eventPayload(def, raw)
+		if err != nil {
+			writeJSON(w, 400, map[string]string{"error": err.Error()})
+			return
 		}
 		flows, err := e.db.FindEventAgentFlows(r.Context(), key)
 		if err != nil {
@@ -1019,6 +1047,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 	results := []map[string]string{}
 	var stepStarted time.Time
 	var nodeInput string
+	var pinInputs map[string]string
 	var currentNode *flowNode
 	var nodeAttempts int
 	defer func() {
@@ -1113,7 +1142,14 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			}
 			var present bool
 			var inputErr error
-			if n.Type == "merge" {
+			pinInputs = nil
+			if n.Type == "function" && hasInputPins(g, n.ID) {
+				pinInputs, present, inputErr = flowV2PinInputs(g, n.ID, state)
+				if inputErr == nil && present {
+					raw, _ := json.Marshal(pinInputs)
+					previous = string(raw)
+				}
+			} else if n.Type == "merge" {
 				previous, present, inputErr = flowV2Merge(g, n.ID, state)
 			} else {
 				previous, present, inputErr = flowV2SourceInput(g, n.ID, state)
@@ -1160,6 +1196,17 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			nodeInput = previous
 		}
 
+		if n.Type == "emit_event" {
+			summary, err := e.performSideEffect(ctx, f, n, depth, previous, "", func(payload string) (string, error) {
+				return e.emitFlowEvent(ctx, f.ID, n, payload)
+			})
+			if err != nil {
+				return "", fmt.Errorf("emit node %s: %w", n.ID, err)
+			}
+			// The payload passes through unchanged, so emitting can sit mid-chain.
+			record(map[string]string{"node": n.ID, "label": n.Label, "output": summary})
+			continue
+		}
 		if n.Type == "web_search" {
 			result, err := e.runWebSearch(ctx, n.Value)
 			if err != nil {
@@ -1217,7 +1264,10 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				if mime == "" {
 					mime = "text/plain"
 				}
-				if err := e.db.WriteUserspaceFile(ctx, workspaceOwner, n.Value, mime, []byte(previous)); err != nil {
+				owner := workspaceOwner
+				if _, err := e.performSideEffect(ctx, f, n, depth, previous, mime, func(payload string) (string, error) {
+					return "", e.db.WriteUserspaceFile(ctx, owner, n.Value, mime, []byte(payload))
+				}); err != nil {
 					return "", fmt.Errorf("workspace write %s: %w", n.Value, err)
 				}
 			} else {
@@ -1265,6 +1315,18 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			definition, _, err := e.db.ResolveBlueprintFunction(ctx, n.FunctionID, n.FunctionRevision)
 			if err != nil {
 				return "", fmt.Errorf("function %d unavailable: %w", n.FunctionID, err)
+			}
+			if functionGraphVersion(definition) == 2 {
+				result, err := callFunctionV2(definition, pinInputs, previous)
+				if err != nil {
+					return "", fmt.Errorf("function %d: %w", n.FunctionID, err)
+				}
+				previous = result
+				record(map[string]string{"node": n.ID, "label": n.Label, "output": previous})
+				continue
+			}
+			if len(pinInputs) > 0 {
+				return "", fmt.Errorf("function %d has a single untyped input; it cannot take typed pins", n.FunctionID)
 			}
 			var g functionGraph
 			if err := json.Unmarshal(definition.Graph, &g); err != nil {

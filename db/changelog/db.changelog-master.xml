@@ -28,4 +28,6 @@
   <include file="024-flow-function-revisions.xml" relativeToChangelogFile="true"/>
   <include file="025-flow-run-queue.xml" relativeToChangelogFile="true"/>
   <include file="026-flow-run-step-diagnostics.xml" relativeToChangelogFile="true"/>
+  <include file="027-flow-event-emission.xml" relativeToChangelogFile="true"/>
+  <include file="028-flow-side-effects.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
