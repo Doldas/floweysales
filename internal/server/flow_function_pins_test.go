@@ -74,17 +74,11 @@ func TestCheckFunctionPinsAgainstDefinition(t *testing.T) {
 		t.Fatalf("fully bound call rejected: %v", err)
 	}
 	var ref referenceError
-	cases := map[string]string{
-		"undeclared output pin": `,{"from":"fn","from_port":"out:missing","to":"flag"}`,
-	}
-	for name, extra := range cases {
-		g, _, err := validateFlow(pinnedFlow("7", extra))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := checkFunctionPins(g, g.Nodes[3], def); !errors.As(err, &ref) {
-			t.Errorf("%s: %v", name, err)
-		}
+	// The output pin is only checked against the definition, so add it after validateFlow.
+	undeclared := g
+	undeclared.Edges = append(append([]flowEdge{}, g.Edges...), flowEdge{From: "fn", FromPort: "out:missing", To: "flag"})
+	if err := checkFunctionPins(undeclared, fn, def); !errors.As(err, &ref) {
+		t.Errorf("undeclared output pin: %v", err)
 	}
 	// One declared input left unconnected.
 	unbound := strings.Replace(string(pinnedFlow("7", "").Graph), `{"from":"limit","to":"fn","to_port":"in:threshold"},`, ``, 1)

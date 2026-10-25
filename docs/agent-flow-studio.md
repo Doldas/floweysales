@@ -21,6 +21,17 @@ The editor supports a searchable role-aware node picker, free positioning, zoom/
 
 To start, sign in and open **My Flows → New flow / Edit**. Add nodes with **+ Add node**, select a graph node to configure all fields in its floating tooltip, check **Graph validation**, then **Save flow** before **Run now**. Use **Run history → Inspect nodes** to view recorded steps, status-colored historical graph snapshots, duration and errors. Scheduling and typed event triggers require SYS_ADMIN.
 
+## Branch, merge and type rules
+
+In version 2 graphs a node runs when one of its inputs is active, and fails if several are active at once. The editor and the server therefore check, before a flow is saved or published:
+
+- **Joining branches:** a node may take several inputs only when they come from opposite `true`/`false` branches of the same IF / ELSE (at most one can be active). Inputs that can arrive together, such as two steps that both follow the trigger or the same branch twice, need a **Merge** node, which collects every active input into a JSON array.
+- **Typed pins:** each input pin of a function takes one source, and all of a function's pins must be fed from the same branches, so a pin is never missing when only one branch runs.
+- **Types:** a pin that expects `number` or `boolean` accepts a constant, condition result or function output pin of that type. `text` pins accept any value. Values whose type is only known at run time, such as agent output or JSON fields, are still checked when the function runs.
+- **Duplicates:** the same connection cannot be added twice, in any graph version.
+
+The validation panel lists these problems and selects the affected node. Drawing or adding a connection that breaks a rule shows the problem straight away.
+
 ## Typed functions with several inputs and outputs
 
 A Blueprint function can declare up to 8 named, typed **input pins** and 8 **output pins** (`number`, `text` or `boolean`). In the function library choose **New typed function**, declare the pins, add internal Value, Operation and Branch nodes (and optional extra exits) and wire them with data wires (values between pins) and execution wires (order, or `true`/`false` from a branch). Pin renames and removals update the wires that use them. The server validates types, ports, cycles and that every exit provides every output (graph version 2); older single-input functions keep working unchanged.

@@ -20,6 +20,7 @@ import (
 // or function and that pinned revisions exist, so a published graph cannot
 // freeze a dangling reference.
 func (e *Engine) checkCallReferences(ctx context.Context, g flowGraph) error {
+	pinInputs, pinOutputs := map[string][]blueprintV2Port{}, map[string][]blueprintV2Port{}
 	for _, n := range g.Nodes {
 		switch n.Type {
 		case "flow":
@@ -55,9 +56,14 @@ func (e *Engine) checkCallReferences(ctx context.Context, g flowGraph) error {
 			if err := checkFunctionPins(g, n, definition); err != nil {
 				return err
 			}
+			if functionGraphVersion(definition) == 2 {
+				if pinInputs[n.ID], pinOutputs[n.ID], err = functionV2Ports(definition); err != nil {
+					return referenceError{fmt.Sprintf("function %d has an unreadable graph", n.FunctionID)}
+				}
+			}
 		}
 	}
-	return nil
+	return checkPinTypes(g, pinInputs, pinOutputs)
 }
 
 // referenceError is a client error; other checkCallReferences errors mean storage failed.
