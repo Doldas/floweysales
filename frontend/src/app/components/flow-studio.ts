@@ -13,10 +13,12 @@ import { BlueprintLibraryComponent } from './blueprint-library';
 import { AuthState } from '../auth.service';
 import { canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history';
 import { listOverviewFlows } from './flow-overview';
+import { bindInputPin, declaredPins, mixesPinAndPlainInputs, pinBindings, pinEdgeProblem, pinOffset, routeOutputPin, unboundInputPins } from './function-pins';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 
 interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'; label:string; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
+interface FunctionDef { id:number; name:string; graph?:unknown }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow extends PublishState { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
 interface FlowRunStep {id:number;node:string;label:string;status:string;input?:string;output:string;error?:string;started_at?:string;created_at?:string;duration_ms?:number|null;attempts?:number|null;worker_attempt?:number|null}
@@ -143,6 +145,8 @@ export class ConfirmDeleteFlowDialog {
            [attr.stroke]="n.id===selectedNode()?.id?'#94caff':'#607993'" stroke-width="2"/>
          <text [attr.x]="n.x+12" [attr.y]="n.y+24" fill="#dceaf8" font-size="13">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':n.type==='workspace_read'?'▤ READ FILE':n.type==='workspace_write'?'▣ WRITE FILE':n.type==='output'?'→ OUTPUT':n.type==='condition'?'◇ IF / ELSE':n.type==='merge'?'⇉ MERGE':n.type==='json_get'?'{} JSON FIELD':n.type==='emit_event'?'⇢ EMIT EVENT':'✦ AGENT'}}</text>
          <text [attr.x]="n.x+12" [attr.y]="n.y+48" fill="#dceaf8" font-size="12">{{n.label.slice(0,16)}}</text>
+          @for(pin of functionPins(n).inputs;track pin.name;let i=$index){<g><circle [attr.cx]="n.x" [attr.cy]="n.y+pinOffset(i,functionPins(n).inputs.length,70)" r="5" fill="#2d7fb8" stroke="#bfe2ff"><title>Input {{pin.name}} ({{pin.type}})</title></circle><text [attr.x]="n.x+8" [attr.y]="n.y+pinOffset(i,functionPins(n).inputs.length,70)+3" font-size="8" fill="#9fc4e4">{{pin.name.slice(0,8)}}</text></g>}
+          @for(pin of functionPins(n).outputs;track pin.name;let i=$index){<g><circle [attr.cx]="n.x+125" [attr.cy]="n.y+pinOffset(i,functionPins(n).outputs.length,70)" r="5" fill="#2da07a" stroke="#bff0dc"><title>Output {{pin.name}} ({{pin.type}})</title></circle><text [attr.x]="n.x+117" [attr.y]="n.y+pinOffset(i,functionPins(n).outputs.length,70)+3" font-size="8" fill="#9fe0c4" text-anchor="end">{{pin.name.slice(0,8)}}</text></g>}
           @if(n.type!=='trigger'){<circle class="canvas-port input-port" [attr.cx]="n.x" [attr.cy]="n.y+35" r="8" tabindex="0" role="button" [attr.aria-label]="'Connect into '+n.label" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation();chooseInputPort(n.id)" (keydown.enter)="$event.stopPropagation();chooseInputPort(n.id)"/>}
           @if(n.type!=='output'){<circle class="canvas-port output-port" [class.port-active]="connectingFrom()===n.id" [attr.cx]="n.x+125" [attr.cy]="n.y+35" r="8" tabindex="0" role="button" [attr.aria-label]="'Start connection from '+n.label" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation();chooseOutputPort(n.id)" (keydown.enter)="$event.stopPropagation();chooseOutputPort(n.id)"/>}
        </g>
@@ -290,6 +294,26 @@ export class ConfirmDeleteFlowDialog {
        }
        @if(n.type==='function'){
          <label>Reusable function <select [ngModel]="n.function_id||0" (ngModelChange)="updateFunctionReference(+$event)"><option [ngValue]="0">Choose saved function</option>@for(f of functions();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
+         @if(functionPins(n).inputs.length||functionPins(n).outputs.length){
+          <div class="field-mapper">
+           <strong>Typed input pins</strong>
+           @for(pin of functionPins(n).inputs;track pin.name){
+            <label>{{pin.name}} ({{pin.type}})<select [ngModel]="pinSources(n)[pin.name]||''" (ngModelChange)="bindPin(pin.name,$event)">
+             <option value="">Not connected</option>
+             @for(other of graph().nodes;track other.id){@if(other.id!==n.id&&other.type!=='output'){<option [value]="other.id">{{other.label}}</option>}}
+            </select></label>
+           }
+           <strong>Typed output pins</strong>
+           @for(pin of functionPins(n).outputs;track pin.name){
+            <label>{{pin.name}} ({{pin.type}}) → <select #pinTarget (change)="routePin(pin.name,pinTarget.value)">
+             <option value="">Send to node…</option>
+             @for(other of graph().nodes;track other.id){@if(other.id!==n.id&&other.type!=='trigger'){<option [value]="other.id">{{other.label}}</option>}}
+            </select></label>
+            @if(pinTargets(n,pin.name).length){<p class="muted">Routed to: {{pinTargets(n,pin.name).join(', ')}}</p>}
+           }
+           <p class="muted">Each declared input must be connected. Outputs are read from the function's result by name; unrouted outputs are simply not used. Types are checked when you save or publish.</p>
+          </div>
+         }
          @if(n.function_id){<label>Function revision <select [ngModel]="n.function_revision||0" (ngModelChange)="updateRevisionPin('function_revision',+$event)"><option [ngValue]="0">Follow active revision</option>@for(r of targetRevisions()['function:'+n.function_id]||[];track r.revision){<option [ngValue]="r.revision">{{revisionOptionLabel(r)}}</option>}</select></label>
          <p class="muted">{{pinDescription(n.function_revision)}}</p>}
          <p class="muted">Applies the function to the preceding node's typed value; invalid inputs fail the run safely.</p>
@@ -649,9 +673,26 @@ export class FlowStudioComponent {
     if(this.graph().edges.some(e=>e.from===from&&e.to===id)){this.cancelConnecting();this.message.set('These nodes are already connected.');return}
     this.connect(from,id);this.chosen.set(id);this.connectingFrom.set('');
   }
+  /** Declared pins of the function a node calls (empty for other nodes and legacy functions). */
+  functionPins(n:FlowNode){return n.type==='function'?declaredPins(this.functions().find(f=>f.id===n.function_id)?.graph):{inputs:[],outputs:[]}}
+  /** Vertical position of a wire end on a node; typed pins are spread along its edge. */
+  pinY(n:FlowNode,side:'in'|'out',port?:string):number{
+    const prefix=side==='in'?'in:':'out:';
+    if(n.type==='function'&&port?.startsWith(prefix)){
+      const pins=side==='in'?this.functionPins(n).inputs:this.functionPins(n).outputs;
+      const i=pins.findIndex(p=>p.name===port.slice(prefix.length));
+      if(i>=0)return pinOffset(i,pins.length,70);
+    }
+    return 35;
+  }
+  readonly pinOffset=pinOffset;
+  pinSources(n:FlowNode):Record<string,string>{return pinBindings(this.graph().edges,n.id)}
+  bindPin(pin:string,source:string){this.graph.update(g=>({...g,version:2,edges:bindInputPin(g.edges,this.chosen(),pin,source)}))}
+  routePin(pin:string,target:string){this.graph.update(g=>({...g,version:2,edges:routeOutputPin(g.edges,this.chosen(),pin,target)}))}
+  pinTargets(n:FlowNode,pin:string):string[]{return this.graph().edges.filter(e=>e.from===n.id&&e.from_port==='out:'+pin).map(e=>e.to)}
   edgePath(e:FlowEdge):string{
     const a=this.node(e.from),b=this.node(e.to);if(!a||!b)return '';
-    const x1=a.x+125,y1=a.y+35,x2=b.x,y2=b.y+35,d=Math.max(45,Math.abs(x2-x1)*0.45);
+    const x1=a.x+125,y1=a.y+this.pinY(a,'out',e.from_port),x2=b.x,y2=b.y+this.pinY(b,'in',e.to_port),d=Math.max(45,Math.abs(x2-x1)*0.45);
     return 'M '+x1+' '+y1+' C '+(x1+d)+' '+y1+', '+(x2-d)+' '+y2+', '+x2+' '+y2;
   }
   fitCanvas():void{
@@ -719,7 +760,7 @@ export class FlowStudioComponent {
  readonly flows=signal<SavedFlow[]>([]);
  readonly availableModels=signal<{model:string;label:string}[]>([]);
  readonly defaultAIModel=signal('');
- readonly functions=signal<({id:number;name:string}&PublishState)[]>([]);
+ readonly functions=signal<(FunctionDef&PublishState)[]>([]);
  readonly selectedId=signal(0);
  readonly name=signal('Daily research');
  readonly enabled=signal(false);
@@ -827,11 +868,22 @@ export class FlowStudioComponent {
           if(from.type==='trigger')add('Trigger has no typed value output.',e.from);
           if(to.type==='trigger'||to.type==='constant')add('Target cannot accept typed input: '+to.label,e.to);
           if(from.type==='constant'&&from.value_type!=='text')add('Convert number/boolean constants to text before connecting: '+from.label,e.from);
+        }else if(e.to_port?.startsWith('in:')||e.from_port?.startsWith('out:')){
+          const problem=pinEdgeProblem(e,from.type,to.type,this.functionPins(from).outputs,this.functionPins(to).inputs);
+          if(problem)add(problem+' ('+from.label+' → '+to.label+')',problem.includes('input')?e.to:e.from);
         }else add('Unsupported connection port combination: '+(e.from_port||'default')+' → '+(e.to_port||'default'),e.from);
       }
       adjacency.get(e.from)?.push(e.to);incoming.set(e.to,(incoming.get(e.to)||0)+1);
     }
     for(const n of g.nodes)if(n.type!=='trigger'&&!incoming.get(n.id))add('Disconnected node: '+n.label,n.id);
+    for(const n of g.nodes){
+      if(n.type!=='function')continue;
+      const pins=this.functionPins(n).inputs;
+      if(mixesPinAndPlainInputs(g.edges,n.id))add('Connect every input of this function to a typed pin, not a mix: '+n.label,n.id);
+      else if(pins.length>1||(pins.length===1&&pinBindings(g.edges,n.id)[pins[0].name]===undefined&&g.edges.some(e=>e.to===n.id&&e.to_port?.startsWith('in:')))){
+        for(const pin of unboundInputPins(g.edges,n.id,pins))add('Connect input pin "'+pin.name+'" ('+pin.type+'): '+n.label,n.id);
+      }
+    }
     const visited=new Set<string>(),active=new Set<string>();let cycle=false;
     const dfs=(id:string):void=>{
       if(active.has(id)){cycle=true;return}

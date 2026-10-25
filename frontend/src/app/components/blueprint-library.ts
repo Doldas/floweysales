@@ -3,16 +3,18 @@ import { HostListener, Component, EventEmitter, Output, signal } from '@angular/
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { TypedFunctionEditorComponent } from './typed-function-editor';
+import { V2Graph, isTypedFunctionGraph, newTypedFunctionGraph } from './function-pins';
 import { PublishState, RevisionSummary, canPublish, publishStatusLabel } from './flow-versions';
 
 type Kind='text'|'number'|'boolean';
 interface Node {id:string;type:'input'|'output'|'constant'|'operation';value_type?:Kind;value?:string;operation?:string;x:number;y:number}
 interface Edge {from:string;to:string;to_port?:string}
-interface Definition extends PublishState {id:number;name:string;graph:{nodes:Node[];edges:Edge[]}}
+interface Definition extends PublishState {id:number;name:string;graph:{nodes:Node[];edges:Edge[]}|V2Graph}
 interface Trigger {id:number;event_key:string;payload_type:Kind}
 @Component({
  selector:'fse-blueprint-library',standalone:true,
- imports:[FormsModule,MatButtonModule,MatCardModule],
+ imports:[FormsModule,MatButtonModule,MatCardModule,TypedFunctionEditorComponent],
  template:`
  <mat-card class="lib">
  <h3>Blueprint Function Library</h3>
@@ -21,15 +23,19 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
   <label>Function <select [ngModel]="currentId()" (ngModelChange)="choose(+$event)"><option [ngValue]="0">New function</option><optgroup label="Custom">@for(f of functions();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</optgroup></select></label>
   <label>Name <input [ngModel]="name()" (ngModelChange)="name.set($event)"></label>
   <button mat-stroked-button (click)="newFunction()">New</button>
+  <button mat-stroked-button (click)="newTypedFunction()" title="Several named, typed inputs and outputs">New typed function</button>
   <label>Built-in function starters<select [ngModel]="''" (ngModelChange)="loadFunctionTemplate($event)">
    <option value="">Copy a template…</option>
    <option value="double">Double a number</option>
    <option value="threshold">Compare with threshold</option>
    <option value="percent">Convert fraction to percent</option>
   </select></label>
-  <button mat-stroked-button (click)="add('constant')">+ Value</button>
-  <button mat-stroked-button (click)="add('operation')">+ Operation</button>
+  @if(!typed()){<button mat-stroked-button (click)="add('constant')">+ Value</button>
+  <button mat-stroked-button (click)="add('operation')">+ Operation</button>}
  </div>
+ @if(typed();as t){
+  <fse-typed-function-editor [graph]="t" (graphChange)="typed.set($event)"></fse-typed-function-editor>
+ } @else {
  <div class="blueprint-layout">
  <div class="canvas-shell">
     <div class="canvas-navigation" aria-label="Canvas navigation">
@@ -92,6 +98,7 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
   } @else {<p>Select a node to edit its pins and properties.</p>}
  </aside>
  </div>
+ }
  <div class="toolbar"><button mat-flat-button (click)="save()" [disabled]="busy()">Save function</button>
   @if(current();as c){
    <label>Publish note <input [ngModel]="publishNote()" (ngModelChange)="publishNote.set($event)" maxlength="500" placeholder="What changed (optional)"></label>
@@ -200,6 +207,8 @@ export class BlueprintLibraryComponent {
  readonly functions=signal<Definition[]>([]);
  readonly triggers=signal<Trigger[]>([]);
  readonly currentId=signal(0);
+ /** Set while editing a function with declared typed pins (graph version 2). */
+ readonly typed=signal<V2Graph|null>(null);
  readonly name=signal('My function');
  readonly nodes=signal<Node[]>(this.initialNodes());
  readonly edges=signal<Edge[]>([]);
@@ -214,7 +223,7 @@ export class BlueprintLibraryComponent {
  readonly revisions=signal<RevisionSummary[]>([]);
  readonly publishNote=signal('');
  readonly current=()=>this.functions().find(f=>f.id===this.currentId());
- private draftSnapshot():string{return JSON.stringify({name:this.name(),nodes:this.nodes(),edges:this.edges()})}
+ private draftSnapshot():string{return JSON.stringify({name:this.name(),typed:this.typed(),nodes:this.nodes(),edges:this.edges()})}
  private savedDraft=signal('');
  readonly hasUnsavedChanges=()=>this.savedDraft()!==this.draftSnapshot();
  async loadRevisions(){const id=this.currentId();if(!id){this.revisions.set([]);return}
@@ -246,14 +255,15 @@ export class BlueprintLibraryComponent {
   this.eventKey.set(key);this.payloadType.set('text');
   this.status.set('Trigger template selected. Create trigger to activate this event key.');
  }
- newFunction(){this.currentId.set(0);this.name.set('My function');this.nodes.set(this.initialNodes());this.edges.set([]);this.selected.set('');this.revisions.set([])}
- choose(id:number){const f=this.functions().find(x=>x.id===id);if(!f){this.newFunction();return}this.currentId.set(id);this.name.set(f.name);this.nodes.set(structuredClone(f.graph.nodes));this.edges.set(structuredClone(f.graph.edges));this.selected.set('');this.savedDraft.set(this.draftSnapshot());this.publishNote.set('');void this.loadRevisions()}
+ newTypedFunction(){this.newFunction();this.name.set('My typed function');this.typed.set(newTypedFunctionGraph());this.status.set('Declare typed input and output pins, add nodes and wire them, then save. Flows bind each pin separately.')}
+ newFunction(){this.typed.set(null);this.currentId.set(0);this.name.set('My function');this.nodes.set(this.initialNodes());this.edges.set([]);this.selected.set('');this.revisions.set([])}
+ choose(id:number){const f=this.functions().find(x=>x.id===id);if(!f){this.newFunction();return}this.currentId.set(id);this.name.set(f.name);if(isTypedFunctionGraph(f.graph)){this.typed.set(structuredClone(f.graph));this.nodes.set([]);this.edges.set([])}else{this.typed.set(null);this.nodes.set(structuredClone(f.graph.nodes));this.edges.set(structuredClone(f.graph.edges))};this.selected.set('');this.savedDraft.set(this.draftSnapshot());this.publishNote.set('');void this.loadRevisions()}
  add(type:'constant'|'operation'){const id=type+'-'+Date.now().toString(36);this.nodes.update(n=>[...n,{id,type,x:240+(n.length%3)*95,y:35+(n.length%3)*90,...(type==='operation'?{operation:'add'}:{value_type:'number' as Kind,value:'1'})}]);this.selected.set(id)}
  edit(field:'value_type'|'value'|'operation',value:string){this.nodes.update(nodes=>nodes.map(n=>n.id===this.selected()?{...n,[field]:value}:n))}
  connect(from:string,to:string,port:string){if(!from||from===to)return;this.edges.update(es=>[...es.filter(e=>!(e.to===to&&(e.to_port||'a')===port)),{from,to,to_port:port}])}
  removeNode(id:string){this.nodes.update(ns=>ns.filter(n=>n.id!==id));this.edges.update(es=>es.filter(e=>e.from!==id&&e.to!==id));this.selected.set('')}
  private async api(url:string,init?:RequestInit):Promise<any>{const res=await fetch(url,{credentials:'same-origin',...init,headers:{'Content-Type':'application/json',...init?.headers}});const data=await res.json();if(!res.ok)throw Error(data.error||'Request failed');return data}
  async refresh(){try{const [f,t]=await Promise.all([this.api('/api/admin/blueprint-functions'),this.api('/api/admin/blueprint-triggers')]);this.functions.set(f.functions||[]);this.triggers.set(t.triggers||[])}catch(e){this.status.set(String(e))}}
- async save(){this.busy.set(true);try{const id=this.currentId();const res:Definition=await this.api(id?'/api/admin/blueprint-functions/'+id:'/api/admin/blueprint-functions',{method:id?'PUT':'POST',body:JSON.stringify({name:this.name(),graph:{nodes:this.nodes(),edges:this.edges()}})});this.currentId.set(res.id);this.savedDraft.set(this.draftSnapshot());this.status.set(res.active_revision?'Draft saved; publish it to change unpinned calls':'Function saved');await this.refresh();await this.loadRevisions();this.functionsChanged.emit()}catch(e){this.status.set(String(e))}finally{this.busy.set(false)}}
+ async save(){this.busy.set(true);try{const id=this.currentId();const res:Definition=await this.api(id?'/api/admin/blueprint-functions/'+id:'/api/admin/blueprint-functions',{method:id?'PUT':'POST',body:JSON.stringify({name:this.name(),graph:this.typed()??{nodes:this.nodes(),edges:this.edges()}})});this.currentId.set(res.id);this.savedDraft.set(this.draftSnapshot());this.status.set(res.active_revision?'Draft saved; publish it to change unpinned calls':'Function saved');await this.refresh();await this.loadRevisions();this.functionsChanged.emit()}catch(e){this.status.set(String(e))}finally{this.busy.set(false)}}
  async createTrigger(){this.busy.set(true);try{await this.api('/api/admin/blueprint-triggers',{method:'POST',body:JSON.stringify({event_key:this.eventKey(),payload_type:this.payloadType()})});this.status.set('Trigger created');await this.refresh()}catch(e){this.status.set(String(e))}finally{this.busy.set(false)}}
 }

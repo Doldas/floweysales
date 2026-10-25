@@ -148,7 +148,7 @@ func (d *Database) resolve(ctx context.Context, s revisionStore, id int64, pinne
 	if pinned > 0 {
 		r, err := d.getRevision(ctx, s, id, pinned)
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", "", nil, fmt.Errorf("revision %d does not exist", pinned)
+			return "", "", nil, fmt.Errorf("revision %d does not exist: %w", pinned, sql.ErrNoRows)
 		}
 		if err != nil {
 			return "", "", nil, err
