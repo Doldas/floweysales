@@ -95,6 +95,11 @@ func TestPublishingAnUntriedRevisionPausesAutomation(t *testing.T) {
 	}
 	// A new revision has not been tried, so automation pauses.
 	changed := strings.Replace(string(f.Graph), "approved report body", "changed body", 1)
+	draft := automated
+	draft.Graph = json.RawMessage(changed)
+	if _, err := env.db.SaveAgentFlow(ctx, draft, owner); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := env.db.PublishAgentFlow(ctx, saved.ID, saved.Name, changed, "second", owner); err != nil {
 		t.Fatal(err)
 	}
