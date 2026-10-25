@@ -113,7 +113,7 @@ jobs:
       - name: Install frozen dependencies
         run: npm ci --prefix frontend
       - name: Unit tests for Flow Studio helpers
-        run: node --test frontend/src/app/components/flow-history.spec.ts frontend/src/app/components/flow-overview.spec.ts frontend/src/app/components/flow-versions.spec.ts frontend/src/app/components/update-status.spec.ts frontend/src/app/components/function-pins.spec.ts
+        run: node --test frontend/src/app/components/flow-history.spec.ts frontend/src/app/components/flow-overview.spec.ts frontend/src/app/components/flow-versions.spec.ts frontend/src/app/components/update-status.spec.ts frontend/src/app/components/function-pins.spec.ts frontend/src/app/components/wire-drag.spec.ts
       - name: Production Angular build
         run: npm run build --prefix frontend
       - name: Install headless Chromium for responsive layout tests

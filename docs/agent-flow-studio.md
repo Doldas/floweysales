@@ -32,6 +32,10 @@ In a flow, the **Function** node of a typed function shows its pins on the canva
 - **Checks:** pin names and types are checked against the exact revision the node will call, both in the editor and when the flow is saved or published, so a revision that changes its pins can be caught before it breaks a run. Pins require graph version 2. Pinning a function node to a revision (see above) pins its pin layout too.
 - A node whose input pin is fed from a branch that was not taken is skipped like any other version 2 node.
 
+### Drawing wires on the canvas
+
+Drag from an output port (or a typed output pin) to an input port (or input pin) to connect them. A dashed wire follows the pointer and the input port it would snap to is highlighted. A pin-to-pin wire must agree on type, an input pin takes one source (a new wire replaces the old one), and a node cannot connect to itself; refused drops explain why in the status line. Clicking an output port and then an input port still works, and the node settings panel remains the keyboard route for binding pins.
+
 ## Flow-to-flow events (Emit Event)
 
 A SYS_ADMIN can add an **Emit Event** node (graph version 2) that names a custom trigger defined under *Function library & triggers*. When it runs, it queues one run of every **other** enabled flow subscribed to that event key, with the node's input as the payload. The payload is checked against the trigger's declared type (text ≤ 2000 characters, number or boolean), exactly as for `POST /api/admin/flow-events/{key}`. The input then passes to the next node unchanged.
