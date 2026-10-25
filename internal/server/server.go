@@ -17,6 +17,7 @@ import (
 	"floweysales/internal/storage"
 	"floweysales/internal/tracker"
 	"floweysales/internal/trading"
+	"floweysales/internal/updates"
 )
 
 // SharedMarketConfig is the live asset configuration that the tick loop polls
@@ -128,6 +129,7 @@ func (c *SharedMarketConfig) Set(symbol string, provider market.Provider) {
 // Engine owns the HTTP mux and wires every endpoint group.
 type Engine struct {
 	authService      *identity.Service
+	updates          *updates.Service
 	authCookieSecure bool
 	authLimiter      authRateLimit
 	db               *storage.Database
@@ -239,6 +241,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, fi
 	e.registerFlowRoutes()
 	e.registerBlueprintRoutes()
 	e.registerRevisionRoutes()
+	e.registerUpdateRoutes()
 	e.registerUserspaceRoutes()
 	e.registerMCPTrackerRoutes()
 	e.registerStaticRoutes()
