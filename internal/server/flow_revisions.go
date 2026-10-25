@@ -199,7 +199,7 @@ func (e *Engine) registerRevisionRoutes() {
 			writePublishError(w, err, "Flow")
 			return
 		}
-		writeJSON(w, 200, map[string]any{"flow_id": id, "active_revision": revision})
+		writeJSON(w, 200, e.withAutomationGate(r.Context(), map[string]any{"flow_id": id, "active_revision": revision}, id))
 	})
 	e.mux.HandleFunc("GET /api/admin/flows/{id}/revisions", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAuthorized(w, r, "flows.read") {
@@ -267,7 +267,7 @@ func (e *Engine) registerRevisionRoutes() {
 			writeRevisionLookupError(w, err)
 			return
 		}
-		writeJSON(w, 200, map[string]any{"flow_id": id, "active_revision": revision})
+		writeJSON(w, 200, e.withAutomationGate(r.Context(), map[string]any{"flow_id": id, "active_revision": revision}, id))
 	})
 	e.mux.HandleFunc("POST /api/admin/flows/{id}/revisions/{rev}/restore", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAuthorized(w, r, "flows.write") {

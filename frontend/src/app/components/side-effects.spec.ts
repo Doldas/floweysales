@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  canDecide, capabilityManifest, decisionProblem, describeAudit, describeCapability, formatBytes, nodeCapability, sideEffectStatusLabel, sortForReview,
+  canDecide, capabilityManifest, decisionProblem, describeAudit, readinessHeadline, describeCapability, formatBytes, nodeCapability, sideEffectStatusLabel, sortForReview,
   type SideEffect,
 } from './side-effects.ts';
 
@@ -47,4 +47,12 @@ test('audit entries read as sentences', () => {
   assert.equal(describeAudit({ action: 'side_effect.decide', target_type: 'side_effect', target_id: '7' }), 'Decided side effect 7');
   assert.equal(describeAudit({ action: 'trigger.save', target_type: 'trigger', target_id: '' }), 'Saved trigger');
   assert.equal(describeAudit({ action: 'odd', target_type: 'x', target_id: '1' }), 'odd (x 1)');
+});
+
+test('readiness headlines distinguish gated, ready and automated flows', () => {
+  const r = (applies: boolean, ready: boolean) => ({ applies, ready, revision: 1, checks: [], side_effects: [] });
+  assert.match(readinessHeadline(r(false, true), true), /No side effects/);
+  assert.match(readinessHeadline(r(true, true), true), /^Ready: runs unattended/);
+  assert.match(readinessHeadline(r(true, false), true), /refused/);
+  assert.match(readinessHeadline(r(true, false), false), /Not ready to run unattended yet/);
 });
