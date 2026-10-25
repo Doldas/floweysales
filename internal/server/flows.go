@@ -359,6 +359,17 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		if from.Type == "agent" && edge.To == edge.From {
 			return g, nil, fmt.Errorf("cycle")
 		}
+		// Typed function pins: in:<pin> binds a function input, out:<pin>
+		// reads one function output. Pin names are checked against the
+		// function definition when the flow is saved or published.
+		if g.Version == 2 && (strings.HasPrefix(edge.ToPort, "in:") || strings.HasPrefix(edge.FromPort, "out:")) {
+			if err := validateFunctionPinEdge(edge, from, nodes[edge.To]); err != nil {
+				return g, nil, err
+			}
+			degrees[edge.To]++
+			next[edge.From] = append(next[edge.From], edge.To)
+			continue
+		}
 		if g.Version == 2 && strings.HasPrefix(edge.FromPort, "field:") && edge.ToPort == "input" {
 			property := strings.TrimPrefix(edge.FromPort, "field:")
 			if !flowVariablePattern.MatchString(property) {
@@ -1029,6 +1040,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 	results := []map[string]string{}
 	var stepStarted time.Time
 	var nodeInput string
+	var pinInputs map[string]string
 	var currentNode *flowNode
 	var nodeAttempts int
 	defer func() {
@@ -1123,7 +1135,14 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			}
 			var present bool
 			var inputErr error
-			if n.Type == "merge" {
+			pinInputs = nil
+			if n.Type == "function" && hasInputPins(g, n.ID) {
+				pinInputs, present, inputErr = flowV2PinInputs(g, n.ID, state)
+				if inputErr == nil && present {
+					raw, _ := json.Marshal(pinInputs)
+					previous = string(raw)
+				}
+			} else if n.Type == "merge" {
 				previous, present, inputErr = flowV2Merge(g, n.ID, state)
 			} else {
 				previous, present, inputErr = flowV2SourceInput(g, n.ID, state)
@@ -1284,6 +1303,18 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			definition, _, err := e.db.ResolveBlueprintFunction(ctx, n.FunctionID, n.FunctionRevision)
 			if err != nil {
 				return "", fmt.Errorf("function %d unavailable: %w", n.FunctionID, err)
+			}
+			if functionGraphVersion(definition) == 2 {
+				result, err := callFunctionV2(definition, pinInputs, previous)
+				if err != nil {
+					return "", fmt.Errorf("function %d: %w", n.FunctionID, err)
+				}
+				previous = result
+				record(map[string]string{"node": n.ID, "label": n.Label, "output": previous})
+				continue
+			}
+			if len(pinInputs) > 0 {
+				return "", fmt.Errorf("function %d has a single untyped input; it cannot take typed pins", n.FunctionID)
 			}
 			var g functionGraph
 			if err := json.Unmarshal(definition.Graph, &g); err != nil {

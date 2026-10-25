@@ -44,16 +44,15 @@ func (e *Engine) checkCallReferences(ctx context.Context, g flowGraph) error {
 				return err
 			}
 		case "function":
-			var err error
-			if n.FunctionRevision > 0 {
-				_, err = e.db.GetBlueprintFunctionRevision(ctx, n.FunctionID, n.FunctionRevision)
-			} else {
-				_, err = e.db.GetBlueprintFunction(ctx, n.FunctionID)
-			}
+			definition, _, err := e.db.ResolveBlueprintFunction(ctx, n.FunctionID, n.FunctionRevision)
 			if errors.Is(err, sql.ErrNoRows) {
 				return referenceError{fmt.Sprintf("node %s calls function %d%s, which does not exist", n.ID, n.FunctionID, revisionSuffix(n.FunctionRevision))}
 			}
 			if err != nil {
+				return err
+			}
+			// Pins are checked against the revision that will actually run.
+			if err := checkFunctionPins(g, n, definition); err != nil {
 				return err
 			}
 		}

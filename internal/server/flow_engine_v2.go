@@ -122,10 +122,14 @@ func flowV2JSONProperty(value, property string) (string, error) {
 }
 
 func flowV2EdgeValue(edge flowEdge, source string) (string, error) {
-	if !strings.HasPrefix(edge.FromPort, "field:") {
+	// out:<pin> reads one output of a function node's JSON result object.
+	property, ok := strings.CutPrefix(edge.FromPort, "field:")
+	if !ok {
+		property, ok = strings.CutPrefix(edge.FromPort, pinOutPrefix)
+	}
+	if !ok {
 		return source, nil
 	}
-	property := strings.TrimPrefix(edge.FromPort, "field:")
 	value, err := flowV2JSONProperty(source, property)
 	if err != nil {
 		return "", fmt.Errorf("edge %s to %s: %w", edge.From, edge.To, err)

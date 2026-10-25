@@ -21,6 +21,17 @@ The editor supports a searchable role-aware node picker, free positioning, zoom/
 
 To start, sign in and open **My Flows → New flow / Edit**. Add nodes with **+ Add node**, select a graph node to configure all fields in its floating tooltip, check **Graph validation**, then **Save flow** before **Run now**. Use **Run history → Inspect nodes** to view recorded steps, status-colored historical graph snapshots, duration and errors. Scheduling and typed event triggers require SYS_ADMIN.
 
+## Typed functions with several inputs and outputs
+
+A Blueprint function can declare up to 8 named, typed **input pins** and 8 **output pins** (`number`, `text` or `boolean`). In the function library choose **New typed function**, declare the pins, add internal Value, Operation and Branch nodes (and optional extra exits) and wire them with data wires (values between pins) and execution wires (order, or `true`/`false` from a branch). Pin renames and removals update the wires that use them. The server validates types, ports, cycles and that every exit provides every output (graph version 2); older single-input functions keep working unchanged.
+
+In a flow, the **Function** node of a typed function shows its pins on the canvas and in its settings:
+
+- **Inputs:** bind each declared input pin to an upstream node. Every input must be connected, and a node cannot mix typed pins with a plain input. A function with a single input can also take the ordinary connection.
+- **Outputs:** the function returns a JSON object keyed by output name with real JSON types (numbers and booleans are not turned into text). Route an output pin to a downstream node and that node receives only that value. Unrouted outputs are simply not used.
+- **Checks:** pin names and types are checked against the exact revision the node will call, both in the editor and when the flow is saved or published, so a revision that changes its pins can be caught before it breaks a run. Pins require graph version 2. Pinning a function node to a revision (see above) pins its pin layout too.
+- A node whose input pin is fed from a branch that was not taken is skipped like any other version 2 node.
+
 ## Flow-to-flow events (Emit Event)
 
 A SYS_ADMIN can add an **Emit Event** node (graph version 2) that names a custom trigger defined under *Function library & triggers*. When it runs, it queues one run of every **other** enabled flow subscribed to that event key, with the node's input as the payload. The payload is checked against the trigger's declared type (text ≤ 2000 characters, number or boolean), exactly as for `POST /api/admin/flow-events/{key}`. The input then passes to the next node unchanged.
