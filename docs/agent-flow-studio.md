@@ -21,6 +21,15 @@ The editor supports a searchable role-aware node picker, free positioning, zoom/
 
 To start, sign in and open **My Flows → New flow / Edit**. Add nodes with **+ Add node**, select a graph node to configure all fields in its floating tooltip, check **Graph validation**, then **Save flow** before **Run now**. Use **Run history → Inspect nodes** to view recorded steps, status-colored historical graph snapshots, duration and errors. Scheduling and typed event triggers require SYS_ADMIN.
 
+## Flow-to-flow events (Emit Event)
+
+A SYS_ADMIN can add an **Emit Event** node (graph version 2) that names a custom trigger defined under *Function library & triggers*. When it runs, it queues one run of every **other** enabled flow subscribed to that event key, with the node's input as the payload. The payload is checked against the trigger's declared type (text ≤ 2000 characters, number or boolean), exactly as for `POST /api/admin/flow-events/{key}`. The input then passes to the next node unchanged.
+
+- **Durable and exactly-once:** subscriber runs are inserted in one transaction through the durable queue (Liquibase 027). Each carries a key made of parent run, flow, node and subscriber. If the emitting run's worker is lost and the node runs again after resume, no subscriber is queued twice; the trace says how many were already queued.
+- **Loop protection:** a flow never triggers itself. Runs started by an emission carry their chain depth, and a run at depth 3 cannot emit further. One emission reaches at most 10 flows.
+- **Lineage:** Run History shows "triggered by run #N" on runs an emission started (`parent_run_id` in run listings).
+- Saving or publishing a flow that emits an undefined event is refused; the editor's graph validation flags it too.
+
 ## Durable run queue, checkpoints and dead-letter
 
 Every run (manual, scheduled, event or retry) is stored as **QUEUED** together with the graph snapshot it will execute (Liquibase change 025). Nothing is lost when workers are busy or the process restarts:

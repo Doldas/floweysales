@@ -218,7 +218,10 @@ func (e *Engine) runClaimedFlow(workerCtx context.Context, c *storage.ClaimedFlo
 			log.Printf("[Flows] Resume trace for run %d not saved: %v", c.RunID, err)
 		}
 	}
-	runCtx := context.WithValue(context.WithValue(context.WithValue(ctx, flowTraceRunKey{}, c.RunID), flowCheckpointKey{}, checkpointer), flowAttemptKey{}, c.Attempt)
+	runCtx := context.WithValue(ctx, flowTraceRunKey{}, c.RunID)
+	runCtx = context.WithValue(runCtx, flowCheckpointKey{}, checkpointer)
+	runCtx = context.WithValue(runCtx, flowAttemptKey{}, c.Attempt)
+	runCtx = context.WithValue(runCtx, flowEventDepthKey{}, c.EventDepth)
 	output, runErr := e.executeFlowNestedWithInput(runCtx, f, map[int64]bool{}, 0, c.Input)
 
 	switch {

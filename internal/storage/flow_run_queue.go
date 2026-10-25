@@ -39,6 +39,10 @@ type NewFlowRun struct {
 	Input    string
 	Revision *int
 	Graph    json.RawMessage
+	// Set for runs queued by an Emit Event node.
+	ParentRunID *int64
+	EventDepth  int
+	EmitKey     string
 }
 
 // FlowRunCheckpoint is executor state saved before node NextIndex of the run's order.
@@ -57,6 +61,7 @@ type ClaimedFlowRun struct {
 	Revision   *int
 	Graph      json.RawMessage
 	Attempt    int
+	EventDepth int
 	Checkpoint *FlowRunCheckpoint
 }
 
@@ -65,34 +70,89 @@ type execer interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-func insertQueuedRun(ctx context.Context, tx execer, r NewFlowRun) (int64, error) {
-	if len(r.Graph) == 0 || len(r.Graph) > 16000 || !json.Valid(r.Graph) {
-		return 0, fmt.Errorf("invalid flow snapshot")
-	}
+func queueCapacity(ctx context.Context, tx execer, adding int) error {
 	var queued int
 	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM agent_flow_runs WHERE status='QUEUED'").Scan(&queued); err != nil {
+		return err
+	}
+	if queued+adding > MaxQueuedRuns {
+		return ErrFlowQueueFull
+	}
+	return nil
+}
+
+func insertQueuedRun(ctx context.Context, tx execer, r NewFlowRun) (int64, error) {
+	if err := queueCapacity(ctx, tx, 1); err != nil {
 		return 0, err
 	}
-	if queued >= MaxQueuedRuns {
-		return 0, ErrFlowQueueFull
+	id, _, err := insertRunRow(ctx, tx, r)
+	return id, err
+}
+
+// insertRunRow inserts the run and its snapshot. A run whose EmitKey was
+// already used is not inserted again; inserted reports which happened.
+func insertRunRow(ctx context.Context, tx execer, r NewFlowRun) (id int64, inserted bool, err error) {
+	if len(r.Graph) == 0 || len(r.Graph) > 16000 || !json.Valid(r.Graph) {
+		return 0, false, fmt.Errorf("invalid flow snapshot")
 	}
-	var input any
+	var input, emitKey any
 	if r.Input != "" {
 		input = r.Input
 	}
-	res, err := tx.ExecContext(ctx, `INSERT INTO agent_flow_runs(flow_id,trigger_type,status,flow_revision,input_text,queued_at,available_at,max_attempts)
-		VALUES(?,?,'QUEUED',?,?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6),?)`, r.FlowID, r.Trigger, r.Revision, input, DefaultMaxClaims)
-	if err != nil {
-		return 0, err
+	if r.EmitKey != "" {
+		emitKey = r.EmitKey
 	}
-	id, err := res.LastInsertId()
+	// The no-op update makes a reused emit_key affect 0 rows instead of failing.
+	res, err := tx.ExecContext(ctx, `INSERT INTO agent_flow_runs(flow_id,trigger_type,status,flow_revision,input_text,queued_at,available_at,max_attempts,
+		parent_run_id,event_depth,emit_key)
+		VALUES(?,?,'QUEUED',?,?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6),?,?,?,?) ON DUPLICATE KEY UPDATE id=id`,
+		r.FlowID, r.Trigger, r.Revision, input, DefaultMaxClaims, r.ParentRunID, r.EventDepth, emitKey)
 	if err != nil {
-		return 0, err
+		return 0, false, err
+	}
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		return 0, false, err
+	}
+	id, err = res.LastInsertId()
+	if err != nil {
+		return 0, false, err
 	}
 	if _, err := tx.ExecContext(ctx, "INSERT INTO agent_flow_run_snapshots(run_id,graph_json) VALUES(?,?)", id, string(r.Graph)); err != nil {
-		return 0, err
+		return 0, false, err
 	}
-	return id, nil
+	return id, true, nil
+}
+
+// EnqueueEmittedAgentFlowRuns queues the runs one Emit Event node triggers,
+// atomically. Each run needs an EmitKey; runs whose key was already used
+// (the emit node ran again after its worker was lost) are skipped and
+// counted as duplicates, so an event is queued exactly once per subscriber.
+func (d *Database) EnqueueEmittedAgentFlowRuns(ctx context.Context, runs []NewFlowRun) (queued, duplicates int, err error) {
+	for _, r := range runs {
+		if r.EmitKey == "" || r.ParentRunID == nil {
+			return 0, 0, fmt.Errorf("emitted runs need a parent run and emit key")
+		}
+	}
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer tx.Rollback()
+	if err := queueCapacity(ctx, tx, len(runs)); err != nil {
+		return 0, 0, err
+	}
+	for _, r := range runs {
+		_, inserted, err := insertRunRow(ctx, tx, r)
+		if err != nil {
+			return 0, 0, err
+		}
+		if inserted {
+			queued++
+		} else {
+			duplicates++
+		}
+	}
+	return queued, duplicates, tx.Commit()
 }
 
 // EnqueueAgentFlowRun stores a run and its graph snapshot atomically.
@@ -167,13 +227,13 @@ func (d *Database) ClaimAgentFlowRun(ctx context.Context, owner string, lease ti
 	c := &ClaimedFlowRun{RunID: id}
 	var name, graph, state sql.NullString
 	var next sql.NullInt64
-	err = tx.QueryRowContext(ctx, `SELECT r.flow_id,f.name,r.trigger_type,COALESCE(r.input_text,''),r.flow_revision,r.attempts,
+	err = tx.QueryRowContext(ctx, `SELECT r.flow_id,f.name,r.trigger_type,COALESCE(r.input_text,''),r.flow_revision,r.attempts,r.event_depth,
 		s.graph_json,cp.next_index,cp.state_json
 		FROM agent_flow_runs r
 		LEFT JOIN agent_flows f ON f.id=r.flow_id
 		LEFT JOIN agent_flow_run_snapshots s ON s.run_id=r.id
 		LEFT JOIN agent_flow_run_checkpoints cp ON cp.run_id=r.id
-		WHERE r.id=?`, id).Scan(&c.FlowID, &name, &c.Trigger, &c.Input, &c.Revision, &c.Attempt, &graph, &next, &state)
+		WHERE r.id=?`, id).Scan(&c.FlowID, &name, &c.Trigger, &c.Input, &c.Revision, &c.Attempt, &c.EventDepth, &graph, &next, &state)
 	if err != nil {
 		return nil, err
 	}
