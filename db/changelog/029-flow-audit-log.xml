@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="029-flow-audit-log" author="floweysales" dbms="mysql">
+  <createTable tableName="flow_audit_log" remarks="Who changed or triggered flows, functions, triggers, events and approvals, and when">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="actor_id" type="BIGINT" remarks="No foreign key: entries outlive deleted accounts"/>
+   <column name="actor_email" type="VARCHAR(254)"/>
+   <column name="action" type="VARCHAR(64)" remarks="e.g. flow.update, flow.publish, run.cancel, side_effect.decide"><constraints nullable="false"/></column>
+   <column name="target_type" type="VARCHAR(32)"><constraints nullable="false"/></column>
+   <column name="target_id" type="VARCHAR(128)"/>
+   <column name="route" type="VARCHAR(160)" remarks="Matched API route pattern"><constraints nullable="false"/></column>
+   <column name="status_code" type="INT"><constraints nullable="false"/></column>
+   <column name="request_sha256" type="CHAR(64)" remarks="Digest of the request body; the body itself is not stored"/>
+   <column name="summary" type="VARCHAR(500)"/>
+   <column name="created_at" type="DATETIME(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <createIndex tableName="flow_audit_log" indexName="idx_flow_audit_target">
+   <column name="target_type"/>
+   <column name="target_id"/>
+   <column name="id"/>
+  </createIndex>
+  <createIndex tableName="flow_audit_log" indexName="idx_flow_audit_action">
+   <column name="action"/>
+   <column name="id"/>
+  </createIndex>
+  <rollback>
+   <dropTable tableName="flow_audit_log"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

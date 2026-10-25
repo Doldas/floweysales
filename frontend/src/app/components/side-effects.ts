@@ -73,3 +73,21 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
 }
+
+export interface AuditEntry {
+  id: number; actor_email: string; action: string; target_type: string; target_id: string;
+  route: string; status_code: number; request_sha256?: string; summary: string; created_at: string;
+}
+
+const auditVerbs: Record<string, string> = {
+  create: 'Created', save: 'Saved', update: 'Updated', delete: 'Deleted', publish: 'Published', activate_revision: 'Activated a revision of',
+  restore_revision: 'Restored a revision into the draft of', run: 'Started a run of', cancel: 'Cancelled', retry: 'Retried', send: 'Sent', decide: 'Decided',
+};
+
+/** "flow.publish" on flow 4 → "Published flow 4". */
+export function describeAudit(entry: Pick<AuditEntry, 'action' | 'target_type' | 'target_id'>): string {
+  const [kind, verb] = entry.action.split('.');
+  const target = entry.target_id ? ` ${entry.target_id}` : '';
+  if (!verb || !auditVerbs[verb]) return `${entry.action} (${entry.target_type}${target})`;
+  return `${auditVerbs[verb]} ${kind.replace('_', ' ')}${target}`;
+}
