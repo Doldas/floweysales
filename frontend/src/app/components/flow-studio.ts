@@ -2,6 +2,8 @@ import { CanvasGestures } from './canvas-gestures';
 import { HostListener, Component, ChangeDetectionStrategy, signal, effect } from '@angular/core';
 import { MarkdownRunOutputComponent } from './markdown-run-output';
 import { UserspaceFilesComponent } from './userspace-files';
+import { FlowSideEffectsComponent } from './flow-side-effects';
+import { capabilityManifest, describeCapability, nodeCapability } from './side-effects';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -11,14 +13,14 @@ import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angu
 import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 import { AuthState } from '../auth.service';
-import { canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history';
+import { canCancelRun, canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history';
 import { listOverviewFlows } from './flow-overview';
 import { semanticIssues } from './flow-semantics';
 import { nearestPort, portPoints, wireFromDrag, edgeKey, wirePath, type PortPoint } from './wire-drag';
 import { bindInputPin, declaredPins, mixesPinAndPlainInputs, pinBindings, pinEdgeProblem, pinOffset, routeOutputPin, unboundInputPins } from './function-pins';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'; label:string; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'; label:string; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FunctionDef { id:number; name:string; graph?:unknown }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
@@ -49,7 +51,7 @@ export class ConfirmDeleteFlowDialog {
 
 @Component({
  selector:'fse-flow-studio', standalone:true,
- imports:[CommonModule,FormsModule,MatButtonModule,MatCardModule,MatIconModule,MatDialogModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,UserspaceFilesComponent],
+ imports:[CommonModule,FormsModule,MatButtonModule,MatCardModule,MatIconModule,MatDialogModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,UserspaceFilesComponent,FlowSideEffectsComponent],
  changeDetection:ChangeDetectionStrategy.Default,
  template:`
  <mat-card class="flow-studio glass">
@@ -64,6 +66,7 @@ export class ConfirmDeleteFlowDialog {
      }
      <button type="button" role="tab" [attr.aria-selected]="studioTab()==='files'" [class.selected]="studioTab()==='files'" (click)="studioTab.set('files')">My Workspace</button>
      <button type="button" role="tab" [attr.aria-selected]="studioTab()==='runs'" [class.selected]="studioTab()==='runs'" (click)="studioTab.set('runs')">Run history</button>
+     <button type="button" role="tab" [attr.aria-selected]="studioTab()==='approvals'" [class.selected]="studioTab()==='approvals'" (click)="studioTab.set('approvals')">Approvals &amp; audit</button>
    </nav>
    @if(studioTab()==='overview'){
     <section class="flows-overview" aria-label="My Flows">
@@ -239,6 +242,14 @@ export class ConfirmDeleteFlowDialog {
            <label>Operand <input [ngModel]="n.value||''" (ngModelChange)="updateUtility('value',$event)" maxlength="1000" [placeholder]="n.transform==='replace'?'find=>replacement':'Text to add'"></label>
          }
        }
+       @if(nodeCapability(n);as cap){
+        <fieldset class="capability-box">
+         <legend>Side effect · {{cap.capability}}</legend>
+         <p class="muted">{{describeCapability(cap.capability,cap.target)}}. This is the only change the node can make, and every run that makes it is recorded under Approvals &amp; audit.</p>
+         <label class="checkbox-row"><input type="checkbox" [checked]="n.approval==='required'" (change)="setApproval($any($event.target).checked)"> Require SYS_ADMIN approval before this runs</label>
+         @if(n.approval==='required'){<p class="muted">The run pauses here and resumes only after the exact content is approved. Unapproved requests expire after 7 days. Not available inside flows used as a Call Flow.</p>}
+        </fieldset>
+       }
        @if(n.type==='emit_event'){
         <label>Event to emit <select [ngModel]="n.event||''" (ngModelChange)="updateUtility('event',$event)">
           <option value="">Choose a custom trigger</option>
@@ -346,6 +357,7 @@ export class ConfirmDeleteFlowDialog {
    </div>
    
    </div>
+   @if(sideEffects().length){<section class="capability-summary" aria-label="Side effects this flow can perform"><strong>Side effects</strong><ul>@for(use of sideEffects();track use.node){<li><button type="button" (click)="openQuickNode(use.node)">{{use.label}}</button>: {{describeCapability(use.capability,use.target)}}{{use.approvalRequired?' · approval required':' · runs without approval'}}</li>}</ul></section>}
    <section class="graph-validation" aria-label="Flow graph validation">
      <header><strong>Graph validation</strong><span role="status">{{graphIssues().length?graphIssues().length+' issues':'No structural issues'}}</span></header>
      @if(graphIssues().length){<p>Fix these issues before saving and running:</p><ul>
@@ -391,11 +403,12 @@ export class ConfirmDeleteFlowDialog {
      <fse-blueprint-library (functionsChanged)="loadFunctions()"></fse-blueprint-library>
    }
    @if (studioTab()==='files') { <fse-userspace-files></fse-userspace-files> }
+   @if (studioTab()==='approvals') { <fse-flow-side-effects></fse-flow-side-effects> }
    @if (studioTab()==='runs') {
    <div class="run-history-heading"><h3>Recent runs</h3>
      <label>Flow <select [ngModel]="historyFlowId()" (ngModelChange)="selectHistoryFlow(+$event)" aria-label="Select flow for history"><option [ngValue]="0">Select a flow…</option>@for(f of flows();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
      <label>Find run <input [ngModel]="historySearch()" (ngModelChange)="historySearch.set($event)" placeholder="Run ID or trigger"></label>
-     <label>Status <select [ngModel]="historyStatusFilter()" (ngModelChange)="historyStatusFilter.set($event)"><option value="all">All statuses</option><option value="SUCCESS">Success</option><option value="FAILED">Failed</option><option value="QUEUED">Queued</option><option value="RUNNING">Running</option><option value="CANCELLED">Cancelled</option><option value="DEAD">Dead-lettered</option></select></label>
+     <label>Status <select [ngModel]="historyStatusFilter()" (ngModelChange)="historyStatusFilter.set($event)"><option value="all">All statuses</option><option value="SUCCESS">Success</option><option value="FAILED">Failed</option><option value="QUEUED">Queued</option><option value="RUNNING">Running</option><option value="AWAITING_APPROVAL">Awaiting approval</option><option value="CANCELLED">Cancelled</option><option value="DEAD">Dead-lettered</option></select></label>
      <label>Output view <select [ngModel]="logView()" (ngModelChange)="logView.set($event)">
        <option value="markdown">Markdown (default)</option><option value="raw">RAW</option><option value="json">Structured JSON</option>
      </select></label>
@@ -413,11 +426,11 @@ export class ConfirmDeleteFlowDialog {
     @if(historyFlowId()&&runs().length&&!filteredRuns().length){<p class="muted">No runs match your filters.</p>}
    @for(run of filteredRuns();track run.id){
     <details class="flow-run">
-      <summary><span class="run-summary-status" [class.run-success]="run.status==='SUCCESS'" [class.run-failed]="run.status==='FAILED'||run.status==='DEAD'" [class.run-active]="isActiveRun(run.status)">{{runStatusLabel(run.status)}}</span> #{{run.id}} · {{run.trigger}} · {{runRevisionLabel(run.flow_revision)}}@if(runAttemptLabel(run.attempts,run.max_attempts);as attempt){ · {{attempt}}} <span class="muted">· {{displayRunTime(run.status==='QUEUED'?run.queued_at:run.started_at)}} · {{displayRunDuration(run)}}</span></summary>
+      <summary><span class="run-summary-status" [class.run-success]="run.status==='SUCCESS'" [class.run-failed]="run.status==='FAILED'||run.status==='DEAD'" [class.run-active]="canCancelRun(run.status)">{{runStatusLabel(run.status)}}</span> #{{run.id}} · {{run.trigger}} · {{runRevisionLabel(run.flow_revision)}}@if(runAttemptLabel(run.attempts,run.max_attempts);as attempt){ · {{attempt}}} <span class="muted">· {{displayRunTime(run.status==='QUEUED'?run.queued_at:run.started_at)}} · {{displayRunDuration(run)}}</span></summary>
       <div class="run-diagnostics">
        @if(run.queued_at){<span><strong>Queued:</strong> {{displayRunTime(run.queued_at)}}</span>}
        <span><strong>Started:</strong> {{run.status==='QUEUED'&&!run.attempts?'Waiting for a worker':displayRunTime(run.started_at)}}</span>
-       <span><strong>Finished:</strong> {{isActiveRun(run.status)?'In progress':displayRunTime(run.finished_at)}}</span>
+       <span><strong>Finished:</strong> {{run.status==='AWAITING_APPROVAL'?'Waiting for approval':isActiveRun(run.status)?'In progress':displayRunTime(run.finished_at)}}</span>
        @if(run.attempts){<span><strong>Worker attempts:</strong> {{run.attempts}} of {{run.max_attempts}}</span>}
        <span><strong>Duration:</strong> {{displayRunDuration(run)}}</span>
        <span><strong>Trigger:</strong> {{run.trigger}}@if(run.parent_run_id){ · triggered by run #{{run.parent_run_id}}}</span>
@@ -435,7 +448,8 @@ export class ConfirmDeleteFlowDialog {
         }
        </div>
       }
-      @if(isActiveRun(run.status)){<button mat-stroked-button color="warn" (click)="cancelRun(run.id)" [disabled]="busy()">{{run.status==='QUEUED'?'Remove from queue':'Cancel run'}}</button>}
+      @if(run.status==='AWAITING_APPROVAL'){<button mat-stroked-button type="button" (click)="studioTab.set('approvals')">Review in Approvals &amp; audit</button>}
+      @if(canCancelRun(run.status)){<button mat-stroked-button color="warn" (click)="cancelRun(run.id)" [disabled]="busy()">{{run.status==='QUEUED'?'Remove from queue':'Cancel run'}}</button>}
       @if(canRetryRun(run.status)){<button mat-stroked-button (click)="retryRun(run.id)" [disabled]="busy()" title="Queue this run again; it resumes from its last checkpoint">Retry from checkpoint</button>}
       <button mat-stroked-button (click)="showRunSteps(run.id)">{{traceRunId()===run.id?'Hide node trace':'Inspect nodes'}}</button>
       @if(traceRunId()===run.id){
@@ -589,6 +603,9 @@ export class ConfirmDeleteFlowDialog {
  .inspector-fields{display:flex;flex-direction:column;gap:12px}
  .field-mapper{display:flex;flex-direction:column;gap:8px;border:1px solid #4b718b;border-radius:8px;padding:10px}
  .field-mapper strong{font-size:13px}
+ .capability-box{border:1px solid #ae8c67;border-radius:8px;padding:8px 10px;margin:6px 0}.capability-box legend{color:#ffe19a;font-weight:700;padding:0 4px}
+ .checkbox-row{display:flex!important;gap:8px;align-items:center}
+ .capability-summary{border:1px solid #50738e;border-radius:8px;padding:10px;margin:10px 0}.capability-summary ul{margin:6px 0 0;padding-left:18px}.capability-summary li{overflow-wrap:anywhere}.capability-summary button{background:none;border:0;text-decoration:underline;color:#aedfff;cursor:pointer;font:inherit;padding:0}
  .mapped-edge{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:12px;overflow-wrap:anywhere}
  .mapped-edge button{color:#bce3ff;background:#1b3850;border:1px solid #527b99;border-radius:5px;padding:5px}
  .inspector-fields label{min-width:0;width:100%;flex:auto}
@@ -780,7 +797,7 @@ export class FlowStudioComponent {
     switch(id){case 0:this.addAgent();break;case 1:this.addV2Node('condition');break;case 2:this.addV2Node('merge');break;case 3:this.addV2Node('json_get');break;case 4:this.addPureLoop();break;case 5:this.addHTTPGet();break;case 6:this.addWebCrawler();break;case 7:this.addWebSearch();break;case 8:this.addOutput();break;case 9:this.addSubflow();break;case 10:this.addConstant();break;case 11:this.addFunctionCall();break;case 12:this.addUtility('save_result');break;case 13:this.addUtility('load_result');break;case 14:this.addUtility('transform');break;case 15:this.addUtility('workspace_read');break;case 16:this.addUtility('workspace_write');break;case 17:this.addEmitEvent();break;default:return;}
     this.nodePickerOpen.set(false);
   }
-  readonly studioTab=signal<'overview'|'editor'|'library'|'runs'|'files'>('overview');
+  readonly studioTab=signal<'overview'|'editor'|'library'|'runs'|'files'|'approvals'>('overview');
   readonly flowSearch=signal('');readonly flowFilter=signal('all');readonly flowSort=signal('name');
   readonly listedFlows=()=>{
     return listOverviewFlows(this.flows(),this.flowSearch(),this.flowFilter(),this.flowSort());
@@ -1153,6 +1170,10 @@ export class FlowStudioComponent {
    this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type,label,variable:'summary',transform:'trim',content_type:'text/plain',value:type==='workspace_read'||type==='workspace_write'?'/research/summary.md':'',x:260+(count%4)*140,y:40+Math.floor(count/4)*100}]}));
    this.chosen.set(id);
  }
+ readonly nodeCapability=nodeCapability;
+ readonly describeCapability=describeCapability;
+ readonly sideEffects=()=>capabilityManifest(this.graph().nodes);
+ setApproval(required:boolean){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>{if(n.id!==this.chosen())return n;const {approval,...rest}=n;return required?{...rest,approval:'required' as const}:rest})}))}
  updateUtility(field:'variable'|'transform'|'value'|'content_type'|'value_type'|'event',value:string){
    this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,[field]:value}:n)}));
  }
@@ -1249,6 +1270,7 @@ export class FlowStudioComponent {
   }catch(e){this.message.set(String(e))}
  }
  readonly isActiveRun=isActiveRun;
+ readonly canCancelRun=canCancelRun;
  readonly canRetryRun=canRetryRun;
  readonly runStatusLabel=runStatusLabel;
  readonly runAttemptLabel=runAttemptLabel;

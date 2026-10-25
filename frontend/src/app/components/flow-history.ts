@@ -44,6 +44,11 @@ export function isActiveRun(status: string): boolean {
   return status === 'QUEUED' || status === 'RUNNING';
 }
 
+/** Runs that have not finished can be cancelled, including runs parked until a side effect is approved. */
+export function canCancelRun(status: string): boolean {
+  return isActiveRun(status) || status === 'AWAITING_APPROVAL';
+}
+
 /** FAILED and dead-lettered (DEAD) runs can be retried from their last checkpoint. */
 export function canRetryRun(status: string): boolean {
   return status === 'FAILED' || status === 'DEAD';
@@ -54,6 +59,7 @@ export function runStatusLabel(status: string): string {
   switch (status) {
     case 'QUEUED': return 'Queued';
     case 'RUNNING': return 'Running';
+    case 'AWAITING_APPROVAL': return 'Awaiting approval';
     case 'SUCCESS': return 'Success';
     case 'FAILED': return 'Failed';
     case 'CANCELLED': return 'Cancelled';

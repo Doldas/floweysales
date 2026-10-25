@@ -44,6 +44,7 @@ type flowNode struct {
 	Operator         string  `json:"operator,omitempty"`
 	Property         string  `json:"property,omitempty"`
 	Event            string  `json:"event,omitempty"`
+	Approval         string  `json:"approval,omitempty"`
 	X                float64 `json:"x"`
 	Y                float64 `json:"y"`
 }
@@ -270,6 +271,9 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 			if n.Type == "workspace_write" && !allowedUserspaceType(n.ContentType) {
 				return g, nil, fmt.Errorf("unsupported workspace file format")
 			}
+		}
+		if err := validateFlowApproval(n); err != nil {
+			return g, nil, err
 		}
 		if n.Event != "" && n.Type != "emit_event" {
 			return g, nil, fmt.Errorf("only Emit Event nodes name an event")
@@ -1193,7 +1197,9 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 		}
 
 		if n.Type == "emit_event" {
-			summary, err := e.emitFlowEvent(ctx, f.ID, n, previous)
+			summary, err := e.performSideEffect(ctx, f, n, depth, previous, "", func(payload string) (string, error) {
+				return e.emitFlowEvent(ctx, f.ID, n, payload)
+			})
 			if err != nil {
 				return "", fmt.Errorf("emit node %s: %w", n.ID, err)
 			}
@@ -1258,7 +1264,10 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				if mime == "" {
 					mime = "text/plain"
 				}
-				if err := e.db.WriteUserspaceFile(ctx, workspaceOwner, n.Value, mime, []byte(previous)); err != nil {
+				owner := workspaceOwner
+				if _, err := e.performSideEffect(ctx, f, n, depth, previous, mime, func(payload string) (string, error) {
+					return "", e.db.WriteUserspaceFile(ctx, owner, n.Value, mime, []byte(payload))
+				}); err != nil {
 					return "", fmt.Errorf("workspace write %s: %w", n.Value, err)
 				}
 			} else {
