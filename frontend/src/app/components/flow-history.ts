@@ -38,3 +38,35 @@ export function pushHistorySnapshot(stack: readonly string[], snapshot: string, 
   const keep = Math.max(0, limit - 1);
   return [...(keep > 0 ? stack.slice(-keep) : []), snapshot];
 }
+
+/** Runs waiting in the durable queue or executing; History keeps refreshing while any exist. */
+export function isActiveRun(status: string): boolean {
+  return status === 'QUEUED' || status === 'RUNNING';
+}
+
+/** FAILED and dead-lettered (DEAD) runs can be retried from their last checkpoint. */
+export function canRetryRun(status: string): boolean {
+  return status === 'FAILED' || status === 'DEAD';
+}
+
+/** Readable run status; DEAD runs exhausted their worker claims. */
+export function runStatusLabel(status: string): string {
+  switch (status) {
+    case 'QUEUED': return 'Queued';
+    case 'RUNNING': return 'Running';
+    case 'SUCCESS': return 'Success';
+    case 'FAILED': return 'Failed';
+    case 'CANCELLED': return 'Cancelled';
+    case 'DEAD': return 'Dead-lettered';
+  }
+  return status;
+}
+
+/**
+ * Describes worker claims. A first attempt needs no label; later attempts
+ * resumed from a checkpoint after the previous worker was lost.
+ */
+export function runAttemptLabel(attempts: number | undefined, maxAttempts: number | undefined): string {
+  if (!attempts || attempts <= 1) return '';
+  return maxAttempts ? `attempt ${attempts} of ${maxAttempts} (resumed from checkpoint)` : `attempt ${attempts} (resumed from checkpoint)`;
+}

@@ -164,7 +164,8 @@ type Engine struct {
 	tradingMu      sync.Mutex
 	tradingCfg     trading.Config
 	matchMu        sync.Mutex
-	flowSlots      chan struct{}
+	flowWorkerID   string
+	flowWake       chan struct{}
 	flowStop       context.CancelFunc
 	flowRunsMu     sync.Mutex
 	flowRunCancels map[int64]context.CancelFunc
@@ -191,7 +192,8 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, fi
 		trackerCfg:      trackerCfg,
 		webFS:           webFS,
 		hub:             newSSEHub(),
-		flowSlots:       make(chan struct{}, 2),
+		flowWorkerID:    newFlowWorkerID(),
+		flowWake:        make(chan struct{}, 1),
 		flowRunCancels:  make(map[int64]context.CancelFunc),
 		mux:             http.NewServeMux(),
 		historyCache:    make(map[string]historyCacheEntry),
@@ -331,6 +333,9 @@ func (e *Engine) Start(host, port string) error {
 	flowCtx, flowCancel := context.WithCancel(context.Background())
 	e.flowStop = flowCancel
 	go e.runFlowScheduler(flowCtx)
+	for i := 0; i < flowWorkerCount; i++ {
+		go e.runFlowWorker(flowCtx)
+	}
 
 	go func() {
 		if err := e.httpSrv.Serve(ln); err != nil && err != http.ErrServerClosed {

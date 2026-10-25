@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="025-flow-run-queue" author="floweysales" dbms="mysql">
+  <addColumn tableName="agent_flow_runs">
+   <column name="input_text" type="TEXT" remarks="Trigger input (event payload) the run executes with"/>
+   <column name="queued_at" type="DATETIME(6)" remarks="When the run entered the queue; NULL for runs before the durable queue"/>
+   <column name="available_at" type="DATETIME(6)" remarks="Earliest time a worker may claim a QUEUED run (retry backoff)"/>
+   <column name="attempts" type="INT" defaultValueNumeric="0" remarks="Worker claims so far; each claim after the first resumes from the checkpoint">
+    <constraints nullable="false"/>
+   </column>
+   <column name="max_attempts" type="INT" defaultValueNumeric="3" remarks="Claims allowed before a run whose worker keeps disappearing is dead-lettered">
+    <constraints nullable="false"/>
+   </column>
+   <column name="lease_owner" type="VARCHAR(64)" remarks="Worker currently executing the run"/>
+   <column name="lease_expires_at" type="DATETIME(6)" remarks="RUNNING runs past this instant lost their worker and are recovered"/>
+  </addColumn>
+  <createIndex tableName="agent_flow_runs" indexName="idx_agent_flow_runs_queue">
+   <column name="status"/>
+   <column name="available_at"/>
+  </createIndex>
+  <createTable tableName="agent_flow_run_checkpoints" remarks="Executor state saved before each top-level node, used to resume a run">
+   <column name="run_id" type="BIGINT"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="next_index" type="INT"><constraints nullable="false"/></column>
+   <column name="state_json" type="LONGTEXT"><constraints nullable="false"/></column>
+   <column name="updated_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <addForeignKeyConstraint baseTableName="agent_flow_run_checkpoints" baseColumnNames="run_id"
+   referencedTableName="agent_flow_runs" referencedColumnNames="id" constraintName="fk_flow_checkpoint_run" onDelete="CASCADE"/>
+  <rollback>
+   <dropTable tableName="agent_flow_run_checkpoints"/>
+   <dropIndex tableName="agent_flow_runs" indexName="idx_agent_flow_runs_queue"/>
+   <dropColumn tableName="agent_flow_runs" columnName="lease_expires_at"/>
+   <dropColumn tableName="agent_flow_runs" columnName="lease_owner"/>
+   <dropColumn tableName="agent_flow_runs" columnName="max_attempts"/>
+   <dropColumn tableName="agent_flow_runs" columnName="attempts"/>
+   <dropColumn tableName="agent_flow_runs" columnName="available_at"/>
+   <dropColumn tableName="agent_flow_runs" columnName="queued_at"/>
+   <dropColumn tableName="agent_flow_runs" columnName="input_text"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

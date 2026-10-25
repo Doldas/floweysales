@@ -128,7 +128,7 @@ func (e *Engine) allowedUserAPI(r *http.Request, u identity.User) bool {
 		if method == http.MethodGet {
 			permission = "flows.read"
 		}
-		if strings.HasSuffix(path, "/run") || strings.HasSuffix(path, "/cancel") {
+		if strings.HasSuffix(path, "/run") || strings.HasSuffix(path, "/cancel") || strings.HasSuffix(path, "/retry") {
 			permission = "flows.run"
 		}
 		if strings.HasSuffix(path, "/preview") {
