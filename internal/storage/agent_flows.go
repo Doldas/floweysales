@@ -232,3 +232,19 @@ func (d *Database) AgentFlowOwnedBy(ctx context.Context, flowID, userID int64) (
 	err := d.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM agent_flows WHERE id=? AND created_by=?", flowID, userID).Scan(&count)
 	return count == 1, err
 }
+
+// HasSuccessfulManualRun reports whether revision of the flow has completed a
+// manually started run, the supervised trial the readiness gate asks for.
+func (d *Database) HasSuccessfulManualRun(ctx context.Context, flowID int64, revision int) (bool, error) {
+	var count int
+	err := d.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM agent_flow_runs WHERE flow_id=? AND flow_revision=? AND trigger_type='manual' AND status='SUCCESS'`,
+		flowID, revision).Scan(&count)
+	return count > 0, err
+}
+
+// PauseAgentFlowAutomation disables a flow's schedule and event subscription
+// without touching its draft or revisions.
+func (d *Database) PauseAgentFlowAutomation(ctx context.Context, flowID int64) error {
+	_, err := d.db.ExecContext(ctx, "UPDATE agent_flows SET enabled=FALSE WHERE id=?", flowID)
+	return err
+}

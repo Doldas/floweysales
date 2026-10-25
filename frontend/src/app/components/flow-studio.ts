@@ -3,7 +3,7 @@ import { HostListener, Component, ChangeDetectionStrategy, signal, effect } from
 import { MarkdownRunOutputComponent } from './markdown-run-output';
 import { UserspaceFilesComponent } from './userspace-files';
 import { FlowSideEffectsComponent } from './flow-side-effects';
-import { capabilityManifest, describeCapability, nodeCapability } from './side-effects';
+import { capabilityManifest, describeCapability, nodeCapability, readinessHeadline, type Readiness } from './side-effects';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -357,6 +357,7 @@ export class ConfirmDeleteFlowDialog {
    </div>
    
    </div>
+   @if(readiness();as r){@if(r.applies||automated()){<section class="readiness-panel" [class.readiness-ok]="r.ready" aria-label="Production readiness"><header><strong>Production readiness</strong> <button type="button" (click)="loadReadiness()" aria-label="Re-check production readiness">Re-check</button></header><p role="status">{{readinessHeadline(r,automated())}}</p>@if(r.applies){<ul>@for(c of r.checks;track c.id){<li [class.check-ok]="c.ok"><span aria-hidden="true">{{c.ok?'✓':'✗'}}</span> {{c.message}}</li>}</ul>}</section>}}
    @if(sideEffects().length){<section class="capability-summary" aria-label="Side effects this flow can perform"><strong>Side effects</strong><ul>@for(use of sideEffects();track use.node){<li><button type="button" (click)="openQuickNode(use.node)">{{use.label}}</button>: {{describeCapability(use.capability,use.target)}}{{use.approvalRequired?' · approval required':' · runs without approval'}}</li>}</ul></section>}
    <section class="graph-validation" aria-label="Flow graph validation">
      <header><strong>Graph validation</strong><span role="status">{{graphIssues().length?graphIssues().length+' issues':'No structural issues'}}</span></header>
@@ -603,6 +604,9 @@ export class ConfirmDeleteFlowDialog {
  .inspector-fields{display:flex;flex-direction:column;gap:12px}
  .field-mapper{display:flex;flex-direction:column;gap:8px;border:1px solid #4b718b;border-radius:8px;padding:10px}
  .field-mapper strong{font-size:13px}
+ .readiness-panel{border:1px solid #ae8c67;border-radius:8px;padding:10px;margin:10px 0}.readiness-panel.readiness-ok{border-color:#3f9a78}
+ .readiness-panel header{display:flex;justify-content:space-between;gap:8px;align-items:center}.readiness-panel header button{background:#203a53;color:#e5f3ff;border:1px solid #527b99;border-radius:5px;padding:4px 8px;cursor:pointer}
+ .readiness-panel p{margin:6px 0}.readiness-panel ul{list-style:none;margin:0;padding:0}.readiness-panel li{color:#ffd9c2;overflow-wrap:anywhere;margin:3px 0}.readiness-panel li.check-ok{color:#bff0dc}
  .capability-box{border:1px solid #ae8c67;border-radius:8px;padding:8px 10px;margin:6px 0}.capability-box legend{color:#ffe19a;font-weight:700;padding:0 4px}
  .checkbox-row{display:flex!important;gap:8px;align-items:center}
  .capability-summary{border:1px solid #50738e;border-radius:8px;padding:10px;margin:10px 0}.capability-summary ul{margin:6px 0 0;padding-left:18px}.capability-summary li{overflow-wrap:anywhere}.capability-summary button{background:none;border:0;text-decoration:underline;color:#aedfff;cursor:pointer;font:inherit;padding:0}
@@ -1085,8 +1089,26 @@ export class FlowStudioComponent {
  async loadRevisions(){
   const id=this.selectedId();
   if(!id){this.revisions.set([]);return}
+  void this.loadReadiness();
   try{const data=await this.request('/api/admin/flows/'+id+'/revisions');if(this.selectedId()===id)this.revisions.set(data.revisions||[])}
   catch(e){this.revisions.set([]);this.message.set(String(e))}
+ }
+ /** Production-readiness gate of the selected flow's published revision. */
+ readonly readiness=signal<Readiness|null>(null);
+ readonly readinessHeadline=readinessHeadline;
+ readonly automated=()=>this.enabled()&&(this.interval()>0||!!this.eventKey());
+ async loadReadiness(){
+  const id=this.selectedId();
+  if(!id){this.readiness.set(null);return}
+  try{const r=await this.request('/api/admin/flows/'+id+'/readiness');if(this.selectedId()===id)this.readiness.set(r)}
+  catch{this.readiness.set(null)}
+ }
+ /** Publishing or activating an untried revision pauses automation; keep the editor in step. */
+ private notePausedAutomation(data:any):boolean{
+  if(!data?.automation_paused)return false;
+  this.enabled.set(false);this.savedSnapshot.set(this.currentSnapshot());
+  this.message.set('Revision '+data.active_revision+' is active, and automation is paused until it passes the readiness checks: '+(data.readiness?.checks||[]).filter((c:any)=>!c.ok).map((c:any)=>c.message).join(' '));
+  return true;
  }
  async loadTargetRevisions(kind:'flow'|'function',id:number){
   if(!id)return;
@@ -1106,14 +1128,14 @@ export class FlowStudioComponent {
   const id=this.selectedId();
   if(!id||this.hasUnsavedChanges()){this.message.set('Save the draft before publishing.');return}
   this.busy.set(true);
-  try{const data=await this.request('/api/admin/flows/'+id+'/publish',{method:'POST',body:JSON.stringify({note:this.publishNote().trim()})});this.publishNote.set('');this.message.set('Published revision '+data.active_revision+'; runs now use it.');await this.refresh();await this.loadRevisions()}
+  try{const data=await this.request('/api/admin/flows/'+id+'/publish',{method:'POST',body:JSON.stringify({note:this.publishNote().trim()})});this.publishNote.set('');if(!this.notePausedAutomation(data))this.message.set('Published revision '+data.active_revision+'; runs now use it.');await this.refresh();await this.loadRevisions()}
   catch(e){this.message.set(String(e))}finally{this.busy.set(false)}
  }
  async activateRevision(revision:number){
   const id=this.selectedId();
   if(!id||!confirm('Make revision '+revision+' active? Scheduled, event and manual runs will use it.'))return;
   this.busy.set(true);
-  try{await this.request('/api/admin/flows/'+id+'/revisions/'+revision+'/activate',{method:'POST'});this.message.set('Revision '+revision+' is now active.');await this.refresh();await this.loadRevisions()}
+  try{const data=await this.request('/api/admin/flows/'+id+'/revisions/'+revision+'/activate',{method:'POST'});if(!this.notePausedAutomation(data))this.message.set('Revision '+revision+' is now active.');await this.refresh();await this.loadRevisions()}
   catch(e){this.message.set(String(e))}finally{this.busy.set(false)}
  }
  async restoreRevision(revision:number){
@@ -1374,7 +1396,7 @@ export class FlowStudioComponent {
  }
  async save(){this.busy.set(true);try{const id=this.selectedId();const body={name:this.name(),graph:this.graph(),enabled:this.enabled(),interval_minutes:this.interval(),event_key:this.eventKey()};
    const flow:SavedFlow=await this.request(id?'/api/admin/flows/'+id:'/api/admin/flows',{method:id?'PUT':'POST',body:JSON.stringify(body)});
-   this.selectedId.set(flow.id);this.historyFlowId.set(flow.id);this.savedSnapshot.set(this.currentSnapshot());this.message.set(flow.active_revision?'Draft saved; publish it to change what runs.':'Flow saved');await this.refresh();await this.loadRevisions()}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
+   this.selectedId.set(flow.id);this.historyFlowId.set(flow.id);this.savedSnapshot.set(this.currentSnapshot());this.message.set(flow.active_revision?'Draft saved; publish it to change what runs.':'Flow saved');await this.refresh();await this.loadRevisions()}catch(e){this.message.set(String(e));void this.loadReadiness()}finally{this.busy.set(false)}}
  async run(target:'active'|'draft'='active'){
    const issues=this.graphIssues();
    if(issues.length){this.message.set('Resolve '+issues.length+' graph issue(s) before running.');return}

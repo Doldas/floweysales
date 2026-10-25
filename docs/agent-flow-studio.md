@@ -45,6 +45,21 @@ Only two node types change anything outside a run: **Write Workspace File** (cap
 
 API: `GET /api/admin/flow-side-effects?status=&flow_id=`, `GET /api/admin/flow-side-effects/{id}` (SYS_ADMIN, includes the payload under review) and `POST /api/admin/flow-side-effects/{id}/decision` with `{"approve": true|false, "note": "…"}` (SYS_ADMIN). This approves research automation output only: there is no trading and no real money.
 
+### Production-readiness gate
+
+A flow with side effects may run unattended, on a schedule or from an event, only when its **published revision** passes the readiness checks. Automation always runs that revision. The checks are:
+
+1. **Published.** The flow has a published revision.
+2. **Valid.** The revision validates, and every flow, function and event it calls or emits exists.
+3. **Supervised.** If any side effect runs without approval, the revision has completed at least one **manual** run, so a person has seen what it writes or emits. A revision whose side effects all require approval passes, because each unattended run is reviewed anyway.
+
+Flows without side effects are not gated. Where the gate is enforced:
+
+- **Saving:** saving a flow with automation on (Enabled plus a schedule or event key) is refused with `409` until the checks pass. Save it disabled, publish, run it once, then enable it.
+- **Publishing or activating:** when you publish or activate a revision of an automated flow and the new revision does not pass, automation is **paused** (Enabled is turned off; the schedule and event key are kept). The response says so with `automation_paused` and the failing checks.
+
+The editor shows a **Production readiness** panel for flows with side effects or automation. `GET /api/admin/flows/{id}/readiness` returns the same checks. Flows that were automated before the gate existed keep running until their next save or publish. None of this enables trading.
+
 ### Change log and authorization
 
 Every successful change to Flow Studio is recorded in `flow_audit_log`: creating, updating, deleting, publishing, activating or restoring flows and functions, saving triggers, sending events, starting, cancelling and retrying runs, and side-effect decisions. Each record holds the actor, the action, the target, the matched route, the HTTP status, a SHA-256 of the request body (the body itself is not stored) and a short summary. Refused requests are not recorded. SYS_ADMIN reads it under **Approvals & audit → Change log** or with `GET /api/admin/flow-audit?target_type=&target_id=&action=&before=`.

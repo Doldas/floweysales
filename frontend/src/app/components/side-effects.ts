@@ -91,3 +91,13 @@ export function describeAudit(entry: Pick<AuditEntry, 'action' | 'target_type' |
   if (!verb || !auditVerbs[verb]) return `${entry.action} (${entry.target_type}${target})`;
   return `${auditVerbs[verb]} ${kind.replace('_', ' ')}${target}`;
 }
+
+export interface ReadinessCheck { id: string; ok: boolean; message: string }
+export interface Readiness { applies: boolean; ready: boolean; revision: number | null; checks: ReadinessCheck[]; side_effects: unknown[] }
+
+/** One line for the readiness panel. */
+export function readinessHeadline(r: Readiness, automated: boolean): string {
+  if (!r.applies) return 'No side effects: this flow may run on a schedule or from events.';
+  if (r.ready) return automated ? 'Ready: runs unattended with audited side effects.' : 'Ready to run unattended once you enable a schedule or event.';
+  return automated ? 'Not ready: saving with automation on is refused until these checks pass.' : 'Not ready to run unattended yet.';
+}

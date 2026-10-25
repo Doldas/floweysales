@@ -971,6 +971,18 @@ func (e *Engine) saveFlow(w http.ResponseWriter, r *http.Request, id int64) {
 		writeReferenceError(w, err)
 		return
 	}
+	// Unattended runs of a flow with side effects must pass the readiness gate.
+	if flowAutomated(f) {
+		readiness, err := e.automationReadiness(r.Context(), f)
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"error": "Readiness check unavailable"})
+			return
+		}
+		if !readiness.Ready {
+			writeJSON(w, 409, map[string]any{"error": "This flow has side effects and is not ready to run unattended; save it disabled, publish and run it manually first", "readiness": readiness})
+			return
+		}
+	}
 	user, _ := e.currentUser(r)
 	saved, err := e.db.SaveAgentFlow(r.Context(), f, user.ID)
 	if err != nil {
