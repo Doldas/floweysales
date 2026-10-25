@@ -15,12 +15,12 @@ import { canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActi
 import { listOverviewFlows } from './flow-overview';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'; label:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'; label:string; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow extends PublishState { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
 interface FlowRunStep {id:number;node:string;label:string;status:string;input?:string;output:string;error?:string;started_at?:string;created_at?:string;duration_ms?:number|null;attempts?:number|null;worker_attempt?:number|null}
-interface FlowRun { id:number; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null; failed_node?:string|null; flow_revision?:number|null; attempts?:number; max_attempts?:number; queued_at?:string|null }
+interface FlowRun { id:number; parent_run_id?:number|null; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null; failed_node?:string|null; flow_revision?:number|null; attempts?:number; max_attempts?:number; queued_at?:string|null }
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
 @Component({
@@ -141,7 +141,7 @@ export class ConfirmDeleteFlowDialog {
          <rect [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="12"
            [attr.fill]="n.id===selectedNode()?.id?'#244970':'#1c2a3b'"
            [attr.stroke]="n.id===selectedNode()?.id?'#94caff':'#607993'" stroke-width="2"/>
-         <text [attr.x]="n.x+12" [attr.y]="n.y+24" fill="#dceaf8" font-size="13">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':n.type==='workspace_read'?'▤ READ FILE':n.type==='workspace_write'?'▣ WRITE FILE':n.type==='output'?'→ OUTPUT':n.type==='condition'?'◇ IF / ELSE':n.type==='merge'?'⇉ MERGE':n.type==='json_get'?'{} JSON FIELD':'✦ AGENT'}}</text>
+         <text [attr.x]="n.x+12" [attr.y]="n.y+24" fill="#dceaf8" font-size="13">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':n.type==='workspace_read'?'▤ READ FILE':n.type==='workspace_write'?'▣ WRITE FILE':n.type==='output'?'→ OUTPUT':n.type==='condition'?'◇ IF / ELSE':n.type==='merge'?'⇉ MERGE':n.type==='json_get'?'{} JSON FIELD':n.type==='emit_event'?'⇢ EMIT EVENT':'✦ AGENT'}}</text>
          <text [attr.x]="n.x+12" [attr.y]="n.y+48" fill="#dceaf8" font-size="12">{{n.label.slice(0,16)}}</text>
           @if(n.type!=='trigger'){<circle class="canvas-port input-port" [attr.cx]="n.x" [attr.cy]="n.y+35" r="8" tabindex="0" role="button" [attr.aria-label]="'Connect into '+n.label" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation();chooseInputPort(n.id)" (keydown.enter)="$event.stopPropagation();chooseInputPort(n.id)"/>}
           @if(n.type!=='output'){<circle class="canvas-port output-port" [class.port-active]="connectingFrom()===n.id" [attr.cx]="n.x+125" [attr.cy]="n.y+35" r="8" tabindex="0" role="button" [attr.aria-label]="'Start connection from '+n.label" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation();chooseOutputPort(n.id)" (keydown.enter)="$event.stopPropagation();chooseOutputPort(n.id)"/>}
@@ -232,6 +232,13 @@ export class ConfirmDeleteFlowDialog {
            <label>Operand <input [ngModel]="n.value||''" (ngModelChange)="updateUtility('value',$event)" maxlength="1000" [placeholder]="n.transform==='replace'?'find=>replacement':'Text to add'"></label>
          }
        }
+       @if(n.type==='emit_event'){
+        <label>Event to emit <select [ngModel]="n.event||''" (ngModelChange)="updateUtility('event',$event)">
+          <option value="">Choose a custom trigger</option>
+          @for(t of triggers();track t.event_key){<option [value]="t.event_key">{{t.event_key}} ({{t.payload_type}})</option>}
+        </select></label>
+        <p class="muted">Queues one run of every other enabled flow subscribed to this event, with this node's input as the payload (checked against the trigger's type). The input passes on unchanged. Event chains stop after {{maxEventDepth}} levels and each emission reaches at most 10 flows; a retried run never queues a subscriber twice. Define events under Function library &amp; triggers.</p>
+       }
        @if(n.type==='web_search'){
         <label>Search query<input [ngModel]="n.value||''" (ngModelChange)="updateUtility('value',$event)" maxlength="400" placeholder="Quarterly earnings guidance"></label>
         <p class="muted">Searches with the system administrator's Brave or Tavily configuration. Returns up to 5 sourced results as JSON. API keys never reach the browser or graph.</p>
@@ -301,6 +308,7 @@ export class ConfirmDeleteFlowDialog {
      @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addSubflow();closeCanvasMenu()">Call Flow</button>}
      <button type="button" role="menuitem" (click)="addConstant();closeCanvasMenu()">Value</button>
      @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addFunctionCall();closeCanvasMenu()">Function</button>}
+     @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addEmitEvent();closeCanvasMenu()">Emit Event</button>}
      @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('save_result');closeCanvasMenu()">Save Result</button>}
      @if(auth.user()?.role==='SYS_ADMIN'){<button type="button" role="menuitem" (click)="addUtility('load_result');closeCanvasMenu()">Load Result</button>}
      <button type="button" role="menuitem" (click)="addUtility('transform');closeCanvasMenu()">Transform Text</button>
@@ -385,7 +393,7 @@ export class ConfirmDeleteFlowDialog {
        <span><strong>Finished:</strong> {{isActiveRun(run.status)?'In progress':displayRunTime(run.finished_at)}}</span>
        @if(run.attempts){<span><strong>Worker attempts:</strong> {{run.attempts}} of {{run.max_attempts}}</span>}
        <span><strong>Duration:</strong> {{displayRunDuration(run)}}</span>
-       <span><strong>Trigger:</strong> {{run.trigger}}</span>
+       <span><strong>Trigger:</strong> {{run.trigger}}@if(run.parent_run_id){ · triggered by run #{{run.parent_run_id}}}</span>
        <span><strong>Graph:</strong> {{runRevisionLabel(run.flow_revision)}}</span>
       </div>
       @if(run.status==='QUEUED'&&run.error){<p class="muted" role="status">{{run.error}}</p>}
@@ -683,12 +691,12 @@ export class FlowStudioComponent {
  readonly logView=signal<'markdown'|'raw'|'json'>('markdown');
  readonly nodePickerOpen=signal(false);
   readonly nodePickerQuery=signal('');
-  readonly nodeTypes=[{"id":0,"label":"Agent","admin":false},{"id":1,"label":"If / Else","admin":false},{"id":2,"label":"Merge","admin":false},{"id":3,"label":"JSON Field","admin":false},{"id":4,"label":"Loop","admin":false},{"id":5,"label":"HTTP JSON/XML","admin":false},{"id":6,"label":"Web crawler","admin":false},{"id":7,"label":"Web search","admin":false},{"id":8,"label":"Output","admin":false},{"id":9,"label":"Call Flow","admin":true},{"id":10,"label":"Value","admin":false},{"id":11,"label":"Function","admin":true},{"id":12,"label":"Save Result","admin":true},{"id":13,"label":"Load Result","admin":true},{"id":14,"label":"Transform","admin":false},{"id":15,"label":"Read File","admin":true},{"id":16,"label":"Write File","admin":true}];
+  readonly nodeTypes=[{"id":0,"label":"Agent","admin":false},{"id":1,"label":"If / Else","admin":false},{"id":2,"label":"Merge","admin":false},{"id":3,"label":"JSON Field","admin":false},{"id":4,"label":"Loop","admin":false},{"id":5,"label":"HTTP JSON/XML","admin":false},{"id":6,"label":"Web crawler","admin":false},{"id":7,"label":"Web search","admin":false},{"id":8,"label":"Output","admin":false},{"id":9,"label":"Call Flow","admin":true},{"id":10,"label":"Value","admin":false},{"id":11,"label":"Function","admin":true},{"id":12,"label":"Save Result","admin":true},{"id":13,"label":"Load Result","admin":true},{"id":14,"label":"Transform","admin":false},{"id":15,"label":"Read File","admin":true},{"id":16,"label":"Write File","admin":true},{"id":17,"label":"Emit Event","admin":true}];
   readonly visibleNodeTypes=()=>this.nodeTypes.filter(n=>(!n.admin||this.auth.user()?.role==='SYS_ADMIN')&&n.label.toLowerCase().includes(this.nodePickerQuery().trim().toLowerCase()));
   toggleNodePicker(){this.nodePickerOpen.update(v=>!v);this.nodePickerQuery.set('')}
   addPickedNode(id:number){
     if(!this.visibleNodeTypes().some(n=>n.id===id))return;
-    switch(id){case 0:this.addAgent();break;case 1:this.addV2Node('condition');break;case 2:this.addV2Node('merge');break;case 3:this.addV2Node('json_get');break;case 4:this.addPureLoop();break;case 5:this.addHTTPGet();break;case 6:this.addWebCrawler();break;case 7:this.addWebSearch();break;case 8:this.addOutput();break;case 9:this.addSubflow();break;case 10:this.addConstant();break;case 11:this.addFunctionCall();break;case 12:this.addUtility('save_result');break;case 13:this.addUtility('load_result');break;case 14:this.addUtility('transform');break;case 15:this.addUtility('workspace_read');break;case 16:this.addUtility('workspace_write');break;default:return;}
+    switch(id){case 0:this.addAgent();break;case 1:this.addV2Node('condition');break;case 2:this.addV2Node('merge');break;case 3:this.addV2Node('json_get');break;case 4:this.addPureLoop();break;case 5:this.addHTTPGet();break;case 6:this.addWebCrawler();break;case 7:this.addWebSearch();break;case 8:this.addOutput();break;case 9:this.addSubflow();break;case 10:this.addConstant();break;case 11:this.addFunctionCall();break;case 12:this.addUtility('save_result');break;case 13:this.addUtility('load_result');break;case 14:this.addUtility('transform');break;case 15:this.addUtility('workspace_read');break;case 16:this.addUtility('workspace_write');break;case 17:this.addEmitEvent();break;default:return;}
     this.nodePickerOpen.set(false);
   }
   readonly studioTab=signal<'overview'|'editor'|'library'|'runs'|'files'>('overview');
@@ -773,6 +781,8 @@ export class FlowStudioComponent {
       if(n.type==='agent'&&(n.prompt||'').trim().length<5)add('Agent needs research instructions: '+n.label,n.id);
       if(n.type==='flow'&&!n.flow_id)add('Select a saved flow: '+n.label,n.id);
       if(n.type==='function'&&!n.function_id)add('Select a saved function: '+n.label,n.id);
+      if(n.type==='emit_event'&&!n.event)add('Choose the event to emit: '+n.label,n.id);
+      else if(n.type==='emit_event'&&this.auth.user()?.role==='SYS_ADMIN'&&!this.triggers().some(t=>t.event_key===n.event))add('Event '+n.event+' is not defined; create it under Function library & triggers: '+n.label,n.id);
       if(n.type==='json_get'&&!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(n.property||''))add('Enter a valid JSON property: '+n.label,n.id);
       if(n.type==='condition'&&!['equals','not_equals','contains','greater_than','less_than'].includes(n.operator||''))add('Select a condition operator: '+n.label,n.id);
       if(n.type==='loop'&&(!n.loop_limit||n.loop_limit<1||n.loop_limit>100))add('Set loop limit from 1 to 100: '+n.label,n.id);
@@ -1007,6 +1017,14 @@ export class FlowStudioComponent {
    this.message.set('Draft restored from revision '+revision+'. Publish it to make it the next revision.')}
   catch(e){this.message.set(String(e))}finally{this.busy.set(false)}
  }
+ readonly maxEventDepth=3;
+ addEmitEvent():void {
+  const count=this.graph().nodes.length;
+  const id='emit-'+Date.now().toString(36);
+  const event=this.triggers()[0]?.event_key||'';
+  this.graph.update(g=>({...g,version:2,nodes:[...g.nodes,{id,type:'emit_event',label:'Emit event',event,x:260+(count%4)*140,y:40+Math.floor(count/4)*100}]}));
+  this.chosen.set(id);
+ }
  addWebSearch():void {
   const count=this.graph().nodes.length;
   const id='web-search-'+Date.now().toString(36);
@@ -1042,7 +1060,7 @@ export class FlowStudioComponent {
    this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type,label,variable:'summary',transform:'trim',content_type:'text/plain',value:type==='workspace_read'||type==='workspace_write'?'/research/summary.md':'',x:260+(count%4)*140,y:40+Math.floor(count/4)*100}]}));
    this.chosen.set(id);
  }
- updateUtility(field:'variable'|'transform'|'value'|'content_type'|'value_type',value:string){
+ updateUtility(field:'variable'|'transform'|'value'|'content_type'|'value_type'|'event',value:string){
    this.graph.update(g=>({...g,nodes:g.nodes.map(n=>n.id===this.chosen()?{...n,[field]:value}:n)}));
  }
  formattedRunJSON(raw:string):string{

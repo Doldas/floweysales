@@ -43,6 +43,7 @@ type flowNode struct {
 	LoopCondition    string  `json:"loop_condition,omitempty"`
 	Operator         string  `json:"operator,omitempty"`
 	Property         string  `json:"property,omitempty"`
+	Event            string  `json:"event,omitempty"`
 	X                float64 `json:"x"`
 	Y                float64 `json:"y"`
 }
@@ -145,7 +146,7 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		if n.FlowRevision < 0 || n.FunctionRevision < 0 || (n.FlowRevision != 0 && n.Type != "flow") || (n.FunctionRevision != 0 && n.Type != "function") {
 			return g, nil, fmt.Errorf("revision pins are only valid on call flow and function nodes")
 		}
-		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" && n.Type != "output" && (g.Version != 2 || n.Type != "loop") && n.Type != "http_get" && (g.Version != 2 || n.Type != "web_search") && (g.Version != 2 || n.Type != "web_crawl") && (g.Version != 2 || (n.Type != "condition" && n.Type != "merge" && n.Type != "json_get")) {
+		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" && n.Type != "output" && (g.Version != 2 || n.Type != "loop") && n.Type != "http_get" && (g.Version != 2 || n.Type != "web_search") && (g.Version != 2 || n.Type != "web_crawl") && (g.Version != 2 || (n.Type != "condition" && n.Type != "merge" && n.Type != "json_get")) && (g.Version != 2 || n.Type != "emit_event") {
 			return g, nil, fmt.Errorf("only trigger, research agent, constant and subflow nodes are allowed")
 		}
 		if g.Version == 2 && (n.Type == "condition" || n.Type == "merge" || n.Type == "json_get") {
@@ -268,6 +269,15 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 			}
 			if n.Type == "workspace_write" && !allowedUserspaceType(n.ContentType) {
 				return g, nil, fmt.Errorf("unsupported workspace file format")
+			}
+		}
+		if n.Event != "" && n.Type != "emit_event" {
+			return g, nil, fmt.Errorf("only Emit Event nodes name an event")
+		}
+		if n.Type == "emit_event" {
+			utilities++
+			if n.Prompt != "" || n.FlowID != 0 || n.FunctionID != 0 || !flowEventPattern.MatchString(n.Event) {
+				return g, nil, fmt.Errorf("Emit Event needs a valid event key and no prompt or call")
 			}
 		}
 		if n.Type == "save_result" || n.Type == "load_result" || n.Type == "transform" {
@@ -867,19 +877,19 @@ func (e *Engine) registerFlowRoutes() {
 			writeJSON(w, 400, map[string]string{"error": "Trigger event requires a JSON value"})
 			return
 		}
-		eventInput := string(payload.Value)
-		if def.PayloadType == "number" || def.PayloadType == "boolean" {
-			if _, err := parseTyped(def.PayloadType, string(payload.Value)); err != nil {
-				writeJSON(w, 400, map[string]string{"error": "Event payload type mismatch"})
-				return
-			}
-		} else {
+		raw := string(payload.Value)
+		if def.PayloadType != "number" && def.PayloadType != "boolean" {
 			var value string
-			if json.Unmarshal(payload.Value, &value) != nil || len(value) > 2000 {
+			if json.Unmarshal(payload.Value, &value) != nil {
 				writeJSON(w, 400, map[string]string{"error": "Event expects a text value"})
 				return
 			}
-			eventInput = value
+			raw = value
+		}
+		eventInput, err := eventPayload(def, raw)
+		if err != nil {
+			writeJSON(w, 400, map[string]string{"error": err.Error()})
+			return
 		}
 		flows, err := e.db.FindEventAgentFlows(r.Context(), key)
 		if err != nil {
@@ -1160,6 +1170,15 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			nodeInput = previous
 		}
 
+		if n.Type == "emit_event" {
+			summary, err := e.emitFlowEvent(ctx, f.ID, n, previous)
+			if err != nil {
+				return "", fmt.Errorf("emit node %s: %w", n.ID, err)
+			}
+			// The payload passes through unchanged, so emitting can sit mid-chain.
+			record(map[string]string{"node": n.ID, "label": n.Label, "output": summary})
+			continue
+		}
 		if n.Type == "web_search" {
 			result, err := e.runWebSearch(ctx, n.Value)
 			if err != nil {

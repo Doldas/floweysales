@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="027-flow-event-emission" author="floweysales" dbms="mysql">
+  <addColumn tableName="agent_flow_runs">
+   <column name="parent_run_id" type="BIGINT" remarks="Run whose Emit Event node queued this run; NULL for manual, scheduled and API events"/>
+   <column name="event_depth" type="INT" defaultValueNumeric="0" remarks="Emit Event chain depth; bounded to stop event loops">
+    <constraints nullable="false"/>
+   </column>
+   <column name="emit_key" type="VARCHAR(160)" remarks="parent run:flow:node:target flow; unique so a resumed emit cannot queue twice"/>
+  </addColumn>
+  <addUniqueConstraint tableName="agent_flow_runs" columnNames="emit_key" constraintName="uq_agent_flow_runs_emit_key"/>
+  <createIndex tableName="agent_flow_runs" indexName="idx_agent_flow_runs_parent">
+   <column name="parent_run_id"/>
+  </createIndex>
+  <rollback>
+   <dropIndex tableName="agent_flow_runs" indexName="idx_agent_flow_runs_parent"/>
+   <dropUniqueConstraint tableName="agent_flow_runs" constraintName="uq_agent_flow_runs_emit_key"/>
+   <dropColumn tableName="agent_flow_runs" columnName="emit_key"/>
+   <dropColumn tableName="agent_flow_runs" columnName="event_depth"/>
+   <dropColumn tableName="agent_flow_runs" columnName="parent_run_id"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

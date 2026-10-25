@@ -35,6 +35,14 @@ func (e *Engine) checkCallReferences(ctx context.Context, g flowGraph) error {
 			if err != nil {
 				return err
 			}
+		case "emit_event":
+			_, err := e.db.GetBlueprintTrigger(ctx, n.Event)
+			if errors.Is(err, sql.ErrNoRows) {
+				return referenceError{fmt.Sprintf("node %s emits event %s, which is not defined", n.ID, n.Event)}
+			}
+			if err != nil {
+				return err
+			}
 		case "function":
 			var err error
 			if n.FunctionRevision > 0 {
