@@ -45,6 +45,12 @@ Only two node types change anything outside a run: **Write Workspace File** (cap
 
 API: `GET /api/admin/flow-side-effects?status=&flow_id=`, `GET /api/admin/flow-side-effects/{id}` (SYS_ADMIN, includes the payload under review) and `POST /api/admin/flow-side-effects/{id}/decision` with `{"approve": true|false, "note": "…"}` (SYS_ADMIN). This approves research automation output only: there is no trading and no real money.
 
+### Change log and authorization
+
+Every successful change to Flow Studio is recorded in `flow_audit_log`: creating, updating, deleting, publishing, activating or restoring flows and functions, saving triggers, sending events, starting, cancelling and retrying runs, and side-effect decisions. Each record holds the actor, the action, the target, the matched route, the HTTP status, a SHA-256 of the request body (the body itself is not stored) and a short summary. Refused requests are not recorded. SYS_ADMIN reads it under **Approvals & audit → Change log** or with `GET /api/admin/flow-audit?target_type=&target_id=&action=&before=`.
+
+The audit middleware matches routes by pattern, and a unit test fails if a mutating Flow Studio route is neither audited nor explicitly exempt (the two previews). The MySQL authorization test checks that USER accounts get 403 from every SYS_ADMIN-only Flow Studio route (functions, triggers, events, approvals, change log), and that they can read the side-effect audit of their own flows.
+
 ## Typed functions with several inputs and outputs
 
 A Blueprint function can declare up to 8 named, typed **input pins** and 8 **output pins** (`number`, `text` or `boolean`). In the function library choose **New typed function**, declare the pins, add internal Value, Operation and Branch nodes (and optional extra exits) and wire them with data wires (values between pins) and execution wires (order, or `true`/`false` from a branch). Pin renames and removals update the wires that use them. The server validates types, ports, cycles and that every exit provides every output (graph version 2); older single-input functions keep working unchanged.

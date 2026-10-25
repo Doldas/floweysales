@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  canDecide, capabilityManifest, decisionProblem, describeCapability, formatBytes, nodeCapability, sideEffectStatusLabel, sortForReview,
+  canDecide, capabilityManifest, decisionProblem, describeAudit, describeCapability, formatBytes, nodeCapability, sideEffectStatusLabel, sortForReview,
   type SideEffect,
 } from './side-effects.ts';
 
@@ -40,4 +40,11 @@ test('review order puts the longest-waiting request first', () => {
   assert.deepEqual(sortForReview([e(1, 'APPLIED'), e(4, 'PENDING'), e(2, 'PENDING'), e(3, 'REJECTED')]).map(x => x.id), [2, 4, 3, 1]);
   assert.equal(formatBytes(512), '512 B');
   assert.equal(formatBytes(2048), '2.0 KiB');
+});
+
+test('audit entries read as sentences', () => {
+  assert.equal(describeAudit({ action: 'flow.publish', target_type: 'flow', target_id: '4' }), 'Published flow 4');
+  assert.equal(describeAudit({ action: 'side_effect.decide', target_type: 'side_effect', target_id: '7' }), 'Decided side effect 7');
+  assert.equal(describeAudit({ action: 'trigger.save', target_type: 'trigger', target_id: '' }), 'Saved trigger');
+  assert.equal(describeAudit({ action: 'odd', target_type: 'x', target_id: '1' }), 'odd (x 1)');
 });

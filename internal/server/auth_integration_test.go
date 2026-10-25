@@ -210,6 +210,36 @@ func TestMySQLAuthGate(t *testing.T) {
 	assert(request("GET", "/api/admin/updates", nil, userCookie, ""), http.StatusForbidden)
 	assert(request("POST", "/api/admin/updates/apply", nil, userCookie, ""), http.StatusForbidden)
 	assert(request("GET", "/api/admin/updates", nil, cookies[0], ""), http.StatusOK)
+
+	// Flow Studio mutations that only SYS_ADMIN may make are refused for USER.
+	for _, route := range []struct{ method, path string }{
+		{"POST", "/api/admin/blueprint-functions"}, {"PUT", "/api/admin/blueprint-functions/1"},
+		{"POST", "/api/admin/blueprint-functions/1/publish"}, {"POST", "/api/admin/blueprint-functions/1/revisions/1/activate"},
+		{"POST", "/api/admin/blueprint-functions/1/revisions/1/restore"}, {"POST", "/api/admin/blueprint-triggers"},
+		{"POST", "/api/admin/flow-events/market.close"}, {"POST", "/api/admin/flow-side-effects/1/decision"},
+		{"GET", "/api/admin/flow-side-effects/1"}, {"GET", "/api/admin/flow-audit"},
+	} {
+		res := request(route.method, route.path, map[string]any{}, userCookie, "")
+		if res.StatusCode != http.StatusForbidden {
+			t.Errorf("USER %s %s: got %d, want 403", route.method, route.path, res.StatusCode)
+		}
+		res.Body.Close()
+	}
+	// Owners may read the side-effect audit of their own flows.
+	assert(request("GET", "/api/admin/flow-side-effects", nil, userCookie, ""), http.StatusOK)
+	// A SYS_ADMIN change is recorded with its actor; the refused USER attempts are not.
+	assert(request("POST", "/api/admin/blueprint-triggers", map[string]string{"event_key": "audit.check", "payload_type": "text"}, cookies[0], ""), http.StatusCreated)
+	res = request("GET", "/api/admin/flow-audit?action=trigger.save", nil, cookies[0], "")
+	var audit struct {
+		Entries []storage.FlowAuditEntry `json:"entries"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&audit); err != nil || res.StatusCode != http.StatusOK {
+		t.Fatalf("audit log: %d %v", res.StatusCode, err)
+	}
+	res.Body.Close()
+	if len(audit.Entries) != 1 || audit.Entries[0].ActorEmail != email || audit.Entries[0].TargetID != "audit.check" || audit.Entries[0].StatusCode != http.StatusCreated {
+		t.Fatalf("audited trigger: %+v", audit.Entries)
+	}
 	checked := request("POST", "/api/admin/updates/check", nil, cookies[0], "")
 	var overview map[string]any
 	if err := json.NewDecoder(checked.Body).Decode(&overview); err != nil {

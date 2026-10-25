@@ -30,4 +30,5 @@
   <include file="026-flow-run-step-diagnostics.xml" relativeToChangelogFile="true"/>
   <include file="027-flow-event-emission.xml" relativeToChangelogFile="true"/>
   <include file="028-flow-side-effects.xml" relativeToChangelogFile="true"/>
+  <include file="029-flow-audit-log.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

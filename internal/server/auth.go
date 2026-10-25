@@ -91,6 +91,10 @@ func (e *Engine) Handler() http.Handler {
 			e.serveUserProvision(w, r)
 			return
 		}
+		if isMutation(r.Method) && strings.HasPrefix(r.URL.Path, "/api/admin/") {
+			e.serveAudited(w, r, e.mux)
+			return
+		}
 		e.mux.ServeHTTP(w, r)
 	})
 }
@@ -122,6 +126,10 @@ func (e *Engine) allowedUserAPI(r *http.Request, u identity.User) bool {
 	method, path := r.Method, r.URL.Path
 	if strings.HasPrefix(path, "/api/me/tracker-emails") && (method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete) {
 		return true
+	}
+	// Owners read the side-effect audit of their own flows; decisions stay SYS_ADMIN-only.
+	if path == "/api/admin/flow-side-effects" && method == http.MethodGet {
+		return e.authService.HasPermission(r.Context(), u.Role, "flows.read")
 	}
 	if strings.HasPrefix(path, "/api/admin/flows") {
 		permission := "flows.write"

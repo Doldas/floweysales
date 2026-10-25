@@ -2,7 +2,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { AuthState } from '../auth.service';
-import { canDecide, decisionProblem, describeCapability, formatBytes, sideEffectStatusLabel, sortForReview, type SideEffect } from './side-effects';
+import { canDecide, decisionProblem, describeAudit, describeCapability, formatBytes, sideEffectStatusLabel, sortForReview, type AuditEntry, type SideEffect } from './side-effects';
 
 /** Side-effect approvals and the audit trail of every workspace write and event emission. */
 @Component({
@@ -22,6 +22,23 @@ import { canDecide, decisionProblem, describeCapability, formatBytes, sideEffect
     <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">Refresh</button>
    </div>
   </header>
+  @if(isAdmin()){
+   <div class="effects-views" role="tablist" aria-label="Audit views">
+    <button type="button" role="tab" [attr.aria-selected]="view()==='effects'" [class.selected]="view()==='effects'" (click)="view.set('effects')">Side effects</button>
+    <button type="button" role="tab" [attr.aria-selected]="view()==='changes'" [class.selected]="view()==='changes'" (click)="view.set('changes');loadChanges()">Change log</button>
+   </div>
+  }
+  @if(view()==='changes'){
+   <p class="muted">Every successful change to flows, functions, triggers, events, runs and approvals, with who made it. Request bodies are kept only as a SHA-256 digest.</p>
+   @if(!changes().length){<p class="muted">No changes recorded yet.</p>}
+   <ul class="effect-list">
+    @for(entry of changes();track entry.id){
+     <li class="effect"><div class="effect-head"><strong>{{describeAudit(entry)}}</strong></div>
+      <p class="effect-meta">{{entry.actor_email||'unknown user'}} · {{time(entry.created_at)}} · HTTP {{entry.status_code}}@if(entry.summary){ · {{entry.summary}}}</p></li>
+    }
+   </ul>
+   @if(changes().length && changes().length%200===0){<button mat-stroked-button type="button" (click)="loadChanges(true)" [disabled]="busy()">Load older changes</button>}
+  } @else {
   @if(pendingCount()){<p class="effects-pending" role="status">{{pendingCount()}} {{pendingCount()===1?'request is':'requests are'}} waiting for approval.</p>}
   @if(message()){<p class="effects-message" role="status">{{message()}}</p>}
   @if(!effects().length){<p class="muted">No side effects recorded{{status()?' with this status':''}} yet.</p>}
@@ -49,6 +66,7 @@ import { canDecide, decisionProblem, describeCapability, formatBytes, sideEffect
     </li>
    }
   </ul>
+  }
  </section>`,
  styles:[`
  .effects{display:flex;flex-direction:column;gap:12px;color:#e6f2fd}
@@ -68,6 +86,8 @@ import { canDecide, decisionProblem, describeCapability, formatBytes, sideEffect
  details{margin-top:8px}summary{cursor:pointer;color:#aedfff}
  .effect-payload{white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;background:#0f1f2d;border-radius:6px;padding:10px}
  .effect-digest{font-size:11px;overflow-wrap:anywhere}
+ .effects-views{display:flex;gap:6px}.effects-views button{background:transparent;color:#c4d7eb;border:1px solid #527b99;border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}
+ .effects-views button.selected{background:#1e435f;color:white;border-color:#6aa5c9}
  .effect-buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
  .muted{color:#9fb6cb}`]
 })
@@ -82,6 +102,9 @@ export class FlowSideEffectsComponent implements OnInit {
  readonly reviewed=signal<Record<number,string>>({});
  readonly isAdmin=computed(()=>this.auth.user()?.role==='SYS_ADMIN');
  readonly pendingCount=computed(()=>this.effects().filter(e=>e.status==='PENDING').length);
+ readonly view=signal<'effects'|'changes'>('effects');
+ readonly changes=signal<AuditEntry[]>([]);
+ readonly describeAudit=describeAudit;
  readonly statusLabel=sideEffectStatusLabel;
  readonly describe=describeCapability;
  readonly bytes=formatBytes;
@@ -97,6 +120,16 @@ export class FlowSideEffectsComponent implements OnInit {
    const query=this.status()?'?status='+encodeURIComponent(this.status()):'';
    const body=await this.request('/api/admin/flow-side-effects'+query);
    this.effects.set(sortForReview(body.side_effects||[]));
+  }catch(e){this.message.set((e as Error).message)}
+  finally{this.busy.set(false)}
+ }
+
+ async loadChanges(older=false){
+  this.busy.set(true);
+  try{
+   const last=this.changes().at(-1);
+   const body=await this.request('/api/admin/flow-audit'+(older&&last?'?before='+last.id:''));
+   this.changes.set(older?[...this.changes(),...(body.entries||[])]:body.entries||[]);
   }catch(e){this.message.set((e as Error).message)}
   finally{this.busy.set(false)}
  }
