@@ -396,3 +396,59 @@ func TestConcurrentWorkersClaimDistinctRuns(t *testing.T) {
 		}
 	}
 }
+
+func TestStepDiagnosticsRecordRedactedInputErrorAndAttempt(t *testing.T) {
+	env, _ := queueEnv(t)
+	ctx := context.Background()
+	f, err := env.db.SaveAgentFlow(ctx, storage.AgentFlow{Name: "Diagnostics", Graph: json.RawMessage(`{"version":2,"nodes":[
+		{"id":"t","type":"trigger"},
+		{"id":"c","type":"constant","value_type":"text","value":"quote via ?symbol=AAPL&apikey=supersecret999"},
+		{"id":"up","type":"transform","transform":"uppercase"},
+		{"id":"load","type":"load_result","variable":"missing"}],
+		"edges":[{"from":"t","to":"c"},{"from":"c","to":"up"},{"from":"up","to":"load"}]}`)}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, _, err = env.db.ResolveAgentFlow(ctx, f.ID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID, err := env.engine.enqueueFlow(ctx, f, nil, "manual", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := env.db.ClaimAgentFlowRun(ctx, env.engine.flowWorkerID, flowLease)
+	if err != nil || claimed == nil || claimed.RunID != runID {
+		t.Fatalf("claim: %+v %v", claimed, err)
+	}
+	env.engine.runClaimedFlow(ctx, claimed)
+
+	steps, err := env.db.ListAgentFlowRunSteps(ctx, runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byNode := map[string]storage.AgentFlowRunStep{}
+	for _, s := range steps {
+		byNode[s.Node] = s
+		for _, field := range []string{s.Input, s.Output, s.Error} {
+			if strings.Contains(field, "supersecret999") {
+				t.Fatalf("secret persisted in step %s: %+v", s.Node, s)
+			}
+		}
+	}
+	up := byNode["up"]
+	if up.Status != "SUCCESS" || !strings.Contains(up.Input, "apikey=[REDACTED]") || !strings.Contains(up.Output, "APIKEY=[REDACTED]") {
+		t.Fatalf("transform step must record its redacted input and output: %+v", up)
+	}
+	if up.WorkerAttempt == nil || *up.WorkerAttempt != 1 || up.StartedAt == "" || up.DurationMS == nil {
+		t.Fatalf("transform step timing and attempt: %+v", up)
+	}
+	load := byNode["load"]
+	if load.Status != "FAILED" || !strings.Contains(load.Error, "missing") || load.Output != "" || !strings.Contains(load.Input, "APIKEY=[REDACTED]") {
+		t.Fatalf("failed step must carry its error and input separately: %+v", load)
+	}
+	runs, err := env.db.ListAgentFlowRuns(ctx, f.ID)
+	if err != nil || runs[0].Status != "FAILED" || runs[0].FailedNode == nil || *runs[0].FailedNode != "load" {
+		t.Fatalf("run attribution: %+v %v", runs, err)
+	}
+}

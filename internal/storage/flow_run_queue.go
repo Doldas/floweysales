@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"floweysales/internal/redact"
 )
 
 // Durable flow run queue. Every run is inserted as QUEUED together with the
@@ -230,12 +232,8 @@ func (d *Database) FinishLeasedAgentFlowRun(ctx context.Context, runID int64, ow
 	if runErr != nil {
 		status, message = "FAILED", runErr.Error()
 	}
-	if len(output) > 64000 {
-		output = output[:64000]
-	}
-	if len(message) > 2000 {
-		message = message[:2000]
-	}
+	output = redact.Preview(output, 64000)
+	message = redact.Preview(message, 2000)
 	var node *string
 	if runErr != nil && failedNode != "" {
 		node = &failedNode

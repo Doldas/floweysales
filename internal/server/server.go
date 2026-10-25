@@ -14,6 +14,7 @@ import (
 
 	"floweysales/internal/identity"
 	"floweysales/internal/market"
+	"floweysales/internal/redact"
 	"floweysales/internal/storage"
 	"floweysales/internal/tracker"
 	"floweysales/internal/trading"
@@ -188,7 +189,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, fi
 	e := &Engine{
 		db:              db,
 		config:          config,
-		finnhubAPIKey:   finnhubAPIKey,
+		finnhubAPIKey:   registeredSecret(finnhubAPIKey),
 		trackerCfg:      trackerCfg,
 		webFS:           webFS,
 		hub:             newSSEHub(),
@@ -259,6 +260,7 @@ func (e *Engine) ConfigureAI(baseURL, apiKey, model string) {
 	e.aiBaseURL = baseURL
 	e.aiAPIKey = apiKey
 	e.aiModel = model
+	redact.RegisterSecret(apiKey)
 }
 
 // ConfigureAgentLimits sets bounded server-side budgets.
@@ -448,4 +450,10 @@ func queryParam(r *http.Request, key, fallback string) string {
 		return fallback
 	}
 	return v
+}
+
+// registeredSecret marks a credential the server holds so flow traces mask it.
+func registeredSecret(value string) string {
+	redact.RegisterSecret(value)
+	return value
 }

@@ -70,3 +70,74 @@ export function runAttemptLabel(attempts: number | undefined, maxAttempts: numbe
   if (!attempts || attempts <= 1) return '';
   return maxAttempts ? `attempt ${attempts} of ${maxAttempts} (resumed from checkpoint)` : `attempt ${attempts} (resumed from checkpoint)`;
 }
+
+/** The recorded fields of a node step that run comparison looks at. */
+export interface ComparableStep {
+  node: string;
+  label?: string;
+  status: string;
+  input?: string;
+  output?: string;
+  duration_ms?: number | null;
+}
+
+export type StepChange = 'unchanged' | 'status' | 'input' | 'output' | 'added' | 'removed';
+
+export interface StepComparison {
+  node: string;
+  label: string;
+  status?: string;
+  baselineStatus?: string;
+  durationMs?: number | null;
+  baselineDurationMs?: number | null;
+  /** Current minus baseline duration, when both are known. */
+  durationDeltaMs: number | null;
+  change: StepChange;
+}
+
+/** Last recorded step per node; retries and resumes append later steps. */
+function lastStepByNode<T extends ComparableStep>(steps: readonly T[]): Map<string, T> {
+  const map = new Map<string, T>();
+  for (const step of steps) {
+    if (step.node !== 'flow') map.set(step.node, step);
+  }
+  return map;
+}
+
+/**
+ * Compares two runs node by node, in the current run's order followed by
+ * nodes only the baseline executed. The most significant difference wins:
+ * status, then input, then output.
+ */
+export function compareRunSteps(current: readonly ComparableStep[], baseline: readonly ComparableStep[]): StepComparison[] {
+  const now = lastStepByNode(current);
+  const before = lastStepByNode(baseline);
+  const nodes = [...now.keys(), ...[...before.keys()].filter(node => !now.has(node))];
+  return nodes.map(node => {
+    const a = now.get(node);
+    const b = before.get(node);
+    let change: StepChange = 'unchanged';
+    if (!b) change = 'added';
+    else if (!a) change = 'removed';
+    else if (a.status !== b.status) change = 'status';
+    else if ((a.input ?? '') !== (b.input ?? '')) change = 'input';
+    else if ((a.output ?? '') !== (b.output ?? '')) change = 'output';
+    const delta = a?.duration_ms != null && b?.duration_ms != null ? a.duration_ms - b.duration_ms : null;
+    return {
+      node, label: a?.label || b?.label || node, status: a?.status, baselineStatus: b?.status,
+      durationMs: a?.duration_ms, baselineDurationMs: b?.duration_ms, durationDeltaMs: delta, change,
+    };
+  });
+}
+
+/** Node IDs in the order they were recorded, for stepping through a run. */
+export function executedNodeOrder(steps: readonly ComparableStep[]): string[] {
+  const seen = new Set<string>();
+  const order: string[] = [];
+  for (const step of steps) {
+    if (step.node === 'flow' || seen.has(step.node)) continue;
+    seen.add(step.node);
+    order.push(step.node);
+  }
+  return order;
+}
