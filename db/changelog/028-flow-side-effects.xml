@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="028-flow-side-effects" author="floweysales" dbms="mysql">
+  <createTable tableName="agent_flow_side_effects" remarks="Audit trail of flow side effects (workspace writes, event emission) and their approvals">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="run_id" type="BIGINT" remarks="No foreign key: the audit trail outlives deleted flows and their runs">
+    <constraints nullable="false"/>
+   </column>
+   <column name="flow_id" type="BIGINT" remarks="Flow whose node performs the effect; a subflow's own ID inside a Call Flow">
+    <constraints nullable="false"/>
+   </column>
+   <column name="flow_name" type="VARCHAR(120)" remarks="Snapshot for flows deleted later"/>
+   <column name="node_id" type="VARCHAR(48)"><constraints nullable="false"/></column>
+   <column name="node_label" type="VARCHAR(100)"/>
+   <column name="capability" type="VARCHAR(32)" remarks="workspace.write or events.emit"><constraints nullable="false"/></column>
+   <column name="target" type="VARCHAR(512)" remarks="The only scope the capability covers: one workspace file or one event key">
+    <constraints nullable="false"/>
+   </column>
+   <column name="approval_required" type="BOOLEAN" defaultValueBoolean="false"><constraints nullable="false"/></column>
+   <column name="status" type="VARCHAR(16)" remarks="PENDING, APPROVED, APPLIED, REJECTED, EXPIRED or CANCELLED"><constraints nullable="false"/></column>
+   <column name="payload_text" type="LONGTEXT" remarks="Exact content to apply; kept only while PENDING or APPROVED"/>
+   <column name="payload_sha256" type="CHAR(64)"><constraints nullable="false"/></column>
+   <column name="payload_bytes" type="INT"><constraints nullable="false"/></column>
+   <column name="payload_preview" type="TEXT" remarks="Redacted, truncated preview kept for audit"/>
+   <column name="content_type" type="VARCHAR(64)"/>
+   <column name="requested_at" type="DATETIME(6)"><constraints nullable="false"/></column>
+   <column name="decided_by" type="BIGINT"/>
+   <column name="decided_by_email" type="VARCHAR(254)" remarks="Snapshot so the audit trail survives user changes"/>
+   <column name="decided_at" type="DATETIME(6)"/>
+   <column name="decision_note" type="VARCHAR(500)"/>
+   <column name="applied_at" type="DATETIME(6)"/>
+  </createTable>
+  <addUniqueConstraint tableName="agent_flow_side_effects" columnNames="run_id,flow_id,node_id" constraintName="uq_flow_side_effect_node"/>
+  <createIndex tableName="agent_flow_side_effects" indexName="idx_flow_side_effects_status">
+   <column name="status"/>
+   <column name="requested_at"/>
+  </createIndex>
+  <createIndex tableName="agent_flow_side_effects" indexName="idx_flow_side_effects_flow">
+   <column name="flow_id"/>
+   <column name="id"/>
+  </createIndex>
+  <rollback>
+   <dropTable tableName="agent_flow_side_effects"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

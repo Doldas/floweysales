@@ -188,6 +188,9 @@ func (d *Database) DeleteAgentFlow(ctx context.Context, id int64) error {
 	if running != 0 {
 		return ErrAgentFlowRunning
 	}
+	if err := cancelSideEffects(ctx, tx, "flow_id=?", id); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM agent_flow_runs WHERE flow_id=?", id); err != nil {
 		return err
 	}
@@ -201,13 +204,24 @@ func (d *Database) DeleteAgentFlow(ctx context.Context, id int64) error {
 // its flow. The worker's lease renewal then fails, so it stops, and its
 // completion cannot overwrite CANCELLED.
 func (d *Database) CancelAgentFlowRun(ctx context.Context, flowID, runID int64) (bool, error) {
-	result, err := d.db.ExecContext(ctx, `UPDATE agent_flow_runs SET status='CANCELLED',error_message='Cancelled by administrator',
-		finished_at=UTC_TIMESTAMP(6),lease_owner=NULL,lease_expires_at=NULL WHERE id=? AND flow_id=? AND status IN ('QUEUED','RUNNING')`, runID, flowID)
+	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, err
 	}
-	affected, err := result.RowsAffected()
-	return affected == 1, err
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `UPDATE agent_flow_runs SET status='CANCELLED',error_message='Cancelled by administrator',
+		finished_at=UTC_TIMESTAMP(6),lease_owner=NULL,lease_expires_at=NULL WHERE id=? AND flow_id=? AND status IN ('QUEUED','RUNNING','AWAITING_APPROVAL')`, runID, flowID)
+	if err != nil {
+		return false, err
+	}
+	if affected, err := result.RowsAffected(); err != nil || affected != 1 {
+		return false, err
+	}
+	// A cancelled run never applies a pending or approved side effect.
+	if err := cancelSideEffects(ctx, tx, "id=?", runID); err != nil {
+		return false, err
+	}
+	return true, tx.Commit()
 }
 
 func (d *Database) ListAgentFlowsForUser(ctx context.Context, userID int64) ([]AgentFlow, error) {

@@ -17,7 +17,7 @@ The editor supports a searchable role-aware node picker, free positioning, zoom/
 - Flows **never execute live trades**. An admin must separately enable authentication and configure an AI endpoint/model.
 - Runs go through a durable queue with checkpoint resume and dead-lettering (see below); concurrency is bounded per process.
 - The flow graph rejects cycles. Recurring loops happen at the scheduler level, not through unbounded edges.
-- **Already available:** conditional/branch nodes, bounded agent retries/timeouts, owner-scoped manual flows, cancellation, recorded node steps, immutable run graph snapshots, execution timestamps, preview-only replay and draft/publish revisions with rollback and call pinning (see below). **Still planned:** durable checkpoints/dead-letter queues, general trigger adapters, richer per-step timing/attempt data and adversarial/accessibility tests.
+- **Already available:** conditional/branch nodes, bounded agent retries/timeouts, owner-scoped manual flows, cancellation, recorded node steps, immutable run graph snapshots, execution timestamps, preview-only replay, draft/publish revisions with rollback and call pinning, durable checkpoints and dead-lettering, per-node timing/attempt data, and audited side effects with optional approval (see below). **Still planned:** general trigger adapters and adversarial/accessibility tests (#58, #95).
 
 To start, sign in and open **My Flows → New flow / Edit**. Add nodes with **+ Add node**, select a graph node to configure all fields in its floating tooltip, check **Graph validation**, then **Save flow** before **Run now**. Use **Run history → Inspect nodes** to view recorded steps, status-colored historical graph snapshots, duration and errors. Scheduling and typed event triggers require SYS_ADMIN.
 
@@ -31,6 +31,19 @@ In version 2 graphs a node runs when one of its inputs is active, and fails if s
 - **Duplicates:** the same connection cannot be added twice, in any graph version.
 
 The validation panel lists these problems and selects the affected node. Drawing or adding a connection that breaks a rule shows the problem straight away.
+
+## Side effects, approvals and audit trail
+
+Only two node types change anything outside a run: **Write Workspace File** (capability `workspace.write`) and **Emit Event** (capability `events.emit`). Both are SYS_ADMIN-only. Each one's scope is fixed by the node itself, either one file in the flow owner's workspace or one defined event, so a run can never write another path or emit another event. Agents still run without tools, and reads (HTTP GET, web search, crawling, workspace reads) are not side effects. The editor lists a flow's side effects above Graph validation, and each side-effect node's settings show its capability.
+
+- **Audit trail:** every applied side effect is recorded with its flow, node, run, capability, target, payload size, SHA-256 and a redacted preview. The record survives deletion of the flow and its runs. **Flow Studio → Approvals & audit** lists the trail; flow owners see their own flows and SYS_ADMIN sees all of them.
+- **Approval:** tick **Require SYS_ADMIN approval before this runs** on a side-effect node. When a run reaches the node it stores the exact payload, and the run shows as **Awaiting approval** (status `AWAITING_APPROVAL`, not polled, can be cancelled). A SYS_ADMIN reviews the content under Approvals & audit:
+  - **Approve:** the run is requeued with a fresh claim budget, resumes from its checkpoint at that node, and applies the stored payload exactly as reviewed. The payload is then dropped and only the digest and preview are kept.
+  - **Reject:** the run fails with the reason, which is required. Nothing is applied.
+- **Expiry and cancellation:** an undecided request expires after 7 days and fails its run. Cancelling the run or deleting the flow cancels a pending or approved request so it can never be applied. Retrying a failed run asks for approval again.
+- **Limits:** approval gates run only in queued top-level runs. A gated node inside a flow used as a Call Flow fails instead of parking its caller. Replay previews never perform side effects. Both decisions are added to the run's step trace.
+
+API: `GET /api/admin/flow-side-effects?status=&flow_id=`, `GET /api/admin/flow-side-effects/{id}` (SYS_ADMIN, includes the payload under review) and `POST /api/admin/flow-side-effects/{id}/decision` with `{"approve": true|false, "note": "…"}` (SYS_ADMIN). This approves research automation output only: there is no trading and no real money.
 
 ## Typed functions with several inputs and outputs
 
