@@ -237,7 +237,7 @@ func TestMySQLAuthGate(t *testing.T) {
 		t.Fatalf("audit log: %d %v", res.StatusCode, err)
 	}
 	res.Body.Close()
-	if len(audit.Entries) != 1 || audit.Entries[0].ActorEmail != email || audit.Entries[0].TargetID != "audit.check" || audit.Entries[0].StatusCode != http.StatusCreated {
+	if len(audit.Entries) != 1 || audit.Entries[0].ActorEmail != email || audit.Entries[0].TargetID != "1" || audit.Entries[0].StatusCode != http.StatusCreated {
 		t.Fatalf("audited trigger: %+v", audit.Entries)
 	}
 	checked := request("POST", "/api/admin/updates/check", nil, cookies[0], "")
