@@ -448,6 +448,9 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 	if len(order) != len(g.Nodes) {
 		return g, nil, fmt.Errorf("graph has a cycle or unreachable nodes")
 	}
+	if err := checkFlowSemantics(g, order); err != nil {
+		return g, nil, err
+	}
 	return g, order, nil
 }
 

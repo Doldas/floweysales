@@ -13,6 +13,7 @@ import { BlueprintLibraryComponent } from './blueprint-library';
 import { AuthState } from '../auth.service';
 import { canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history';
 import { listOverviewFlows } from './flow-overview';
+import { semanticIssues } from './flow-semantics';
 import { nearestPort, portPoints, wireFromDrag, edgeKey, wirePath, type PortPoint } from './wire-drag';
 import { bindInputPin, declaredPins, mixesPinAndPlainInputs, pinBindings, pinEdgeProblem, pinOffset, routeOutputPin, unboundInputPins } from './function-pins';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
@@ -721,7 +722,7 @@ export class FlowStudioComponent {
       if('problem' in result){this.message.set(result.problem);return}
       this.graph.update(g=>({...g,version:source.pin||target.pin?2:g.version,edges:result.edges}));
       this.chosen.set(target.nodeId);this.cancelConnecting();
-      this.message.set('Connected '+(this.node(source.nodeId)?.label||source.nodeId)+(source.pin?'.'+source.pin:'')+' → '+(this.node(target.nodeId)?.label||target.nodeId)+(target.pin?'.'+target.pin:'')+'; save the flow to persist.');
+      if(!this.warnAboutInputs(target.nodeId))this.message.set('Connected '+(this.node(source.nodeId)?.label||source.nodeId)+(source.pin?'.'+source.pin:'')+' → '+(this.node(target.nodeId)?.label||target.nodeId)+(target.pin?'.'+target.pin:'')+'; save the flow to persist.');
     };
     svg.addEventListener('pointermove',move);svg.addEventListener('pointerup',stop);svg.addEventListener('pointercancel',stop);
   }
@@ -932,6 +933,7 @@ export class FlowStudioComponent {
     if(triggers.length===1)dfs(triggers[0].id);
     if(cycle)add('Graph contains a cycle.');
     for(const n of g.nodes)if(!visited.has(n.id))add('Unreachable node: '+n.label,n.id);
+    for(const issue of semanticIssues(g.version,g.nodes,g.edges,n=>this.functionPins(n as FlowNode)))add(issue.message,issue.nodeId);
     return issues;
   };
   openValidationIssue(id:string):void{if(this.node(id))this.openQuickNode(id)}
@@ -1207,7 +1209,13 @@ export class FlowStudioComponent {
    this.graph.update(g=>({...g,edges:g.edges.filter(e=>e!==edge)}));
  }
   connect(from:string,to:string){if(!from||from===to||this.graph().edges.some(e=>e.from===from&&e.to===to))return;
-  this.graph.update(g=>({...g,edges:[...g.edges,{from,to}]}))}
+  this.graph.update(g=>({...g,edges:[...g.edges,{from,to}]}));this.warnAboutInputs(to)}
+  /** Points out right away when a new connection breaks the branch/merge rules for its target. */
+  private warnAboutInputs(nodeId:string):boolean{
+    const g=this.graph(),issue=semanticIssues(g.version,g.nodes,g.edges,n=>this.functionPins(n as FlowNode)).find(i=>i.nodeId===nodeId);
+    if(issue)this.message.set(issue.message);
+    return !!issue;
+  }
  linkSelected(){const target=this.selectedNode();if(!target)return;const last=this.graph().nodes.find(x=>x.id!==target.id&&x.type==='agent');if(last)this.connect(last.id,target.id)}
  removeSelected(){this.removeNode(this.chosen())}
   removeNode(id:string){const n=this.node(id);if(!n||n.type==='trigger')return;
