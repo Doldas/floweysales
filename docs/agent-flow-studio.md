@@ -6,7 +6,7 @@ Authenticated Flow Studio includes a **My Flows** dashboard, visual graph editor
 
 - Exactly one **Trigger** root and 2–16 total nodes / 1–32 edges; the server rejects cycles and disconnected nodes. Besides agents, versioned graphs support conditions, merge, JSON field extraction, bounded data loops, value/transform/output, HTTP/web research and privileged function/subflow and Workspace nodes.
 - **Manual:** click Run now on a saved flow.
-- **Interval schedule:** enable the flow and set `interval_minutes` to 5–10080. The Go scheduler polls every 30 seconds, and the DB atomically claims due intervals across service replicas.
+- **Interval schedule:** enable the flow and set `interval_minutes` to 5–10080. The Go scheduler polls every 30 seconds and, in one MySQL transaction, claims the due interval and queues its run, so replicas never double-run an interval and a crash never loses one.
 - **Event key:** enable a flow with a key such as `market.close`; authenticated SYS_ADMIN can call `POST /api/admin/flow-events/market.close`. This is an administrator-triggered event hook, not a public unauthenticated webhook. Automated source adapters can be added later behind a separately secured event-ingress layer.
 
 The editor supports a searchable role-aware node picker, free positioning, zoom/pan, **Fit flow**, curved links, accessible click-to-connect ports and bounded **Undo/Redo** of graph changes. Selecting a node opens the **complete floating settings tooltip** (the former permanent Details panel was removed). Graph preflight reports core structural/configuration problems with click-to-node fixes; the server remains authoritative for all execution and permission checks. Version 2 execution routes values along edges and selects conditional branches in topological order.
@@ -15,11 +15,25 @@ The editor supports a searchable role-aware node picker, free positioning, zoom/
 
 - Agent tools are **disabled** in flow execution initially. This prevents order placement or other side effects, but also limits agents to prompt-based research instead of tool-driven autonomous investigation.
 - Flows **never execute live trades**. An admin must separately enable authentication and configure an AI endpoint/model.
-- Schedule polling and execution are bounded, with durable completed/failed run history. Scheduling claims are durable but not an at-least-once queue: a process death after claiming a run but before inserting it can miss that interval. Runs interrupted after insertion are eventually marked failed.
+- Runs go through a durable queue with checkpoint resume and dead-lettering (see below); concurrency is bounded per process.
 - The flow graph rejects cycles. Recurring loops happen at the scheduler level, not through unbounded edges.
 - **Already available:** conditional/branch nodes, bounded agent retries/timeouts, owner-scoped manual flows, cancellation, recorded node steps, immutable run graph snapshots, execution timestamps, preview-only replay and draft/publish revisions with rollback and call pinning (see below). **Still planned:** durable checkpoints/dead-letter queues, general trigger adapters, richer per-step timing/attempt data and adversarial/accessibility tests.
 
 To start, sign in and open **My Flows → New flow / Edit**. Add nodes with **+ Add node**, select a graph node to configure all fields in its floating tooltip, check **Graph validation**, then **Save flow** before **Run now**. Use **Run history → Inspect nodes** to view recorded steps, status-colored historical graph snapshots, duration and errors. Scheduling and typed event triggers require SYS_ADMIN.
+
+## Durable run queue, checkpoints and dead-letter
+
+Every run (manual, scheduled, event or retry) is stored as **QUEUED** together with the graph snapshot it will execute (Liquibase change 025). Nothing is lost when workers are busy or the process restarts:
+
+- **Workers:** each process runs two workers that claim the oldest queued run with `SELECT … FOR UPDATE SKIP LOCKED`, so several replicas can share the queue without claiming a run twice. A claim is a 60-second **lease** renewed every 20 seconds; each attempt is limited to 2 minutes.
+- **Checkpoints:** before each top-level node, the executor saves its state (completed outputs, variables, branch values). Only the lease holder can write them.
+- **Resume:** a run whose lease expires (crash, restart, lost connection) is requeued with a backoff and the next worker **resumes from the last checkpoint**, so completed nodes, including agent calls, are not repeated. Run History marks the resume and shows the attempt (`attempt 2 of 3`). The node that was executing when the worker died runs again, so nodes with side effects (Workspace writes, saved results) must tolerate a repeat; Workspace writes overwrite the same file.
+- **Dead-letter:** a run whose worker is lost on every allowed claim (3) becomes **DEAD** instead of retrying forever. **Retry from checkpoint** requeues a FAILED or DEAD run with a fresh claim budget; it resumes before the node that failed.
+- **Cancellation** works for queued runs (removed before any worker starts) and running ones, including on another replica: the worker's next lease renewal fails and it stops.
+- **Outbox:** event triggers queue one run per subscribed flow; the queued rows are the durable outbox, so an accepted event is not lost on restart. The queue holds at most 200 queued runs; beyond that new manual and event runs get HTTP 429 and due schedules stay due until there is room.
+- Runs left RUNNING by versions before the queue (no lease) are still failed after 5 minutes.
+
+API: `POST /api/admin/flows/{id}/run` returns `run_id` and status `queued`; `POST /api/admin/flows/{id}/runs/{run}/retry` requeues a FAILED/DEAD run (`flows.run`). Run listings include `attempts`, `max_attempts` and `queued_at`.
 
 ## Drafts, published revisions and rollback
 

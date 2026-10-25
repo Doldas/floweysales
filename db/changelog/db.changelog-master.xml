@@ -26,4 +26,5 @@
   <include file="022-flow-run-failed-node.xml" relativeToChangelogFile="true"/>
   <include file="023-paper-approval-review.xml" relativeToChangelogFile="true"/>
   <include file="024-flow-function-revisions.xml" relativeToChangelogFile="true"/>
+  <include file="025-flow-run-queue.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

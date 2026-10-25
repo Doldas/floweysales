@@ -180,6 +180,21 @@ func TestMySQLAuthGate(t *testing.T) {
 	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/revisions/1/activate", flowID), nil, otherCookies[0], ""), http.StatusNotFound)
 	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/revisions/1/activate", flowID), nil, userCookie, ""), http.StatusOK)
 	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/revisions/9/activate", flowID), nil, userCookie, ""), http.StatusNotFound)
+	// Runs are queued durably (no workers run in this test): the owner can
+	// cancel a queued run, a queued run cannot be retried, others see nothing.
+	queuedResponse := request("POST", fmt.Sprintf("/api/admin/flows/%d/run", flowID), nil, userCookie, "")
+	var queued map[string]any
+	if err := json.NewDecoder(queuedResponse.Body).Decode(&queued); err != nil {
+		t.Fatal(err)
+	}
+	queuedResponse.Body.Close()
+	queuedRun, _ := queued["run_id"].(float64)
+	if queuedResponse.StatusCode != http.StatusAccepted || queued["status"] != "queued" || queuedRun <= 0 {
+		t.Fatalf("manual run should be queued: %d %v", queuedResponse.StatusCode, queued)
+	}
+	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/runs/%d/retry", flowID, int64(queuedRun)), nil, userCookie, ""), http.StatusConflict)
+	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/runs/%d/cancel", flowID, int64(queuedRun)), nil, otherCookies[0], ""), http.StatusNotFound)
+	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/runs/%d/cancel", flowID, int64(queuedRun)), nil, userCookie, ""), http.StatusOK)
 	// Only safe research routes are available to USER. No orders or global changes.
 	assert(request("GET", "/api/ai/tools", nil, userCookie, ""), http.StatusOK)
 	assert(request("GET", "/api/orders", nil, userCookie, ""), http.StatusForbidden)

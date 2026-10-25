@@ -605,6 +605,36 @@ func (e *Engine) registerFlowRoutes() {
 		e.flowRunsMu.Unlock()
 		writeJSON(w, 200, map[string]any{"cancelled": true, "run_id": runID})
 	})
+	// Requeue a FAILED or dead-lettered run; it resumes from its last checkpoint.
+	e.mux.HandleFunc("POST /api/admin/flows/{id}/runs/{run}/retry", func(w http.ResponseWriter, r *http.Request) {
+		if !e.flowAuthorized(w, r, "flows.run") {
+			return
+		}
+		flowID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil || flowID <= 0 {
+			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
+			return
+		}
+		runID, err := strconv.ParseInt(r.PathValue("run"), 10, 64)
+		if err != nil || runID <= 0 {
+			writeJSON(w, 400, map[string]string{"error": "Invalid run ID"})
+			return
+		}
+		requeued, err := e.db.RetryAgentFlowRun(r.Context(), flowID, runID)
+		switch {
+		case errors.Is(err, storage.ErrFlowQueueFull):
+			writeJSON(w, 429, map[string]string{"error": err.Error()})
+			return
+		case err != nil:
+			writeJSON(w, 503, map[string]string{"error": "Retry unavailable"})
+			return
+		case !requeued:
+			writeJSON(w, 409, map[string]string{"error": "Only failed or dead-lettered runs with a saved graph snapshot can be retried"})
+			return
+		}
+		e.wakeFlowWorkers()
+		writeJSON(w, 202, map[string]any{"status": "queued", "run_id": runID})
+	})
 	e.mux.HandleFunc("GET /api/admin/flows/{id}/runs/{run}/steps", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAuthorized(w, r, "flows.read") {
 			return
@@ -711,7 +741,7 @@ func (e *Engine) registerFlowRoutes() {
 		}
 		found := false
 		for _, run := range recent {
-			if run.ID == runID && run.Status != "RUNNING" {
+			if run.ID == runID && run.Status != "RUNNING" && run.Status != storage.FlowRunQueued {
 				found = true
 				break
 			}
@@ -803,11 +833,16 @@ func (e *Engine) registerFlowRoutes() {
 				return
 			}
 		}
-		if err := e.launchResolvedFlow(f, revision, "manual", ""); err != nil {
+		runID, err := e.enqueueFlow(r.Context(), f, revision, "manual", "")
+		if errors.Is(err, storage.ErrFlowQueueFull) {
 			writeJSON(w, 429, map[string]string{"error": err.Error()})
 			return
 		}
-		writeJSON(w, 202, map[string]any{"status": "queued", "flow_id": id, "flow_revision": revision})
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"error": "Could not queue the run"})
+			return
+		}
+		writeJSON(w, 202, map[string]any{"status": "queued", "flow_id": id, "run_id": runID, "flow_revision": revision})
 	})
 	e.mux.HandleFunc("POST /api/admin/flow-events/{key}", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {
@@ -853,11 +888,14 @@ func (e *Engine) registerFlowRoutes() {
 		}
 		count := 0
 		for _, f := range flows {
-			if e.launchFlowWithInput(f, "event", eventInput) == nil {
-				count++
+			if _, err := e.enqueueActiveFlow(r.Context(), f.ID, "event", eventInput); err != nil {
+				log.Printf("[Flows] Event %s not queued for flow %d: %v", key, f.ID, err)
+				continue
 			}
+			count++
 		}
-		writeJSON(w, 202, map[string]any{"started": count, "event_key": key})
+		// The queued runs are the event's durable outbox: they survive restarts.
+		writeJSON(w, 202, map[string]any{"started": count, "queued": count, "event_key": key})
 	})
 }
 func (e *Engine) saveFlow(w http.ResponseWriter, r *http.Request, id int64) {
@@ -918,79 +956,6 @@ func (e *Engine) saveFlow(w http.ResponseWriter, r *http.Request, id int64) {
 	writeJSON(w, 200, saved)
 }
 
-// launchFlow is deliberately bounded and never executes trading or external
-// write tools. Agent nodes use the existing read-only AI engine and budgets.
-func (e *Engine) launchFlow(f storage.AgentFlow, trigger string) error {
-	return e.launchFlowWithInput(f, trigger, "")
-}
-
-// launchFlowWithInput runs the flow's active revision, or its draft when it
-// has never been published. Scheduled and event runs always go through here.
-func (e *Engine) launchFlowWithInput(f storage.AgentFlow, trigger, input string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	resolved, revision, err := e.db.ResolveAgentFlow(ctx, f.ID, 0)
-	cancel()
-	if err != nil {
-		return fmt.Errorf("flow %d revision unavailable: %w", f.ID, err)
-	}
-	return e.launchResolvedFlow(resolved, revision, trigger, input)
-}
-
-// launchResolvedFlow executes exactly the graph in f and records revision
-// (nil for the draft) on the run.
-func (e *Engine) launchResolvedFlow(f storage.AgentFlow, revision *int, trigger, input string) error {
-	select {
-	case e.flowSlots <- struct{}{}:
-	default:
-		return fmt.Errorf("maximum concurrent agent flows reached")
-	}
-	go func() {
-		defer func() { <-e.flowSlots }()
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		id, err := e.db.CreateAgentFlowRunRevision(ctx, f.ID, trigger, revision)
-		if err != nil {
-			log.Printf("[Flows] Could not create run: %v", err)
-			return
-		}
-		// Persist the graph exactly as it was when this run began.
-		if snapshotErr := e.db.SaveAgentFlowRunSnapshot(ctx, id, f.Graph); snapshotErr != nil {
-			log.Printf("[Flows] Could not snapshot run graph: %v", snapshotErr)
-			finishCtx, finishCancel := context.WithTimeout(context.Background(), 5*time.Second)
-			_ = e.db.FinishAgentFlowRun(finishCtx, id, "", fmt.Errorf("run graph snapshot failed: %w", snapshotErr))
-			finishCancel()
-			return
-		}
-		e.flowRunsMu.Lock()
-		e.flowRunCancels[id] = cancel
-		e.flowRunsMu.Unlock()
-		defer func() { e.flowRunsMu.Lock(); delete(e.flowRunCancels, id); e.flowRunsMu.Unlock() }()
-		if ctx.Err() != nil {
-			return
-		}
-		output, runErr := e.executeFlowNestedWithInput(context.WithValue(ctx, flowTraceRunKey{}, id), f, map[int64]bool{}, 0, input)
-		finishCtx, finishCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer finishCancel()
-		failedNode := ""
-		if runErr != nil {
-			var nodeErr *flowNodeError
-			var traceErr error
-			if errors.As(runErr, &nodeErr) {
-				failedNode = nodeErr.NodeID
-				traceErr = e.db.AppendAgentFlowRunStepAttempts(finishCtx, id, nodeErr.NodeID, nodeErr.Label, "FAILED", runErr.Error(), &nodeErr.DurationMS, nodeErr.Attempts)
-			} else {
-				traceErr = e.db.AppendAgentFlowRunStep(finishCtx, id, "flow", "Flow execution", "FAILED", runErr.Error())
-			}
-			if traceErr != nil {
-				log.Printf("[Flows] Failed run trace persistence: %v", traceErr)
-			}
-		}
-		if err := e.db.FinishAgentFlowRunWithNode(finishCtx, id, output, runErr, failedNode); err != nil {
-			log.Printf("[Flows] Cannot persist run: %v", err)
-		}
-	}()
-	return nil
-}
 func (e *Engine) executeFlow(ctx context.Context, f storage.AgentFlow) (string, error) {
 	return e.executeFlowNested(ctx, f, map[int64]bool{}, 0)
 }
@@ -1080,7 +1045,24 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 		}
 	}
 	lastNodeID := "start"
-	for _, id := range order {
+	startIndex := 0
+	checkpointer, _ := ctx.Value(flowCheckpointKey{}).(*flowCheckpointer)
+	if depth != 0 {
+		checkpointer = nil // Subflows run inside their caller's node.
+	}
+	if checkpointer != nil && checkpointer.resume != nil {
+		saved, err := restoreFlowCheckpoint(checkpointer.resume, order, v2)
+		if err != nil {
+			return "", err
+		}
+		startIndex = checkpointer.resume.NextIndex
+		previous, lastNodeID, nodeResults, variables, results, workspaceOwner = saved.Previous, saved.LastNodeID, saved.NodeResults, saved.Variables, saved.Results, saved.WorkspaceOwner
+		if v2 {
+			state = saved.V2
+		}
+	}
+	for i := startIndex; i < len(order); i++ {
+		id := order[i]
 		stepStarted = time.Now()
 		currentNode = nil
 		if err := ctx.Err(); err != nil {
@@ -1090,6 +1072,16 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			state.Values[lastNodeID] = previous
 		}
 		nodeResults[lastNodeID] = previous
+		// Every node before i has completed; save that so a run whose
+		// worker is lost resumes here instead of starting over.
+		if checkpointer != nil && i > startIndex {
+			if err := checkpointer.save(ctx, i, flowCheckpointState{
+				NextNode: id, Previous: previous, LastNodeID: lastNodeID, NodeResults: nodeResults,
+				Variables: variables, Results: results, WorkspaceOwner: workspaceOwner, V2: state,
+			}); err != nil {
+				return "", err
+			}
+		}
 		n := nodes[id]
 		if n.Type == "trigger" {
 			if v2 {
@@ -1400,6 +1392,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 	return string(raw), nil
 }
 func (e *Engine) runFlowScheduler(ctx context.Context) {
+	e.recoverFlowRuns(ctx)
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -1407,18 +1400,8 @@ func (e *Engine) runFlowScheduler(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			queryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			flows, err := e.db.ClaimDueAgentFlows(queryCtx)
-			cancel()
-			if err != nil {
-				log.Printf("[Flows] schedule check: %v", err)
-				continue
-			}
-			for _, f := range flows {
-				if err := e.launchFlow(f, "schedule"); err != nil {
-					log.Printf("[Flows] skipped: %v", err)
-				}
-			}
+			e.recoverFlowRuns(ctx)
+			e.enqueueDueFlows(ctx)
 		}
 	}
 }

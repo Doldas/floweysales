@@ -28,6 +28,9 @@ type AgentFlowRun struct {
 	DurationMS *int64  `json:"duration_ms"`
 	FailedNode *string `json:"failed_node"`
 	Revision   *int    `json:"flow_revision"`
+	Attempts   int     `json:"attempts"`
+	MaxClaims  int     `json:"max_attempts"`
+	QueuedAt   *string `json:"queued_at"`
 }
 
 var agentFlowSelect = "SELECT p.id,p.name,p.graph_json,p.enabled,p.interval_minutes,COALESCE(p.event_key,'')" +
@@ -129,7 +132,7 @@ func (d *Database) FinishAgentFlowRunWithNode(ctx context.Context, id int64, out
 	return err
 }
 func (d *Database) ListAgentFlowRuns(ctx context.Context, flowID int64) ([]AgentFlowRun, error) {
-	rows, err := d.db.QueryContext(ctx, "SELECT id,flow_id,trigger_type,status,COALESCE(output_json,''),COALESCE(error_message,''),DATE_FORMAT(started_at,'%Y-%m-%dT%H:%i:%s.%fZ'),IF(finished_at IS NULL,NULL,DATE_FORMAT(finished_at,'%Y-%m-%dT%H:%i:%s.%fZ')),IF(finished_at IS NULL,NULL,TIMESTAMPDIFF(MICROSECOND,started_at,finished_at) DIV 1000),failed_node_id,flow_revision FROM agent_flow_runs WHERE flow_id=? ORDER BY id DESC LIMIT 30", flowID)
+	rows, err := d.db.QueryContext(ctx, "SELECT id,flow_id,trigger_type,status,COALESCE(output_json,''),COALESCE(error_message,''),DATE_FORMAT(started_at,'%Y-%m-%dT%H:%i:%s.%fZ'),IF(finished_at IS NULL,NULL,DATE_FORMAT(finished_at,'%Y-%m-%dT%H:%i:%s.%fZ')),IF(finished_at IS NULL,NULL,TIMESTAMPDIFF(MICROSECOND,started_at,finished_at) DIV 1000),failed_node_id,flow_revision,attempts,max_attempts,IF(queued_at IS NULL,NULL,DATE_FORMAT(queued_at,'%Y-%m-%dT%H:%i:%s.%fZ')) FROM agent_flow_runs WHERE flow_id=? ORDER BY id DESC LIMIT 30", flowID)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +143,7 @@ func (d *Database) ListAgentFlowRuns(ctx context.Context, flowID int64) ([]Agent
 		var finishedAt sql.NullString
 		var durationMS sql.NullInt64
 		var failedNode sql.NullString
-		if err := rows.Scan(&x.ID, &x.FlowID, &x.Trigger, &x.Status, &x.Output, &x.Error, &x.StartedAt, &finishedAt, &durationMS, &failedNode, &x.Revision); err != nil {
+		if err := rows.Scan(&x.ID, &x.FlowID, &x.Trigger, &x.Status, &x.Output, &x.Error, &x.StartedAt, &finishedAt, &durationMS, &failedNode, &x.Revision, &x.Attempts, &x.MaxClaims, &x.QueuedAt); err != nil {
 			return nil, err
 		}
 		if finishedAt.Valid {
@@ -157,33 +160,6 @@ func (d *Database) ListAgentFlowRuns(ctx context.Context, flowID int64) ([]Agent
 	return result, rows.Err()
 }
 
-// ClaimDueAgentFlows atomically advances due schedules before launching any
-// external model calls. Two scheduler processes cannot claim the same tick.
-func (d *Database) ClaimDueAgentFlows(ctx context.Context) ([]AgentFlow, error) {
-	flows, err := d.ListAgentFlows(ctx)
-	if err != nil {
-		return nil, err
-	}
-	due := []AgentFlow{}
-	for _, f := range flows {
-		if !f.Enabled || f.IntervalMinutes < 1 {
-			continue
-		}
-		res, err := d.db.ExecContext(ctx, `UPDATE agent_flows SET next_run_at=DATE_ADD(UTC_TIMESTAMP(6),INTERVAL interval_minutes MINUTE)
- WHERE id=? AND enabled=TRUE AND interval_minutes>0 AND next_run_at<=UTC_TIMESTAMP(6)`, f.ID)
-		if err != nil {
-			return due, err
-		}
-		n, err := res.RowsAffected()
-		if err != nil {
-			return due, err
-		}
-		if n == 1 {
-			due = append(due, f)
-		}
-	}
-	return due, nil
-}
 func (d *Database) FindEventAgentFlows(ctx context.Context, key string) ([]AgentFlow, error) {
 	flows, err := d.ListAgentFlows(ctx)
 	if err != nil {
@@ -196,12 +172,6 @@ func (d *Database) FindEventAgentFlows(ctx context.Context, key string) ([]Agent
 		}
 	}
 	return out, nil
-}
-func (d *Database) RecoverStalledAgentFlowRuns(ctx context.Context) error {
-	// Workers are in-process and lost during restart. A run older than 5m is
-	// terminally failed rather than remaining RUNNING indefinitely.
-	_, err := d.db.ExecContext(ctx, `UPDATE agent_flow_runs SET status='FAILED',error_message='Worker interrupted or timed out',finished_at=UTC_TIMESTAMP(6) WHERE status='RUNNING' AND started_at<DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 5 MINUTE)`)
-	return err
 }
 
 // ErrAgentFlowRunning prevents deleting a flow while a worker is active.
@@ -235,10 +205,12 @@ func (d *Database) DeleteAgentFlow(ctx context.Context, id int64) error {
 	return tx.Commit()
 }
 
-// CancelAgentFlowRun transitions only a running run, atomically and within its flow.
-// The worker's subsequent completion cannot overwrite CANCELLED.
+// CancelAgentFlowRun cancels a queued or running run, atomically and within
+// its flow. The worker's lease renewal then fails, so it stops, and its
+// completion cannot overwrite CANCELLED.
 func (d *Database) CancelAgentFlowRun(ctx context.Context, flowID, runID int64) (bool, error) {
-	result, err := d.db.ExecContext(ctx, "UPDATE agent_flow_runs SET status='CANCELLED',error_message='Cancelled by administrator',finished_at=UTC_TIMESTAMP(6) WHERE id=? AND flow_id=? AND status='RUNNING'", runID, flowID)
+	result, err := d.db.ExecContext(ctx, `UPDATE agent_flow_runs SET status='CANCELLED',error_message='Cancelled by administrator',
+		finished_at=UTC_TIMESTAMP(6),lease_owner=NULL,lease_expires_at=NULL WHERE id=? AND flow_id=? AND status IN ('QUEUED','RUNNING')`, runID, flowID)
 	if err != nil {
 		return false, err
 	}

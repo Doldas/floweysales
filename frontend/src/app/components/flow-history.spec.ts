@@ -3,7 +3,7 @@
 // No extra test dependencies are required.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { UNDO_HISTORY_LIMIT, filterFlowRuns, pushHistorySnapshot } from './flow-history.ts';
+import { UNDO_HISTORY_LIMIT, canRetryRun, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history.ts';
 
 const runs = [
   { id: 1, trigger: 'manual', status: 'SUCCESS' },
@@ -75,4 +75,18 @@ test('pushHistorySnapshot keeps at most the limit and drops the oldest entries',
 
 test('a limit of one keeps only the newest snapshot', () => {
   assert.deepEqual(pushHistorySnapshot(pushHistorySnapshot(['a'], 'b', 1), 'c', 1), ['c']);
+});
+
+test('queued and running runs are active; failed and dead runs can be retried', () => {
+  assert.deepEqual(['QUEUED', 'RUNNING', 'SUCCESS', 'FAILED', 'DEAD', 'CANCELLED'].map(isActiveRun), [true, true, false, false, false, false]);
+  assert.deepEqual(['QUEUED', 'RUNNING', 'SUCCESS', 'FAILED', 'DEAD', 'CANCELLED'].map(canRetryRun), [false, false, false, true, true, false]);
+});
+
+test('run status and attempt labels', () => {
+  assert.equal(runStatusLabel('DEAD'), 'Dead-lettered');
+  assert.equal(runStatusLabel('QUEUED'), 'Queued');
+  assert.equal(runStatusLabel('CUSTOM'), 'CUSTOM');
+  assert.equal(runAttemptLabel(1, 3), '');
+  assert.equal(runAttemptLabel(undefined, undefined), '');
+  assert.equal(runAttemptLabel(2, 3), 'attempt 2 of 3 (resumed from checkpoint)');
 });

@@ -11,7 +11,7 @@ import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angu
 import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 import { AuthState } from '../auth.service';
-import { filterFlowRuns, pushHistorySnapshot } from './flow-history';
+import { canRetryRun, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history';
 import { listOverviewFlows } from './flow-overview';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 
@@ -20,7 +20,7 @@ interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string 
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow extends PublishState { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
 interface FlowRunStep {id:number;node:string;label:string;status:string;output:string;created_at?:string;duration_ms?:number|null;attempts?:number|null}
-interface FlowRun { id:number; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null; failed_node?:string|null; flow_revision?:number|null }
+interface FlowRun { id:number; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null; failed_node?:string|null; flow_revision?:number|null; attempts?:number; max_attempts?:number; queued_at?:string|null }
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
 @Component({
@@ -360,34 +360,38 @@ export class ConfirmDeleteFlowDialog {
    <div class="run-history-heading"><h3>Recent runs</h3>
      <label>Flow <select [ngModel]="historyFlowId()" (ngModelChange)="selectHistoryFlow(+$event)" aria-label="Select flow for history"><option [ngValue]="0">Select a flow…</option>@for(f of flows();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
      <label>Find run <input [ngModel]="historySearch()" (ngModelChange)="historySearch.set($event)" placeholder="Run ID or trigger"></label>
-     <label>Status <select [ngModel]="historyStatusFilter()" (ngModelChange)="historyStatusFilter.set($event)"><option value="all">All statuses</option><option value="SUCCESS">Success</option><option value="FAILED">Failed</option><option value="RUNNING">Running</option><option value="CANCELLED">Cancelled</option></select></label>
+     <label>Status <select [ngModel]="historyStatusFilter()" (ngModelChange)="historyStatusFilter.set($event)"><option value="all">All statuses</option><option value="SUCCESS">Success</option><option value="FAILED">Failed</option><option value="QUEUED">Queued</option><option value="RUNNING">Running</option><option value="CANCELLED">Cancelled</option><option value="DEAD">Dead-lettered</option></select></label>
      <label>Output view <select [ngModel]="logView()" (ngModelChange)="logView.set($event)">
        <option value="markdown">Markdown (default)</option><option value="raw">RAW</option><option value="json">Structured JSON</option>
      </select></label>
      <button mat-stroked-button (click)="refreshRuns()" [disabled]="!historyFlowId()||historyLoading()">Refresh history</button>
      <label>Compare with run<select [ngModel]="compareRun()" (ngModelChange)="compareAgainst(+$event)">
       <option [ngValue]="0">No comparison</option>
-      @for(other of runs();track other.id){<option [ngValue]="other.id">#{{other.id}} · {{other.status}}</option>}
+      @for(other of runs();track other.id){<option [ngValue]="other.id">#{{other.id}} · {{runStatusLabel(other.status)}}</option>}
      </select></label>
    </div>
+   @if(message()){<p class="flow-message" role="status">{{message()}}</p>}
    @if(!historyFlowId()){<p class="muted">Select a flow above to view its history.</p>}
     @else if(!runs().length&&!historyLoading()){<p class="muted">No executions yet for this flow.</p>}
     @if(historyLoading()){<p role="status">Loading run history…</p>}
-    @if(runs().some(run=>run.status==='RUNNING')){<p class="muted" role="status">Active run detected · history refreshes automatically every 5 seconds while this tab is open.</p>}
+    @if(runs().some(run=>isActiveRun(run.status))){<p class="muted" role="status">Queued or running run detected · history refreshes automatically every 5 seconds while this tab is open.</p>}
     @if(historyFlowId()&&runs().length&&!filteredRuns().length){<p class="muted">No runs match your filters.</p>}
    @for(run of filteredRuns();track run.id){
     <details class="flow-run">
-      <summary><span class="run-summary-status" [class.run-success]="run.status==='SUCCESS'" [class.run-failed]="run.status==='FAILED'" [class.run-active]="run.status==='RUNNING'">{{run.status}}</span> #{{run.id}} · {{run.trigger}} · {{runRevisionLabel(run.flow_revision)}} <span class="muted">· {{displayRunTime(run.started_at)}} · {{displayRunDuration(run)}}</span></summary>
+      <summary><span class="run-summary-status" [class.run-success]="run.status==='SUCCESS'" [class.run-failed]="run.status==='FAILED'||run.status==='DEAD'" [class.run-active]="isActiveRun(run.status)">{{runStatusLabel(run.status)}}</span> #{{run.id}} · {{run.trigger}} · {{runRevisionLabel(run.flow_revision)}}@if(runAttemptLabel(run.attempts,run.max_attempts);as attempt){ · {{attempt}}} <span class="muted">· {{displayRunTime(run.status==='QUEUED'?run.queued_at:run.started_at)}} · {{displayRunDuration(run)}}</span></summary>
       <div class="run-diagnostics">
-       <span><strong>Started:</strong> {{displayRunTime(run.started_at)}}</span>
-       <span><strong>Finished:</strong> {{run.status==='RUNNING'?'In progress':displayRunTime(run.finished_at)}}</span>
+       @if(run.queued_at){<span><strong>Queued:</strong> {{displayRunTime(run.queued_at)}}</span>}
+       <span><strong>Started:</strong> {{run.status==='QUEUED'&&!run.attempts?'Waiting for a worker':displayRunTime(run.started_at)}}</span>
+       <span><strong>Finished:</strong> {{isActiveRun(run.status)?'In progress':displayRunTime(run.finished_at)}}</span>
+       @if(run.attempts){<span><strong>Worker attempts:</strong> {{run.attempts}} of {{run.max_attempts}}</span>}
        <span><strong>Duration:</strong> {{displayRunDuration(run)}}</span>
        <span><strong>Trigger:</strong> {{run.trigger}}</span>
        <span><strong>Graph:</strong> {{runRevisionLabel(run.flow_revision)}}</span>
       </div>
-      @if(run.status==='FAILED'&&run.error){
+      @if(run.status==='QUEUED'&&run.error){<p class="muted" role="status">{{run.error}}</p>}
+      @if((run.status==='FAILED'||run.status==='DEAD')&&run.error){
        <div class="run-error-panel" role="alert">
-        <strong>Execution failed</strong>
+        <strong>{{run.status==='DEAD'?'Dead-lettered':'Execution failed'}}</strong>
         <p>{{run.error}}</p>
         @if(run.failed_node){
           <button mat-stroked-button (click)="inspectFailedNode(run.id,run.failed_node)">Inspect failed node: {{run.failed_node}}</button>
@@ -396,7 +400,8 @@ export class ConfirmDeleteFlowDialog {
         }
        </div>
       }
-      @if(run.status==='RUNNING'){<button mat-stroked-button color="warn" (click)="cancelRun(run.id)" [disabled]="busy()">Cancel run</button>}
+      @if(isActiveRun(run.status)){<button mat-stroked-button color="warn" (click)="cancelRun(run.id)" [disabled]="busy()">{{run.status==='QUEUED'?'Remove from queue':'Cancel run'}}</button>}
+      @if(canRetryRun(run.status)){<button mat-stroked-button (click)="retryRun(run.id)" [disabled]="busy()" title="Queue this run again; it resumes from its last checkpoint">Retry from checkpoint</button>}
       <button mat-stroked-button (click)="showRunSteps(run.id)">{{traceRunId()===run.id?'Hide node trace':'Inspect nodes'}}</button>
       @if(traceRunId()===run.id){
        @if(executionGraph();as graph){
@@ -807,6 +812,7 @@ export class FlowStudioComponent {
    return value<1000?value+' ms':value<60000?(value/1000).toFixed(1)+' s':Math.floor(value/60000)+' min '+Math.round(value%60000/1000)+' s';
  }
  displayRunDuration(run:FlowRun):string{
+   if(run.status==='QUEUED')return 'Queued';
    if(run.duration_ms==null)return run.status==='RUNNING'?'In progress':'Unavailable';
    const ms=Math.max(0,run.duration_ms);
    return ms<1000?ms+' ms':ms<60000?(ms/1000).toFixed(1)+' s':Math.floor(ms/60000)+' min '+Math.round(ms%60000/1000)+' s';
@@ -848,7 +854,7 @@ export class FlowStudioComponent {
       this.lastGraphVersion=current;this.redoHistory.set([]);
     });
     effect((onCleanup)=>{
-      if(this.studioTab()!=='runs'||!this.historyFlowId()||!this.runs().some(run=>run.status==='RUNNING'))return;
+      if(this.studioTab()!=='runs'||!this.historyFlowId()||!this.runs().some(run=>isActiveRun(run.status)))return;
       const timer=setInterval(()=>void this.refreshRuns(),5000);
       onCleanup(()=>clearInterval(timer));
     });
@@ -1078,6 +1084,20 @@ export class FlowStudioComponent {
     catch{this.triggers.set([])}
    }else{this.triggers.set([])}
   }catch(e){this.message.set(String(e))}
+ }
+ readonly isActiveRun=isActiveRun;
+ readonly canRetryRun=canRetryRun;
+ readonly runStatusLabel=runStatusLabel;
+ readonly runAttemptLabel=runAttemptLabel;
+ async retryRun(runId:number){
+  if(!this.historyFlowId()||this.busy())return;
+  this.busy.set(true);
+  try{
+   await this.request('/api/admin/flows/'+this.historyFlowId()+'/runs/'+runId+'/retry',{method:'POST'});
+   this.message.set('Run #'+runId+' queued again; it resumes from its last checkpoint.');
+   await this.refreshRuns();
+  }catch(e){this.message.set('Cannot retry run: '+String(e))}
+  finally{this.busy.set(false)}
  }
  async cancelRun(runId:number){
   if(!this.historyFlowId()||this.busy())return;

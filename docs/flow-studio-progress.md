@@ -32,6 +32,7 @@
 - Expand **Inspect nodes** to see the **immutable graph snapshot captured when that run started**. Nodes are colored by recorded SUCCESS/FAILED/RUNNING/SKIPPED status (or not recorded). Select a node to see its persisted status/output preview; old runs lacking snapshots fall back to the trace.
 - View run start/finish times, total elapsed time and node-step recording timestamps. Errors have a visible panel with **Inspect failed node** for the recorded failing node; runs recorded before structured attribution show a message-based suspected-node hint instead.
 - Side-effect-free replay previews and basic run comparison exist. They are **not** equivalent to a complete deterministic debugger or replay with real external effects.
+- Runs are durably queued. History shows **Queued**, **Running**, resumed attempts and **Dead-lettered** runs; queued runs can be removed, and failed or dead-lettered runs retried from their last checkpoint.
 - Each run shows the revision it executed (*rev N* or *draft*). Use the editor's **Versions** panel to publish, activate an older revision (rollback) or restore one into the draft, and **Run draft** to test unpublished edits.
 
 ### Work with private documents
