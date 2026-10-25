@@ -47,7 +47,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
@@ -56,7 +56,7 @@ jobs:
             GIT_COMMIT=${{ steps.vars.outputs.commit }}
             BUILD_TIME=${{ steps.vars.outputs.created }}
           tags: ghcr.io/${{ steps.vars.outputs.owner }}/floweysales:${{ steps.vars.outputs.tag }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/liquibase.Dockerfile
