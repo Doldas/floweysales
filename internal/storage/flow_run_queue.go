@@ -125,12 +125,13 @@ func insertRunRow(ctx context.Context, tx execer, r NewFlowRun) (id int64, inser
 
 // EnqueueEmittedAgentFlowRuns queues the runs one Emit Event node triggers,
 // atomically. Each run needs an EmitKey; runs whose key was already used
-// (the emit node ran again after its worker was lost) are skipped and
-// counted as duplicates, so an event is queued exactly once per subscriber.
+// (the emit node ran again after its worker was lost, or a webhook sender
+// retried a delivery) are skipped and counted as duplicates, so an event is
+// queued exactly once per subscriber.
 func (d *Database) EnqueueEmittedAgentFlowRuns(ctx context.Context, runs []NewFlowRun) (queued, duplicates int, err error) {
 	for _, r := range runs {
-		if r.EmitKey == "" || r.ParentRunID == nil {
-			return 0, 0, fmt.Errorf("emitted runs need a parent run and emit key")
+		if r.EmitKey == "" {
+			return 0, 0, fmt.Errorf("emitted runs need an emit key")
 		}
 	}
 	tx, err := d.db.BeginTx(ctx, nil)

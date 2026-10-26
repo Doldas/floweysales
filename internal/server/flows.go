@@ -1485,6 +1485,7 @@ func (e *Engine) runFlowScheduler(ctx context.Context) {
 	e.recoverFlowRuns(ctx)
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
+	var pruned time.Time
 	for {
 		select {
 		case <-ctx.Done():
@@ -1492,6 +1493,12 @@ func (e *Engine) runFlowScheduler(ctx context.Context) {
 		case <-ticker.C:
 			e.recoverFlowRuns(ctx)
 			e.enqueueDueFlows(ctx)
+			if time.Since(pruned) > time.Hour {
+				pruned = time.Now()
+				if err := e.db.PruneFlowEventDeliveries(ctx, adapterDeliveryRetention); err != nil {
+					log.Printf("[Flows] Pruning adapter deliveries failed: %v", err)
+				}
+			}
 		}
 	}
 }
