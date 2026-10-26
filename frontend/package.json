@@ -14,7 +14,8 @@
     "smoke:financials": "node smoke-financials.mjs",
     "smoke:ai": "node smoke-ai.mjs",
     "smoke:trading": "node smoke-trading.mjs",
-    "smoke:responsive": "node smoke-responsive.mjs"
+    "smoke:responsive": "node smoke-responsive.mjs",
+    "smoke:a11y": "node smoke-a11y.mjs"
   },
   "private": true,
   "packageManager": "npm@12.2.0",
@@ -36,6 +37,7 @@
     "@angular/build": "^22.2.4",
     "@angular/cli": "^22.2.4",
     "@angular/compiler-cli": "^22.2.0",
+    "axe-core": "4.14.0",
     "playwright": "^1.64.1",
     "prettier": "^3.8.1",
     "typescript": "~6.0.2"

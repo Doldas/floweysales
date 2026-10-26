@@ -42,7 +42,7 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
       <button type="button" (click)="zoomCanvas(0.8)" aria-label="Zoom in">＋</button>
       <span>{{ canvasZoomPercent() }}%</span>
       <button type="button" (click)="zoomCanvas(1.25)" aria-label="Zoom out">－</button>
-      <button type="button" (click)="resetCanvas()" aria-label="Reset canvas view">Reset view</button>
+      <button type="button" (click)="resetCanvas()" title="Reset canvas view">Reset view</button>
     </div>
     <div class="canvas">
   <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (pointerdown)="onCanvasPointerDown($event)" (click)="closeQuickNodeOnCanvas($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="onCanvasPointerEnd($event)" (pointercancel)="onCanvasPointerEnd($event)" (contextmenu)="onCanvasContextMenu($event)">

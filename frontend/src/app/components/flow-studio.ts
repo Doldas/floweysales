@@ -134,12 +134,12 @@ export class ConfirmDeleteFlowDialog {
       <button type="button" (click)="zoomCanvas(0.8)" aria-label="Zoom in">＋</button>
       <span>{{ canvasZoomPercent() }}%</span>
       <button type="button" (click)="zoomCanvas(1.25)" aria-label="Zoom out">－</button>
-      <button type="button" (click)="fitCanvas()" aria-label="Fit all nodes in view">Fit flow</button>
-      <button type="button" (click)="resetCanvas()" aria-label="Reset canvas view">Reset view</button>
+      <button type="button" (click)="fitCanvas()" title="Fit all nodes in view">Fit flow</button>
+      <button type="button" (click)="resetCanvas()" title="Reset canvas view">Reset view</button>
       @if(connectingFrom()){<span class="canvas-connect-hint" role="status">Select an input port <button type="button" (click)="cancelConnecting()">Cancel</button></span>}
     </div>
     <div class="flow-workspace" aria-label="Agent flow graph editor">
-    <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (pointerdown)="onCanvasPointerDown($event)" (click)="closeQuickNodeOnCanvas($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="onCanvasPointerEnd($event)" (pointercancel)="onCanvasPointerEnd($event)" (contextmenu)="onCanvasContextMenu($event)" role="img" aria-label="Agent nodes and directed connections">
+    <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (pointerdown)="onCanvasPointerDown($event)" (click)="closeQuickNodeOnCanvas($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="onCanvasPointerEnd($event)" (pointercancel)="onCanvasPointerEnd($event)" (contextmenu)="onCanvasContextMenu($event)" role="group" aria-label="Flow canvas: nodes and directed connections">
      <defs><marker id="flow-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#72b7ef"/></marker></defs>
      @for(edge of graph().edges;track edgeKey(edge)){
        <path [attr.d]="edgePath(edge)" fill="none" stroke="#72b7ef" stroke-width="2.5" marker-end="url(#flow-arrow)"/>
@@ -475,12 +475,12 @@ export class ConfirmDeleteFlowDialog {
             <svg [attr.viewBox]="executionViewBox()" role="group" [attr.aria-label]="'Execution graph for run '+run.id">
               @for(edge of graph.edges;track $index){<path [attr.d]="executionEdgePath(edge,graph)" stroke="#8eacc6" stroke-width="2" fill="none"/>}
               @for(n of graph.nodes;track n.id){
-                <g tabindex="0" role="button" class="exec-node" [attr.aria-label]="n.label+', '+executionNodeStatus(n.id)"
+                <g tabindex="0" role="button" class="exec-node" [attr.aria-label]="n.label+' '+executionNodeStatus(n.id)"
                  (click)="executionSelectedNode.set(n.id)" (keydown.enter)="executionSelectedNode.set(n.id)" (keydown.space)="$event.preventDefault();executionSelectedNode.set(n.id)">
                   <rect [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="10"
                    [attr.fill]="executionNodeColor(n.id)" [attr.stroke]="executionSelectedNode()===n.id?'#ffe59c':'#8fa6bc'" [attr.stroke-width]="executionSelectedNode()===n.id?4:2"/>
                   <text [attr.x]="n.x+10" [attr.y]="n.y+24" font-size="12" fill="#fff">{{n.label.slice(0,17)}}</text>
-                  <text [attr.x]="n.x+10" [attr.y]="n.y+46" font-size="11" fill="#fff">{{executionNodeStatus(n.id)}}</text>
+                  <text [attr.x]="n.x+10" [attr.y]="n.y+46" font-size="11" fill="#fff"> {{executionNodeStatus(n.id)}}</text>
                 </g>
               }
             </svg>

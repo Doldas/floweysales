@@ -129,6 +129,16 @@ jobs:
             sleep 1
           done
           npm run smoke:responsive --prefix frontend
+      - name: Flow Studio accessibility (axe-core, WCAG 2.1 AA)
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory www/browser >/tmp/floweysales-a11y-server.log 2>&1 &
+          web_pid=$!
+          trap 'kill "$web_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then break; fi
+            sleep 1
+          done
+          npm run smoke:a11y --prefix frontend
       - uses: actions/upload-artifact@v7
         with:
           name: frontend-preview
