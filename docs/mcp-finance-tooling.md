@@ -4,7 +4,7 @@
 - Agent output may be connected to a downstream node using the Node Details "Connect output from" picker. An explicit **Output Result** node can display the final value, and adding it while an agent is selected automatically connects it.
 - An unconnected agent continues to appear in the normal run history. This is backward compatible with existing saved flows.
 - Agent Output format: `Markdown / Default` (unchanged) or `JSON only`. JSON mode adds a strict output-only system instruction and rejects invalid JSON or scalar values **after** the model responds. It does not silently strip prose or markdown fences.
-- Agent tools remain disabled within scheduled Flow Studio research executions. Tracker mutations are **not** enabled for research flow agents.
+- Flow Studio agent nodes have no tools unless a SYS_ADMIN grants read-only research tools per node ([details](agent-flow-studio.md#research-tools-for-agent-nodes)). Tracker mutations are **not** grantable to flow agents.
 
 ## MCP finance tracker tools
 New optional MCP tools: `tracker_list`, `tracker_status`, `tracker_start`. They operate against the same persisted tracker registry and 16-tracker quota as the dashboard, with no trading orders.

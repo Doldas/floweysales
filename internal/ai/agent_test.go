@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -177,5 +178,72 @@ func TestAgentToolCallBudget(t *testing.T) {
 	}
 	if n > 1 {
 		t.Fatalf("exceeded tool budget, got %d tool executions", n)
+	}
+}
+
+// scriptedOpenAI answers each round with the next scripted SSE body and keeps the request bodies.
+func scriptedOpenAI(t *testing.T, rounds ...string) (*httptest.Server, *[]string) {
+	t.Helper()
+	var bodies []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, string(raw))
+		w.Header().Set("Content-Type", "text/event-stream")
+		i := min(len(bodies), len(rounds)) - 1
+		_, _ = fmt.Fprintf(w, "data: %s\n\ndata: [DONE]\n\n", rounds[i])
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &bodies
+}
+
+func toolCallChunk(id, name string) string {
+	return fmt.Sprintf(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":%q,"type":"function","function":{"name":%q,"arguments":"{\"symbol\":\"TEST\"}"}}]},"finish_reason":"tool_calls"}]}`, id, name)
+}
+
+func TestAllowedToolsLimitTheCatalogueAndCalls(t *testing.T) {
+	srv, bodies := scriptedOpenAI(t,
+		toolCallChunk("c1", "get_market_stats"),
+		`{"choices":[{"delta":{"content":"done"},"finish_reason":"stop"}]}`)
+	var results []Event
+	err := Run(context.Background(), NewClient(srv.URL, "", "test"), fakeDS{}, []Message{{Role: "user", Content: "x"}},
+		AgentOptions{AllowedTools: []string{"get_price_history"}}, func(e Event) {
+			if e.Type == "tool_result" {
+				results = append(results, e)
+			}
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains((*bodies)[0], `"get_price_history"`) || strings.Contains((*bodies)[0], `"get_market_stats"`) {
+		t.Fatalf("model must only be offered granted tools: %s", (*bodies)[0])
+	}
+	if len(results) != 1 || !strings.Contains(results[0].ToolError, "not granted") {
+		t.Fatalf("an ungranted call must be refused, not executed: %+v", results)
+	}
+}
+
+func TestAnswerAfterToolBudgetWithdrawsTools(t *testing.T) {
+	srv, bodies := scriptedOpenAI(t,
+		toolCallChunk("c1", "get_price_history"),
+		toolCallChunk("c2", "get_price_history"),
+		`{"choices":[{"delta":{"content":"final"},"finish_reason":"stop"}]}`)
+	var content strings.Builder
+	var errs, executed int
+	err := Run(context.Background(), NewClient(srv.URL, "", "test"), fakeDS{}, []Message{{Role: "user", Content: "x"}},
+		AgentOptions{MaxSteps: 4, MaxToolCalls: 1, AllowedTools: []string{"get_price_history"}, AnswerAfterToolBudget: true}, func(e Event) {
+			switch e.Type {
+			case "delta":
+				content.WriteString(e.Content)
+			case "error":
+				errs++
+			case "tool_start":
+				executed++
+			}
+		})
+	if err != nil || content.String() != "final" || errs != 0 || executed != 1 {
+		t.Fatalf("content %q errors %d executed %d err %v", content.String(), errs, executed, err)
+	}
+	if len(*bodies) != 3 || strings.Contains((*bodies)[2], `"tools"`) {
+		t.Fatalf("the round after the budget must be offered no tools: %d rounds", len(*bodies))
 	}
 }

@@ -13,7 +13,7 @@ The editor supports a searchable role-aware node picker, free positioning, zoom/
 
 ## Safety and remaining work
 
-- Agent tools are **disabled** in flow execution initially. This prevents order placement or other side effects, but also limits agents to prompt-based research instead of tool-driven autonomous investigation.
+- Agent nodes have **no tools** unless a SYS_ADMIN grants some, and only read-only research tools can be granted (see [Research tools for agent nodes](#research-tools-for-agent-nodes)). No tool can place orders, change approvals or modify the system.
 - Flows **never execute live trades**. An admin must separately enable authentication and configure an AI endpoint/model.
 - Runs go through a durable queue with checkpoint resume and dead-lettering (see below); concurrency is bounded per process.
 - The flow graph rejects cycles. Recurring loops happen at the scheduler level, not through unbounded edges.
@@ -89,6 +89,16 @@ A SYS_ADMIN can add an **Emit Event** node (graph version 2) that names a custom
 - **Loop protection:** a flow never triggers itself. Runs started by an emission carry their chain depth, and a run at depth 3 cannot emit further. One emission reaches at most 10 flows.
 - **Lineage:** Run History shows "triggered by run #N" on runs an emission started (`parent_run_id` in run listings).
 - Saving or publishing a flow that emits an undefined event is refused; the editor's graph validation flags it too.
+
+## Research tools for agent nodes
+
+A SYS_ADMIN can let an agent node gather its own evidence instead of answering from its prompt alone. In the node's settings, **Research tools** lists the grantable tools. Tick up to 8 and optionally set **Max tool calls** (1–16; default 6).
+
+- **Grantable catalogue (read-only):** symbol search, price history, technical analysis, latest close, provider quote, quarterly financials, financial-ratio and TTM-valuation calculators, provider capabilities/endpoints/research operations, SEC filings, SEC XBRL facts, SEC filing sections, the DCF/WACC/ROIC calculators and web search. `GET /api/admin/flow-agent-tools` returns the list with descriptions. Tools that read the engine's own tracker state (engine config, recorded ticks, market stats) cannot be granted. A tool added to the chat catalogue later is not grantable until it is explicitly added to this list.
+- **Enforced on the server:** the model is offered only the granted tools, and a call to any other tool is refused without running it. Saving or publishing a flow that grants an unknown or non-grantable tool, more than 8 tools, or a budget without tools is refused. Granting tools is SYS_ADMIN-only: a flow with a tool grant cannot be saved or run by an ordinary user, and nodes without grants behave exactly as before.
+- **Budget:** once the call budget is spent, the tools are withdrawn and the agent must answer with what it has. The node does not fail. A granted agent's default timeout is 90 s instead of 45 s. Retries (0–2) remain allowed because no granted tool has side effects.
+- **Trace:** every call is recorded on the node's run step (Liquibase 031, `tool_calls`): attempt, tool name, redacted arguments (300 characters), success or redacted error and result size. Results themselves are not stored. At most 32 calls are kept per node. *Run history → Inspect nodes* lists them, and failed nodes keep their trace too.
+- Tool results are passed to the model as untrusted data, and the system prompt asks it to cite the tool and period behind every number. Tools such as SEC facts and web search use the server's configured providers and keys, so their rate limits and costs apply.
 
 ## Durable run queue, checkpoints and dead-letter
 

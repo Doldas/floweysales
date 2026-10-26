@@ -3,6 +3,7 @@ import { HostListener, Component, ChangeDetectionStrategy, signal, effect } from
 import { MarkdownRunOutputComponent } from './markdown-run-output';
 import { UserspaceFilesComponent } from './userspace-files';
 import { FlowSideEffectsComponent } from './flow-side-effects';
+import { clampToolBudget, describeToolCall, toggleTool, toolLabel, type GrantableTool, type ToolCall } from './agent-tools';
 import { capabilityManifest, describeCapability, nodeCapability, readinessHeadline, type Readiness } from './side-effects';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -20,12 +21,12 @@ import { nearestPort, portPoints, wireFromDrag, edgeKey, wirePath, type PortPoin
 import { bindInputPin, declaredPins, mixesPinAndPlainInputs, pinBindings, pinEdgeProblem, pinOffset, routeOutputPin, unboundInputPins } from './function-pins';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'; label:string; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'; label:string; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FunctionDef { id:number; name:string; graph?:unknown }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow extends PublishState { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
-interface FlowRunStep {id:number;node:string;label:string;status:string;input?:string;output:string;error?:string;started_at?:string;created_at?:string;duration_ms?:number|null;attempts?:number|null;worker_attempt?:number|null}
+interface FlowRunStep {id:number;node:string;label:string;status:string;input?:string;output:string;error?:string;started_at?:string;created_at?:string;duration_ms?:number|null;attempts?:number|null;worker_attempt?:number|null;tool_calls?:ToolCall[]}
 interface FlowRun { id:number; parent_run_id?:number|null; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null; failed_node?:string|null; flow_revision?:number|null; attempts?:number; max_attempts?:number; queued_at?:string|null }
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
@@ -196,6 +197,16 @@ export class ConfirmDeleteFlowDialog {
         <label>Timeout (seconds, 0 = default 45) <input type="number" min="0" max="90" step="1" [ngModel]="n.timeout_seconds||0" (ngModelChange)="updateAgentPolicy(n.id,'timeout_seconds',+$event)"></label>
         <label>Retries on failure (0–2) <input type="number" min="0" max="2" step="1" [ngModel]="n.max_retries||0" (ngModelChange)="updateAgentPolicy(n.id,'max_retries',+$event)"></label>
         <p class="muted">Retries only apply to read-only agent calls. Backoff: 1s, then 2s. Other nodes will never repeat automatically.</p>
+        @if(auth.user()?.role==='SYS_ADMIN'){
+         <fieldset class="tool-grants">
+          <legend>Research tools ({{n.tools?.length||0}} of {{toolLimits().max_tools}})</legend>
+          <p class="muted">Granted tools are read-only: market data, SEC filings, web search and calculators. Every call is recorded in Run history. Without a grant the agent answers from its prompt alone.</p>
+          @for(tool of agentTools();track tool.name){
+           <label class="checkbox-row" [title]="tool.description"><input type="checkbox" [checked]="n.tools?.includes(tool.name)" (change)="toggleAgentTool(n.id,tool.name)"> {{toolLabel(tool.name)}}</label>
+          }
+          @if(n.tools?.length){<label>Max tool calls (0 = default {{toolLimits().default_tool_calls}}) <input type="number" min="0" [max]="toolLimits().max_tool_calls" step="1" [ngModel]="n.max_tool_calls||0" (ngModelChange)="updateToolBudget(n.id,+$event)"></label>}
+         </fieldset>
+        } @else if(n.tools?.length){<p class="muted">This agent has {{n.tools.length}} research tool(s) granted by an administrator.</p>}
         @if(n.output_mode==='json'){
           <label>JSON output contract <textarea rows="8" spellcheck="false" [ngModel]="n.json_contract||''" (ngModelChange)="updateNodeFor(n.id,'json_contract',$event)" maxlength="3000" placeholder='{"type":"object","required":["symbol"],"properties":{"symbol":{"type":"string"},"score":{"type":"number"}}}'></textarea></label>
           <p class="muted">Optional contract: object properties, required fields and primitive types. Invalid results fail rather than reaching downstream nodes.</p>
@@ -489,6 +500,7 @@ export class ConfirmDeleteFlowDialog {
                   @if(step.attempts!=null){<dt>Node attempts</dt><dd>{{step.attempts}}</dd>}
                   @if(step.worker_attempt!=null){<dt>Worker attempt</dt><dd>{{step.worker_attempt}}</dd>}
                 </dl>
+                @if(step.tool_calls?.length){<section class="tool-calls"><h5>Tool calls ({{step.tool_calls!.length}})</h5><ul>@for(call of step.tool_calls!;track $index){<li [class.tool-failed]="!call.ok">{{describeToolCall(call)}}</li>}</ul></section>}
                 @if(step.error){<div class="exec-error-hint" role="alert"><strong>Error</strong><pre>{{step.error}}</pre></div>}
                 <div class="debug-io">
                   <section><h5>Input</h5>@if(step.input){<pre>{{step.input}}</pre>}@else{<p class="muted">{{step.status==='SKIPPED'?'Skipped: no active input branch.':'No input recorded (start node or a run recorded before input capture).'}}</p>}</section>
@@ -609,6 +621,8 @@ export class ConfirmDeleteFlowDialog {
  .readiness-panel p{margin:6px 0}.readiness-panel ul{list-style:none;margin:0;padding:0}.readiness-panel li{color:#ffd9c2;overflow-wrap:anywhere;margin:3px 0}.readiness-panel li.check-ok{color:#bff0dc}
  .capability-box{border:1px solid #ae8c67;border-radius:8px;padding:8px 10px;margin:6px 0}.capability-box legend{color:#ffe19a;font-weight:700;padding:0 4px}
  .checkbox-row{display:flex!important;gap:8px;align-items:center}
+ .tool-grants{border:1px solid #45627b;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:4px;margin:4px 0}.tool-grants legend{padding:0 4px;font-weight:600}
+ .tool-calls ul{margin:4px 0 0;padding-left:18px;font-size:13px;overflow-wrap:anywhere}.tool-calls li.tool-failed{color:#ffb3bd}
  .capability-summary{border:1px solid #50738e;border-radius:8px;padding:10px;margin:10px 0}.capability-summary ul{margin:6px 0 0;padding-left:18px}.capability-summary li{overflow-wrap:anywhere}.capability-summary button{background:none;border:0;text-decoration:underline;color:#aedfff;cursor:pointer;font:inherit;padding:0}
  .mapped-edge{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:12px;overflow-wrap:anywhere}
  .mapped-edge button{color:#bce3ff;background:#1b3850;border:1px solid #527b99;border-radius:5px;padding:5px}
@@ -822,6 +836,10 @@ export class FlowStudioComponent {
  readonly availableModels=signal<{model:string;label:string}[]>([]);
  readonly defaultAIModel=signal('');
  readonly functions=signal<(FunctionDef&PublishState)[]>([]);
+ readonly agentTools=signal<GrantableTool[]>([]);
+ readonly toolLimits=signal({max_tools:8,max_tool_calls:16,default_tool_calls:6});
+ readonly toolLabel=toolLabel;
+ readonly describeToolCall=describeToolCall;
  readonly selectedId=signal(0);
  readonly name=signal('Daily research');
  readonly enabled=signal(false);
@@ -1016,7 +1034,7 @@ export class FlowStudioComponent {
  constructor(){
   // Load the revision list of the selected call node's target for its pin selector.
   effect(()=>{const n=this.selectedNode();if(n?.type==='flow'&&n.flow_id)void this.loadTargetRevisions('flow',n.flow_id);if(n?.type==='function'&&n.function_id)void this.loadTargetRevisions('function',n.function_id)});
-  this.resetGraphHistory();this.savedSnapshot.set(this.currentSnapshot());void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN')void this.loadFunctions();void this.loadModels();
+  this.resetGraphHistory();this.savedSnapshot.set(this.currentSnapshot());void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN'){void this.loadFunctions();void this.loadAgentTools()}void this.loadModels();
     effect(()=>{
       const current=JSON.stringify(this.graph());
       if(current===this.lastGraphVersion||this.dragHistoryStart!==null)return;
@@ -1209,6 +1227,16 @@ export class FlowStudioComponent {
  connectValue(from:string,to:string){if(!to||this.node(from)?.value_type!=='text'){this.message.set('Typed link requires a text value and an agent or flow input');return}if(this.graph().edges.some(e=>e.from===from&&e.to===to))return;this.graph.update(g=>({...g,edges:[...g.edges,{from,to,from_port:'value',to_port:'input'}]}))}
  addSubflow(){const n=this.graph().nodes;const id='flow-'+Date.now().toString(36);this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'flow',label:'Call flow',flow_id:0,x:260+(n.length%4)*140,y:40+Math.floor(n.length/4)*100}]}));this.chosen.set(id)}
  updateFlowReference(target:number){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>{if(n.id!==this.chosen())return n;const next={...n,flow_id:target};delete next.flow_revision;return next})}))}
+ async loadAgentTools(){try{const data=await this.request('/api/admin/flow-agent-tools');this.agentTools.set(data.tools||[]);this.toolLimits.set({max_tools:data.max_tools,max_tool_calls:data.max_tool_calls,default_tool_calls:data.default_tool_calls})}catch{/* Tool grants stay hidden when the catalogue is unavailable. */}}
+ toggleAgentTool(id:string,name:string){
+   const n=this.node(id);const next=toggleTool(n?.tools,name,this.toolLimits().max_tools);
+   if(!next){this.message.set('An agent can be granted at most '+this.toolLimits().max_tools+' tools');return}
+   this.graph.update(g=>({...g,nodes:g.nodes.map(x=>{if(x.id!==id)return x;const {tools:_t,max_tool_calls:_m,...rest}=x;return next.length?{...rest,tools:next,...(_m?{max_tool_calls:_m}:{})}:rest})}));
+ }
+ updateToolBudget(id:string,value:number){
+   const budget=clampToolBudget(value,this.toolLimits().max_tool_calls);
+   this.graph.update(g=>({...g,nodes:g.nodes.map(x=>{if(x.id!==id)return x;const {max_tool_calls:_m,...rest}=x;return budget?{...rest,max_tool_calls:budget}:rest})}));
+ }
  updateAgentPolicy(id:string,field:'timeout_seconds'|'max_retries',value:number):void {
    const max=field==='max_retries'?2:90;
    const safe=Number.isFinite(value)?Math.max(0,Math.min(max,Math.trunc(value))):0;

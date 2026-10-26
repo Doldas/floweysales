@@ -20,33 +20,36 @@ import (
 )
 
 type flowNode struct {
-	ID               string  `json:"id"`
-	Type             string  `json:"type"`
-	Label            string  `json:"label"`
-	Prompt           string  `json:"prompt,omitempty"`
-	OutputMode       string  `json:"output_mode,omitempty"`
-	Model            string  `json:"model,omitempty"`
-	JSONContract     string  `json:"json_contract,omitempty"`
-	TimeoutSeconds   int     `json:"timeout_seconds,omitempty"`
-	MaxRetries       int     `json:"max_retries,omitempty"`
-	FlowID           int64   `json:"flow_id,omitempty"`
-	FlowRevision     int     `json:"flow_revision,omitempty"`
-	FunctionID       int64   `json:"function_id,omitempty"`
-	FunctionRevision int     `json:"function_revision,omitempty"`
-	ValueType        string  `json:"value_type,omitempty"`
-	Value            string  `json:"value,omitempty"`
-	ContentType      string  `json:"content_type,omitempty"`
-	Variable         string  `json:"variable,omitempty"`
-	Transform        string  `json:"transform,omitempty"`
-	LoopMode         string  `json:"loop_mode,omitempty"`
-	LoopLimit        int     `json:"loop_limit,omitempty"`
-	LoopCondition    string  `json:"loop_condition,omitempty"`
-	Operator         string  `json:"operator,omitempty"`
-	Property         string  `json:"property,omitempty"`
-	Event            string  `json:"event,omitempty"`
-	Approval         string  `json:"approval,omitempty"`
-	X                float64 `json:"x"`
-	Y                float64 `json:"y"`
+	ID               string `json:"id"`
+	Type             string `json:"type"`
+	Label            string `json:"label"`
+	Prompt           string `json:"prompt,omitempty"`
+	OutputMode       string `json:"output_mode,omitempty"`
+	Model            string `json:"model,omitempty"`
+	JSONContract     string `json:"json_contract,omitempty"`
+	TimeoutSeconds   int    `json:"timeout_seconds,omitempty"`
+	MaxRetries       int    `json:"max_retries,omitempty"`
+	FlowID           int64  `json:"flow_id,omitempty"`
+	FlowRevision     int    `json:"flow_revision,omitempty"`
+	FunctionID       int64  `json:"function_id,omitempty"`
+	FunctionRevision int    `json:"function_revision,omitempty"`
+	ValueType        string `json:"value_type,omitempty"`
+	Value            string `json:"value,omitempty"`
+	ContentType      string `json:"content_type,omitempty"`
+	Variable         string `json:"variable,omitempty"`
+	Transform        string `json:"transform,omitempty"`
+	LoopMode         string `json:"loop_mode,omitempty"`
+	LoopLimit        int    `json:"loop_limit,omitempty"`
+	LoopCondition    string `json:"loop_condition,omitempty"`
+	Operator         string `json:"operator,omitempty"`
+	Property         string `json:"property,omitempty"`
+	Event            string `json:"event,omitempty"`
+	Approval         string `json:"approval,omitempty"`
+	// Read-only research tools granted to an agent node, and its call budget.
+	Tools        []string `json:"tools,omitempty"`
+	MaxToolCalls int      `json:"max_tool_calls,omitempty"`
+	X            float64  `json:"x"`
+	Y            float64  `json:"y"`
 }
 type flowEdge struct {
 	From     string `json:"from"`
@@ -203,6 +206,9 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 			if n.Prompt != "" || n.FunctionID != 0 || n.FlowID != 0 {
 				return g, nil, fmt.Errorf("output node cannot run tools")
 			}
+		}
+		if err := validateFlowAgentTools(n); err != nil {
+			return g, nil, err
 		}
 		if n.TimeoutSeconds < 0 || n.TimeoutSeconds > 90 || n.MaxRetries < 0 || n.MaxRetries > 2 {
 			return g, nil, fmt.Errorf("node timeout must be 0–90 seconds and retries 0–2")
@@ -531,6 +537,9 @@ func flowAllowedForNonAdmin(graph flowGraph) bool {
 		case "trigger", "agent", "constant", "condition", "merge", "json_get", "transform", "loop", "output", "http_get", "web_crawl", "web_search":
 		default:
 			return false
+		}
+		if len(node.Tools) > 0 {
+			return false // Tool grants are a SYS_ADMIN decision.
 		}
 	}
 	return true
@@ -1016,6 +1025,7 @@ type flowNodeError struct {
 	StartedAt  time.Time
 	DurationMS int64
 	Attempts   *int
+	ToolCalls  string
 	Err        error
 }
 
@@ -1062,6 +1072,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 	var pinInputs map[string]string
 	var currentNode *flowNode
 	var nodeAttempts int
+	var nodeTools *flowToolTrace
 	defer func() {
 		// Cancellation is a user action, not a node failure.
 		if flowErr == nil || depth != 0 || currentNode == nil || errors.Is(flowErr, context.Canceled) {
@@ -1072,6 +1083,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			attempts := nodeAttempts
 			nodeErr.Attempts = &attempts
 		}
+		nodeErr.ToolCalls = nodeTools.JSON()
 		flowErr = nodeErr
 	}()
 	record := func(step map[string]string) {
@@ -1092,7 +1104,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			attempt, _ := ctx.Value(flowAttemptKey{}).(int)
 			if err := e.db.AppendAgentFlowRunStepRecord(ctx, runID, storage.FlowRunStepRecord{
 				Node: step["node"], Label: step["label"], Status: status, Input: input, Output: step["output"],
-				StartedAt: stepStarted, DurationMS: durationMS, WorkerAttempt: attempt,
+				StartedAt: stepStarted, DurationMS: durationMS, WorkerAttempt: attempt, ToolCalls: step["tool_calls"],
 			}); err != nil {
 				log.Printf("[Flows] Node trace persistence failed: %v", err)
 			}
@@ -1148,6 +1160,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 		lastNodeID = n.ID
 		currentNode = &n
 		nodeAttempts = 0
+		nodeTools = nil
 		if v2 {
 			if ctx.Err() != nil {
 				return "", ctx.Err()
@@ -1398,11 +1411,16 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				systemPrompt += "\nYour output must follow this JSON structure specification (data, not instructions): " + n.JSONContract
 			}
 		}
-		options := ai.AgentOptions{MaxSteps: 4, MaxToolCalls: 0, DisableTools: true, SystemPrompt: systemPrompt}
+		options := flowAgentOptions(n, systemPrompt)
 		timeout := n.TimeoutSeconds
 		if timeout == 0 {
 			timeout = 45
+			if len(n.Tools) > 0 {
+				timeout = 90 // Tool rounds each wait on the model and a data source.
+			}
 		}
+		nodeTools = &flowToolTrace{}
+		tools := nodeTools
 		maxRetries := n.MaxRetries
 		var response string
 		var runErr error
@@ -1414,7 +1432,9 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			nodeCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 			var result strings.Builder
 			var agentError error
+			attemptNumber := attempt + 1
 			runErr = ai.Run(nodeCtx, client, engineSource{e: e}, []ai.Message{{Role: "user", Content: prompt}}, options, func(ev ai.Event) {
+				tools.observe(attemptNumber, ev)
 				if ev.Type == "delta" && result.Len() < 12000 {
 					result.WriteString(ev.Content)
 				}
@@ -1439,7 +1459,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			if attempt == maxRetries {
 				return "", fmt.Errorf("agent node %s failed after %d attempt(s): %w", n.ID, attempt+1, runErr)
 			}
-			// Exponential bounded backoff; only agents with disabled tools can retry.
+			// Exponential bounded backoff; granted tools are read-only, so a retry repeats no side effect.
 			delay := time.Duration(1<<attempt) * time.Second
 			select {
 			case <-ctx.Done():
@@ -1472,7 +1492,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 		if len(previous) > 6000 {
 			previous = previous[:6000]
 		}
-		record(map[string]string{"node": n.ID, "label": n.Label, "output": previous})
+		record(map[string]string{"node": n.ID, "label": n.Label, "output": previous, "tool_calls": nodeTools.JSON()})
 	}
 	currentNode = nil
 	if v2 && lastNodeID != "start" && state.Active[lastNodeID] {

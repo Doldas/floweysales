@@ -27,6 +27,12 @@ type AgentOptions struct {
 	MaxToolCalls       int
 	MaxToolResultBytes int
 	DisableTools       bool
+	// AllowedTools, when non-nil, limits the catalogue to these tool names;
+	// calls to any other tool are refused without running it.
+	AllowedTools []string
+	// AnswerAfterToolBudget makes an exhausted tool budget withdraw the tools
+	// and ask for a final answer instead of ending the run with an error.
+	AnswerAfterToolBudget bool
 }
 
 // DefaultSystemPrompt instructs the model how to use the market tools.
@@ -88,7 +94,21 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	messages = append(messages, transcript...)
 
 	tools := ToolDefs()
-	if opts.DisableTools {
+	var granted map[string]bool
+	if opts.AllowedTools != nil {
+		granted = map[string]bool{}
+		for _, name := range opts.AllowedTools {
+			granted[name] = true
+		}
+		kept := tools[:0:0]
+		for _, t := range tools {
+			if granted[t.Function.Name] {
+				kept = append(kept, t)
+			}
+		}
+		tools = kept
+	}
+	if opts.DisableTools || len(tools) == 0 {
 		tools = nil
 	}
 
@@ -128,14 +148,28 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 
 		for _, tc := range assistant.ToolCalls {
 			if toolCalls >= opts.MaxToolCalls {
-				emit(Event{Type: "error", Error: fmt.Sprintf("Agent tool-call budget exhausted (%d calls). Task may be incomplete.", opts.MaxToolCalls)})
-				emit(Event{Type: "done", Steps: step})
-				return nil
+				if !opts.AnswerAfterToolBudget {
+					emit(Event{Type: "error", Error: fmt.Sprintf("Agent tool-call budget exhausted (%d calls). Task may be incomplete.", opts.MaxToolCalls)})
+					emit(Event{Type: "done", Steps: step})
+					return nil
+				}
+				// Every tool call needs a reply before the model can continue.
+				tools = nil
+				refusal := Message{Role: "tool", ToolCallID: tc.ID, Content: `{"error":"tool budget exhausted; answer with the results you have"}`}
+				messages = append(messages, refusal)
+				emit(Event{Type: "transcript_message", Message: &refusal})
+				continue
 			}
 			toolCalls++
 			emit(Event{Type: "tool_start", Name: tc.Function.Name, Arguments: tc.Function.Arguments})
 
-			result, err := Execute(ctx, src, tc.Function.Name, tc.Function.Arguments)
+			var result string
+			var err error
+			if granted != nil && !granted[tc.Function.Name] {
+				err = fmt.Errorf("tool %s is not granted to this agent", tc.Function.Name)
+			} else {
+				result, err = Execute(ctx, src, tc.Function.Name, tc.Function.Arguments)
+			}
 			ev := Event{Type: "tool_result", Name: tc.Function.Name}
 			if err != nil {
 				ev.ToolError = err.Error()
