@@ -4,6 +4,7 @@ import { MarkdownRunOutputComponent } from './markdown-run-output';
 import { UserspaceFilesComponent } from './userspace-files';
 import { FlowSideEffectsComponent } from './flow-side-effects';
 import { clampToolBudget, describeToolCall, toggleTool, toolLabel, type GrantableTool, type ToolCall } from './agent-tools';
+import { FlowEventAdaptersComponent } from './flow-event-adapters';
 import { capabilityManifest, describeCapability, nodeCapability, readinessHeadline, type Readiness } from './side-effects';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -52,7 +53,7 @@ export class ConfirmDeleteFlowDialog {
 
 @Component({
  selector:'fse-flow-studio', standalone:true,
- imports:[CommonModule,FormsModule,MatButtonModule,MatCardModule,MatIconModule,MatDialogModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,UserspaceFilesComponent,FlowSideEffectsComponent],
+ imports:[CommonModule,FormsModule,MatButtonModule,MatCardModule,MatIconModule,MatDialogModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,UserspaceFilesComponent,FlowSideEffectsComponent,FlowEventAdaptersComponent],
  changeDetection:ChangeDetectionStrategy.Default,
  template:`
  <mat-card class="flow-studio glass">
@@ -413,6 +414,7 @@ export class ConfirmDeleteFlowDialog {
    }
    @if (studioTab()==='library') {
      <fse-blueprint-library (functionsChanged)="loadFunctions()"></fse-blueprint-library>
+     @if(auth.user()?.role==='SYS_ADMIN'){ <fse-flow-event-adapters></fse-flow-event-adapters> }
    }
    @if (studioTab()==='files') { <fse-userspace-files></fse-userspace-files> }
    @if (studioTab()==='approvals') { <fse-flow-side-effects></fse-flow-side-effects> }

@@ -126,7 +126,7 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
   </select></label>
  </div>
  <h3>Custom Event Triggers</h3>
- <p>Define a typed event and subscribe to its key in an enabled flow. Events currently require an authenticated admin request.</p>
+ <p>Define a typed event and subscribe to its key in an enabled flow. Send events with an authenticated admin request, or from another service through a signed inbound webhook below.</p>
  <div class="toolbar">
   <label>Event key <input [ngModel]="eventKey()" (ngModelChange)="eventKey.set($event)" placeholder="research.completed"></label>
   <label>Payload type <select [ngModel]="payloadType()" (ngModelChange)="payloadType.set($event)"><option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option></select></label>

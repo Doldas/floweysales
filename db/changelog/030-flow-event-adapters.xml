@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="030-flow-event-adapters" author="floweysales" dbms="mysql">
+  <createTable tableName="flow_event_adapters" remarks="Signed inbound webhooks that deliver third-party events to one typed trigger">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="name" type="VARCHAR(100)"><constraints nullable="false"/></column>
+   <column name="slug" type="CHAR(26)" remarks="Random, unguessable part of the public URL"><constraints nullable="false" unique="true" uniqueConstraintName="uq_flow_event_adapter_slug"/></column>
+   <column name="event_key" type="VARCHAR(100)" remarks="The only event this adapter may deliver"><constraints nullable="false"/></column>
+   <column name="secret_enc" type="VARBINARY(256)" remarks="HMAC secret sealed with FLOWEYSALES_SECRETS_KEY"><constraints nullable="false"/></column>
+   <column name="payload_pointer" type="VARCHAR(200)" remarks="RFC 6901 JSON pointer to the event value; empty uses the whole body"/>
+   <column name="rate_per_minute" type="INT" defaultValueNumeric="30"><constraints nullable="false"/></column>
+   <column name="enabled" type="BOOLEAN" defaultValueBoolean="true"><constraints nullable="false"/></column>
+   <column name="created_by" type="BIGINT"/>
+   <column name="created_at" type="DATETIME(6)"><constraints nullable="false"/></column>
+   <column name="secret_rotated_at" type="DATETIME(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <createTable tableName="flow_event_deliveries" remarks="Every signed delivery an adapter received, accepted or not">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="adapter_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="delivery_id" type="VARCHAR(128)" remarks="Sender's idempotency key; NULL for rejected requests"/>
+   <column name="status" type="VARCHAR(16)" remarks="ACCEPTED or REJECTED"><constraints nullable="false"/></column>
+   <column name="reason" type="VARCHAR(200)"/>
+   <column name="payload_sha256" type="CHAR(64)"/>
+   <column name="queued_runs" type="INT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+   <column name="received_at" type="DATETIME(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <addUniqueConstraint tableName="flow_event_deliveries" columnNames="adapter_id,delivery_id" constraintName="uq_flow_event_delivery"/>
+  <createIndex tableName="flow_event_deliveries" indexName="idx_flow_event_deliveries_adapter">
+   <column name="adapter_id"/>
+   <column name="id"/>
+  </createIndex>
+  <addForeignKeyConstraint baseTableName="flow_event_deliveries" baseColumnNames="adapter_id"
+   referencedTableName="flow_event_adapters" referencedColumnNames="id" constraintName="fk_flow_event_delivery_adapter" onDelete="CASCADE"/>
+  <rollback>
+   <dropTable tableName="flow_event_deliveries"/>
+   <dropTable tableName="flow_event_adapters"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

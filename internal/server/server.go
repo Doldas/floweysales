@@ -170,6 +170,7 @@ type Engine struct {
 	flowStop       context.CancelFunc
 	flowRunsMu     sync.Mutex
 	flowRunCancels map[int64]context.CancelFunc
+	adapterLimits  adapterLimiter
 }
 
 type historyCacheEntry struct {
@@ -245,6 +246,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, fi
 	e.registerFlowSideEffectRoutes()
 	e.registerFlowAuditRoutes()
 	e.registerFlowReadinessRoutes()
+	e.registerFlowEventAdapterRoutes()
 	e.registerFlowAgentToolRoutes()
 	e.registerBlueprintRoutes()
 	e.registerRevisionRoutes()
