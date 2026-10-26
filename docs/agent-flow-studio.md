@@ -17,7 +17,7 @@ The editor supports a searchable role-aware node picker, free positioning, zoom/
 - Flows **never execute live trades**. An admin must separately enable authentication and configure an AI endpoint/model.
 - Runs go through a durable queue with checkpoint resume and dead-lettering (see below); concurrency is bounded per process.
 - The flow graph rejects cycles. Recurring loops happen at the scheduler level, not through unbounded edges.
-- **Already available:** conditional/branch nodes, bounded agent retries/timeouts, owner-scoped manual flows, cancellation, recorded node steps, immutable run graph snapshots, execution timestamps, preview-only replay, draft/publish revisions with rollback and call pinning, durable checkpoints and dead-lettering, per-node timing/attempt data, and audited side effects with optional approval (see below), signed inbound webhooks for third-party events, and scoped read-only research tools for agent nodes. **Still planned:** adversarial/accessibility tests (#58, #95).
+- **Already available:** conditional/branch nodes, bounded agent retries/timeouts, owner-scoped manual flows, cancellation, recorded node steps, immutable run graph snapshots, execution timestamps, preview-only replay, draft/publish revisions with rollback and call pinning, durable checkpoints and dead-lettering, per-node timing/attempt data, and audited side effects with optional approval (see below), signed inbound webhooks for third-party events, and scoped read-only research tools for agent nodes. **Still planned:** automated accessibility, UI and adversarial tests (#139).
 
 To start, sign in and open **My Flows → New flow / Edit**. Add nodes with **+ Add node**, select a graph node to configure all fields in its floating tooltip, check **Graph validation**, then **Save flow** before **Run now**. Use **Run history → Inspect nodes** to view recorded steps, status-colored historical graph snapshots, duration and errors. Scheduling and typed event triggers require SYS_ADMIN.
 
@@ -171,7 +171,7 @@ API: `POST …/publish` (`{"note": "…"}`, ≤500 characters), `GET …/revisio
 
 Add **Call Flow** nodes in the graph editor and select another saved flow by ID. When the parent flow runs, the selected flow is executed as a nested research function, and its serialized output feeds the following node. Nesting is bounded to four levels and a flow cannot call itself recursively, directly or indirectly. Subflows inherit the parent run's time limit and the read-only/no-tools policy. Missing references fail the run safely.
 
-This is the **first building block**, not yet a full Unreal Engine Blueprint-equivalent visual language. Strongly typed value pins, declared input/output ports, independent user-authored function libraries, parameter binding, custom trigger constructors and step-by-step debugging remain tracked under #59. Nested flow calls currently share the parent run log rather than creating child run records.
+This is the **first building block**, not yet a full Unreal Engine Blueprint-equivalent visual language. Typed multi-pin functions, revisions, drag-to-wire, custom triggers and the run debugger have since shipped (#114, #118, #131–#133); see the sections above. Nested flow calls currently share the parent run log rather than creating child run records.
 
 ## Typed value nodes (Blueprint milestone)
 
@@ -185,7 +185,7 @@ Use **+ Function** in Flow Studio to add a call node, select a saved function, a
 
 The **Custom Event Triggers** panel creates registered `event_key` definitions with a `text`, `number` or `boolean` payload type. An enabled flow can subscribe using its event key. To publish an event, an authenticated SYS_ADMIN sends `POST /api/admin/flow-events/{key}` with JSON `{"value":42}` (or a matching text/boolean value). The event's type is validated before matching flows are launched; its value is passed to the downstream flow. Other services publish the same events through signed [event adapters](#signed-inbound-webhooks-event-adapters); there is no unsigned public ingestion.
 
-**Boundaries for this iteration:** function graphs support one typed argument and one typed return value. More than one typed parameter, reusable version pinning, independent control/data wires, loops, output-of-a-branch selective execution, end-user auth delegation, durable event queues and inter-flow event emission remain under issue #59. As in existing Flow Studio, scheduling/execution is research-only with no brokerage or real-money operations.
+**Boundaries for this iteration:** this section describes the first single-pin function iteration. Typed multi-pin functions, revision pinning, durable event queues and inter-flow event emission shipped later (see above). Independent control/data wires, loops and end-user auth delegation are not implemented. As in existing Flow Studio, scheduling/execution is research-only with no brokerage or real-money operations.
 
 ## Blueprint function library and custom triggers
 
@@ -193,7 +193,7 @@ SYS_ADMIN can open the Function Library under Flow Studio to create bounded, pur
 
 Custom triggers are registered as unique event keys with text, numeric or boolean payloads. An administrator can enable flows with the matching event key and publish a value through `POST /api/admin/flow-events/{key}` with `{"value":"example"}` for text, `{"value":42}` for numbers or `{"value":true}` for boolean triggers. The admin endpoint requires authenticated SYS_ADMIN and matching value types; third parties use a signed [event adapter](#signed-inbound-webhooks-event-adapters) instead. A flow can subscribe by setting its Event key and Enabled toggle.
 
-**Remaining limitations:** A function graph currently exposes one typed input and one typed output; branch logic selects a value rather than controlling separate execution wires. The flow graph uses the previous node's output as function input. Agent nodes have no tools unless a SYS_ADMIN grants read-only research tools (see *Research tools for agent nodes*). Multiple typed pins remain in #59.
+**Remaining limitations:** Branch logic selects a value rather than controlling separate execution wires. The flow graph uses the previous node's output as function input. Agent nodes have no tools unless a SYS_ADMIN grants read-only research tools (see *Research tools for agent nodes*).
 
 ## Current UX delivery
 

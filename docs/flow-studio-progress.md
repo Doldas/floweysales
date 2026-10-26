@@ -1,6 +1,6 @@
 # Flow Studio, Run History and My Workspace — delivery progress
 
-**Status as of 2026-10-24.** This page describes code **merged into `main`**, not just proposed work. Tracking issue: [#95](https://github.com/Doldas/floweysales/issues/95) (still open). The nine UX increments below are merged, but their completion does **not** mean the overall UX roadmap is finished.
+**Status as of 2026-10-24** (tracking issue #95 has since closed; remaining test work is in [#139](https://github.com/Doldas/floweysales/issues/139)). This page describes code **merged into `main`**, not just proposed work. The nine UX increments below are merged, but their completion does **not** mean the overall UX roadmap is finished.
 
 ## Merged delivery log
 
