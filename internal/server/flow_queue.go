@@ -258,6 +258,7 @@ func (e *Engine) runClaimedFlow(workerCtx context.Context, c *storage.ClaimedFlo
 			traceErr = e.db.AppendAgentFlowRunStepRecord(traceCtx, c.RunID, storage.FlowRunStepRecord{
 				Node: nodeErr.NodeID, Label: nodeErr.Label, Status: "FAILED", Input: nodeErr.Input, Error: runErr.Error(),
 				StartedAt: nodeErr.StartedAt, DurationMS: &nodeErr.DurationMS, Attempts: nodeErr.Attempts, WorkerAttempt: c.Attempt,
+				ToolCalls: nodeErr.ToolCalls,
 			})
 		} else {
 			traceErr = e.db.AppendAgentFlowRunStepRecord(traceCtx, c.RunID, storage.FlowRunStepRecord{

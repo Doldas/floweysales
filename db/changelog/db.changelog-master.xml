@@ -32,4 +32,5 @@
   <include file="028-flow-side-effects.xml" relativeToChangelogFile="true"/>
   <include file="029-flow-audit-log.xml" relativeToChangelogFile="true"/>
   <include file="030-flow-event-adapters.xml" relativeToChangelogFile="true"/>
+  <include file="031-flow-agent-tool-calls.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

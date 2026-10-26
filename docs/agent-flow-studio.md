@@ -13,11 +13,11 @@ The editor supports a searchable role-aware node picker, free positioning, zoom/
 
 ## Safety and remaining work
 
-- Agent tools are **disabled** in flow execution initially. This prevents order placement or other side effects, but also limits agents to prompt-based research instead of tool-driven autonomous investigation.
+- Agent nodes have **no tools** unless a SYS_ADMIN grants some, and only read-only research tools can be granted (see [Research tools for agent nodes](#research-tools-for-agent-nodes)). No tool can place orders, change approvals or modify the system.
 - Flows **never execute live trades**. An admin must separately enable authentication and configure an AI endpoint/model.
 - Runs go through a durable queue with checkpoint resume and dead-lettering (see below); concurrency is bounded per process.
 - The flow graph rejects cycles. Recurring loops happen at the scheduler level, not through unbounded edges.
-- **Already available:** conditional/branch nodes, bounded agent retries/timeouts, owner-scoped manual flows, cancellation, recorded node steps, immutable run graph snapshots, execution timestamps, preview-only replay, draft/publish revisions with rollback and call pinning, durable checkpoints and dead-lettering, per-node timing/attempt data, and audited side effects with optional approval (see below). signed inbound webhooks for third-party events. **Still planned:** scoped agent tool grants and adversarial/accessibility tests (#58, #95).
+- **Already available:** conditional/branch nodes, bounded agent retries/timeouts, owner-scoped manual flows, cancellation, recorded node steps, immutable run graph snapshots, execution timestamps, preview-only replay, draft/publish revisions with rollback and call pinning, durable checkpoints and dead-lettering, per-node timing/attempt data, and audited side effects with optional approval (see below), signed inbound webhooks for third-party events, and scoped read-only research tools for agent nodes. **Still planned:** adversarial/accessibility tests (#58, #95).
 
 To start, sign in and open **My Flows → New flow / Edit**. Add nodes with **+ Add node**, select a graph node to configure all fields in its floating tooltip, check **Graph validation**, then **Save flow** before **Run now**. Use **Run history → Inspect nodes** to view recorded steps, status-colored historical graph snapshots, duration and errors. Scheduling and typed event triggers require SYS_ADMIN.
 
@@ -129,6 +129,16 @@ The panel shows the same example for each new secret.
 
 Admin API (SYS_ADMIN): `GET|POST /api/admin/flow-event-adapters`, `PUT|DELETE /api/admin/flow-event-adapters/{id}` (`name`, `payload_pointer`, `rate_per_minute`, `enabled`), `POST /api/admin/flow-event-adapters/{id}/rotate-secret`, `GET /api/admin/flow-event-adapters/{id}/deliveries` (latest 50).
 
+## Research tools for agent nodes
+
+A SYS_ADMIN can let an agent node gather its own evidence instead of answering from its prompt alone. In the node's settings, **Research tools** lists the grantable tools. Tick up to 8 and optionally set **Max tool calls** (1–16; default 6).
+
+- **Grantable catalogue (read-only):** symbol search, price history, technical analysis, latest close, provider quote, quarterly financials, financial-ratio and TTM-valuation calculators, provider capabilities/endpoints/research operations, SEC filings, SEC XBRL facts, SEC filing sections, the DCF/WACC/ROIC calculators and web search. `GET /api/admin/flow-agent-tools` returns the list with descriptions. Tools that read the engine's own tracker state (engine config, recorded ticks, market stats) cannot be granted. A tool added to the chat catalogue later is not grantable until it is explicitly added to this list.
+- **Enforced on the server:** the model is offered only the granted tools, and a call to any other tool is refused without running it. Saving or publishing a flow that grants an unknown or non-grantable tool, more than 8 tools, or a budget without tools is refused. Granting tools is SYS_ADMIN-only: a flow with a tool grant cannot be saved or run by an ordinary user, and nodes without grants behave exactly as before.
+- **Budget:** once the call budget is spent, the tools are withdrawn and the agent must answer with what it has. The node does not fail. A granted agent's default timeout is 90 s instead of 45 s. Retries (0–2) remain allowed because no granted tool has side effects.
+- **Trace:** every call is recorded on the node's run step (Liquibase 031, `tool_calls`): attempt, tool name, redacted arguments (300 characters), success or redacted error and result size. Results themselves are not stored. At most 32 calls are kept per node. *Run history → Inspect nodes* lists them, and failed nodes keep their trace too.
+- Tool results are passed to the model as untrusted data, and the system prompt asks it to cite the tool and period behind every number. Tools such as SEC facts and web search use the server's configured providers and keys, so their rate limits and costs apply.
+
 ## Durable run queue, checkpoints and dead-letter
 
 Every run (manual, scheduled, event or retry) is stored as **QUEUED** together with the graph snapshot it will execute (Liquibase change 025). Nothing is lost when workers are busy or the process restarts:
@@ -183,7 +193,7 @@ SYS_ADMIN can open the Function Library under Flow Studio to create bounded, pur
 
 Custom triggers are registered as unique event keys with text, numeric or boolean payloads. An administrator can enable flows with the matching event key and publish a value through `POST /api/admin/flow-events/{key}` with `{"value":"example"}` for text, `{"value":42}` for numbers or `{"value":true}` for boolean triggers. The admin endpoint requires authenticated SYS_ADMIN and matching value types; third parties use a signed [event adapter](#signed-inbound-webhooks-event-adapters) instead. A flow can subscribe by setting its Event key and Enabled toggle.
 
-**Remaining limitations:** A function graph currently exposes one typed input and one typed output; branch logic selects a value rather than controlling separate execution wires. The flow graph uses the previous node's output as function input. Agent research is read-only, with tool access disabled. Multiple typed pins remain in #59.
+**Remaining limitations:** A function graph currently exposes one typed input and one typed output; branch logic selects a value rather than controlling separate execution wires. The flow graph uses the previous node's output as function input. Agent nodes have no tools unless a SYS_ADMIN grants read-only research tools (see *Research tools for agent nodes*). Multiple typed pins remain in #59.
 
 ## Current UX delivery
 

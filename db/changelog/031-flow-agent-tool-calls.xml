@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="031-flow-agent-tool-calls" author="floweysales" dbms="mysql">
+  <addColumn tableName="agent_flow_run_steps">
+   <column name="tool_calls" type="TEXT" remarks="JSON list of the read-only tools an agent node called: name, redacted arguments, outcome and result size"/>
+  </addColumn>
+  <rollback>
+   <dropColumn tableName="agent_flow_run_steps" columnName="tool_calls"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>
