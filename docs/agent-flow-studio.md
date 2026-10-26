@@ -7,7 +7,7 @@ Authenticated Flow Studio includes a **My Flows** dashboard, visual graph editor
 - Exactly one **Trigger** root and 2–16 total nodes / 1–32 edges; the server rejects cycles and disconnected nodes. Besides agents, versioned graphs support conditions, merge, JSON field extraction, bounded data loops, value/transform/output, HTTP/web research and privileged function/subflow and Workspace nodes.
 - **Manual:** click Run now on a saved flow.
 - **Interval schedule:** enable the flow and set `interval_minutes` to 5–10080. The Go scheduler polls every 30 seconds and, in one MySQL transaction, claims the due interval and queues its run, so replicas never double-run an interval and a crash never loses one.
-- **Event key:** enable a flow with a key such as `market.close`; authenticated SYS_ADMIN can call `POST /api/admin/flow-events/market.close`. This is an administrator-triggered event hook, not a public unauthenticated webhook. Automated source adapters can be added later behind a separately secured event-ingress layer.
+- **Event key:** enable a flow with a key such as `market.close`; authenticated SYS_ADMIN can call `POST /api/admin/flow-events/market.close`. Other services can deliver the same events without a session through a **signed inbound webhook** (event adapter, see [below](#signed-inbound-webhooks-event-adapters)).
 
 The editor supports a searchable role-aware node picker, free positioning, zoom/pan, **Fit flow**, curved links, accessible click-to-connect ports and bounded **Undo/Redo** of graph changes. Selecting a node opens the **complete floating settings tooltip** (the former permanent Details panel was removed). Graph preflight reports core structural/configuration problems with click-to-node fixes; the server remains authoritative for all execution and permission checks. Version 2 execution routes values along edges and selects conditional branches in topological order.
 
@@ -17,7 +17,7 @@ The editor supports a searchable role-aware node picker, free positioning, zoom/
 - Flows **never execute live trades**. An admin must separately enable authentication and configure an AI endpoint/model.
 - Runs go through a durable queue with checkpoint resume and dead-lettering (see below); concurrency is bounded per process.
 - The flow graph rejects cycles. Recurring loops happen at the scheduler level, not through unbounded edges.
-- **Already available:** conditional/branch nodes, bounded agent retries/timeouts, owner-scoped manual flows, cancellation, recorded node steps, immutable run graph snapshots, execution timestamps, preview-only replay, draft/publish revisions with rollback and call pinning, durable checkpoints and dead-lettering, per-node timing/attempt data, and audited side effects with optional approval (see below). **Still planned:** general trigger adapters and adversarial/accessibility tests (#58, #95).
+- **Already available:** conditional/branch nodes, bounded agent retries/timeouts, owner-scoped manual flows, cancellation, recorded node steps, immutable run graph snapshots, execution timestamps, preview-only replay, draft/publish revisions with rollback and call pinning, durable checkpoints and dead-lettering, per-node timing/attempt data, and audited side effects with optional approval (see below). signed inbound webhooks for third-party events. **Still planned:** scoped agent tool grants and adversarial/accessibility tests (#58, #95).
 
 To start, sign in and open **My Flows → New flow / Edit**. Add nodes with **+ Add node**, select a graph node to configure all fields in its floating tooltip, check **Graph validation**, then **Save flow** before **Run now**. Use **Run history → Inspect nodes** to view recorded steps, status-colored historical graph snapshots, duration and errors. Scheduling and typed event triggers require SYS_ADMIN.
 
@@ -90,6 +90,45 @@ A SYS_ADMIN can add an **Emit Event** node (graph version 2) that names a custom
 - **Lineage:** Run History shows "triggered by run #N" on runs an emission started (`parent_run_id` in run listings).
 - Saving or publishing a flow that emits an undefined event is refused; the editor's graph validation flags it too.
 
+## Signed inbound webhooks (event adapters)
+
+An **event adapter** lets a third-party service (a market-data alert, a CI job, a monitoring tool) deliver one custom trigger without a Flowey session. A SYS_ADMIN creates it under *Function library & triggers → Inbound webhooks* (Liquibase 030). Each adapter has:
+
+- a **public URL** `POST /api/hooks/flow-events/{slug}` with a random, unguessable 26-character slug,
+- exactly **one event key**. The adapter cannot deliver any other event, and the key cannot change after creation,
+- a **signing secret** (`whsec_…`), shown only when created or rotated. It is stored sealed with AES-GCM under `FLOWEYSALES_SECRETS_KEY` and bound to the adapter's slug, so creating adapters requires that key,
+- an optional **payload pointer** (RFC 6901, e.g. `/data/price`) that selects the event value from the JSON body. Empty uses the whole body. Text events accept any JSON value (objects and arrays as compact JSON); number and boolean events need a scalar of that type,
+- a **rate limit** of 1–600 deliveries per minute (default 30), counted per instance.
+
+**Signing.** Every delivery carries three headers:
+
+| Header | Value |
+| --- | --- |
+| `X-Flowey-Timestamp` | Unix seconds; refused when more than 5 minutes from server time |
+| `X-Flowey-Delivery` | Sender's unique delivery ID, 1–128 characters `[A-Za-z0-9._:-]` |
+| `X-Flowey-Signature` | `sha256=` + hex HMAC-SHA256 of `<timestamp>.<delivery id>.<raw body>` with the secret |
+
+```sh
+BODY='{"data":{"price":101.5}}'
+TS=$(date +%s); ID=$(uuidgen)
+SIG=sha256=$(printf '%s.%s.%s' "$TS" "$ID" "$BODY" | openssl dgst -sha256 -hmac "$SECRET" -hex | sed 's/^.* //')
+curl -X POST "https://flowey.example/api/hooks/flow-events/$SLUG" -H 'Content-Type: application/json' \
+  -H "X-Flowey-Timestamp: $TS" -H "X-Flowey-Delivery: $ID" -H "X-Flowey-Signature: $SIG" -d "$BODY"
+```
+
+The panel shows the same example for each new secret.
+
+**Responses.** `202 {"status":"accepted","queued":N}` once every enabled subscriber is queued; `200 {"status":"duplicate"}` for a delivery ID already accepted; `401` for a missing or invalid signature or a stale timestamp; `413` above 16 KiB; `422` when the value is missing or has the wrong type; `429` (with `Retry-After`) over the rate limit; `503` when the run queue is full or storage is unavailable, which is safe to retry. Unknown and **disabled** adapters both answer `404`.
+
+**Guarantees.**
+- **Exactly once per subscriber:** runs are queued through the durable outbox with a key made of adapter, delivery ID and flow. A sender that retries after a timeout, even one where the first attempt queued runs but failed to answer, never starts a subscriber twice. Because the delivery ID is signed, a captured request cannot be replayed under a new ID, and accepted IDs are kept for 30 days, far longer than the 5-minute timestamp window.
+- Runs start with trigger `webhook` at event depth 0, so they may emit further events within the usual chain limit (3). One delivery reaches at most 10 flows.
+- The production-readiness gate still applies: an event-subscribed flow with side effects must be published and have run manually before it can be enabled.
+- Rate-limited requests are counted before signature checks, so a flood of unsigned requests is refused without writing to the database. Up to the limit, every request to an existing adapter is logged under **Deliveries**: status, reason, delivery ID, SHA-256 of the body (never the body itself) and runs queued. The log is pruned after 30 days.
+- Creating, updating, rotating and deleting adapters is recorded in the change log. Rotating takes effect immediately: deliveries signed with the old secret are refused.
+
+Admin API (SYS_ADMIN): `GET|POST /api/admin/flow-event-adapters`, `PUT|DELETE /api/admin/flow-event-adapters/{id}` (`name`, `payload_pointer`, `rate_per_minute`, `enabled`), `POST /api/admin/flow-event-adapters/{id}/rotate-secret`, `GET /api/admin/flow-event-adapters/{id}/deliveries` (latest 50).
+
 ## Durable run queue, checkpoints and dead-letter
 
 Every run (manual, scheduled, event or retry) is stored as **QUEUED** together with the graph snapshot it will execute (Liquibase change 025). Nothing is lost when workers are busy or the process restarts:
@@ -134,7 +173,7 @@ SYS_ADMIN can use the **Blueprint Function Library** in the Flow Studio dashboar
 
 Use **+ Function** in Flow Studio to add a call node, select a saved function, and connect the preceding value or text context. The function's declared input type must match the current value. It returns its value as context for subsequent nodes. Graphs and functions persist in MySQL.
 
-The **Custom Event Triggers** panel creates registered `event_key` definitions with a `text`, `number` or `boolean` payload type. An enabled flow can subscribe using its event key. To publish an event, an authenticated SYS_ADMIN sends `POST /api/admin/flow-events/{key}` with JSON `{"value":42}` (or a matching text/boolean value). The event's type is validated before matching flows are launched; its value is passed to the downstream flow. No public event ingestion or unauthenticated webhooks are enabled.
+The **Custom Event Triggers** panel creates registered `event_key` definitions with a `text`, `number` or `boolean` payload type. An enabled flow can subscribe using its event key. To publish an event, an authenticated SYS_ADMIN sends `POST /api/admin/flow-events/{key}` with JSON `{"value":42}` (or a matching text/boolean value). The event's type is validated before matching flows are launched; its value is passed to the downstream flow. Other services publish the same events through signed [event adapters](#signed-inbound-webhooks-event-adapters); there is no unsigned public ingestion.
 
 **Boundaries for this iteration:** function graphs support one typed argument and one typed return value. More than one typed parameter, reusable version pinning, independent control/data wires, loops, output-of-a-branch selective execution, end-user auth delegation, durable event queues and inter-flow event emission remain under issue #59. As in existing Flow Studio, scheduling/execution is research-only with no brokerage or real-money operations.
 
@@ -142,9 +181,9 @@ The **Custom Event Triggers** panel creates registered `event_key` definitions w
 
 SYS_ADMIN can open the Function Library under Flow Studio to create bounded, pure typed functions using input/output, constant and operation nodes. Available operations: arithmetic, comparisons, boolean AND/OR/NOT, IF and explicit to-text conversion. Connect source nodes to named ports, save the graph, then select it from a Function node in a flow. Functions cannot access order APIs, side-effecting tools or live trading.
 
-Custom triggers are registered as unique event keys with text, numeric or boolean payloads. An administrator can enable flows with the matching event key and publish a value through `POST /api/admin/flow-events/{key}` with `{"value":"example"}` for text, `{"value":42}` for numbers or `{"value":true}` for boolean triggers. Triggers require authenticated SYS_ADMIN and matching value types; they are not public inbound webhooks. A flow can subscribe by setting its Event key and Enabled toggle.
+Custom triggers are registered as unique event keys with text, numeric or boolean payloads. An administrator can enable flows with the matching event key and publish a value through `POST /api/admin/flow-events/{key}` with `{"value":"example"}` for text, `{"value":42}` for numbers or `{"value":true}` for boolean triggers. The admin endpoint requires authenticated SYS_ADMIN and matching value types; third parties use a signed [event adapter](#signed-inbound-webhooks-event-adapters) instead. A flow can subscribe by setting its Event key and Enabled toggle.
 
-**Remaining limitations:** A function graph currently exposes one typed input and one typed output; branch logic selects a value rather than controlling separate execution wires. The flow graph uses the previous node's output as function input. Graph revisions are not pinned; trigger delivery and downstream starts are best-effort and are not durable outbox events. Agent research is read-only, with tool access disabled. Extensible trigger adapters, multiple typed pins and durable propagation remain in #59.
+**Remaining limitations:** A function graph currently exposes one typed input and one typed output; branch logic selects a value rather than controlling separate execution wires. The flow graph uses the previous node's output as function input. Agent research is read-only, with tool access disabled. Multiple typed pins remain in #59.
 
 ## Current UX delivery
 

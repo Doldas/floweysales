@@ -76,6 +76,11 @@ func (e *Engine) Handler() http.Handler {
 			e.serveAuth(w, r)
 			return
 		}
+		// Signed event adapter webhooks authenticate by HMAC, not by session.
+		if strings.HasPrefix(r.URL.Path, "/api/hooks/flow-events/") {
+			e.mux.ServeHTTP(w, r)
+			return
+		}
 		if e.authService != nil {
 			u, ok := e.currentUser(r)
 			if !ok {

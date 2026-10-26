@@ -44,6 +44,10 @@ var flowAuditRoutes = map[string]auditedRoute{
 	"POST /api/admin/blueprint-triggers":                                {"trigger.save", "trigger", ""},
 	"POST /api/admin/flow-events/{key}":                                 {"event.send", "event", "key"},
 	"POST /api/admin/flow-side-effects/{id}/decision":                   {"side_effect.decide", "side_effect", "id"},
+	"POST /api/admin/flow-event-adapters":                               {"adapter.create", "adapter", ""},
+	"PUT /api/admin/flow-event-adapters/{id}":                           {"adapter.update", "adapter", "id"},
+	"DELETE /api/admin/flow-event-adapters/{id}":                        {"adapter.delete", "adapter", "id"},
+	"POST /api/admin/flow-event-adapters/{id}/rotate-secret":            {"adapter.rotate_secret", "adapter", "id"},
 }
 
 // flowAuditExempt lists mutating-method routes that change nothing.
