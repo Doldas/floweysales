@@ -5,7 +5,11 @@
 
 export interface GrantableTool { name: string; description: string }
 
-export interface ToolCall { attempt: number; name: string; arguments?: string; ok: boolean; error?: string; result_bytes: number }
+export interface ToolCall {
+  attempt: number; name: string; arguments?: string; ok: boolean; error?: string; result_bytes: number;
+  /** Provenance of a successful result. */
+  retrieved_at?: string; sha256?: string; sources?: string[];
+}
 
 /** Adds or removes a tool, keeping the grant within the server's limit. */
 export function toggleTool(granted: readonly string[] | undefined, name: string, max: number): string[] | null {

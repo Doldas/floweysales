@@ -109,6 +109,14 @@ try {
   await page.waitForTimeout(100);
   check('wiring clears the preflight issue', (await validation.innerText()) === 'No structural issues', await validation.innerText());
 
+  // Grant Research a tool and require grounded figures from the keyboard-opened settings.
+  await studio.locator('[aria-label="Select Research"]').focus();
+  await page.keyboard.press('Enter');
+  const settings = studio.locator('[aria-label="Complete node settings"]');
+  await settings.getByLabel('SEC facts').check();
+  await settings.getByLabel('Require grounded figures').check();
+  await settings.getByRole('button', { name: 'Close node settings' }).click();
+
   // An output added with the new agent selected is wired to it.
   await studio.locator('[aria-label="Select Research agent"]').click();
   await studio.getByRole('button', { name: '+ Add node' }).click();
@@ -128,6 +136,8 @@ try {
   const hasEdge = (from, to) => graph?.edges.some(e => e.from === from && e.to === to);
   check('saved graph has the wired edge Research → Research agent', hasEdge(byLabel('Research'), byLabel('Research agent')));
   check('saved graph has the edge Research agent → Output Result', hasEdge(byLabel('Research agent'), byLabel('Output Result')));
+  const research = graph?.nodes.find(n => n.label === 'Research');
+  check('save sends the tool grant and grounding', research?.tools?.join() === 'get_sec_facts' && research?.require_grounding === true, JSON.stringify(research));
   check('saved flow is a disabled manual flow', save?.body?.enabled === false && !save?.body?.interval_minutes && !save?.body?.event_key, JSON.stringify(save?.body));
 
   // 5. Publish: the saved draft becomes revision 1.
