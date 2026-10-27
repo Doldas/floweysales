@@ -15,7 +15,7 @@ const graph = {
   version: 2,
   nodes: [
     { id: 'start', type: 'trigger', label: 'Start', x: 60, y: 140 },
-    { id: 'agent', type: 'agent', label: 'Analyst', prompt: 'Summarise the filing.', tools: ['get_sec_facts'], max_tool_calls: 4, x: 300, y: 140 },
+    { id: 'agent', type: 'agent', label: 'Analyst', prompt: 'Summarise the filing.', tools: ['get_sec_facts'], max_tool_calls: 4, require_grounding: true, x: 300, y: 140 },
     { id: 'report', type: 'output', label: 'Report', x: 540, y: 140 },
   ],
   edges: [{ from: 'start', to: 'agent' }, { from: 'agent', to: 'report' }],
@@ -37,7 +37,8 @@ const mocks = {
     { id: 1, node: 'start', label: 'Start', status: 'SUCCESS', output: '', duration_ms: 1, created_at: '2026-10-25T10:00:00Z' },
     { id: 2, node: 'agent', label: 'Analyst', status: 'SUCCESS', input: 'Summarise the filing.', output: 'Revenue grew 12%.', duration_ms: 8000, attempts: 1, created_at: '2026-10-25T10:00:08Z',
       tool_calls: [
-        { attempt: 1, name: 'get_sec_facts', arguments: '{"symbol":"NVDA"}', ok: true, result_bytes: 2048 },
+        { attempt: 1, name: 'get_sec_facts', arguments: '{"symbol":"NVDA"}', ok: true, result_bytes: 2048, retrieved_at: '2026-10-25T10:00:03Z',
+          sha256: 'a'.repeat(64), sources: ['https://www.sec.gov/cgi-bin/browse-edgar?CIK=0001045810', '0001045810-25-000023'] },
         { attempt: 1, name: 'search_web', arguments: '{}', ok: false, error: 'tool search_web is not granted to this agent', result_bytes: 0 },
       ] },
   ] },

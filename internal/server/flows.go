@@ -48,8 +48,11 @@ type flowNode struct {
 	// Read-only research tools granted to an agent node, and its call budget.
 	Tools        []string `json:"tools,omitempty"`
 	MaxToolCalls int      `json:"max_tool_calls,omitempty"`
-	X            float64  `json:"x"`
-	Y            float64  `json:"y"`
+	// RequireGrounding fails an attempt whose answer states figures that are
+	// not in its tool results or input.
+	RequireGrounding bool    `json:"require_grounding,omitempty"`
+	X                float64 `json:"x"`
+	Y                float64 `json:"y"`
 }
 type flowEdge struct {
 	From     string `json:"from"`
@@ -1449,6 +1452,11 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				runErr = nodeCtx.Err()
 			}
 			cancel()
+			if runErr == nil && n.RequireGrounding {
+				if err := checkGrounding(result.String(), tools.Evidence(attemptNumber), prompt); err != nil {
+					runErr = fmt.Errorf("grounding check: %w", err)
+				}
+			}
 			if runErr == nil {
 				response = result.String()
 				break

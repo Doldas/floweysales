@@ -22,7 +22,7 @@ import { nearestPort, portPoints, wireFromDrag, edgeKey, wirePath, type PortPoin
 import { bindInputPin, declaredPins, mixesPinAndPlainInputs, pinBindings, pinEdgeProblem, pinOffset, routeOutputPin, unboundInputPins } from './function-pins';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'; label:string; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'; label:string; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number;require_grounding?:boolean; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FunctionDef { id:number; name:string; graph?:unknown }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
@@ -205,7 +205,9 @@ export class ConfirmDeleteFlowDialog {
           @for(tool of agentTools();track tool.name){
            <label class="checkbox-row" [title]="tool.description"><input type="checkbox" [checked]="n.tools?.includes(tool.name)" (change)="toggleAgentTool(n.id,tool.name)"> {{toolLabel(tool.name)}}</label>
           }
-          @if(n.tools?.length){<label>Max tool calls (0 = default {{toolLimits().default_tool_calls}}) <input type="number" min="0" [max]="toolLimits().max_tool_calls" step="1" [ngModel]="n.max_tool_calls||0" (ngModelChange)="updateToolBudget(n.id,+$event)"></label>}
+          @if(n.tools?.length){<label>Max tool calls (0 = default {{toolLimits().default_tool_calls}}) <input type="number" min="0" [max]="toolLimits().max_tool_calls" step="1" [ngModel]="n.max_tool_calls||0" (ngModelChange)="updateToolBudget(n.id,+$event)"></label>
+           <label class="checkbox-row"><input type="checkbox" [checked]="!!n.require_grounding" (change)="setGrounding(n.id,$any($event.target).checked)"> Require grounded figures</label>
+           <p class="muted">When on, every figure in the answer must appear in this attempt's tool results or the node input. Otherwise the attempt fails and lists the unsupported figures.</p>}
          </fieldset>
         } @else if(n.tools?.length){<p class="muted">This agent has {{n.tools.length}} research tool(s) granted by an administrator.</p>}
         @if(n.output_mode==='json'){
@@ -502,7 +504,7 @@ export class ConfirmDeleteFlowDialog {
                   @if(step.attempts!=null){<dt>Node attempts</dt><dd>{{step.attempts}}</dd>}
                   @if(step.worker_attempt!=null){<dt>Worker attempt</dt><dd>{{step.worker_attempt}}</dd>}
                 </dl>
-                @if(step.tool_calls?.length){<section class="tool-calls"><h5>Tool calls ({{step.tool_calls!.length}})</h5><ul>@for(call of step.tool_calls!;track $index){<li [class.tool-failed]="!call.ok">{{describeToolCall(call)}}</li>}</ul></section>}
+                @if(step.tool_calls?.length){<section class="tool-calls"><h5>Tool calls ({{step.tool_calls!.length}})</h5><ul>@for(call of step.tool_calls!;track $index){<li [class.tool-failed]="!call.ok" [title]="call.sha256?'Retrieved '+call.retrieved_at+' · SHA-256 '+call.sha256:''">{{describeToolCall(call)}}@if(call.sources?.length){<span class="tool-sources">Sources: {{call.sources!.join(', ')}}</span>}</li>}</ul></section>}
                 @if(step.error){<div class="exec-error-hint" role="alert"><strong>Error</strong><pre>{{step.error}}</pre></div>}
                 <div class="debug-io">
                   <section><h5>Input</h5>@if(step.input){<pre>{{step.input}}</pre>}@else{<p class="muted">{{step.status==='SKIPPED'?'Skipped: no active input branch.':'No input recorded (start node or a run recorded before input capture).'}}</p>}</section>
@@ -624,7 +626,7 @@ export class ConfirmDeleteFlowDialog {
  .capability-box{border:1px solid #ae8c67;border-radius:8px;padding:8px 10px;margin:6px 0}.capability-box legend{color:#ffe19a;font-weight:700;padding:0 4px}
  .checkbox-row{display:flex!important;gap:8px;align-items:center}
  .tool-grants{border:1px solid #45627b;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:4px;margin:4px 0}.tool-grants legend{padding:0 4px;font-weight:600}
- .tool-calls ul{margin:4px 0 0;padding-left:18px;font-size:13px;overflow-wrap:anywhere}.tool-calls li.tool-failed{color:#ffb3bd}
+ .tool-calls ul{margin:4px 0 0;padding-left:18px;font-size:13px;overflow-wrap:anywhere}.tool-calls li.tool-failed{color:#ffb3bd}.tool-calls .tool-sources{display:block;opacity:.8;font-size:12px}
  .capability-summary{border:1px solid #50738e;border-radius:8px;padding:10px;margin:10px 0}.capability-summary ul{margin:6px 0 0;padding-left:18px}.capability-summary li{overflow-wrap:anywhere}.capability-summary button{background:none;border:0;text-decoration:underline;color:#aedfff;cursor:pointer;font:inherit;padding:0}
  .mapped-edge{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:12px;overflow-wrap:anywhere}
  .mapped-edge button{color:#bce3ff;background:#1b3850;border:1px solid #527b99;border-radius:5px;padding:5px}
@@ -1233,7 +1235,10 @@ export class FlowStudioComponent {
  toggleAgentTool(id:string,name:string){
    const n=this.node(id);const next=toggleTool(n?.tools,name,this.toolLimits().max_tools);
    if(!next){this.message.set('An agent can be granted at most '+this.toolLimits().max_tools+' tools');return}
-   this.graph.update(g=>({...g,nodes:g.nodes.map(x=>{if(x.id!==id)return x;const {tools:_t,max_tool_calls:_m,...rest}=x;return next.length?{...rest,tools:next,...(_m?{max_tool_calls:_m}:{})}:rest})}));
+   this.graph.update(g=>({...g,nodes:g.nodes.map(x=>{if(x.id!==id)return x;const {tools:_t,max_tool_calls:_m,require_grounding:_g,...rest}=x;return next.length?{...rest,tools:next,...(_m?{max_tool_calls:_m}:{}),...(_g?{require_grounding:true}:{})}:rest})}));
+ }
+ setGrounding(id:string,on:boolean){
+   this.graph.update(g=>({...g,nodes:g.nodes.map(x=>{if(x.id!==id)return x;const {require_grounding:_g,...rest}=x;return on&&x.tools?.length?{...rest,require_grounding:true}:rest})}));
  }
  updateToolBudget(id:string,value:number){
    const budget=clampToolBudget(value,this.toolLimits().max_tool_calls);
