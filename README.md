@@ -54,6 +54,10 @@ Read [Flow Studio delivery progress](docs/flow-studio-progress.md), the [UX impl
 3. Open http://localhost:4200 — `/api/*` requests are proxied to :8080 and the
    UI hot-reloads on save.
 
+## Agent evaluation
+
+`go run ./cmd/agent-eval` scores a model on a fixed stock-analysis dataset: accuracy, grounding, citations and refusal when data is missing. See [Agent evaluation suite](docs/agent-evaluation.md).
+
 ## UI smoke test
 
 With the server running on :8080:

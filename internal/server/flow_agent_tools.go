@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"floweysales/internal/ai"
+	"floweysales/internal/grounding"
 	"floweysales/internal/redact"
 )
 
@@ -160,7 +161,7 @@ func (t *flowToolTrace) observe(attempt int, ev ai.Event) {
 				b = &strings.Builder{}
 				t.evidence[attempt] = b
 			}
-			if b.Len()+len(ev.Result) <= maxGroundingEvidence {
+			if b.Len()+len(ev.Result) <= grounding.MaxEvidence {
 				b.WriteString(ev.Result)
 				b.WriteByte('\n')
 			}

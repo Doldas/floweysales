@@ -1,4 +1,7 @@
-package server
+// Package grounding checks that the figures an agent states appear in its
+// evidence. It is a mechanical check against invented numbers, not a
+// semantic fact check.
+package grounding
 
 import (
 	"fmt"
@@ -8,13 +11,9 @@ import (
 	"strings"
 )
 
-// Grounding: with RequireGrounding set, every figure an agent states must
-// match a number in that attempt's tool results or in the node input. It is
-// a mechanical check against invented numbers, not a semantic fact check.
-
 const (
-	// maxGroundingEvidence bounds the tool-result text kept per attempt.
-	maxGroundingEvidence = 512 << 10
+	// MaxEvidence bounds the tool-result text callers keep per attempt.
+	MaxEvidence          = 512 << 10
 	maxUnsupportedListed = 5
 )
 
@@ -25,10 +24,10 @@ var (
 	evidenceNumberPattern = regexp.MustCompile(`-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?`)
 )
 
-// figure is a number stated in an answer.
-type figure struct {
-	text     string
-	value    float64
+// Figure is a number stated in an answer.
+type Figure struct {
+	Text     string
+	Value    float64
 	decimals int
 	percent  bool
 	scale    float64
@@ -36,11 +35,11 @@ type figure struct {
 
 var scaleWords = map[string]float64{"thousand": 1e3, "k": 1e3, "million": 1e6, "mn": 1e6, "m": 1e6, "billion": 1e9, "bn": 1e9, "b": 1e9, "trillion": 1e12, "t": 1e12}
 
-// answerFigures returns the figures in an answer worth checking: decimals,
+// Figures returns the figures in an answer worth checking: decimals,
 // percentages, scaled amounts and numbers of at least 100. Years, small
 // counts and numbers inside labels such as FY2025 or Q3 are skipped.
-func answerFigures(text string) []figure {
-	var out []figure
+func Figures(text string) []Figure {
+	var out []Figure
 	for _, m := range figurePattern.FindAllStringSubmatchIndex(text, -1) {
 		raw := text[m[4]:m[5]]
 		suffix := ""
@@ -56,7 +55,7 @@ func answerFigures(text string) []figure {
 		if err != nil {
 			continue
 		}
-		f := figure{text: strings.TrimSpace(text[m[4]:m[1]]), value: value, scale: 1}
+		f := Figure{Text: strings.TrimSpace(text[m[4]:m[1]]), Value: value, scale: 1}
 		if i := strings.IndexByte(clean, '.'); i >= 0 {
 			f.decimals = len(clean) - i - 1
 		}
@@ -76,10 +75,13 @@ func answerFigures(text string) []figure {
 	return out
 }
 
+// Amount is the figure with its scale word applied: 12.5B is 12500000000.
+func (f Figure) Amount() float64 { return f.Value * f.scale }
+
 func isLetter(b byte) bool { return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') }
 
-// evidenceNumbers extracts every number in the evidence text.
-func evidenceNumbers(evidence string) []float64 {
+// EvidenceNumbers extracts every number in the evidence text.
+func EvidenceNumbers(evidence string) []float64 {
 	var out []float64
 	for _, raw := range evidenceNumberPattern.FindAllString(strings.ReplaceAll(evidence, ",", ""), -1) {
 		if v, err := strconv.ParseFloat(raw, 64); err == nil {
@@ -89,18 +91,18 @@ func evidenceNumbers(evidence string) []float64 {
 	return out
 }
 
-// supported reports whether a figure matches an evidence number at the
+// Supported reports whether a figure matches an evidence number at the
 // figure's own precision, as a fraction behind a percentage, or in another
 // scale (12.5 billion for 12500000000, or 12,500 million).
-func (f figure) supported(evidence []float64) bool {
-	target := f.value * f.scale
+func (f Figure) Supported(evidence []float64) bool {
+	target := f.Value * f.scale
 	unit := math.Pow(10, -float64(f.decimals))
 	near := func(stated, actual float64) bool {
 		// Rounding to the stated precision, with a little room for float noise.
 		return math.Abs(stated-actual) <= unit/2+1e-9*math.Max(1, math.Abs(actual))
 	}
 	for _, e := range evidence {
-		if near(f.value, e) {
+		if near(f.Value, e) {
 			return true
 		}
 		if f.scale != 1 {
@@ -111,12 +113,12 @@ func (f figure) supported(evidence []float64) bool {
 				}
 			}
 		}
-		if f.percent && near(f.value, e*100) {
+		if f.percent && near(f.Value, e*100) {
 			return true
 		}
 		if f.scale == 1 && !f.percent {
 			for _, s := range []float64{1e3, 1e6, 1e9} {
-				if near(f.value, e/s) {
+				if near(f.Value, e/s) {
 					return true
 				}
 			}
@@ -125,17 +127,17 @@ func (f figure) supported(evidence []float64) bool {
 	return false
 }
 
-// checkGrounding returns an error naming the answer's unsupported figures.
-func checkGrounding(answer string, evidence ...string) error {
-	numbers := evidenceNumbers(strings.Join(evidence, "\n"))
+// Check returns an error naming the answer's unsupported figures.
+func Check(answer string, evidence ...string) error {
+	numbers := EvidenceNumbers(strings.Join(evidence, "\n"))
 	var missing []string
 	seen := map[string]bool{}
-	for _, f := range answerFigures(answer) {
-		if f.supported(numbers) || seen[f.text] {
+	for _, f := range Figures(answer) {
+		if f.Supported(numbers) || seen[f.Text] {
 			continue
 		}
-		seen[f.text] = true
-		missing = append(missing, f.text)
+		seen[f.Text] = true
+		missing = append(missing, f.Text)
 	}
 	if len(missing) == 0 {
 		return nil
