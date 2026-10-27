@@ -15,7 +15,8 @@
     "smoke:ai": "node smoke-ai.mjs",
     "smoke:trading": "node smoke-trading.mjs",
     "smoke:responsive": "node smoke-responsive.mjs",
-    "smoke:a11y": "node smoke-a11y.mjs"
+    "smoke:a11y": "node smoke-a11y.mjs",
+    "smoke:flow-editor": "node smoke-flow-editor.mjs"
   },
   "private": true,
   "packageManager": "npm@12.2.0",

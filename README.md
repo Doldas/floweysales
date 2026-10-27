@@ -79,7 +79,11 @@ chart is seeded with provider market history immediately.
 against the production build served on :4173 (`npm run build`, then
 `python3 -m http.server 4173 --directory ../www/browser`). `smoke:a11y` runs
 axe-core (WCAG 2.1 A/AA) over every Flow Studio tab, the agent node settings
-opened from the keyboard and the run trace with its tool calls. CI runs both.
+opened from the keyboard and the run trace with its tool calls.
+`smoke:flow-editor` drives the editing paths against a stateful mock: create a
+flow, catch an unconnected node in preflight, wire it with click-to-connect,
+save (checking the exact graph sent), publish, run and inspect the node trace
+with its tool calls. CI runs all three.
 
 ## Market history
 
