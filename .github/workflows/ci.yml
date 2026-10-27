@@ -129,7 +129,7 @@ jobs:
             sleep 1
           done
           npm run smoke:responsive --prefix frontend
-      - name: Flow Studio accessibility (axe-core, WCAG 2.1 AA)
+      - name: Flow Studio accessibility (axe-core, WCAG 2.1 AA) and editing paths
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 --directory www/browser >/tmp/floweysales-a11y-server.log 2>&1 &
           web_pid=$!
@@ -139,6 +139,7 @@ jobs:
             sleep 1
           done
           npm run smoke:a11y --prefix frontend
+          npm run smoke:flow-editor --prefix frontend
       - uses: actions/upload-artifact@v7
         with:
           name: frontend-preview
