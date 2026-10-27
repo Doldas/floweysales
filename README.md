@@ -75,6 +75,12 @@ errors, ticker search/autocomplete works, tracking switches the symbol,
 theme switching applies, a wrong ticker shows the error snackbar, and the
 chart is seeded with provider market history immediately.
 
+`smoke:responsive` and `smoke:a11y` need no backend. They mock the API and run
+against the production build served on :4173 (`npm run build`, then
+`python3 -m http.server 4173 --directory ../www/browser`). `smoke:a11y` runs
+axe-core (WCAG 2.1 A/AA) over every Flow Studio tab, the agent node settings
+opened from the keyboard and the run trace with its tool calls. CI runs both.
+
 ## Market history
 
 `GET /api/history?symbol=MSFT&provider=YAHOO&range=MAX` returns provider OHLC
