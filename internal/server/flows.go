@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"floweysales/internal/ai"
+	"floweysales/internal/grounding"
 	"floweysales/internal/identity"
 	"floweysales/internal/storage"
 )
@@ -1453,7 +1454,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			}
 			cancel()
 			if runErr == nil && n.RequireGrounding {
-				if err := checkGrounding(result.String(), tools.Evidence(attemptNumber), prompt); err != nil {
+				if err := grounding.Check(result.String(), tools.Evidence(attemptNumber), prompt); err != nil {
 					runErr = fmt.Errorf("grounding check: %w", err)
 				}
 			}

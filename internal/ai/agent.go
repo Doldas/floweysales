@@ -33,6 +33,9 @@ type AgentOptions struct {
 	// AnswerAfterToolBudget makes an exhausted tool budget withdraw the tools
 	// and ask for a final answer instead of ending the run with an error.
 	AnswerAfterToolBudget bool
+	// Execute, when set, runs granted tool calls instead of the built-in
+	// tools, for example against recorded fixtures in an evaluation.
+	Execute func(ctx context.Context, name, argsJSON string) (string, error)
 }
 
 // DefaultSystemPrompt instructs the model how to use the market tools.
@@ -167,6 +170,8 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 			var err error
 			if granted != nil && !granted[tc.Function.Name] {
 				err = fmt.Errorf("tool %s is not granted to this agent", tc.Function.Name)
+			} else if opts.Execute != nil {
+				result, err = opts.Execute(ctx, tc.Function.Name, tc.Function.Arguments)
 			} else {
 				result, err = Execute(ctx, src, tc.Function.Name, tc.Function.Arguments)
 			}
