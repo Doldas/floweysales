@@ -1,7 +1,23 @@
 # FloweySales
 
-Go engine + Angular (Material) web terminal. One binary serves the API, the
-SSE price stream and the web UI.
+Agentic financial research workspace: a Go engine plus an Angular + Bootstrap 5
+web app. One binary serves the API, the SSE price stream and the web UI.
+
+## The workspace
+
+| Area | What it does |
+| --- | --- |
+| **Command Center** | Home: ask the agent, KPIs, agent run activity across flows, automations, live trackers, flow templates and recent files |
+| **Research Agent** | Conversational research with read-only market, SEC and valuation tools. Every tool call is shown as a step with its arguments and result. Available as a dock on every page (Ctrl/⌘ J) and as a full page |
+| **Flows** | Flow Studio: build, version, run and audit multi-step agent automations |
+| **Inbox** | Decisions agents are waiting on: flow side effects that need approval, and paper-trade proposals that need a second SYS_ADMIN |
+| **Markets / Financials** | Trackers, live chart with indicators and insights, fundamentals and quarterly statements, each with an "Analyze with agent" hand-off |
+| **Paper portfolio** | Simulated order ticket, positions and blotter (SYS_ADMIN) |
+| **Files** | Private research workspace that flows read and write |
+
+Press **Ctrl/⌘ K** anywhere for the command palette. Light and dark themes follow
+the system setting and can be toggled in the top bar. See
+[ADR 0001](docs/adr/0001-agentic-workspace-shell.md) for the design decisions.
 
 ## Requirements
 
@@ -65,25 +81,28 @@ With the server running on :8080:
 ```bash
 cd frontend
 npx playwright install chromium   # first time only
-npm run smoke              # boot, search, track, themes, error snackbar
+npm run smoke              # boot, search, track, theme toggle, unknown-ticker toast
 npm run smoke:history      # historical chart seeding + range toggles
 npm run smoke:stop         # stop-loss line spans the whole range
-npm run smoke:analysis     # indicator chips, RSI/MACD panels, insights
+npm run smoke:analysis     # study chips, RSI/MACD panels, insights
 npm run smoke:financials   # quarterly statements card
-npm run smoke:ai           # AI chat panel, tools, markdown rendering
+npm run smoke:ai           # agent dock, tool steps, markdown rendering
 npm run smoke:trading      # order ticket, review/confirm, positions, cancel
 ```
 
 Verifies with a headless browser that the page boots with zero console
 errors, ticker search/autocomplete works, tracking switches the symbol,
-theme switching applies, a wrong ticker shows the error snackbar, and the
-chart is seeded with provider market history immediately.
+theme switching applies, a wrong ticker shows an error toast, and the
+chart is seeded with provider market history immediately. Set `SMOKE_URL` to
+test another address.
 
 `smoke:responsive` and `smoke:a11y` need no backend. They mock the API and run
 against the production build served on :4173 (`npm run build`, then
-`python3 -m http.server 4173 --directory ../www/browser`). `smoke:a11y` runs
-axe-core (WCAG 2.1 A/AA) over every Flow Studio tab, the agent node settings
-opened from the keyboard and the run trace with its tool calls.
+`python3 -m http.server 4173 --directory ../www/browser`). Both use the shared mock
+backend in `smoke-fixtures.mjs`. `smoke:a11y` runs axe-core (WCAG 2.1 A/AA) over
+every page in light and dark, the agent dock, the command palette, every Flow
+Studio tab, the agent node settings opened from the keyboard and the run trace
+with its tool calls.
 `smoke:flow-editor` drives the editing paths against a stateful mock: create a
 flow, catch an unconnected node in preflight, wire it with click-to-connect,
 save (checking the exact graph sent), publish, run and inspect the node trace

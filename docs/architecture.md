@@ -3,7 +3,7 @@
 Current components:
 
 ```text
-Angular UI ──────────→ Go REST + SSE API ───────→ provider adapters (Yahoo, Finnhub, Avanza, Binance)
+Angular/Bootstrap UI → Go REST + SSE API ───────→ provider adapters (Yahoo, Finnhub, Avanza, Binance)
     │                           │
     └── chat UI ──→ AI agent ────┼── tool catalog ──→ history, quarterly financials, market stats
                                 │

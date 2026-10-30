@@ -1,118 +1,86 @@
 @if (data(); as md) {
-  <mat-card class="glass info-card">
-    <mat-card-header>
-      <div mat-card-avatar>
-        <mat-icon>{{ isStock() ? 'show_chart' : 'savings' }}</mat-icon>
+  <section class="card info-card" aria-labelledby="asset-info-title">
+    <div class="card-header">
+      <span class="asset-glyph" aria-hidden="true"><i class="bi" [class.bi-building]="isStock()" [class.bi-piggy-bank]="!isStock()"></i></span>
+      <div class="min-w-0 me-auto">
+        <h2 class="card-title" id="asset-info-title">
+          {{ md.name || md.symbol || '—' }} @if (md.symbol) { <span class="text-muted fw-normal">({{ md.symbol }})</span> }
+        </h2>
+        <div class="small text-muted">
+          {{ md.type || 'Asset' }}
+          @if (md.listing?.marketPlaceName) { · {{ md.listing!.marketPlaceName }} ({{ md.listing!.marketListName }}) }
+          @if (md.isin) { · ISIN {{ md.isin }} }
+        </div>
       </div>
-      <mat-card-title>
-        {{ (md.name || md.symbol || '—') }}
-        @if (md.symbol) { <span class="dim">({{ md.symbol }})</span> }
-      </mat-card-title>
-      <mat-card-subtitle>
-        {{ md.type || 'ASSET' }}
-        @if (md.listing?.marketPlaceName) { • {{ md.listing!.marketPlaceName }}
-        ({{ md.listing!.marketListName }}) }
-        @if (md.isin) { • ISIN: {{ md.isin }} }
-      </mat-card-subtitle>
-    </mat-card-header>
+      <nav class="fs-segmented" role="tablist" aria-label="Fundamentals views">
+        <button type="button" role="tab" [attr.aria-selected]="tab() === 'overview'" (click)="tab.set('overview')">Overview</button>
+        <button type="button" role="tab" [attr.aria-selected]="tab() === 'ratios'" (click)="tab.set('ratios')">{{ isStock() ? 'Key ratios' : 'Risk & ESG' }}</button>
+        @if (isFund()) {
+          <button type="button" role="tab" [attr.aria-selected]="tab() === 'holdings'" (click)="tab.set('holdings')">Top holdings</button>
+        }
+      </nav>
+    </div>
 
-    <mat-card-content>
+    <div class="card-body">
       <p class="description">
-        {{ md.description || (isStock()
-          ? 'Trading data & key metrics for ' + (md.name || md.symbol) + '.'
-          : 'No description available.') }}
+        {{ md.description || (isStock() ? 'Trading data and key metrics for ' + (md.name || md.symbol) + '.' : 'No description available.') }}
       </p>
 
-      <mat-tab-group animationDuration="180ms">
-        <!-- OVERVIEW -->
-        <mat-tab label="Overview">
-          <div class="tile-grid">
-            @if (isStock()) {
-              <div class="tile">
-                <div class="tile-label">Day Change</div>
-                <div class="tile-value"
-                     [class.positive]="(md.quote?.changePercent ?? 0) >= 0"
-                     [class.negative]="(md.quote?.changePercent ?? 0) < 0">
-                  {{ md.quote?.changePercent !== undefined ? fmtPerf(md.quote!.changePercent) : '---' }}
-                </div>
-              </div>
-              <div class="tile">
-                <div class="tile-label">Day High</div>
-                <div class="tile-value">
-                  {{ md.quote?.highest !== undefined ? (md.quote!.highest!.toFixed(2) + ' ' + currentCurrency()) : '---' }}
-                </div>
-              </div>
-              <div class="tile">
-                <div class="tile-label">Day Low</div>
-                <div class="tile-value">
-                  {{ md.quote?.lowest !== undefined ? (md.quote!.lowest!.toFixed(2) + ' ' + currentCurrency()) : '---' }}
-                </div>
-              </div>
-              <div class="tile">
-                <div class="tile-label">Last Price</div>
-                <div class="tile-value">
-                  {{ md.quote?.last !== undefined ? (md.quote!.last!.toFixed(2) + ' ' + currentCurrency()) : '---' }}
-                </div>
-              </div>
-              <div class="tile">
-                <div class="tile-label">Spread</div>
-                <div class="tile-value accent">
-                  {{ md.quote?.spread !== undefined ? md.quote!.spread!.toFixed(2) + '%' : '---' }}
-                </div>
-              </div>
-            } @else {
-              <div class="tile"><div class="tile-label">1 Day</div><div class="tile-value">{{ fmtPerf(md.performance?.['1d']) }}</div></div>
-              <div class="tile"><div class="tile-label">1 Month</div><div class="tile-value">{{ fmtPerf(md.performance?.['1m']) }}</div></div>
-              <div class="tile"><div class="tile-label">3 Months</div><div class="tile-value">{{ fmtPerf(md.performance?.['3m']) }}</div></div>
-              <div class="tile"><div class="tile-label">1 Year</div><div class="tile-value">{{ fmtPerf(md.performance?.['1y']) }}</div></div>
-              <div class="tile"><div class="tile-label">3 Years</div><div class="tile-value">{{ fmtPerf(md.performance?.['3y']) }}</div></div>
-              <div class="tile"><div class="tile-label">Mgmt Fee</div><div class="tile-value accent">{{ md.fees?.management ?? '---' }}%</div></div>
-            }
-          </div>
-        </mat-tab>
+      @if (tab() === 'overview') {
+        <div class="tile-grid" role="tabpanel">
+          @if (isStock()) {
+            <div class="tile"><div class="tile-label">Day change</div>
+              <div class="tile-value" [class.positive]="(md.quote?.changePercent ?? 0) >= 0" [class.negative]="(md.quote?.changePercent ?? 0) < 0">
+                {{ md.quote?.changePercent !== undefined ? fmtPerf(md.quote!.changePercent) : '—' }}</div></div>
+            <div class="tile"><div class="tile-label">Day high</div><div class="tile-value">{{ md.quote?.highest !== undefined ? (md.quote!.highest!.toFixed(2) + ' ' + currentCurrency()) : '—' }}</div></div>
+            <div class="tile"><div class="tile-label">Day low</div><div class="tile-value">{{ md.quote?.lowest !== undefined ? (md.quote!.lowest!.toFixed(2) + ' ' + currentCurrency()) : '—' }}</div></div>
+            <div class="tile"><div class="tile-label">Last price</div><div class="tile-value">{{ md.quote?.last !== undefined ? (md.quote!.last!.toFixed(2) + ' ' + currentCurrency()) : '—' }}</div></div>
+            <div class="tile"><div class="tile-label">Spread</div><div class="tile-value">{{ md.quote?.spread !== undefined ? md.quote!.spread!.toFixed(2) + '%' : '—' }}</div></div>
+          } @else {
+            <div class="tile"><div class="tile-label">1 day</div><div class="tile-value">{{ fmtPerf(md.performance?.['1d']) }}</div></div>
+            <div class="tile"><div class="tile-label">1 month</div><div class="tile-value">{{ fmtPerf(md.performance?.['1m']) }}</div></div>
+            <div class="tile"><div class="tile-label">3 months</div><div class="tile-value">{{ fmtPerf(md.performance?.['3m']) }}</div></div>
+            <div class="tile"><div class="tile-label">1 year</div><div class="tile-value">{{ fmtPerf(md.performance?.['1y']) }}</div></div>
+            <div class="tile"><div class="tile-label">3 years</div><div class="tile-value">{{ fmtPerf(md.performance?.['3y']) }}</div></div>
+            <div class="tile"><div class="tile-label">Management fee</div><div class="tile-value">{{ md.fees?.management ?? '—' }}%</div></div>
+          }
+        </div>
+      }
 
-        <!-- KEY RATIOS / RISK -->
-        <mat-tab label="{{ isStock() ? 'Key Ratios' : 'Risk & ESG' }}">
-          <div class="tile-grid">
-            @if (isStock()) {
-              <div class="tile"><div class="tile-label">P/E Ratio</div><div class="tile-value positive">{{ md.keyIndicators?.peRatio?.toFixed(2) ?? '---' }}</div></div>
-              <div class="tile"><div class="tile-label">P/S Ratio</div><div class="tile-value">{{ md.keyIndicators?.psRatio?.toFixed(2) ?? '---' }}</div></div>
-              <div class="tile"><div class="tile-label">P/B Ratio</div><div class="tile-value">{{ md.keyIndicators?.pbRatio?.toFixed(2) ?? '---' }}</div></div>
-              <div class="tile"><div class="tile-label">EPS</div><div class="tile-value">{{ md.keyIndicators?.eps !== undefined ? md.keyIndicators!.eps!.toFixed(2) + ' ' + currentCurrency() : '---' }}</div></div>
-              <div class="tile"><div class="tile-label">Direct Yield</div><div class="tile-value orange">{{ md.keyIndicators?.directYield !== undefined ? md.keyIndicators!.directYield!.toFixed(2) + '%' : '---' }}</div></div>
-              <div class="tile"><div class="tile-label">Market Cap</div><div class="tile-value">{{ fmtMarketCap(md.keyIndicators?.marketCap, currentCurrency()) }}</div></div>
-            } @else {
-              <div class="tile"><div class="tile-label">Risk Level</div><div class="tile-value orange">{{ md.risk?.value ?? '-' }} / 7 {{ md.risk?.text ? '(' + md.risk!.text + ')' : '' }}</div></div>
-              <div class="tile"><div class="tile-label">Rating</div><div class="tile-value positive">{{ stars(md.rating) }}</div></div>
-              <div class="tile"><div class="tile-label">ESG Rating</div><div class="tile-value">{{ seedlings(md.esg?.rating) }}</div></div>
-              <div class="tile"><div class="tile-label">ESG Score</div><div class="tile-value">{{ md.esg?.score ?? 'N/A' }}</div></div>
-              <div class="tile"><div class="tile-label">Sharpe Ratio</div><div class="tile-value">{{ md.extended_info?.sharpeRatio ?? 'N/A' }}</div></div>
-              <div class="tile"><div class="tile-label">Standard Dev.</div><div class="tile-value">{{ md.extended_info?.standardDeviation != null ? md.extended_info!.standardDeviation + '%' : 'N/A' }}</div></div>
-            }
-          </div>
-        </mat-tab>
+      @if (tab() === 'ratios') {
+        <div class="tile-grid" role="tabpanel">
+          @if (isStock()) {
+            <div class="tile"><div class="tile-label">P/E</div><div class="tile-value">{{ md.keyIndicators?.peRatio?.toFixed(2) ?? '—' }}</div></div>
+            <div class="tile"><div class="tile-label">P/S</div><div class="tile-value">{{ md.keyIndicators?.psRatio?.toFixed(2) ?? '—' }}</div></div>
+            <div class="tile"><div class="tile-label">P/B</div><div class="tile-value">{{ md.keyIndicators?.pbRatio?.toFixed(2) ?? '—' }}</div></div>
+            <div class="tile"><div class="tile-label">EPS</div><div class="tile-value">{{ md.keyIndicators?.eps !== undefined ? md.keyIndicators!.eps!.toFixed(2) + ' ' + currentCurrency() : '—' }}</div></div>
+            <div class="tile"><div class="tile-label">Dividend yield</div><div class="tile-value">{{ md.keyIndicators?.directYield !== undefined ? md.keyIndicators!.directYield!.toFixed(2) + '%' : '—' }}</div></div>
+            <div class="tile"><div class="tile-label">Market cap</div><div class="tile-value">{{ fmtMarketCap(md.keyIndicators?.marketCap, currentCurrency()) }}</div></div>
+          } @else {
+            <div class="tile"><div class="tile-label">Risk level</div><div class="tile-value">{{ md.risk?.value ?? '—' }} / 7 {{ md.risk?.text ? '(' + md.risk!.text + ')' : '' }}</div></div>
+            <div class="tile"><div class="tile-label">Rating</div><div class="tile-value">{{ stars(md.rating) }}</div></div>
+            <div class="tile"><div class="tile-label">ESG rating</div><div class="tile-value">{{ seedlings(md.esg?.rating) }}</div></div>
+            <div class="tile"><div class="tile-label">ESG score</div><div class="tile-value">{{ md.esg?.score ?? 'N/A' }}</div></div>
+            <div class="tile"><div class="tile-label">Sharpe ratio</div><div class="tile-value">{{ md.extended_info?.sharpeRatio ?? 'N/A' }}</div></div>
+            <div class="tile"><div class="tile-label">Std. deviation</div><div class="tile-value">{{ md.extended_info?.standardDeviation != null ? md.extended_info!.standardDeviation + '%' : 'N/A' }}</div></div>
+          }
+        </div>
+      }
 
-        <!-- HOLDINGS (funds) -->
-        @if (isFund()) {
-          <mat-tab label="Top Holdings">
-            <table mat-table [dataSource]="holdings()" class="mat-elevation-z0 hive-table">
-              <ng-container matColumnDef="name">
-                <th mat-header-cell *matHeaderCellDef>Name</th>
-                <td mat-cell *matCellDef="let h"><b>{{ h.name }}</b></td>
-              </ng-container>
-              <ng-container matColumnDef="weight">
-                <th mat-header-cell *matHeaderCellDef>Weight (%)</th>
-                <td mat-cell *matCellDef="let h">{{ h.weight }}</td>
-              </ng-container>
-              <tr mat-header-row *matHeaderRowDef="['name','weight']"></tr>
-              <tr mat-row *matRowDef="let row; columns: ['name','weight']"></tr>
-            </table>
-            @if (!holdings().length) {
-              <p class="empty-hint">No top holdings dataset available.</p>
-            }
-          </mat-tab>
-        }
-      </mat-tab-group>
-    </mat-card-content>
-  </mat-card>
+      @if (tab() === 'holdings' && isFund()) {
+        <div role="tabpanel">
+          @if (holdings().length) {
+            <div class="fs-scroll-x">
+              <table class="table table-sm">
+                <thead><tr><th scope="col">Name</th><th scope="col" class="text-end">Weight (%)</th></tr></thead>
+                <tbody>@for (h of holdings(); track h.name) { <tr><td class="fw-medium">{{ h.name }}</td><td class="text-end tabular">{{ h.weight }}</td></tr> }</tbody>
+              </table>
+            </div>
+          } @else {
+            <p class="text-muted mb-0">No top holdings dataset available.</p>
+          }
+        </div>
+      }
+    </div>
+  </section>
 }

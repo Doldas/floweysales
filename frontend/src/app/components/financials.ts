@@ -7,17 +7,9 @@ import {
   input,
   signal,
 } from '@angular/core';
-import { MatCardModule } from '@angular/material/card';
-import { MatTableModule } from '@angular/material/table';
-import { MatIconModule } from '@angular/material/icon';
-import { MatButtonModule } from '@angular/material/button';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatButtonToggleModule } from '@angular/material/button-toggle';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatSelectModule } from '@angular/material/select';
 
 import { MarketService, describeHttpError } from '../services';
+import { AgentSession } from '../core/agent-session';
 import type { FinancialsResponse, ProviderId, QuarterlyFinancial } from '../models';
 
 interface FinRow {
@@ -44,24 +36,17 @@ const DASH = '—';
 @Component({
   selector: 'fse-financials',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [
-    MatCardModule,
-    MatTableModule,
-    MatIconModule,
-    MatButtonModule,
-    MatProgressBarModule,
-    MatTooltipModule,
-    MatButtonToggleModule,
-    MatFormFieldModule,
-    MatSelectModule,
-  ],
+  imports: [],
   templateUrl: './financials.html',
   styleUrl: './financials.scss',
 })
 export class FinancialsComponent {
   private readonly api = inject(MarketService);
+  private readonly agent = inject(AgentSession);
 
   readonly symbol = input('');
+  /** Shows the "Analyze with agent" action in the header. */
+  readonly agentAction = input(true);
   readonly provider = input<ProviderId>('YAHOO');
 
   readonly yearOptions = Array.from({length: new Date().getFullYear() - 1999}, (_,i) => new Date().getFullYear()-i);
@@ -72,7 +57,6 @@ export class FinancialsComponent {
   readonly error = signal('');
   readonly data = signal<FinancialsResponse | null>(null);
 
-  readonly columns = ['period', 'revenue', 'netIncome', 'grossMargin', 'netMargin', 'eps', 'fcf'];
 
   readonly rows = computed<FinRow[]>(() => {
     const reports = this.data()?.reports ?? [];
@@ -93,6 +77,19 @@ export class FinancialsComponent {
         fcf: this.money(r.free_cash_flow),
       };
     });
+  });
+
+  /** Revenue bars, oldest quarter first, scaled to the largest absolute value. */
+  readonly trend = computed(() => {
+    const reports = [...(this.data()?.reports ?? [])].reverse().slice(-12);
+    const max = Math.max(...reports.map(r => Math.abs(r.revenue ?? 0)), 1);
+    return reports.map(r => ({
+      period: r.period,
+      short: r.period.replace(/^CY/, '').replace(/^(\d{4}) (Q\d)$/, "$2 '$1").replace(/'(\d\d)(\d\d)$/, "'$2"),
+      pct: (Math.abs(r.revenue ?? 0) / max) * 100,
+      negative: (r.revenue ?? 0) < 0,
+      label: this.money(r.revenue),
+    }));
   });
 
   readonly hasReports = computed(() => (this.data()?.reports?.length ?? 0) > 0);
@@ -136,6 +133,12 @@ export class FinancialsComponent {
   setToYear(year: number):void {
     this.toYear.set(year);
     if (this.yearMode()==='custom') this.reload();
+  }
+
+  /** Hands the loaded statements to the research agent for interpretation. */
+  askAgent(): void {
+    const periods = this.rows().slice(0, 8).map(r => r.period).join(', ');
+    this.agent.ask(`Analyze ${this.symbol()}'s quarterly financials (${periods}): revenue growth, margin trend, earnings quality and free cash flow. Flag anything unusual and cite the periods.`);
   }
 
   reload(): void {

@@ -6,7 +6,7 @@ Userspace is a **tenant-owned virtual document store** accessed by the app, save
 ## Implemented and merged
 - Authenticated userspace CRUD API under `/api/userspace`; every database query is scoped to the authenticated principal. Admin flows resolve the **saved flow's creator** as the userspace principal, not the caller's session or an AI-supplied owner ID.
 - MySQL-backed metadata and content, provisioned by Liquibase migration 012.
-- Simple text formats: Markdown, plain text, CSV and JSON, editable from My Workspace in Flow Studio.
+- Simple text formats: Markdown, plain text, CSV and JSON, editable from the Files workspace (`#/workspace`).
 - `workspace_read` and `workspace_write` flow nodes. Read loads text from the flow creator's userspace; write stores the preceding result (text/plain) with an explicit path.
 - Logical path validation forbids `.`, `..`, NUL, backslash, relative paths. No host path access, code execution or general SQL exposed.
 - Per-file 2 MiB limit, per-user 256 file limit, concurrent-write quota serialization using the owning auth row. Deletes are owner scoped.

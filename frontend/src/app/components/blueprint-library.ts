@@ -1,8 +1,6 @@
 import { CanvasGestures } from './canvas-gestures';
 import { HostListener, Component, EventEmitter, Output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
 import { TypedFunctionEditorComponent } from './typed-function-editor';
 import { V2Graph, isTypedFunctionGraph, newTypedFunctionGraph } from './function-pins';
 import { PublishState, RevisionSummary, canPublish, publishStatusLabel } from './flow-versions';
@@ -13,25 +11,25 @@ interface Edge {from:string;to:string;to_port?:string}
 interface Definition extends PublishState {id:number;name:string;graph:{nodes:Node[];edges:Edge[]}|V2Graph}
 interface Trigger {id:number;event_key:string;payload_type:Kind}
 @Component({
- selector:'fse-blueprint-library',standalone:true,
- imports:[FormsModule,MatButtonModule,MatCardModule,TypedFunctionEditorComponent],
+ selector:'fse-blueprint-library', host:{class:'fs-native-forms'},standalone:true,
+ imports:[FormsModule,TypedFunctionEditorComponent],
  template:`
- <mat-card class="lib">
+ <div class="card lib">
  <h3>Blueprint Function Library</h3>
  <p>Create reusable functions graphically. All operations are pure and cannot execute trades.</p>
  <div class="toolbar">
   <label>Function <select [ngModel]="currentId()" (ngModelChange)="choose(+$event)"><option [ngValue]="0">New function</option><optgroup label="Custom">@for(f of functions();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</optgroup></select></label>
   <label>Name <input [ngModel]="name()" (ngModelChange)="name.set($event)"></label>
-  <button mat-stroked-button (click)="newFunction()">New</button>
-  <button mat-stroked-button (click)="newTypedFunction()" title="Several named, typed inputs and outputs">New typed function</button>
+  <button class="btn btn-sm btn-outline-secondary" (click)="newFunction()">New</button>
+  <button class="btn btn-sm btn-outline-secondary" (click)="newTypedFunction()" title="Several named, typed inputs and outputs">New typed function</button>
   <label>Built-in function starters<select [ngModel]="''" (ngModelChange)="loadFunctionTemplate($event)">
    <option value="">Copy a template…</option>
    <option value="double">Double a number</option>
    <option value="threshold">Compare with threshold</option>
    <option value="percent">Convert fraction to percent</option>
   </select></label>
-  @if(!typed()){<button mat-stroked-button (click)="add('constant')">+ Value</button>
-  <button mat-stroked-button (click)="add('operation')">+ Operation</button>}
+  @if(!typed()){<button class="btn btn-sm btn-outline-secondary" (click)="add('constant')">+ Value</button>
+  <button class="btn btn-sm btn-outline-secondary" (click)="add('operation')">+ Operation</button>}
  </div>
  @if(typed();as t){
   <fse-typed-function-editor [graph]="t" (graphChange)="typed.set($event)"></fse-typed-function-editor>
@@ -46,23 +44,23 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
     </div>
     <div class="canvas">
   <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (pointerdown)="onCanvasPointerDown($event)" (click)="closeQuickNodeOnCanvas($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="onCanvasPointerEnd($event)" (pointercancel)="onCanvasPointerEnd($event)" (contextmenu)="onCanvasContextMenu($event)">
-   <defs><marker id="fn-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#7ebdf2"/></marker></defs>
+   <defs><marker id="fn-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" class="edge-arrow"/></marker></defs>
    @for(e of edges();track e.from+e.to+e.to_port){
     <line [attr.x1]="node(e.from)?.x!+120" [attr.y1]="node(e.from)?.y!+25"
-      [attr.x2]="node(e.to)?.x" [attr.y2]="node(e.to)?.y!+25" stroke="#7ebdf2" stroke-width="2" marker-end="url(#fn-arrow)"/>
+      [attr.x2]="node(e.to)?.x" [attr.y2]="node(e.to)?.y!+25" class="fn-edge" marker-end="url(#fn-arrow)"/>
    }
    @for(n of nodes();track n.id){
     <g data-canvas-node (click)="$event.stopPropagation();openQuickNode(n.id)" tabindex="0" (keydown.enter)="openQuickNode(n.id)">
-     <rect [attr.x]="n.x" [attr.y]="n.y" width="120" height="50" rx="9" [attr.fill]="selected()===n.id?'#345579':'#1b3449'" stroke="#8db5d1"/>
-     <text [attr.x]="n.x+8" [attr.y]="n.y+21" fill="white" font-size="12">{{n.type.toUpperCase()}}</text>
-     <text [attr.x]="n.x+8" [attr.y]="n.y+40" fill="#bbd7eb" font-size="11">{{n.operation||n.value_type||n.id}}</text>
+     <rect class="fn-node" [class.selected]="selected()===n.id" [attr.x]="n.x" [attr.y]="n.y" width="120" height="50" rx="9"/>
+     <text class="fn-type" [attr.x]="n.x+8" [attr.y]="n.y+21" font-size="11">{{n.type.toUpperCase()}}</text>
+     <text class="fn-sub" [attr.x]="n.x+8" [attr.y]="n.y+40" font-size="11">{{n.operation||n.value_type||n.id}}</text>
     </g>
    }
   </svg>
  </div>
  @if(quickNode();as q){
   <div class="node-quick-tooltip" (click)="$event.stopPropagation()" aria-label="Quick function node settings">
-   <div class="quick-tooltip-title"><strong>⚙ {{q.id}}</strong><button type="button" class="quick-tooltip-close" (click)="closeQuickNode()" aria-label="Close quick settings" title="Close">×</button></div>
+   <div class="quick-tooltip-title"><strong>⚙ {{q.id}}</strong><button type="button" class="btn-close quick-tooltip-close" (click)="closeQuickNode()" aria-label="Close quick settings" title="Close"></button></div>
    @if(q.type==='constant'||q.type==='input'||q.type==='output'){
      <label>Type <select [ngModel]="q.value_type||'text'" (ngModelChange)="editNode(q.id,'value_type',$event)"><option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option></select></label>
    }
@@ -93,16 +91,16 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
    }
    <label>Connect from <select #from><option value="">Source node</option>@for(src of nodes();track src.id){@if(src.id!==n.id){<option [value]="src.id">{{src.id}}</option>}}</select></label>
    <label>Target pin <select #port><option value="a">a / output</option><option value="b">b</option><option value="condition">condition</option><option value="true">true</option><option value="false">false</option></select></label>
-   <button mat-stroked-button (click)="connect(from.value,n.id,port.value)">Connect</button>
-   <button mat-stroked-button (click)="removeNode(n.id)" [disabled]="n.type==='input'||n.type==='output'">Remove node</button>
+   <button class="btn btn-sm btn-outline-secondary" (click)="connect(from.value,n.id,port.value)">Connect</button>
+   <button class="btn btn-sm btn-outline-secondary" (click)="removeNode(n.id)" [disabled]="n.type==='input'||n.type==='output'">Remove node</button>
   } @else {<p>Select a node to edit its pins and properties.</p>}
  </aside>
  </div>
  }
- <div class="toolbar"><button mat-flat-button (click)="save()" [disabled]="busy()">Save function</button>
+ <div class="toolbar"><button class="btn btn-sm btn-primary" (click)="save()" [disabled]="busy()">Save function</button>
   @if(current();as c){
    <label>Publish note <input [ngModel]="publishNote()" (ngModelChange)="publishNote.set($event)" maxlength="500" placeholder="What changed (optional)"></label>
-   <button mat-stroked-button (click)="publish()" [disabled]="busy()||!canPublish(c,hasUnsavedChanges())" [title]="hasUnsavedChanges()?'Save the function before publishing':'Freeze the saved draft as the next revision'">Publish revision</button>
+   <button class="btn btn-sm btn-outline-secondary" (click)="publish()" [disabled]="busy()||!canPublish(c,hasUnsavedChanges())" [title]="hasUnsavedChanges()?'Save the function before publishing':'Freeze the saved draft as the next revision'">Publish revision</button>
   }
  </div>
  @if(current();as c){
@@ -111,8 +109,8 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
    <p class="muted">Flow nodes that follow the active revision use it; pinned nodes keep their revision.</p>
    @if(revisions().length){<ul>
     @for(r of revisions();track r.revision){<li [class.active]="r.active"><span>Revision {{r.revision}}@if(r.active){ · active}@if(r.note){ · {{r.note}}}</span>
-     <span><button mat-stroked-button (click)="activateRevision(r.revision)" [disabled]="busy()||r.active">Activate</button>
-     <button mat-stroked-button (click)="restoreRevision(r.revision)" [disabled]="busy()">Restore to draft</button></span></li>}
+     <span><button class="btn btn-sm btn-outline-secondary" (click)="activateRevision(r.revision)" [disabled]="busy()||r.active">Activate</button>
+     <button class="btn btn-sm btn-outline-secondary" (click)="restoreRevision(r.revision)" [disabled]="busy()">Restore to draft</button></span></li>}
    </ul>}
   </section>
  }
@@ -130,34 +128,36 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
  <div class="toolbar">
   <label>Event key <input [ngModel]="eventKey()" (ngModelChange)="eventKey.set($event)" placeholder="research.completed"></label>
   <label>Payload type <select [ngModel]="payloadType()" (ngModelChange)="payloadType.set($event)"><option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option></select></label>
-  <button mat-stroked-button (click)="createTrigger()" [disabled]="busy()">Create trigger</button>
+  <button class="btn btn-sm btn-outline-secondary" (click)="createTrigger()" [disabled]="busy()">Create trigger</button>
  </div>
  <div class="triggers">@for(t of triggers();track t.id){<span>{{t.event_key}} · {{t.payload_type}}</span>}</div>
  @if(status()){<p role="status">{{status()}}</p>}
- </mat-card>`,
+ </div>`,
  styles:[`
+ .edge-arrow{fill:var(--fs-edge)}.fn-edge{stroke:var(--fs-edge);stroke-width:2}
+ .fn-node{fill:var(--fs-node-bg);stroke:var(--fs-node-border);stroke-width:1.5}.fn-node.selected{fill:var(--fs-node-selected-bg);stroke:var(--fs-node-selected);stroke-width:2.5}
+ .fn-type{fill:var(--fs-node-sub);font-weight:600;letter-spacing:.04em}.fn-sub{fill:var(--fs-node-text)}
+ [data-canvas-node]{cursor:pointer}[data-canvas-node]:focus,[data-canvas-node]:focus-visible{outline:none}[data-canvas-node]:focus-visible .fn-node{stroke:var(--fs-node-selected);stroke-width:3}
  .canvas-shell{position:relative;min-width:0;min-height:0}
- .node-quick-tooltip{position:absolute;right:12px;top:60px;z-index:7;display:flex;flex-direction:column;gap:9px;padding:12px;width:min(260px,85%);background:rgba(26,51,74,.89);backdrop-filter:blur(10px);border:1px solid #82bbec;border-radius:9px;box-shadow:0 12px 28px #000a}
+ .node-quick-tooltip{position:absolute;right:12px;top:60px;z-index:7;display:flex;flex-direction:column;gap:9px;padding:12px;width:min(260px,85%);background:var(--fs-surface-2);backdrop-filter:blur(10px);border:1px solid var(--fs-accent);border-radius:9px;box-shadow:var(--fs-shadow)}
  .quick-tooltip-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
- .quick-tooltip-close{width:26px;height:26px;min-height:26px!important;padding:0!important;flex:0 0 auto;color:#fff!important;background:#b52b38!important;border:1px solid #e15d66!important;border-radius:5px!important;font-size:20px!important;line-height:1!important;cursor:pointer}
- .quick-tooltip-close:hover{background:#db3545!important}
  .node-quick-tooltip label{display:flex;flex-direction:column;gap:5px}
  .node-quick-tooltip input,.node-quick-tooltip select{width:100%;box-sizing:border-box}
  .node-quick-tooltip button{min-height:32px}
- .canvas-navigation{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:8px;background:#14263a;border:1px solid #45627b;border-radius:8px 8px 0 0}
- .canvas-navigation button,.canvas-context-menu button{background:#203a53;color:#e5f3ff;border:1px solid #527b99;border-radius:5px;min-height:34px;padding:6px 10px;cursor:pointer}
- .canvas-navigation button:focus-visible,.canvas-context-menu button:focus-visible{outline:2px solid #80caff}
+ .canvas-navigation{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:8px;background:var(--fs-surface);border:1px solid var(--fs-border-strong);border-radius:8px 8px 0 0}
+ .canvas-navigation button,.canvas-context-menu button{background:var(--fs-surface-3);color:var(--fs-text);border:1px solid var(--fs-border-strong);border-radius:5px;min-height:34px;padding:6px 10px;cursor:pointer}
+ .canvas-navigation button:focus-visible,.canvas-context-menu button:focus-visible{outline:2px solid var(--fs-accent)}
  .canvas-navigation span{min-width:48px;text-align:center;font-variant-numeric:tabular-nums}
- .canvas-context-menu{position:absolute;top:55px;left:16px;z-index:5;display:flex;flex-direction:column;gap:6px;min-width:180px;padding:12px;background:#15283d;border:1px solid #77b9e9;border-radius:10px;box-shadow:0 10px 35px #0008}
- :host{display:block;margin-top:22px}.lib{padding:18px}.toolbar,.panel,.triggers{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}.panel{padding:16px;border:1px solid #50738e;border-radius:8px;align-content:start;background:#142438;min-width:0;max-height:min(75vh,780px);overflow-y:auto;display:flex;flex-direction:column;align-items:stretch}
+ .canvas-context-menu{position:absolute;top:55px;left:16px;z-index:5;display:flex;flex-direction:column;gap:6px;min-width:180px;padding:12px;background:var(--fs-surface-2);border:1px solid var(--fs-accent);border-radius:10px;box-shadow:var(--fs-shadow)}
+ :host{display:block;margin-top:22px}.lib{padding:18px}.toolbar,.panel,.triggers{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}.panel{padding:16px;border:1px solid var(--fs-border-strong);border-radius:8px;align-content:start;background:var(--fs-surface);min-width:0;max-height:min(75vh,780px);overflow-y:auto;display:flex;flex-direction:column;align-items:stretch}
  .blueprint-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(270px,315px);gap:12px;align-items:stretch}
  .blueprint-layout .canvas{min-width:0;min-height:440px}
- .inspector-heading{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid #50738e;padding-bottom:12px}
+ .inspector-heading{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid var(--fs-border-strong);padding-bottom:12px}
  .inspector-heading span{font-size:11px;letter-spacing:.14em;opacity:.75}
  .panel label,.panel input,.panel select{min-width:0;width:100%;box-sizing:border-box}
  @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .canvas{min-height:280px}.panel{max-height:360px}}
-.panel strong{width:100%}label{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}input,select{background:#14263a;color:#ecf6ff;border:1px solid #68859b;border-radius:6px;padding:8px}.canvas{overflow:auto;border:1px solid #45627b;background:#102032;border-radius:8px}svg{display:block;min-width:650px;width:100%;height:auto;touch-action:none;cursor:grab}.triggers span{padding:8px;border:1px solid #50738e;border-radius:12px}
- .versions ul{list-style:none;padding:0;display:flex;flex-direction:column;gap:6px}.versions li{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;padding:8px;border:1px solid #3d5d77;border-radius:8px}.versions li.active{border-color:#73baff;background:#1b3854}.muted{opacity:.75}`]
+.panel strong{width:100%}label{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}input,select{background:var(--fs-surface);color:var(--fs-text);border:1px solid var(--fs-border-strong);border-radius:6px;padding:8px}.canvas{overflow:auto;border:1px solid var(--fs-border-strong);background:var(--fs-surface);border-radius:8px}svg{display:block;min-width:650px;width:100%;height:auto;touch-action:none;cursor:grab}.triggers span{padding:8px;border:1px solid var(--fs-border-strong);border-radius:12px}
+ .versions ul{list-style:none;padding:0;display:flex;flex-direction:column;gap:6px}.versions li{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;padding:8px;border:1px solid var(--fs-border);border-radius:8px}.versions li.active{border-color:var(--fs-accent);background:var(--fs-surface-3)}.muted{opacity:.75}`]
 })
 export class BlueprintLibraryComponent {
  readonly canvasView = signal({ x: 0, y: 0, width: 850, height: 340 });

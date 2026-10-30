@@ -1,61 +1,56 @@
 @if (visible()) {
-  <mat-card class="glass financials-card">
-    <mat-card-header>
-      <mat-card-title>Quarterly Financials</mat-card-title>
-      <div class="spacer"></div>
-      @if (sourceLabel()) {
-        <span class="fin-source" [matTooltip]="'Statement data via ' + sourceLabel()">
-          {{ sourceLabel() }}
-        </span>
-      }
-      @if (currency()) {
-        <span class="fin-currency">{{ currency() }}</span>
-      }
-      <button mat-icon-button class="fin-reload" (click)="reload()" matTooltip="Reload statements">
-        <mat-icon>refresh</mat-icon>
-      </button>
-    </mat-card-header>
-
-    <div class="fin-year-controls" aria-label="Financial reporting years">
-      <mat-button-toggle-group [value]="yearMode()" (change)="setYearMode($event.value)" aria-label="Quarterly financial period">
-        <mat-button-toggle value="recent">Recent</mat-button-toggle>
-        <mat-button-toggle value="custom">Year range</mat-button-toggle>
-      </mat-button-toggle-group>
-      @if (yearMode() === 'custom') {
-        <div class="fin-year-selectors">
-          <mat-form-field appearance="outline" subscriptSizing="dynamic">
-            <mat-label>From year</mat-label>
-            <mat-select [value]="fromYear()" (selectionChange)="setFromYear($event.value)">
-              @for (year of yearOptions; track year) { <mat-option [value]="year">{{ year }}</mat-option> }
-            </mat-select>
-          </mat-form-field>
-          <span class="fin-year-divider" aria-hidden="true">–</span>
-          <mat-form-field appearance="outline" subscriptSizing="dynamic">
-            <mat-label>To year</mat-label>
-            <mat-select [value]="toYear()" (selectionChange)="setToYear($event.value)">
-              @for (year of yearOptions; track year) { <mat-option [value]="year">{{ year }}</mat-option> }
-            </mat-select>
-          </mat-form-field>
+  <section class="card financials-card" aria-labelledby="fin-title">
+    <div class="card-header">
+      <div class="me-auto">
+        <h2 class="card-title" id="fin-title">Quarterly financials</h2>
+        <div class="small text-muted">
+          {{ symbol() }}@if (sourceLabel()) { · {{ sourceLabel() }} }@if (currency()) { · {{ currency() }} }
         </div>
+      </div>
+      <div class="fin-year-controls" aria-label="Financial reporting years">
+        <div class="fs-segmented" role="group" aria-label="Quarterly financial period">
+          <button type="button" [attr.aria-pressed]="yearMode() === 'recent'" (click)="setYearMode('recent')">Recent</button>
+          <button type="button" [attr.aria-pressed]="yearMode() === 'custom'" (click)="setYearMode('custom')">Year range</button>
+        </div>
+        @if (yearMode() === 'custom') {
+          <div class="fin-year-selectors">
+            <label class="visually-hidden" for="fin-from">From year</label>
+            <select id="fin-from" class="form-select form-select-sm" [value]="fromYear()" (change)="setFromYear(+$any($event.target).value)">
+              @for (year of yearOptions; track year) { <option [value]="year" [selected]="year === fromYear()">{{ year }}</option> }
+            </select>
+            <span class="fin-year-divider" aria-hidden="true">–</span>
+            <label class="visually-hidden" for="fin-to">To year</label>
+            <select id="fin-to" class="form-select form-select-sm" [value]="toYear()" (change)="setToYear(+$any($event.target).value)">
+              @for (year of yearOptions; track year) { <option [value]="year" [selected]="year === toYear()">{{ year }}</option> }
+            </select>
+          </div>
+        }
+      </div>
+      @if (agentAction() && hasReports()) {
+        <button type="button" class="btn btn-sm btn-outline-secondary" (click)="askAgent()"><i class="bi bi-stars" aria-hidden="true"></i>Analyze with agent</button>
       }
+      <button type="button" class="btn btn-ghost btn-icon btn-sm fin-reload" (click)="reload()" aria-label="Reload statements" title="Reload statements">
+        <i class="bi bi-arrow-clockwise" [class.spin]="loading()" aria-hidden="true"></i>
+      </button>
     </div>
-    @if (loading()) {
-      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-    }
+    @if (loading()) { <div class="progress rounded-0" style="height: 2px"><div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div></div> }
 
-    <mat-card-content> 
+    <div class="card-body">
       @if (showBody()) {
         @if (error()) {
-          <div class="fin-state fin-error">
-            <mat-icon>error_outline</mat-icon>
-            <span>{{ error() }}</span>
-          </div>
+          <div class="alert alert-danger d-flex gap-2 mb-0" role="alert"><i class="bi bi-exclamation-circle"></i><span>{{ error() }}</span></div>
         } @else if (!hasReports()) {
-          <div class="fin-state fin-note">
-            <mat-icon>info_outline</mat-icon>
-            <span>{{ note() }}</span>
-          </div>
+          <div class="alert alert-secondary d-flex gap-2 mb-0"><i class="bi bi-info-circle"></i><span>{{ note() }}</span></div>
         } @else {
+          <div class="fin-trend" aria-label="Revenue by quarter, oldest to newest">
+            @for (bar of trend(); track bar.period) {
+              <div class="fin-bar" [title]="bar.period + ': ' + bar.label">
+                <span class="fin-bar-fill" [style.height.%]="bar.pct" [class.neg]="bar.negative"></span>
+                <span class="fin-bar-label">{{ bar.short }}</span>
+              </div>
+            }
+          </div>
+
           <div class="fin-mobile-list" role="list" aria-label="Quarterly financial reports">
             @for (row of rows(); track row.period) {
               <article class="fin-mobile-report" role="listitem">
@@ -76,58 +71,39 @@
             }
           </div>
           <div class="fin-scroll">
-            <table mat-table [dataSource]="rows()" class="fin-table">
-              <ng-container matColumnDef="period">
-                <th mat-header-cell *matHeaderCellDef>Period</th>
-                <td mat-cell *matCellDef="let row">
-                  <span class="fin-period">{{ row.period }}</span>
-                  <span class="fin-sub">{{ row.periodEnd }}@if (row.form) { · {{ row.form }} }</span>
-                </td>
-              </ng-container>
-
-              <ng-container matColumnDef="revenue">
-                <th mat-header-cell *matHeaderCellDef>Revenue</th>
-                <td mat-cell *matCellDef="let row">
-                  <span class="fin-num">{{ row.revenue }}</span>
-                  @if (row.qoq) {
-                    <span class="fin-sub" [class.pos]="row.qoqTone === 'pos'" [class.neg]="row.qoqTone === 'neg'">
-                      {{ row.qoq }} QoQ
-                    </span>
-                  }
-                </td>
-              </ng-container>
-
-              <ng-container matColumnDef="netIncome">
-                <th mat-header-cell *matHeaderCellDef>Net Income</th>
-                <td mat-cell *matCellDef="let row"><span class="fin-num">{{ row.netIncome }}</span></td>
-              </ng-container>
-
-              <ng-container matColumnDef="grossMargin">
-                <th mat-header-cell *matHeaderCellDef>Gross Margin</th>
-                <td mat-cell *matCellDef="let row"><span class="fin-num">{{ row.grossMargin }}</span></td>
-              </ng-container>
-
-              <ng-container matColumnDef="netMargin">
-                <th mat-header-cell *matHeaderCellDef>Net Margin</th>
-                <td mat-cell *matCellDef="let row"><span class="fin-num">{{ row.netMargin }}</span></td>
-              </ng-container>
-
-              <ng-container matColumnDef="eps">
-                <th mat-header-cell *matHeaderCellDef>EPS (dil.)</th>
-                <td mat-cell *matCellDef="let row"><span class="fin-num">{{ row.eps }}</span></td>
-              </ng-container>
-
-              <ng-container matColumnDef="fcf">
-                <th mat-header-cell *matHeaderCellDef>Free Cash Flow</th>
-                <td mat-cell *matCellDef="let row"><span class="fin-num">{{ row.fcf }}</span></td>
-              </ng-container>
-
-              <tr mat-header-row *matHeaderRowDef="columns"></tr>
-              <tr mat-row *matRowDef="let row; columns: columns"></tr>
+            <table class="table table-hover fin-table">
+              <thead>
+                <tr>
+                  <th scope="col">Period</th>
+                  <th scope="col" class="text-end">Revenue</th>
+                  <th scope="col" class="text-end">Net income</th>
+                  <th scope="col" class="text-end">Gross margin</th>
+                  <th scope="col" class="text-end">Net margin</th>
+                  <th scope="col" class="text-end">EPS (dil.)</th>
+                  <th scope="col" class="text-end">Free cash flow</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of rows(); track row.period) {
+                  <tr>
+                    <td><span class="fin-period">{{ row.period }}</span><span class="fin-sub">{{ row.periodEnd }}@if (row.form) { · {{ row.form }} }</span></td>
+                    <td class="text-end"><span class="fin-num">{{ row.revenue }}</span>
+                      @if (row.qoq) { <span class="fin-sub" [class.pos]="row.qoqTone === 'pos'" [class.neg]="row.qoqTone === 'neg'">{{ row.qoq }} QoQ</span> }
+                    </td>
+                    <td class="text-end fin-num">{{ row.netIncome }}</td>
+                    <td class="text-end fin-num">{{ row.grossMargin }}</td>
+                    <td class="text-end fin-num">{{ row.netMargin }}</td>
+                    <td class="text-end fin-num">{{ row.eps }}</td>
+                    <td class="text-end fin-num">{{ row.fcf }}</td>
+                  </tr>
+                }
+              </tbody>
             </table>
           </div>
         }
+      } @else if (!loading()) {
+        <p class="text-muted mb-0">Loading statements…</p>
       }
-    </mat-card-content>
-  </mat-card>
+    </div>
+  </section>
 }

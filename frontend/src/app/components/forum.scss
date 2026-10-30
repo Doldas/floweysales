@@ -1,71 +1,9 @@
-:host {
-  display: block;
-}
-
-.forum-card {
-  margin-top: 24px;
-  backdrop-filter: blur(10px);
-}
-
-.composer {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 10px;
-  margin-bottom: 16px;
-
-  .composer-row {
-    display: flex;
-    gap: 10px;
-
-    .author-field { width: 220px; }
-    .title-field { flex: 1; }
-  }
-}
-
-.post-card {
-  margin-bottom: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.post-head {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.85rem;
-  opacity: 0.8;
-}
-
-.post-title {
-  font-weight: 700;
-  font-size: 1rem;
-  margin: 4px 0;
-}
-
-.post-body {
-  font-size: 0.92rem;
-  opacity: 0.9;
-  white-space: pre-wrap;
-}
-
-.post-actions {
-  margin-top: 8px;
-}
-
-.hint {
-  text-align: center;
-  opacity: 0.65;
-  padding: 12px 0;
-}
-
-
-@media (max-width: 700px) {
-  .forum-card { margin-top: 14px; }
-  .composer .composer-row { flex-direction: column; gap: 0; }
-  .composer .composer-row .author-field,
-  .composer .composer-row .title-field { width: 100%; flex: 1 1 auto; min-width: 0; }
-  .composer button { min-height: 44px; align-self: stretch; }
-  .post-head { gap: 4px 10px; flex-wrap: wrap; overflow-wrap: anywhere; }
-  .post-title, .post-body { overflow-wrap: anywhere; }
-  .post-actions button { min-height: 44px; }
-}
+:host { display: block; min-width: 0; }
+.forum { display: grid; gap: 1rem; max-width: 900px; }
+.post-list { display: grid; gap: 0.75rem; }
+.post-head { display: flex; gap: 0.7rem; align-items: center; margin-bottom: 0.6rem; }
+.post-avatar { display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: 50%; background: var(--fs-accent-soft); color: var(--fs-accent-text); font-weight: 700; flex: 0 0 auto; }
+.post-author { font-weight: 600; font-size: 0.875rem; }
+.post-time { font-size: 0.75rem; color: var(--fs-muted); }
+.post-title { font-size: 1rem; margin: 0 0 0.35rem; }
+.post-body { color: var(--fs-text-2); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.9rem; }

@@ -1,56 +1,51 @@
-<mat-card class="glass forum-card">
-  <mat-card-header>
-    <mat-card-title>Community Insights & Trader Forum</mat-card-title>
-    <mat-card-subtitle>💬 Share market analysis and strategy signals</mat-card-subtitle>
-  </mat-card-header>
-
-  <mat-card-content>
-    <div class="composer">
-      <div class="composer-row">
-        <mat-form-field appearance="outline" class="author-field">
-          <mat-label>Your Name / Handle</mat-label>
-          <input matInput [(ngModel)]="author" maxlength="40">
-        </mat-form-field>
-        <mat-form-field appearance="outline" class="title-field">
-          <mat-label>Post Title</mat-label>
-          <input matInput [(ngModel)]="title" maxlength="120">
-        </mat-form-field>
+<div class="forum">
+  <section class="card composer-card" aria-labelledby="forum-compose-title">
+    <div class="card-body">
+      <h2 class="h6 mb-3" id="forum-compose-title">Share a thesis @if (trackedSymbol()) { <span class="text-muted fw-normal">on {{ trackedSymbol() }}</span> }</h2>
+      <div class="row g-2">
+        <div class="col-sm-4">
+          <label class="form-label" for="forum-author">Name or handle</label>
+          <input class="form-control" id="forum-author" [(ngModel)]="author" maxlength="40">
+        </div>
+        <div class="col-sm-8">
+          <label class="form-label" for="forum-title">Title</label>
+          <input class="form-control" id="forum-title" [(ngModel)]="title" maxlength="120">
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="forum-content">Your thesis</label>
+          <textarea class="form-control" id="forum-content" [(ngModel)]="content" rows="3" placeholder="What are you seeing, and what is the evidence?"></textarea>
+        </div>
       </div>
-      <mat-form-field appearance="outline" class="content-field">
-        <mat-label>Your trading thesis...</mat-label>
-        <textarea matInput [(ngModel)]="content" rows="3"></textarea>
-      </mat-form-field>
-      <button mat-flat-button color="primary" (click)="submit()">
-        <mat-icon>rocket_launch</mat-icon> Broadcast Post
-      </button>
+      <div class="d-flex justify-content-end mt-3">
+        <button type="button" class="btn btn-primary" (click)="submit()"><i class="bi bi-send" aria-hidden="true"></i> Publish post</button>
+      </div>
     </div>
+  </section>
 
-    @if (loading()) {
-      <p class="hint">Loading posts…</p>
-    }
+  @if (loading()) {
+    <p class="text-muted">Loading posts…</p>
+  } @else if (!posts().length) {
+    <div class="fs-empty"><i class="bi bi-chat-square-text"></i><h3>No posts yet</h3><p class="mb-0">Be the first to share a thesis@if (trackedSymbol()) { on {{ trackedSymbol() }}}.</p></div>
+  }
 
-    @if (!loading() && !posts().length) {
-      <p class="hint">No posts found for <b>{{ trackedSymbol() }}</b>. Be the first to post!</p>
-    }
-
+  <div class="post-list">
     @for (post of posts(); track post.id) {
-      <mat-card class="post-card">
-        <mat-card-content>
+      <article class="card post-card">
+        <div class="card-body">
           <div class="post-head">
-            <span class="post-author">👤 {{ post.author }}
-              @if (post.symbol) { <small>({{ post.symbol }})</small> }
-            </span>
-            <span class="post-time">{{ post.timestamp * 1000 | date:'short' }}</span>
+            <span class="post-avatar" aria-hidden="true">{{ (post.author || '?').slice(0, 1).toUpperCase() }}</span>
+            <div class="min-w-0">
+              <div class="post-author">{{ post.author }} @if (post.symbol) { <span class="badge text-bg-secondary ms-1">{{ post.symbol }}</span> }</div>
+              <div class="post-time">{{ post.timestamp * 1000 | date: 'medium' }}</div>
+            </div>
           </div>
-          <div class="post-title">{{ post.title }}</div>
-          <div class="post-body">{{ post.content }}</div>
-          <div class="post-actions">
-            <button mat-stroked-button (click)="vote(post)">
-              👍 Upvote ({{ post.upvotes }})
-            </button>
-          </div>
-        </mat-card-content>
-      </mat-card>
+          <h3 class="post-title">{{ post.title }}</h3>
+          <p class="post-body">{{ post.content }}</p>
+          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="vote(post)" [attr.aria-label]="'Upvote, ' + post.upvotes + ' votes'">
+            <i class="bi bi-hand-thumbs-up" aria-hidden="true"></i> {{ post.upvotes }}
+          </button>
+        </div>
+      </article>
     }
-  </mat-card-content>
-</mat-card>
+  </div>
+</div>

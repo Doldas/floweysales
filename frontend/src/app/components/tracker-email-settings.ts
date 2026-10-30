@@ -1,27 +1,24 @@
 import {Component,signal} from '@angular/core';
 import {FormsModule} from '@angular/forms';
-import {MatButtonModule} from '@angular/material/button';
-import {MatCardModule} from '@angular/material/card';
 
 interface Subscription {symbol:string;provider:string;golden_cross:boolean;death_cross:boolean;stop_loss:boolean;cooldown_minutes:number}
 @Component({
- selector:'fse-tracker-email-settings',standalone:true,
- imports:[FormsModule,MatButtonModule,MatCardModule],
+ selector:'fse-tracker-email-settings', host:{class:'fs-native-forms'},standalone:true,
+ imports:[FormsModule],
  template:`
- <mat-card class="sub-card">
-  <h2>Tracker email notifications</h2>
-  <p>Subscribe to the trackers you follow. Choose which events trigger an email. All preferences are personal and notifications are off until you subscribe.</p>
-  @if(message()){<p role="status">{{message()}}</p>}
+ <div class="card sub-card">
+  <p class="text-muted mb-0">Subscribe to the trackers you follow and choose which events send an email. Preferences are personal; nothing is sent until you subscribe.</p>
+  @if(message()){<p class="alert alert-info py-2 mb-0" role="status">{{message()}}</p>}
   <div class="new-sub">
    <label>Symbol <input [ngModel]="symbol()" (ngModelChange)="symbol.set($event.toUpperCase())" maxlength="32" placeholder="AAPL"></label>
    <label>Provider <select [ngModel]="provider()" (ngModelChange)="provider.set($event)">
     <option value="YAHOO">Yahoo</option><option value="FINNHUB">Finnhub</option><option value="AVANZA">Avanza</option><option value="BINANCE">Binance</option>
    </select></label>
-   <button mat-flat-button [disabled]="busy()||!symbol().trim()" (click)="subscribe()">Subscribe</button>
+   <button class="btn btn-sm btn-primary" [disabled]="busy()||!symbol().trim()" (click)="subscribe()">Subscribe</button>
   </div>
   @for(item of subscriptions();track item.provider+'|'+item.symbol){
    <section class="subscription">
-    <div class="subscription-title"><strong>{{item.symbol}} · {{item.provider}}</strong><button mat-stroked-button [disabled]="busy()" (click)="unsubscribe(item)">Unsubscribe</button></div>
+    <div class="subscription-title"><strong>{{item.symbol}} · {{item.provider}}</strong><button class="btn btn-sm btn-outline-secondary" [disabled]="busy()" (click)="unsubscribe(item)">Unsubscribe</button></div>
     <div class="options">
      <label><input type="checkbox" [ngModel]="item.golden_cross" (ngModelChange)="update(item,'golden_cross',$event)"> Golden Cross</label>
      <label><input type="checkbox" [ngModel]="item.death_cross" (ngModelChange)="update(item,'death_cross',$event)"> Death Cross</label>
@@ -32,15 +29,15 @@ interface Subscription {symbol:string;provider:string;golden_cross:boolean;death
     </div>
    </section>
   } @empty {<p>No tracker email subscriptions yet.</p>}
- </mat-card>
+ </div>
  `,
  styles:[`
- .sub-card{display:flex;flex-direction:column;gap:14px;padding:20px;max-width:900px;margin:16px auto}
+ .sub-card{display:flex;flex-direction:column;gap:14px;padding:20px;max-width:900px}
  .new-sub,.options,.subscription-title{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
  .subscription-title{justify-content:space-between}
- .subscription{border:1px solid #52728b;border-radius:8px;padding:15px;display:grid;gap:12px}
+ .subscription{border:1px solid var(--fs-border-strong);border-radius:8px;padding:15px;display:grid;gap:12px}
  label{display:flex;gap:7px;align-items:center}
- input:not([type=checkbox]),select{background:#173047;color:#fff;border:1px solid #68859b;padding:8px;border-radius:6px;max-width:170px}
+ input:not([type=checkbox]),select{background:var(--fs-surface-2);color:var(--fs-text);border:1px solid var(--fs-border-strong);padding:8px;border-radius:6px;max-width:170px}
  `]
 })
 export class TrackerEmailSettingsComponent {

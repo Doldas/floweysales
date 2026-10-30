@@ -1,57 +1,57 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import { AgentSession } from '../core/agent-session';
 import { FormsModule } from '@angular/forms';
-import { MatButtonModule } from '@angular/material/button';
 import { CommonModule } from '@angular/common';
 
 interface FileEntry {path:string; content_type:string; size:number}
 interface TreeItem { name:string; path:string; depth:number; }
 
 @Component({
- selector:'fse-userspace-files',
+ selector:'fse-userspace-files', host:{class:'fs-native-forms'},
  standalone:true,
- imports:[FormsModule,MatButtonModule,CommonModule],
+ imports:[FormsModule,CommonModule],
  template:`
  <section class="explorer" aria-label="My Workspace file explorer">
   <header class="explorer-toolbar">
-   <div><h3><span aria-hidden="true">▣</span> My Workspace</h3><small>Private documents · 2 MiB per file · 256 files</small></div>
+   <div class="explorer-title"><i class="bi bi-hdd-stack" aria-hidden="true"></i><div><strong>My Workspace</strong><small>Private · 2 MiB per file · 256 files</small></div></div>
    <div class="toolbar-actions">
-    <button mat-stroked-button (click)="newFolder()" [disabled]="busy()">+ Folder</button>
-    <button mat-stroked-button (click)="newFile()">+ File</button>
-    <button mat-stroked-button (click)="refresh()" [disabled]="busy()">Refresh</button>
+    <button class="btn btn-sm btn-outline-secondary" (click)="newFolder()" [disabled]="busy()"><i class="bi bi-folder-plus" aria-hidden="true"></i>Folder</button>
+    <button class="btn btn-sm btn-primary" (click)="newFile()"><i class="bi bi-file-earmark-plus" aria-hidden="true"></i>New file</button>
+    <button class="btn btn-sm btn-ghost btn-icon" (click)="refresh()" [disabled]="busy()" aria-label="Refresh files" title="Refresh"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button>
    </div>
   </header>
   @if(creatingFolder()){
    <form class="folder-creator" (submit)="$event.preventDefault();createFolder()">
     <label>New folder name <input name="folderName" [ngModel]="folderName()" (ngModelChange)="folderName.set($event)" maxlength="80" placeholder="e.g. reports" aria-label="New folder name"></label>
-    <button mat-flat-button type="submit" [disabled]="busy()||!folderName().trim()">Create folder</button>
-    <button mat-stroked-button type="button" (click)="creatingFolder.set(false)">Cancel</button>
+    <button class="btn btn-sm btn-primary" type="submit" [disabled]="busy()||!folderName().trim()">Create folder</button>
+    <button class="btn btn-sm btn-outline-secondary" type="button" (click)="creatingFolder.set(false)">Cancel</button>
    </form>
   }
   <div class="breadcrumb" aria-label="Current folder">
-   <button type="button" (click)="navigate('/')">Workspace</button>
-   @for(crumb of crumbs();track crumb.path){<span aria-hidden="true">›</span><button type="button" (click)="navigate(crumb.path)">{{crumb.name}}</button>}
+   <button type="button" (click)="navigate('/')"><i class="bi bi-house" aria-hidden="true"></i> Workspace</button>
+   @for(crumb of crumbs();track crumb.path){<i class="bi bi-chevron-right" aria-hidden="true"></i><button type="button" (click)="navigate(crumb.path)">{{crumb.name}}</button>}
   </div>
   @if(folderDeleteTarget();as target){
    <div class="delete-confirm folder-delete-confirm" role="alertdialog" aria-modal="true" aria-label="Confirm folder deletion">
     <strong>Delete folder {{target}}?</strong>
     <p>This permanently deletes all {{folderDeleteFileCount()}} files in this folder and its subfolders. This cannot be undone.</p>
-    <button mat-stroked-button type="button" (click)="folderDeleteTarget.set('')">Cancel</button>
-    <button mat-flat-button type="button" [disabled]="busy()" (click)="removeFolder()">Delete folder and contents</button>
+    <button class="btn btn-sm btn-outline-secondary" type="button" (click)="folderDeleteTarget.set('')">Cancel</button>
+    <button class="btn btn-sm btn-primary" type="button" [disabled]="busy()" (click)="removeFolder()">Delete folder and contents</button>
    </div>
   }
   <div class="explorer-grid">
    <nav class="folder-tree" aria-label="Folders">
     <strong>Folders</strong>
     <div class="folder-item">
-     <button type="button" class="folder-toggle" (click)="workspaceExpanded.update(v=>!v)" [attr.aria-expanded]="workspaceExpanded()" aria-label="Toggle Workspace folders">{{workspaceExpanded()?'▾':'▸'}}</button>
+     <button type="button" class="folder-toggle" (click)="workspaceExpanded.update(v=>!v)" [attr.aria-expanded]="workspaceExpanded()" aria-label="Toggle Workspace folders"><i class="bi" [class.bi-chevron-down]="workspaceExpanded()" [class.bi-chevron-right]="!workspaceExpanded()" aria-hidden="true"></i></button>
      <button type="button" [class.active]="folder()==='/'" (click)="navigate('/')">Workspace</button>
     </div>
     @if(workspaceExpanded()){
      @for(dir of visibleDirectories();track dir.path){
       <div class="folder-item" [style.padding-left.px]="dir.depth*16">
-       <button type="button" class="folder-toggle" (click)="toggleDirectory(dir.path)" [attr.aria-expanded]="!isCollapsed(dir.path)" [attr.aria-label]="'Toggle '+dir.name">{{isCollapsed(dir.path)?'▸':'▾'}}</button>
+       <button type="button" class="folder-toggle" (click)="toggleDirectory(dir.path)" [attr.aria-expanded]="!isCollapsed(dir.path)" [attr.aria-label]="'Toggle '+dir.name"><i class="bi" [class.bi-chevron-right]="isCollapsed(dir.path)" [class.bi-chevron-down]="!isCollapsed(dir.path)" aria-hidden="true"></i></button>
        <button type="button" [class.active]="folder()===dir.path" (click)="navigate(dir.path)">{{dir.name}}</button>
-       <button type="button" class="folder-delete" [disabled]="busy()" (click)="requestFolderDelete(dir.path)" [attr.aria-label]="'Delete folder '+dir.name" title="Delete folder and contents">×</button>
+       <button type="button" class="folder-delete" [disabled]="busy()" (click)="requestFolderDelete(dir.path)" [attr.aria-label]="'Delete folder '+dir.name" title="Delete folder and contents"><i class="bi bi-trash3" aria-hidden="true"></i></button>
       </div>
      }
     }
@@ -62,13 +62,13 @@ interface TreeItem { name:string; path:string; depth:number; }
      <div class="file-row heading"><span>Name</span><span>Type</span><span>Size</span></div>
      @for(dir of childFolders();track dir.path){
       <div class="folder-row">
-       <button type="button" class="file-row" (click)="navigate(dir.path)"><span>📁 {{dir.name}}</span><span>Folder</span><span>—</span></button>
-       <button type="button" class="folder-delete" [disabled]="busy()" (click)="requestFolderDelete(dir.path)" [attr.aria-label]="'Delete folder '+dir.name" title="Delete folder and contents">×</button>
+       <button type="button" class="file-row" (click)="navigate(dir.path)"><span><i class="bi bi-folder-fill text-warning me-2" aria-hidden="true"></i>{{dir.name}}</span><span>Folder</span><span>—</span></button>
+       <button type="button" class="folder-delete" [disabled]="busy()" (click)="requestFolderDelete(dir.path)" [attr.aria-label]="'Delete folder '+dir.name" title="Delete folder and contents"><i class="bi bi-trash3" aria-hidden="true"></i></button>
       </div>
      }
      @for(file of visibleFiles();track file.path){
       <button type="button" class="file-row" [class.active]="path()===file.path" (click)="open(file.path)">
-       <span>📄 {{basename(file.path)}}</span><span>{{file.content_type}}</span><span>{{(file.size/1024).toFixed(1)}} KiB</span>
+       <span><i class="bi bi-file-earmark-text text-muted me-2" aria-hidden="true"></i>{{basename(file.path)}}</span><span>{{file.content_type}}</span><span>{{(file.size/1024).toFixed(1)}} KiB</span>
       </button>
      }
      @if(!childFolders().length&&!visibleFiles().length){<p class="empty">This folder is empty. Create a file to get started.</p>}
@@ -103,15 +103,16 @@ interface TreeItem { name:string; path:string; depth:number; }
      }</div>}
     } @else {<pre class="syntax">{{content()}}</pre>}
     <div class="file-actions">
-     <button mat-flat-button (click)="save()" [disabled]="busy()||!path()">Save</button>
-     <button mat-stroked-button (click)="download()" [disabled]="!path()">Download</button>
-     <button mat-stroked-button (click)="deleteRequested.set(true)" [disabled]="busy()||!files().some(f=>f.path===path())">Delete</button>
+     <button class="btn btn-sm btn-primary" (click)="save()" [disabled]="busy()||!path()">Save</button>
+     <button class="btn btn-sm btn-outline-secondary" (click)="download()" [disabled]="!path()">Download</button>
+     <button class="btn btn-sm btn-outline-danger" (click)="deleteRequested.set(true)" [disabled]="busy()||!files().some(f=>f.path===path())">Delete</button>
+     <button class="btn btn-sm btn-outline-secondary ms-auto" (click)="askAgent()" [disabled]="!content().trim()"><i class="bi bi-stars" aria-hidden="true"></i>Ask agent about this file</button>
     </div>
     @if(deleteRequested()){
      <div class="delete-confirm" role="group" aria-label="Confirm file deletion">
       <p>Permanently delete <strong>{{path()}}</strong>?</p>
-      <button mat-stroked-button (click)="deleteRequested.set(false)">Cancel</button>
-      <button mat-flat-button (click)="remove()" [disabled]="busy()">Confirm delete</button>
+      <button class="btn btn-sm btn-outline-secondary" (click)="deleteRequested.set(false)">Cancel</button>
+      <button class="btn btn-sm btn-primary" (click)="remove()" [disabled]="busy()">Confirm delete</button>
      </div>
     }
     @if(message()){<p role="status">{{message()}}</p>}
@@ -119,41 +120,59 @@ interface TreeItem { name:string; path:string; depth:number; }
   </div>
  </section>`,
  styles:[`
- :host{display:block;color:#e2effc}.explorer{background:#101d2b;border:1px solid #34566d;border-radius:12px;overflow:hidden}
- .explorer-toolbar{display:flex;justify-content:space-between;align-items:center;padding:16px;background:#1b3045;gap:12px;flex-wrap:wrap}.explorer-toolbar h3{margin:0}.explorer-toolbar small{opacity:.7}
- .toolbar-actions,.file-actions{display:flex;gap:8px;flex-wrap:wrap}.breadcrumb{display:flex;gap:8px;align-items:center;padding:9px 16px;background:#13283b}
- .breadcrumb button{background:none;border:0;color:#b9ddfa;cursor:pointer;padding:4px}
- .explorer-grid{display:grid;grid-template-columns:minmax(155px,20%) minmax(200px,30%) minmax(0,1fr);min-height:500px}
- .folder-tree,.directory,.editor-panel{padding:13px;min-width:0;overflow:auto}.folder-tree,.directory{border-right:1px solid #36556b}
- .folder-tree{display:flex;flex-direction:column;gap:5px}.folder-tree strong{margin-bottom:8px}
- .folder-item{display:flex;align-items:center;min-width:0;gap:0}
+ :host{display:block;color:var(--fs-text)}
+ .explorer{background:var(--fs-surface);border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);overflow:hidden;box-shadow:var(--fs-shadow-sm)}
+ .explorer-toolbar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--fs-border)}
+ .explorer-title{display:flex;align-items:center;gap:10px}.explorer-title>.bi{font-size:1.2rem;color:var(--fs-accent-text)}
+ .explorer-title strong{display:block;font-size:.95rem}.explorer-title small{color:var(--fs-muted);font-size:.75rem}
+ .toolbar-actions,.file-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+ .breadcrumb{display:flex;gap:4px;align-items:center;padding:8px 16px;margin:0;background:var(--fs-surface-2);border-bottom:1px solid var(--fs-border);font-size:.8125rem;flex-wrap:wrap}
+ .breadcrumb button{background:none;border:0;color:var(--fs-accent-text);padding:2px 4px;border-radius:4px}.breadcrumb button:hover{background:var(--fs-surface-3)}
+ .breadcrumb .bi-chevron-right{color:var(--fs-muted);font-size:.7rem}
+ .explorer-grid{display:grid;grid-template-columns:minmax(170px,20%) minmax(220px,30%) minmax(0,1fr);min-height:520px}
+ .folder-tree,.directory,.editor-panel{padding:12px;min-width:0;overflow:auto}.folder-tree,.directory{border-right:1px solid var(--fs-border)}
+ .folder-tree{display:flex;flex-direction:column;gap:2px;background:var(--fs-surface-2)}.folder-tree>strong{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--fs-muted);margin:2px 6px 8px}
+ .folder-item{display:flex;align-items:center;min-width:0;gap:0;border-radius:6px}
+ .folder-item:hover{background:var(--fs-surface-3)}
  .folder-item button:not(.folder-toggle){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
- .folder-tree .folder-toggle{flex:0 0 28px;text-align:center;padding:7px 4px}
- .folder-item .folder-delete{flex:0 0 30px;padding:5px;color:#ffb6c1;text-align:center}
- .folder-row{display:flex;align-items:center;gap:6px}.folder-row .file-row{flex:1;min-width:0}.folder-row .folder-delete{flex:0 0 30px}
- .folder-delete{color:#ffb6c1;background:#402631;border:1px solid #a36a77;border-radius:6px;cursor:pointer;padding:5px 9px}
- .folder-delete:disabled{opacity:.5;cursor:default}
- .folder-delete-confirm{margin:12px 16px;background:#372532}.folder-delete-confirm button{margin-right:8px}
- .folder-creator{display:flex;flex-wrap:wrap;align-items:end;gap:10px;padding:12px 16px;background:#172d42;border-bottom:1px solid #36556b}
+ .folder-tree button{background:transparent;border:0;text-align:left;white-space:nowrap;color:inherit;padding:6px 8px;border-radius:6px;font-size:.85rem}
+ .folder-tree .folder-toggle{flex:0 0 24px;text-align:center;padding:6px 2px;color:var(--fs-muted);font-size:.7rem}
+ .folder-tree button.active{background:var(--fs-accent-soft);color:var(--fs-accent-text);font-weight:500}
+ .folder-delete{flex:0 0 auto;color:var(--fs-muted);background:transparent;border:0;border-radius:6px;padding:4px 7px;font-size:.8rem;opacity:.7}
+ .folder-delete:hover{color:var(--fs-neg);background:var(--fs-neg-soft);opacity:1}
+ .folder-delete:disabled{opacity:.35}
+ .folder-row{display:flex;align-items:center;gap:4px}.folder-row .file-row{flex:1;min-width:0}
+ .folder-delete-confirm{margin:12px 16px}.folder-delete-confirm button{margin-right:8px}
+ .folder-creator{display:flex;flex-wrap:wrap;align-items:end;gap:10px;padding:12px 16px;background:var(--fs-surface-2);border-bottom:1px solid var(--fs-border)}
  .folder-creator label{flex:1;min-width:180px}
- .folder-tree button{background:transparent;border:0;text-align:left;white-space:nowrap;color:inherit;padding:7px 10px;cursor:pointer;border-radius:5px}
- button.active,.folder-tree button:hover{background:#264865}.directory-header{display:flex;justify-content:space-between;gap:8px;padding:7px 0 14px}
- .file-row{display:grid;grid-template-columns:minmax(120px,1fr) 75px 62px;gap:8px;padding:10px 8px;border:0;border-bottom:1px solid #2d4256;width:100%;text-align:left;background:transparent;color:inherit;cursor:pointer;font:inherit}
- .file-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-row.heading{color:#a8c4db;font-size:12px;cursor:default}.file-row:not(.heading):hover{background:#1d3952}
+ .directory-header{display:flex;justify-content:space-between;gap:8px;padding:4px 4px 10px;font-size:.85rem}.directory-header span{color:var(--fs-muted)}
+ .file-row{display:grid;grid-template-columns:minmax(120px,1fr) 90px 64px;gap:8px;padding:8px;border:0;border-bottom:1px solid var(--fs-border);width:100%;text-align:left;background:transparent;color:inherit;font:inherit;font-size:.85rem;border-radius:0}
+ .file-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-row span:not(:first-child){color:var(--fs-muted);font-size:.78rem}
+ .file-row.heading{color:var(--fs-muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;cursor:default}
+ .file-row:not(.heading):hover{background:var(--fs-surface-2)}
+ button.file-row.active{background:var(--fs-accent-soft)}
  .editor-panel{display:flex;flex-direction:column;gap:12px}.editor-heading,.editor-fields{display:flex;gap:12px;justify-content:space-between;align-items:center}
- .editor-fields label{flex:1}label{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:13px}
- input,select,textarea{box-sizing:border-box;width:100%;background:#0b1b2a;color:#e6f2fe;border:1px solid #567c9b;padding:9px;border-radius:6px;font:inherit}
- .code-editor,.syntax{font:13px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;tab-size:2;overflow:auto;min-height:310px;max-height:540px;white-space:pre;resize:vertical}
- .syntax{border:1px solid #456078;border-radius:6px;padding:12px;background:#091725;overflow:auto}
- .syntax :is(.token-key){color:#86c8ff}.syntax :is(.token-string){color:#a7e69b}.syntax :is(.token-tag){color:#d9a3ff}
- .tree-view{min-height:310px;max-height:540px;overflow:auto;background:#0c1d2c;padding:10px;border-radius:6px}
- .tree-row{display:flex;gap:12px;padding:5px;border-bottom:1px solid #264158;overflow-wrap:anywhere}.tree-key{color:#8ac7f6}
- .error{color:#ffadb8}.empty{opacity:.7}.delete-confirm{border:1px solid #ad6a72;padding:12px;border-radius:8px}
- @media(max-width:1050px){.explorer-grid{grid-template-columns:minmax(155px,30%) minmax(0,1fr)}.editor-panel{grid-column:1/-1;border-top:1px solid #36556b}}
- @media(max-width:650px){.explorer-grid{grid-template-columns:minmax(0,1fr)}.folder-tree,.directory{border-right:0;border-bottom:1px solid #36556b}.folder-tree{max-height:180px}.file-row{grid-template-columns:minmax(100px,1fr) 65px 58px}}
+ .editor-heading span{font-size:.75rem;color:var(--fs-muted);background:var(--fs-surface-3);padding:2px 8px;border-radius:999px}
+ .editor-fields label{flex:1}label{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:13px;font-weight:500}
+ .code-editor,.syntax{font:13px/1.6 var(--bs-font-monospace)!important;tab-size:2;overflow:auto;min-height:340px;max-height:560px;white-space:pre;resize:vertical}
+ .syntax{border:1px solid var(--fs-border);border-radius:var(--bs-border-radius);padding:12px;background:var(--fs-sunken);margin:0}
+ .syntax :is(.token-key){color:var(--fs-accent-text)}.syntax :is(.token-string){color:var(--fs-pos)}.syntax :is(.token-tag){color:var(--fs-agent)}
+ .tree-view{min-height:340px;max-height:560px;overflow:auto;background:var(--fs-sunken);border:1px solid var(--fs-border);padding:10px;border-radius:var(--bs-border-radius);font-size:.82rem}
+ .tree-row{display:flex;gap:12px;padding:4px;border-bottom:1px solid var(--fs-border);overflow-wrap:anywhere}.tree-key{color:var(--fs-accent-text);font-weight:500}
+ .error{color:var(--fs-neg)}.empty{color:var(--fs-muted);padding:16px 4px;font-size:.85rem}
+ .delete-confirm{border:1px solid color-mix(in srgb,var(--fs-neg) 45%,transparent);background:var(--fs-neg-soft);padding:12px;border-radius:var(--bs-border-radius)}
+ @media(max-width:1050px){.explorer-grid{grid-template-columns:minmax(155px,30%) minmax(0,1fr)}.editor-panel{grid-column:1/-1;border-top:1px solid var(--fs-border)}}
+ @media(max-width:650px){.explorer-grid{grid-template-columns:minmax(0,1fr)}.folder-tree,.directory{border-right:0;border-bottom:1px solid var(--fs-border)}.folder-tree{max-height:180px}.file-row{grid-template-columns:minmax(100px,1fr) 70px 58px}}
  `]
 })
 export class UserspaceFilesComponent {
+ private readonly agent=inject(AgentSession);
+ /** Sends the open document to the research agent for a summary and critique. */
+ askAgent(){
+  const text=this.content().slice(0,8000);
+  if(!text.trim())return;
+  this.agent.ask('Review this workspace document ('+this.path()+'). Summarize its key claims, check any figures you can verify with your tools, and list open questions.\n\n```\n'+text+'\n```');
+ }
  readonly files=signal<FileEntry[]>([]);
  readonly folder=signal('/');
  readonly workspaceExpanded=signal(true);

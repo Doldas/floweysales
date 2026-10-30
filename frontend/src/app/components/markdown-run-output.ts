@@ -62,13 +62,13 @@ export function renderRunMarkdown(text: string): string {
   `,
   styles: [`
     .run-steps{display:grid;gap:12px;margin:12px 0}
-    .run-step{border:1px solid #365772;border-radius:9px;padding:14px;min-width:0}
+    .run-step{border:1px solid var(--fs-border);border-radius:9px;padding:14px;min-width:0}
     .step-meta{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin-bottom:10px}
     .step-meta small{opacity:.65}
-    .step-index{border-radius:100%;background:#335b78;padding:4px 8px}
+    .step-index{border-radius:100%;background:var(--fs-accent-soft);padding:4px 8px}
     .variable{font-size:12px;opacity:.7}
     .markdown-output{overflow-wrap:anywhere;line-height:1.65}
-    .markdown-output :is(pre){overflow:auto;max-height:360px;white-space:pre-wrap;background:#0b1c2e;padding:12px;border-radius:6px}
+    .markdown-output :is(pre){overflow:auto;max-height:360px;white-space:pre-wrap;background:var(--fs-sunken);padding:12px;border-radius:6px}
     .markdown-output :is(code){font-family:monospace}
   `]
 })

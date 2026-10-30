@@ -1,0 +1,103 @@
+<div class="chat" [class.is-page]="variant() === 'page'">
+  <div class="chat-scroll" #scroller role="log" aria-label="Agent conversation" aria-live="polite">
+    @if (!session.entries().length) {
+      <div class="chat-empty">
+        <span class="fs-agent-orb empty-orb" aria-hidden="true"><i class="bi bi-stars"></i></span>
+        <h2>What should we research?</h2>
+        <p>
+          The agent plans, calls read-only market, SEC and valuation tools, and cites what it used.
+          @if (session.context().symbol) { It knows you are looking at <strong>{{ session.context().symbol }}</strong>. }
+        </p>
+        <div class="suggestions">
+          @for (s of suggestions(); track s.title) {
+            <button type="button" class="suggestion" (click)="send(s.prompt)" [disabled]="session.streaming()">
+              <i class="bi" [class]="s.icon" aria-hidden="true"></i>
+              <span><strong>{{ s.title }}</strong><small>{{ s.prompt }}</small></span>
+            </button>
+          }
+        </div>
+        @if (session.configLoaded() && !session.configured()) {
+          <div class="alert alert-warning small mt-3 mb-0" role="status">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            No AI model is configured yet.{{ session.canConfigure() ? ' Configure one under Settings → API integrations.' : ' Ask a SYS_ADMIN to configure one.' }}
+          </div>
+        }
+      </div>
+    }
+
+    @for (block of blocks(); track block.kind === 'steps' ? 's' + block.key : block.entry.id) {
+      @if (block.kind === 'steps') {
+          <div class="steps" role="group" [attr.aria-label]="block.steps.length + ' agent tool steps'">
+            <div class="steps-head"><i class="bi bi-cpu" aria-hidden="true"></i> Agent steps <span class="count">{{ block.steps.length }}</span></div>
+            <ol>
+              @for (step of block.steps; track step.id) {
+                <li class="step" [class.is-running]="step.status === 'running'" [class.is-error]="step.status === 'error'">
+                  <details>
+                    <summary>
+                      <span class="step-icon" aria-hidden="true">
+                        @if (step.status === 'running') { <span class="spinner-border spinner-border-sm"></span> }
+                        @else if (step.status === 'error') { <i class="bi bi-x-circle-fill"></i> }
+                        @else { <i class="bi bi-check-circle-fill"></i> }
+                      </span>
+                      <span class="step-name">{{ toolLabel(step.name || 'tool') }}</span>
+                      @if (step.args) { <span class="step-args">{{ args(step.args) }}</span> }
+                      <span class="step-time">{{ step.status === 'running' ? 'running…' : duration(step.durationMs) }}</span>
+                    </summary>
+                    <div class="step-body">
+                      <div class="step-meta"><code>{{ step.name }}</code></div>
+                      @if (step.args) { <pre class="step-pre">{{ toolOutput(step.args) }}</pre> }
+                      @if (step.content) { <pre class="step-pre">{{ toolOutput(step.content) }}</pre> }
+                    </div>
+                  </details>
+                </li>
+              }
+            </ol>
+          </div>
+      } @else if (block.kind === 'user') {
+          <div class="msg msg-user"><div class="bubble">{{ block.entry.content }}</div></div>
+      } @else {
+          <div class="msg msg-agent">
+            <span class="fs-agent-orb sm" aria-hidden="true"><i class="bi bi-stars"></i></span>
+            <div class="bubble chat-markdown" [innerHTML]="md(block.entry.content)"></div>
+          </div>
+      }
+    }
+
+    @if (session.thinking()) {
+      <div class="msg msg-agent thinking" role="status">
+        <span class="fs-agent-orb sm" aria-hidden="true"><i class="bi bi-stars"></i></span>
+        <div class="bubble"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> Planning the next step…</div>
+      </div>
+    } @else if (currentStep(); as step) {
+      <div class="working" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Using {{ toolLabel(step.name || 'tool') }}…</div>
+    }
+
+    @if (session.error()) {
+      <div class="alert alert-danger small d-flex gap-2 align-items-start" role="alert">
+        <i class="bi bi-exclamation-octagon mt-1"></i><span>{{ session.error() }}</span>
+      </div>
+    }
+  </div>
+
+  <form class="composer" (submit)="$event.preventDefault(); send()">
+    @if (session.context().symbol) {
+      <div class="context-row" aria-label="Context sent with your question">
+        <span class="ctx-chip"><i class="bi bi-crosshair" aria-hidden="true"></i> {{ session.context().symbol }}</span>
+        <span class="ctx-chip">{{ session.context().provider }}</span>
+        <span class="ctx-chip">{{ session.context().range }}</span>
+        @if (session.context().price) { <span class="ctx-chip tabular">{{ session.context().price }}</span> }
+      </div>
+    }
+    <div class="composer-box">
+      <textarea #composer rows="1" [value]="draft()" (input)="onInput($any($event.target).value)" (keydown)="onKeydown($event)"
+                [placeholder]="session.configured() || !session.configLoaded() ? 'Ask a research question…' : 'AI model not configured'"
+                aria-label="Message the research agent" [disabled]="session.configLoaded() && !session.configured()"></textarea>
+      @if (session.streaming()) {
+        <button type="button" class="btn btn-outline-secondary btn-icon" (click)="session.stop()" aria-label="Stop the agent"><i class="bi bi-stop-fill"></i></button>
+      } @else {
+        <button type="submit" class="btn btn-primary btn-icon" [disabled]="!draft().trim() || !session.canSend()" aria-label="Send"><i class="bi bi-arrow-up"></i></button>
+      }
+    </div>
+    <div class="composer-hint">Enter to send · Shift+Enter for a new line · Research aid, not investment advice</div>
+  </form>
+</div>

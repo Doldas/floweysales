@@ -1,19 +1,15 @@
 import { CanvasGestures } from './canvas-gestures';
 import { HostListener, Component, ChangeDetectionStrategy, signal, effect } from '@angular/core';
 import { MarkdownRunOutputComponent } from './markdown-run-output';
-import { UserspaceFilesComponent } from './userspace-files';
 import { FlowSideEffectsComponent } from './flow-side-effects';
 import { clampToolBudget, describeToolCall, toggleTool, toolLabel, type GrantableTool, type ToolCall } from './agent-tools';
 import { FlowEventAdaptersComponent } from './flow-event-adapters';
 import { capabilityManifest, describeCapability, nodeCapability, readinessHeadline, type Readiness } from './side-effects';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
-import { MatIconModule } from '@angular/material/icon';
-import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
+import { NotifyService } from '../core/notify.service';
 import { AuthState } from '../auth.service';
 import { canCancelRun, canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history';
 import { listOverviewFlows } from './flow-overview';
@@ -32,61 +28,38 @@ interface FlowRun { id:number; parent_run_id?:number|null; trigger:string; statu
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
 @Component({
- selector: 'fse-confirm-delete-flow',
- standalone: true,
- imports: [MatDialogModule, MatButtonModule],
- template: `
-   <h2 mat-dialog-title>Delete flow?</h2>
-   <mat-dialog-content>
-     Delete <strong>{{ data.name }}</strong> and its execution history? This cannot be undone.
-   </mat-dialog-content>
-   <mat-dialog-actions align="end">
-     <button mat-stroked-button (click)="dialog.close(false)">Cancel</button>
-     <button mat-flat-button color="warn" (click)="dialog.close(true)">Confirm delete</button>
-   </mat-dialog-actions>
- `
-})
-export class ConfirmDeleteFlowDialog {
- readonly dialog = inject(MatDialogRef<ConfirmDeleteFlowDialog>);
- readonly data = inject<{ name: string }>(MAT_DIALOG_DATA);
-}
-
-@Component({
  selector:'fse-flow-studio', standalone:true,
- imports:[CommonModule,FormsModule,MatButtonModule,MatCardModule,MatIconModule,MatDialogModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,UserspaceFilesComponent,FlowSideEffectsComponent,FlowEventAdaptersComponent],
+ imports:[CommonModule,FormsModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,FlowSideEffectsComponent,FlowEventAdaptersComponent],
+ host:{class:'fs-native-forms'},
  changeDetection:ChangeDetectionStrategy.Default,
  template:`
- <mat-card class="flow-studio glass">
-  <mat-card-header><mat-card-title><mat-icon>account_tree</mat-icon> Agent Flow Studio</mat-card-title></mat-card-header>
-  <mat-card-content>
-   <p class="muted">Design read-only research automations. No live trades.</p>
+ <div class="flow-studio">
    <nav class="studio-tabs" role="tablist" aria-label="Flow Studio sections">
-     <button type="button" role="tab" [attr.aria-selected]="studioTab()==='overview'" [class.selected]="studioTab()==='overview'" (click)="studioTab.set('overview')">My Flows</button>
-     <button type="button" role="tab" [attr.aria-selected]="studioTab()==='editor'" [class.selected]="studioTab()==='editor'" (click)="studioTab.set('editor')">Flow editor</button>
+     <button type="button" role="tab" class="studio-tab" [attr.aria-selected]="studioTab()==='overview'" [class.active]="studioTab()==='overview'" (click)="studioTab.set('overview')"><i class="bi bi-grid" aria-hidden="true"></i>My Flows</button>
+     <button type="button" role="tab" class="studio-tab" [attr.aria-selected]="studioTab()==='editor'" [class.active]="studioTab()==='editor'" (click)="studioTab.set('editor')"><i class="bi bi-bezier2" aria-hidden="true"></i>Flow editor</button>
+     <button type="button" role="tab" class="studio-tab" [attr.aria-selected]="studioTab()==='runs'" [class.active]="studioTab()==='runs'" (click)="studioTab.set('runs')"><i class="bi bi-clock-history" aria-hidden="true"></i>Run history</button>
+     <button type="button" role="tab" class="studio-tab" [attr.aria-selected]="studioTab()==='approvals'" [class.active]="studioTab()==='approvals'" (click)="studioTab.set('approvals')"><i class="bi bi-shield-check" aria-hidden="true"></i>Approvals &amp; audit</button>
      @if(auth.user()?.role==='SYS_ADMIN'){
-     <button type="button" role="tab" [attr.aria-selected]="studioTab()==='library'" [class.selected]="studioTab()==='library'" (click)="studioTab.set('library')">Function library &amp; triggers</button>
+     <button type="button" role="tab" class="studio-tab" [attr.aria-selected]="studioTab()==='library'" [class.active]="studioTab()==='library'" (click)="studioTab.set('library')"><i class="bi bi-boxes" aria-hidden="true"></i>Function library &amp; triggers</button>
      }
-     <button type="button" role="tab" [attr.aria-selected]="studioTab()==='files'" [class.selected]="studioTab()==='files'" (click)="studioTab.set('files')">My Workspace</button>
-     <button type="button" role="tab" [attr.aria-selected]="studioTab()==='runs'" [class.selected]="studioTab()==='runs'" (click)="studioTab.set('runs')">Run history</button>
-     <button type="button" role="tab" [attr.aria-selected]="studioTab()==='approvals'" [class.selected]="studioTab()==='approvals'" (click)="studioTab.set('approvals')">Approvals &amp; audit</button>
    </nav>
    @if(studioTab()==='overview'){
     <section class="flows-overview" aria-label="My Flows">
-      <div class="overview-heading"><div><h2>My Flows</h2><p class="muted">Manage your saved automations without opening the editor.</p></div><div class="overview-actions"><button mat-stroked-button (click)="refresh()">Refresh</button><button mat-flat-button color="primary" (click)="startFlowFromOverview()">+ New flow</button></div></div>
+      <div class="overview-heading"><div><h2>My Flows</h2><p class="muted">Agent automations you can run, schedule and audit.</p></div><div class="overview-actions"><button class="btn btn-sm btn-outline-secondary" (click)="refresh()"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Refresh</button><button class="btn btn-sm btn-primary" (click)="startFlowFromOverview()"><i class="bi bi-plus-lg" aria-hidden="true"></i>New flow</button></div></div>
       <div class="overview-filters">
        <label>Search<input type="search" [ngModel]="flowSearch()" (ngModelChange)="flowSearch.set($event)" placeholder="Flow name or event key"></label>
        <label>Status<select [ngModel]="flowFilter()" (ngModelChange)="flowFilter.set($event)"><option value="all">All</option><option value="enabled">Enabled</option><option value="disabled">Disabled</option><option value="scheduled">Scheduled</option><option value="manual">Not scheduled</option></select></label>
        <label>Sort<select [ngModel]="flowSort()" (ngModelChange)="flowSort.set($event)"><option value="name">Name A–Z</option><option value="name-desc">Name Z–A</option><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
       </div>
       <p class="muted">{{listedFlows().length}} of {{flows().length}} flows · {{enabledFlowCount()}} enabled · {{scheduledFlowCount()}} scheduled</p>
-      @if(!flows().length){<div class="overview-empty"><h3>No saved flows</h3><button mat-flat-button color="primary" (click)="startFlowFromOverview()">Create your first flow</button></div>}
-      @else if(!listedFlows().length){<div class="overview-empty"><h3>No matching flows</h3><button mat-stroked-button (click)="clearFlowFilters()">Clear filters</button></div>}
+      @if(!flows().length){<div class="overview-empty"><i class="bi bi-diagram-3" aria-hidden="true"></i><h3>No saved flows</h3><p class="muted mb-1">Start blank or pick a template from the editor.</p><button class="btn btn-sm btn-primary" (click)="startFlowFromOverview()">Create your first flow</button></div>}
+      @else if(!listedFlows().length){<div class="overview-empty"><h3>No matching flows</h3><button class="btn btn-sm btn-outline-secondary" (click)="clearFlowFilters()">Clear filters</button></div>}
       @else{<div class="flow-overview-grid">
        @for(flow of listedFlows();track flow.id){<article class="overview-flow-card">
-        <div class="overview-flow-top"><div><h3>{{flow.name}}</h3><p class="muted">{{flow.graph.nodes.length}} nodes · {{flow.graph.edges.length}} links</p></div><span class="overview-flow-status" [class.active]="flow.enabled">{{flow.enabled?'Enabled':'Disabled'}}</span></div>
-        <p class="overview-flow-trigger">@if(flow.interval_minutes>0){Every {{flow.interval_minutes}} min}@else if(flow.event_key){Event: {{flow.event_key}}}@else{Manual execution}</p>
+        <div class="overview-flow-top"><span class="flow-glyph" aria-hidden="true"><i class="bi bi-diagram-3"></i></span><div class="flex-grow-1 min-w-0"><h3>{{flow.name}}</h3><p class="muted">{{flow.graph.nodes.length}} nodes · {{flow.graph.edges.length}} links</p></div><span class="fs-status" [class.is-success]="flow.enabled">{{flow.enabled?'Enabled':'Disabled'}}</span></div>
+        <p class="overview-flow-trigger"><i class="bi" [class.bi-clock]="flow.interval_minutes>0" [class.bi-lightning-charge]="!(flow.interval_minutes>0)&&!!flow.event_key" [class.bi-hand-index]="!(flow.interval_minutes>0)&&!flow.event_key" aria-hidden="true"></i> @if(flow.interval_minutes>0){Every {{flow.interval_minutes}} min}@else if(flow.event_key){Event: {{flow.event_key}}}@else{Manual execution}</p>
         <p class="muted">{{publishStatusLabel(flow)}}</p>
-        <div class="overview-actions"><button mat-flat-button color="primary" (click)="openFlowFromOverview(flow.id)">Edit</button><button mat-stroked-button (click)="openHistoryForFlow(flow.id)">History</button><button mat-stroked-button (click)="runSavedFlow(flow.id)" [disabled]="busy()">Run now</button></div>
+        <div class="overview-actions"><button class="btn btn-sm btn-primary" (click)="openFlowFromOverview(flow.id)">Edit</button><button class="btn btn-sm btn-outline-secondary" (click)="openHistoryForFlow(flow.id)">History</button><button class="btn btn-sm btn-outline-secondary" (click)="runSavedFlow(flow.id)" [disabled]="busy()"><i class="bi bi-play-fill" aria-hidden="true"></i>Run now</button></div>
        </article>}
       </div>}
       @if(message()){<p class="flow-message" role="status">{{message()}}</p>}
@@ -95,7 +68,7 @@ export class ConfirmDeleteFlowDialog {
     @if (studioTab()==='editor') {
    <div class="flow-toolbar">
      <label>Saved flows <select [ngModel]="selectedId()" (ngModelChange)="loadFlow(+$event)"><option [ngValue]="0">New flow</option>@for(f of flows();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
-     <button mat-stroked-button (click)="newFlow()">New</button>
+     <button class="btn btn-sm btn-outline-secondary" (click)="newFlow()">New</button>
      <label>Starter templates
       <select [ngModel]="''" (ngModelChange)="applyFlowTemplate($event)">
        <option value="">Choose a template…</option>
@@ -104,10 +77,10 @@ export class ConfirmDeleteFlowDialog {
        <option value="event">Event-driven analysis</option>
       </select>
      </label>
-     <button mat-stroked-button color="warn" (click)="confirmDeleteFlow()" [disabled]="!selectedId()||busy()">Delete flow</button>
-     <button mat-flat-button type="button" (click)="toggleNodePicker()" [attr.aria-expanded]="nodePickerOpen()" aria-controls="node-picker">+ Add node</button>
-     <button mat-stroked-button (click)="linkSelected()" [disabled]="!selectedNode()||graph().nodes.length<3">Connect to…</button>
-     <button mat-stroked-button (click)="removeSelected()" [disabled]="!selectedNode()||selectedNode()?.type==='trigger'">Remove node</button>
+     <button class="btn btn-sm btn-outline-danger" (click)="confirmDeleteFlow()" [disabled]="!selectedId()||busy()">Delete flow</button>
+     <button class="btn btn-sm btn-primary" type="button" (click)="toggleNodePicker()" [attr.aria-expanded]="nodePickerOpen()" aria-controls="node-picker">+ Add node</button>
+     <button class="btn btn-sm btn-outline-secondary" (click)="linkSelected()" [disabled]="!selectedNode()||graph().nodes.length<3">Connect to…</button>
+     <button class="btn btn-sm btn-outline-secondary" (click)="removeSelected()" [disabled]="!selectedNode()||selectedNode()?.type==='trigger'">Remove node</button>
    </div>
    @if(nodePickerOpen()){
     <section id="node-picker" class="node-picker" aria-label="Add a node">
@@ -115,7 +88,7 @@ export class ConfirmDeleteFlowDialog {
       <label>Search nodes<input type="search" [ngModel]="nodePickerQuery()" (ngModelChange)="nodePickerQuery.set($event)" (keydown.escape)="nodePickerOpen.set(false)" placeholder="Search node type"></label>
       <div class="node-picker-items">
         @for(item of visibleNodeTypes();track item.id){
-          <button type="button" (click)="addPickedNode(item.id)"><mat-icon aria-hidden="true">add_circle_outline</mat-icon>{{item.label}}</button>
+          <button type="button" (click)="addPickedNode(item.id)"><i class="bi bi-plus-circle" aria-hidden="true"></i>{{item.label}}</button>
         } @empty {<p class="muted">No matching nodes.</p>}
       </div>
     </section>
@@ -131,40 +104,39 @@ export class ConfirmDeleteFlowDialog {
    <div class="blueprint-layout">
    <div class="canvas-shell">
     <div class="canvas-navigation" aria-label="Canvas navigation">
-      <button type="button" (click)="zoomCanvas(0.8)" aria-label="Zoom in">＋</button>
+      <button type="button" (click)="zoomCanvas(0.8)" aria-label="Zoom in"><i class="bi bi-zoom-in" aria-hidden="true"></i></button>
       <span>{{ canvasZoomPercent() }}%</span>
-      <button type="button" (click)="zoomCanvas(1.25)" aria-label="Zoom out">－</button>
-      <button type="button" (click)="fitCanvas()" title="Fit all nodes in view">Fit flow</button>
-      <button type="button" (click)="resetCanvas()" title="Reset canvas view">Reset view</button>
+      <button type="button" (click)="zoomCanvas(1.25)" aria-label="Zoom out"><i class="bi bi-zoom-out" aria-hidden="true"></i></button>
+      <button type="button" (click)="fitCanvas()" title="Fit all nodes in view"><i class="bi bi-fullscreen" aria-hidden="true"></i> Fit flow</button>
+      <button type="button" (click)="resetCanvas()" title="Reset canvas view"><i class="bi bi-bootstrap-reboot" aria-hidden="true"></i> Reset view</button>
       @if(connectingFrom()){<span class="canvas-connect-hint" role="status">Select an input port <button type="button" (click)="cancelConnecting()">Cancel</button></span>}
     </div>
     <div class="flow-workspace" aria-label="Agent flow graph editor">
     <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (pointerdown)="onCanvasPointerDown($event)" (click)="closeQuickNodeOnCanvas($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="onCanvasPointerEnd($event)" (pointercancel)="onCanvasPointerEnd($event)" (contextmenu)="onCanvasContextMenu($event)" role="group" aria-label="Flow canvas: nodes and directed connections">
-     <defs><marker id="flow-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#72b7ef"/></marker></defs>
+     <defs><marker id="flow-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" class="edge-arrow"/></marker></defs>
      @for(edge of graph().edges;track edgeKey(edge)){
-       <path [attr.d]="edgePath(edge)" fill="none" stroke="#72b7ef" stroke-width="2.5" marker-end="url(#flow-arrow)"/>
+       <path [attr.d]="edgePath(edge)" class="flow-edge" marker-end="url(#flow-arrow)"/>
      }
-     @if(wireDrag();as w){<path class="wire-ghost" [attr.d]="wireGhostPath()" fill="none" stroke="#ffe19a" stroke-width="2.5" stroke-dasharray="6 4" pointer-events="none"/>@if(w.target;as t){<circle [attr.cx]="t.x" [attr.cy]="t.y" r="10" fill="none" stroke="#ffe19a" stroke-width="3" pointer-events="none"/>}}
+     @if(wireDrag();as w){<path class="wire-ghost" [attr.d]="wireGhostPath()" pointer-events="none"/>@if(w.target;as t){<circle class="wire-target" [attr.cx]="t.x" [attr.cy]="t.y" r="10" pointer-events="none"/>}}
      @for(n of graph().nodes;track n.id){
        <g data-canvas-node (click)="$event.stopPropagation();openQuickNode(n.id)" (pointerdown)="dragStart($event,n.id)" style="cursor:move" tabindex="0"
           (keydown.enter)="openQuickNode(n.id)" [attr.aria-label]="'Select '+n.label">
-         <rect [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="12"
-           [attr.fill]="n.id===selectedNode()?.id?'#244970':'#1c2a3b'"
-           [attr.stroke]="n.id===selectedNode()?.id?'#94caff':'#607993'" stroke-width="2"/>
-         <text [attr.x]="n.x+12" [attr.y]="n.y+24" fill="#dceaf8" font-size="13">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':n.type==='workspace_read'?'▤ READ FILE':n.type==='workspace_write'?'▣ WRITE FILE':n.type==='output'?'→ OUTPUT':n.type==='condition'?'◇ IF / ELSE':n.type==='merge'?'⇉ MERGE':n.type==='json_get'?'{} JSON FIELD':n.type==='emit_event'?'⇢ EMIT EVENT':'✦ AGENT'}}</text>
-         <text [attr.x]="n.x+12" [attr.y]="n.y+48" fill="#dceaf8" font-size="12">{{n.label.slice(0,16)}}</text>
-          @for(pin of functionPins(n).inputs;track pin.name;let i=$index){<g><circle class="canvas-port pin-port" [attr.cx]="n.x" [attr.cy]="n.y+pinOffset(i,functionPins(n).inputs.length,70)" r="6" fill="#2d7fb8" stroke="#bfe2ff" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation()"><title>Input {{pin.name}} ({{pin.type}})</title></circle><text [attr.x]="n.x+8" [attr.y]="n.y+pinOffset(i,functionPins(n).inputs.length,70)+3" font-size="8" fill="#9fc4e4">{{pin.name.slice(0,8)}}</text></g>}
-          @for(pin of functionPins(n).outputs;track pin.name;let i=$index){<g><circle class="canvas-port pin-port" [attr.cx]="n.x+125" [attr.cy]="n.y+pinOffset(i,functionPins(n).outputs.length,70)" r="6" fill="#2da07a" stroke="#bff0dc" (pointerdown)="startWire($event,n.id,pin.name)" (click)="$event.stopPropagation()"><title>Output {{pin.name}} ({{pin.type}})</title></circle><text [attr.x]="n.x+117" [attr.y]="n.y+pinOffset(i,functionPins(n).outputs.length,70)+3" font-size="8" fill="#9fe0c4" text-anchor="end">{{pin.name.slice(0,8)}}</text></g>}
+         <rect class="flow-node" [class.selected]="n.id===selectedNode()?.id" [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="12"/>
+         <rect class="flow-node-accent" [attr.data-type]="n.type" [attr.x]="n.x" [attr.y]="n.y" width="4" height="70" rx="2"/>
+         <text class="node-type" [attr.x]="n.x+12" [attr.y]="n.y+24" font-size="11">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':n.type==='workspace_read'?'▤ READ FILE':n.type==='workspace_write'?'▣ WRITE FILE':n.type==='output'?'→ OUTPUT':n.type==='condition'?'◇ IF / ELSE':n.type==='merge'?'⇉ MERGE':n.type==='json_get'?'{} JSON FIELD':n.type==='emit_event'?'⇢ EMIT EVENT':'✦ AGENT'}}</text>
+         <text class="node-label" [attr.x]="n.x+12" [attr.y]="n.y+48" font-size="13">{{n.label.slice(0,16)}}</text>
+          @for(pin of functionPins(n).inputs;track pin.name;let i=$index){<g><circle [attr.cx]="n.x" [attr.cy]="n.y+pinOffset(i,functionPins(n).inputs.length,70)" r="6" class="canvas-port pin-in" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation()"><title>Input {{pin.name}} ({{pin.type}})</title></circle><text [attr.x]="n.x+8" [attr.y]="n.y+pinOffset(i,functionPins(n).inputs.length,70)+3" font-size="8" class="pin-label">{{pin.name.slice(0,8)}}</text></g>}
+          @for(pin of functionPins(n).outputs;track pin.name;let i=$index){<g><circle [attr.cx]="n.x+125" [attr.cy]="n.y+pinOffset(i,functionPins(n).outputs.length,70)" r="6" class="canvas-port pin-out" (pointerdown)="startWire($event,n.id,pin.name)" (click)="$event.stopPropagation()"><title>Output {{pin.name}} ({{pin.type}})</title></circle><text [attr.x]="n.x+117" [attr.y]="n.y+pinOffset(i,functionPins(n).outputs.length,70)+3" font-size="8" class="pin-label" text-anchor="end">{{pin.name.slice(0,8)}}</text></g>}
           @if(n.type!=='trigger'&&!functionPins(n).inputs.length){<circle class="canvas-port input-port" [attr.cx]="n.x" [attr.cy]="n.y+35" r="8" tabindex="0" role="button" [attr.aria-label]="'Connect into '+n.label" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation();onInputPortClick(n.id)" (keydown.enter)="$event.stopPropagation();chooseInputPort(n.id)"/>}
           @if(n.type!=='output'&&!functionPins(n).outputs.length){<circle class="canvas-port output-port" [class.port-active]="connectingFrom()===n.id" [attr.cx]="n.x+125" [attr.cy]="n.y+35" r="8" tabindex="0" role="button" [attr.aria-label]="'Start connection from '+n.label" (pointerdown)="startWire($event,n.id)" (click)="$event.stopPropagation();onOutputPortClick(n.id)" (keydown.enter)="$event.stopPropagation();chooseOutputPort(n.id)"/>}
        </g>
      }
     </svg>
    </div>
-   @if(quickNode();as n){<section class="node-quick-tooltip node-full-tooltip" role="region" aria-label="Complete node settings" (click)="$event.stopPropagation()"><header class="quick-tooltip-title"><strong>⚙ {{n.label}} · {{n.type}}</strong><button type="button" class="quick-tooltip-close" (click)="closeQuickNode()" aria-label="Close node settings">×</button></header><div class="inspector-fields">
+   @if(quickNode();as n){<section class="node-quick-tooltip node-full-tooltip" role="region" aria-label="Complete node settings" (click)="$event.stopPropagation()"><header class="quick-tooltip-title"><strong>⚙ {{n.label}} · {{n.type}}</strong><button type="button" class="btn-close quick-tooltip-close" (click)="closeQuickNode()" aria-label="Close node settings"></button></header><div class="inspector-fields">
        @if(n.type!=='trigger'){
          <label>Connect output from <select #nodeSource><option value="">Choose upstream node</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id&&other.type!=='output'){<option [value]="other.id">{{other.label}}</option>}}</select></label>
-         <button mat-stroked-button (click)="connect(nodeSource.value,n.id)" [disabled]="!nodeSource.value">Connect nodes</button>
+         <button class="btn btn-sm btn-outline-secondary" (click)="connect(nodeSource.value,n.id)" [disabled]="!nodeSource.value">Connect nodes</button>
          <div class="field-mapper">
           <strong>Map JSON field → input</strong>
           <label>Source agent<select #mappingSource><option value="">Choose JSON agent</option>
@@ -174,7 +146,7 @@ export class ConfirmDeleteFlowDialog {
            <label>Available fields<select #mappingField><option value="">Choose property</option>
              @for(field of nodeContractFields(mappingSource.value);track field){<option [value]="field">{{field}}</option>}
            </select></label>
-           <button mat-stroked-button [disabled]="!mappingField.value" (click)="mapField(mappingSource.value,n.id,mappingField.value)">Connect field</button>
+           <button class="btn btn-sm btn-outline-secondary" [disabled]="!mappingField.value" (click)="mapField(mappingSource.value,n.id,mappingField.value)">Connect field</button>
           }
           @for(edge of mappedInputs(n.id);track edge.from+edge.from_port){
            <div class="mapped-edge"><span>{{node(edge.from)?.label}}.{{edge.from_port?.slice(6)}} → input</span>
@@ -224,9 +196,9 @@ export class ConfirmDeleteFlowDialog {
          </select></label>
          <label>Compare with <input [ngModel]="n.value||''" (ngModelChange)="updateNodeFor(n.id,'value',$event)"></label>
          <label>True → <select #trueTarget><option value="">Select node</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id){<option [value]="other.id">{{other.label}}</option>}}</select></label>
-         <button mat-stroked-button (click)="connectBranch(n.id,trueTarget.value,'true')">Connect TRUE</button>
+         <button class="btn btn-sm btn-outline-secondary" (click)="connectBranch(n.id,trueTarget.value,'true')">Connect TRUE</button>
          <label>False → <select #falseTarget><option value="">Select node</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id){<option [value]="other.id">{{other.label}}</option>}}</select></label>
-         <button mat-stroked-button (click)="connectBranch(n.id,falseTarget.value,'false')">Connect FALSE</button>
+         <button class="btn btn-sm btn-outline-secondary" (click)="connectBranch(n.id,falseTarget.value,'false')">Connect FALSE</button>
        }
        @if(n.type==='json_get'){
          <label>JSON property <input [ngModel]="n.property||''" (ngModelChange)="updateNodeFor(n.id,'property',$event)" maxlength="48" placeholder="score"></label>
@@ -241,7 +213,7 @@ export class ConfirmDeleteFlowDialog {
          <label>Value <input [ngModel]="n.value||''" (ngModelChange)="updateConstant('value',$event)" maxlength="2000" placeholder="Literal value"></label>
          <p class="muted">Use a text value as input to an agent. Number and Boolean values have separate types and cannot connect directly to text inputs.</p>
          <label>Connect value to <select #valueTarget><option value="">Select target</option>@for(other of graph().nodes;track other.id){@if(other.type==='agent'||other.type==='flow'){<option [value]="other.id">{{other.label}}</option>}}</select></label>
-         <button mat-stroked-button (click)="connectValue(n.id,valueTarget.value)">Connect typed value</button>
+         <button class="btn btn-sm btn-outline-secondary" (click)="connectValue(n.id,valueTarget.value)">Connect typed value</button>
        }
        @if(n.type==='save_result'||n.type==='load_result'){
          <label>Run variable <input [ngModel]="n.variable||''" (ngModelChange)="updateUtility('variable',$event)" placeholder="e.g. summary" maxlength="48"></label>
@@ -383,30 +355,30 @@ export class ConfirmDeleteFlowDialog {
      </ul>} @else {<p class="muted">The server will perform final validation when saving or running.</p>}
    </section>
    <div class="flow-actions">
-     <button mat-stroked-button type="button" (click)="undoGraph()" [disabled]="!canUndo()||busy()" aria-label="Undo graph change" title="Undo (Ctrl/Cmd+Z)">↶ Undo</button>
-     <button mat-stroked-button type="button" (click)="redoGraph()" [disabled]="!canRedo()||busy()" aria-label="Redo graph change" title="Redo (Ctrl/Cmd+Shift+Z or Ctrl+Y)">↷ Redo</button>
-     <button mat-flat-button color="primary" (click)="save()" [disabled]="busy()">Save flow</button>
+     <button class="btn btn-sm btn-outline-secondary" type="button" (click)="undoGraph()" [disabled]="!canUndo()||busy()" aria-label="Undo graph change" title="Undo (Ctrl/Cmd+Z)">↶ Undo</button>
+     <button class="btn btn-sm btn-outline-secondary" type="button" (click)="redoGraph()" [disabled]="!canRedo()||busy()" aria-label="Redo graph change" title="Redo (Ctrl/Cmd+Shift+Z or Ctrl+Y)">↷ Redo</button>
+     <button class="btn btn-sm btn-primary" (click)="save()" [disabled]="busy()">Save flow</button>
       <span class="muted" role="status">{{hasUnsavedChanges()?'Unsaved changes':'All changes saved'}}</span>
-     <button mat-stroked-button (click)="run()" [disabled]="busy()||!selectedId()" [title]="currentFlow()?.active_revision?'Runs the active revision':'Runs the saved draft'">Run now</button>
-     @if(currentFlow()?.active_revision&&currentFlow()?.has_unpublished_changes){<button mat-stroked-button (click)="run('draft')" [disabled]="busy()||hasUnsavedChanges()" title="Test unpublished edits without publishing them">Run draft</button>}
+     <button class="btn btn-sm btn-outline-secondary" (click)="run()" [disabled]="busy()||!selectedId()" [title]="currentFlow()?.active_revision?'Runs the active revision':'Runs the saved draft'">Run now</button>
+     @if(currentFlow()?.active_revision&&currentFlow()?.has_unpublished_changes){<button class="btn btn-sm btn-outline-secondary" (click)="run('draft')" [disabled]="busy()||hasUnsavedChanges()" title="Test unpublished edits without publishing them">Run draft</button>}
      <label>Event value <input [ngModel]="triggerValue()" (ngModelChange)="triggerValue.set($event)" placeholder="Value matching trigger type"></label>
-     <button mat-stroked-button (click)="emitEvent()" [disabled]="busy()||!eventKey()">Trigger event</button>
-     <button mat-stroked-button (click)="refresh()">Refresh</button>
+     <button class="btn btn-sm btn-outline-secondary" (click)="emitEvent()" [disabled]="busy()||!eventKey()">Trigger event</button>
+     <button class="btn btn-sm btn-outline-secondary" (click)="refresh()">Refresh</button>
    </div>
    @if(currentFlow();as current){
    <section class="flow-versions" aria-label="Published versions">
      <header><strong>Versions</strong><span role="status">{{publishStatusLabel(current)}}</span></header>
      <div class="flow-version-publish">
        <label>Publish note <input [ngModel]="publishNote()" (ngModelChange)="publishNote.set($event)" maxlength="500" placeholder="What changed (optional)"></label>
-       <button mat-flat-button color="primary" (click)="publish()" [disabled]="busy()||!canPublish(current,hasUnsavedChanges())" [title]="hasUnsavedChanges()?'Save the draft before publishing':'Freeze the saved draft as the next revision and make it active'">Publish revision</button>
+       <button class="btn btn-sm btn-primary" (click)="publish()" [disabled]="busy()||!canPublish(current,hasUnsavedChanges())" [title]="hasUnsavedChanges()?'Save the draft before publishing':'Freeze the saved draft as the next revision and make it active'">Publish revision</button>
      </div>
      <p class="muted">Scheduled, event and manual runs use the active revision. Save edits freely; they reach runs only when published. Activate an older revision to roll back.</p>
      @if(revisions().length){<ul class="flow-version-list">
        @for(r of revisions();track r.revision){<li [class.active]="r.active">
          <span><strong>Revision {{r.revision}}</strong>@if(r.active){ · active} · {{displayRunTime(r.published_at)}}@if(r.note){ · {{r.note}}}</span>
          <span class="flow-version-actions">
-           <button mat-stroked-button (click)="activateRevision(r.revision)" [disabled]="busy()||r.active">Activate</button>
-           <button mat-stroked-button (click)="restoreRevision(r.revision)" [disabled]="busy()">Restore to draft</button>
+           <button class="btn btn-sm btn-outline-secondary" (click)="activateRevision(r.revision)" [disabled]="busy()||r.active">Activate</button>
+           <button class="btn btn-sm btn-outline-secondary" (click)="restoreRevision(r.revision)" [disabled]="busy()">Restore to draft</button>
          </span>
        </li>}
      </ul>} @else {<p class="muted">No published revisions yet.</p>}
@@ -418,7 +390,6 @@ export class ConfirmDeleteFlowDialog {
      <fse-blueprint-library (functionsChanged)="loadFunctions()"></fse-blueprint-library>
      @if(auth.user()?.role==='SYS_ADMIN'){ <fse-flow-event-adapters></fse-flow-event-adapters> }
    }
-   @if (studioTab()==='files') { <fse-userspace-files></fse-userspace-files> }
    @if (studioTab()==='approvals') { <fse-flow-side-effects></fse-flow-side-effects> }
    @if (studioTab()==='runs') {
    <div class="run-history-heading"><h3>Recent runs</h3>
@@ -428,7 +399,7 @@ export class ConfirmDeleteFlowDialog {
      <label>Output view <select [ngModel]="logView()" (ngModelChange)="logView.set($event)">
        <option value="markdown">Markdown (default)</option><option value="raw">RAW</option><option value="json">Structured JSON</option>
      </select></label>
-     <button mat-stroked-button (click)="refreshRuns()" [disabled]="!historyFlowId()||historyLoading()">Refresh history</button>
+     <button class="btn btn-sm btn-outline-secondary" (click)="refreshRuns()" [disabled]="!historyFlowId()||historyLoading()">Refresh history</button>
      <label>Compare with run<select [ngModel]="compareRun()" (ngModelChange)="compareAgainst(+$event)">
       <option [ngValue]="0">No comparison</option>
       @for(other of runs();track other.id){<option [ngValue]="other.id">#{{other.id}} · {{runStatusLabel(other.status)}}</option>}
@@ -442,7 +413,7 @@ export class ConfirmDeleteFlowDialog {
     @if(historyFlowId()&&runs().length&&!filteredRuns().length){<p class="muted">No runs match your filters.</p>}
    @for(run of filteredRuns();track run.id){
     <details class="flow-run">
-      <summary><span class="run-summary-status" [class.run-success]="run.status==='SUCCESS'" [class.run-failed]="run.status==='FAILED'||run.status==='DEAD'" [class.run-active]="canCancelRun(run.status)">{{runStatusLabel(run.status)}}</span> #{{run.id}} · {{run.trigger}} · {{runRevisionLabel(run.flow_revision)}}@if(runAttemptLabel(run.attempts,run.max_attempts);as attempt){ · {{attempt}}} <span class="muted">· {{displayRunTime(run.status==='QUEUED'?run.queued_at:run.started_at)}} · {{displayRunDuration(run)}}</span></summary>
+      <summary><span class="fs-status" [class.is-success]="run.status==='SUCCESS'" [class.is-danger]="run.status==='FAILED'||run.status==='DEAD'" [class.is-warning]="canCancelRun(run.status)">{{runStatusLabel(run.status)}}</span> #{{run.id}} · {{run.trigger}} · {{runRevisionLabel(run.flow_revision)}}@if(runAttemptLabel(run.attempts,run.max_attempts);as attempt){ · {{attempt}}} <span class="muted">· {{displayRunTime(run.status==='QUEUED'?run.queued_at:run.started_at)}} · {{displayRunDuration(run)}}</span></summary>
       <div class="run-diagnostics">
        @if(run.queued_at){<span><strong>Queued:</strong> {{displayRunTime(run.queued_at)}}</span>}
        <span><strong>Started:</strong> {{run.status==='QUEUED'&&!run.attempts?'Waiting for a worker':displayRunTime(run.started_at)}}</span>
@@ -458,16 +429,16 @@ export class ConfirmDeleteFlowDialog {
         <strong>{{run.status==='DEAD'?'Dead-lettered':'Execution failed'}}</strong>
         <p>{{run.error}}</p>
         @if(run.failed_node){
-          <button mat-stroked-button (click)="inspectFailedNode(run.id,run.failed_node)">Inspect failed node: {{run.failed_node}}</button>
+          <button class="btn btn-sm btn-outline-secondary" (click)="inspectFailedNode(run.id,run.failed_node)">Inspect failed node: {{run.failed_node}}</button>
         }@else if(suspectedFailedNode(run);as nodeId){
-          <button mat-stroked-button (click)="inspectFailedNode(run.id,nodeId)">Inspect suspected node: {{nodeId}}</button>
+          <button class="btn btn-sm btn-outline-secondary" (click)="inspectFailedNode(run.id,nodeId)">Inspect suspected node: {{nodeId}}</button>
         }
        </div>
       }
-      @if(run.status==='AWAITING_APPROVAL'){<button mat-stroked-button type="button" (click)="studioTab.set('approvals')">Review in Approvals &amp; audit</button>}
-      @if(canCancelRun(run.status)){<button mat-stroked-button color="warn" (click)="cancelRun(run.id)" [disabled]="busy()">{{run.status==='QUEUED'?'Remove from queue':'Cancel run'}}</button>}
-      @if(canRetryRun(run.status)){<button mat-stroked-button (click)="retryRun(run.id)" [disabled]="busy()" title="Queue this run again; it resumes from its last checkpoint">Retry from checkpoint</button>}
-      <button mat-stroked-button (click)="showRunSteps(run.id)">{{traceRunId()===run.id?'Hide node trace':'Inspect nodes'}}</button>
+      @if(run.status==='AWAITING_APPROVAL'){<button class="btn btn-sm btn-outline-secondary" type="button" (click)="studioTab.set('approvals')">Review in Approvals &amp; audit</button>}
+      @if(canCancelRun(run.status)){<button class="btn btn-sm btn-outline-danger" (click)="cancelRun(run.id)" [disabled]="busy()">{{run.status==='QUEUED'?'Remove from queue':'Cancel run'}}</button>}
+      @if(canRetryRun(run.status)){<button class="btn btn-sm btn-outline-secondary" (click)="retryRun(run.id)" [disabled]="busy()" title="Queue this run again; it resumes from its last checkpoint">Retry from checkpoint</button>}
+      <button class="btn btn-sm btn-outline-secondary" (click)="showRunSteps(run.id)">{{traceRunId()===run.id?'Hide node trace':'Inspect nodes'}}</button>
       @if(traceRunId()===run.id){
        @if(executionGraph();as graph){
         <section class="exec-graph" aria-label="Historical execution graph">
@@ -475,14 +446,13 @@ export class ConfirmDeleteFlowDialog {
           <p class="muted">Saved graph from this run. Select a node to inspect its status and recorded output.</p>
           <div class="exec-graph-canvas">
             <svg [attr.viewBox]="executionViewBox()" role="group" [attr.aria-label]="'Execution graph for run '+run.id">
-              @for(edge of graph.edges;track $index){<path [attr.d]="executionEdgePath(edge,graph)" stroke="#8eacc6" stroke-width="2" fill="none"/>}
+              @for(edge of graph.edges;track $index){<path [attr.d]="executionEdgePath(edge,graph)" class="exec-edge"/>}
               @for(n of graph.nodes;track n.id){
                 <g tabindex="0" role="button" class="exec-node" [attr.aria-label]="n.label+' '+executionNodeStatus(n.id)"
                  (click)="executionSelectedNode.set(n.id)" (keydown.enter)="executionSelectedNode.set(n.id)" (keydown.space)="$event.preventDefault();executionSelectedNode.set(n.id)">
-                  <rect [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="10"
-                   [attr.fill]="executionNodeColor(n.id)" [attr.stroke]="executionSelectedNode()===n.id?'#ffe59c':'#8fa6bc'" [attr.stroke-width]="executionSelectedNode()===n.id?4:2"/>
-                  <text [attr.x]="n.x+10" [attr.y]="n.y+24" font-size="12" fill="#fff">{{n.label.slice(0,17)}}</text>
-                  <text [attr.x]="n.x+10" [attr.y]="n.y+46" font-size="11" fill="#fff"> {{executionNodeStatus(n.id)}}</text>
+                  <rect [attr.class]="'exec-rect tone-'+executionNodeColor(n.id)" [class.selected]="executionSelectedNode()===n.id" [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="10"/>
+                  <text class="exec-text" [attr.x]="n.x+10" [attr.y]="n.y+24" font-size="12">{{n.label.slice(0,17)}}</text>
+                  <text class="exec-sub" [attr.x]="n.x+10" [attr.y]="n.y+46" font-size="11"> {{executionNodeStatus(n.id)}}</text>
                 </g>
               }
             </svg>
@@ -492,9 +462,9 @@ export class ConfirmDeleteFlowDialog {
               <div class="debug-head">
                 <strong>{{executionNodeLabel(nodeId)}} · {{executionNodeStatus(nodeId)}}</strong>
                 @if(executedNodes().length>1){<span class="debug-nav">
-                  <button mat-stroked-button type="button" (click)="stepExecution(-1)" [disabled]="executedIndex(nodeId)<=0" aria-label="Previous executed node">◀ Previous</button>
+                  <button class="btn btn-sm btn-outline-secondary" type="button" (click)="stepExecution(-1)" [disabled]="executedIndex(nodeId)<=0" aria-label="Previous executed node">◀ Previous</button>
                   <span class="muted">Step {{executedIndex(nodeId)+1}} of {{executedNodes().length}}</span>
-                  <button mat-stroked-button type="button" (click)="stepExecution(1)" [disabled]="executedIndex(nodeId)<0||executedIndex(nodeId)>=executedNodes().length-1" aria-label="Next executed node">Next ▶</button>
+                  <button class="btn btn-sm btn-outline-secondary" type="button" (click)="stepExecution(1)" [disabled]="executedIndex(nodeId)<0||executedIndex(nodeId)>=executedNodes().length-1" aria-label="Next executed node">Next ▶</button>
                 </span>}
               </div>
               @if(executionStep(nodeId);as step){
@@ -546,7 +516,7 @@ export class ConfirmDeleteFlowDialog {
            @if(step.input){<p><strong>Input</strong></p><pre>{{step.input}}</pre>}
            @if(step.output){<p><strong>Output</strong></p><pre>{{step.output}}</pre>}
            @if(step.status==='SUCCESS'&&step.output&&step.output.length<4000){
-            <button mat-stroked-button (click)="previewReplay(run.id,step.node)">Replay preview from this node</button>
+            <button class="btn btn-sm btn-outline-secondary" (click)="previewReplay(run.id,step.node)">Replay preview from this node</button>
            }
           </details>
          }
@@ -574,109 +544,172 @@ export class ConfirmDeleteFlowDialog {
     </details>
    }
    }
-  </mat-card-content>
- </mat-card>`,
+ </div>`,
  styles:[`
- .canvas-shell{position:relative;min-width:0;min-height:0}
- .flows-overview{display:grid;gap:18px;margin:16px 0 24px}.overview-heading,.overview-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.overview-heading{justify-content:space-between}.overview-heading h2,.overview-flow-top h3{margin:0 0 6px}.overview-heading p,.overview-flow-top p{margin:0}.overview-filters{display:flex;flex-wrap:wrap;gap:12px}.overview-filters label{flex:1 1 190px}.flow-overview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:14px}.overview-flow-card{display:flex;flex-direction:column;gap:14px;padding:16px;border:1px solid #456b87;border-radius:12px;background:#142438}.overview-flow-top{display:flex;justify-content:space-between;gap:12px}.overview-flow-top h3{font-size:17px;overflow-wrap:anywhere}.overview-flow-top p{font-size:12px}.overview-flow-status{padding:4px 8px;white-space:nowrap;border:1px solid #7e8290;border-radius:20px;font-size:11px}.overview-flow-status.active{border-color:#52bd93;color:#a6f3ce}.overview-flow-trigger{margin:0;color:#c7d9eb;font-size:13px;overflow-wrap:anywhere}.overview-flow-card>.overview-actions{margin-top:auto}.overview-flow-card>.overview-actions button{flex:1 1 auto;min-height:38px}.overview-empty{padding:32px 16px;border:1px dashed #55718a;border-radius:12px;text-align:center}
-.node-picker{display:grid;gap:12px;margin:14px 0;padding:16px;border:1px solid #6086a1;border-radius:10px;background:#15293e}
-  .node-picker-top{display:flex;align-items:center;justify-content:space-between}.node-picker-top button{background:#27445d;border:1px solid #7394ad;border-radius:6px;color:white;min-width:34px;min-height:34px;cursor:pointer}
-  .node-picker label{width:100%;min-width:0}.node-picker-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,180px),1fr));gap:8px;max-height:310px;overflow:auto}
-  .node-picker-items button{display:flex;align-items:center;gap:8px;text-align:left;background:#213c54;color:#edf7ff;border:1px solid #547d9b;border-radius:7px;padding:12px;cursor:pointer;font:inherit}
-  .node-picker-items button:hover{background:#305773}.node-picker-items button:focus-visible{outline:2px solid #94caff}
-  .canvas-navigation{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:8px;background:#14263a;border:1px solid #45627b;border-radius:8px 8px 0 0}
- .canvas-navigation button,.canvas-context-menu button{background:#203a53;color:#e5f3ff;border:1px solid #527b99;border-radius:5px;min-height:34px;padding:6px 10px;cursor:pointer}
- .canvas-navigation button:focus-visible,.canvas-context-menu button:focus-visible{outline:2px solid #80caff}
- .canvas-navigation span{min-width:48px;text-align:center;font-variant-numeric:tabular-nums}
- .canvas-context-menu{position:absolute;top:55px;left:16px;z-index:5;display:flex;flex-direction:column;gap:6px;min-width:180px;padding:12px;background:#15283d;border:1px solid #77b9e9;border-radius:10px;box-shadow:0 10px 35px #0008}
- 
-:host{display:block;margin:0 0 24px}
- .studio-tabs{display:flex;gap:6px;overflow-x:auto;margin:16px 0 20px;border-bottom:1px solid #50738e;padding:0 0 7px}
- .studio-tabs button{flex:0 0 auto;padding:12px 16px;border:1px solid transparent;border-radius:8px;background:transparent;color:#c4d7eb;cursor:pointer;font:inherit;font-weight:600}
- .studio-tabs button.selected{background:#1e435f;border-color:#6aa5c9;color:white}
- .studio-tabs button:focus-visible{outline:2px solid #78c8ef}
-.flow-studio{padding:18px}.flow-studio mat-card-title{display:flex;align-items:center;gap:12px}
- .muted{opacity:.7}.flow-toolbar,.flow-meta,.flow-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin:16px 0}
- label{display:flex;flex-direction:column;gap:4px;font-size:13px;flex:1;min-width:160px}
- input,select,textarea{background:#14263a;color:#e5f3ff;border:1px solid #5e7b93;border-radius:6px;padding:9px;font:inherit}
- textarea{width:100%}.flow-check{flex-direction:row;align-items:center}.flow-check input{width:18px;height:18px}
- .flow-workspace svg{user-select:none;-webkit-user-select:none}.canvas-port{touch-action:none;stroke:#c6edff;stroke-width:2;cursor:crosshair}.input-port{fill:#2c789a}.output-port{fill:#329f78}.port-active{stroke:#ffe19a;stroke-width:4}.canvas-port:focus-visible{stroke:#ffe19a;stroke-width:4;outline:none}
-  .canvas-connect-hint{display:flex;align-items:center;gap:8px;font-size:12px;color:#ffe19a;margin-left:auto}.canvas-connect-hint button{background:#3b3540;color:#ffe19a;border:1px solid #ae8c67;border-radius:5px;cursor:pointer;padding:5px}
-  .flow-workspace{background:radial-gradient(#294057 1px,transparent 1px) 0 0/20px 20px,#0d1b2a;border:1px solid #45627b;overflow:auto;border-radius:12px}
- svg{min-width:660px;width:100%;height:auto;display:block;touch-action:none;cursor:grab}
- .node-quick-tooltip{position:absolute;right:14px;top:62px;z-index:7;display:flex;flex-direction:column;gap:8px;padding:12px;width:min(480px,calc(100% - 28px));box-sizing:border-box;max-height:min(78vh,780px);overflow:auto;background:rgba(26,51,74,.89);backdrop-filter:blur(10px);border:1px solid #8abce4;box-shadow:0 12px 28px #000a;border-radius:10px}
- .quick-tooltip-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
- .quick-tooltip-close{width:26px;height:26px;min-height:26px!important;padding:0!important;flex:0 0 auto;color:#fff!important;background:#b52b38!important;border:1px solid #e15d66!important;border-radius:5px!important;font-size:20px!important;line-height:1!important;cursor:pointer}
- .quick-tooltip-close:hover{background:#db3545!important}
- .node-full-tooltip .inspector-fields{display:flex;flex-direction:column;gap:12px}.node-quick-tooltip label{display:flex;flex-direction:column;gap:4px;min-width:0}
- .node-quick-tooltip input,.node-quick-tooltip textarea,.node-quick-tooltip select{width:100%;box-sizing:border-box}
- .node-quick-tooltip button{min-height:32px}
-  .node-quick-delete{background:#562632;color:#ffe5e5;border:1px solid #b65f6b;border-radius:6px;padding:8px;cursor:pointer}
- .blueprint-layout{display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch;gap:12px;min-height:470px}
- .blueprint-layout .flow-workspace{min-width:0;min-height:470px}
- .flow-node-editor{margin:0;padding:16px;border:1px solid #355a75;border-radius:10px;background:#142438;min-width:0;max-height:min(75vh,780px);overflow-y:auto}
- .inspector-heading{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid #355a75;padding-bottom:12px;margin-bottom:14px}
- .inspector-heading span{font-size:11px;letter-spacing:.14em;color:#a4c9e7}
- .inspector-fields{display:flex;flex-direction:column;gap:12px}
- .field-mapper{display:flex;flex-direction:column;gap:8px;border:1px solid #4b718b;border-radius:8px;padding:10px}
- .field-mapper strong{font-size:13px}
- .readiness-panel{border:1px solid #ae8c67;border-radius:8px;padding:10px;margin:10px 0}.readiness-panel.readiness-ok{border-color:#3f9a78}
- .readiness-panel header{display:flex;justify-content:space-between;gap:8px;align-items:center}.readiness-panel header button{background:#203a53;color:#e5f3ff;border:1px solid #527b99;border-radius:5px;padding:4px 8px;cursor:pointer}
- .readiness-panel p{margin:6px 0}.readiness-panel ul{list-style:none;margin:0;padding:0}.readiness-panel li{color:#ffd9c2;overflow-wrap:anywhere;margin:3px 0}.readiness-panel li.check-ok{color:#bff0dc}
- .capability-box{border:1px solid #ae8c67;border-radius:8px;padding:8px 10px;margin:6px 0}.capability-box legend{color:#ffe19a;font-weight:700;padding:0 4px}
- .checkbox-row{display:flex!important;gap:8px;align-items:center}
- .tool-grants{border:1px solid #45627b;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:4px;margin:4px 0}.tool-grants legend{padding:0 4px;font-weight:600}
- .tool-calls ul{margin:4px 0 0;padding-left:18px;font-size:13px;overflow-wrap:anywhere}.tool-calls li.tool-failed{color:#ffb3bd}.tool-calls .tool-sources{display:block;opacity:.8;font-size:12px}
- .capability-summary{border:1px solid #50738e;border-radius:8px;padding:10px;margin:10px 0}.capability-summary ul{margin:6px 0 0;padding-left:18px}.capability-summary li{overflow-wrap:anywhere}.capability-summary button{background:none;border:0;text-decoration:underline;color:#aedfff;cursor:pointer;font:inherit;padding:0}
- .mapped-edge{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:12px;overflow-wrap:anywhere}
- .mapped-edge button{color:#bce3ff;background:#1b3850;border:1px solid #527b99;border-radius:5px;padding:5px}
- .inspector-fields label{min-width:0;width:100%;flex:auto}
- .inspector-fields input,.inspector-fields select,.inspector-fields textarea{box-sizing:border-box;width:100%;min-width:0}
- @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .flow-workspace{min-height:280px}.node-full-tooltip{width:calc(100% - 16px);right:8px}}
+ :host{display:block;margin:0 0 24px;color:var(--fs-text)}
+ .flow-studio{display:block;min-width:0}
+ .muted{color:var(--fs-muted)}
+ label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:500;flex:1;min-width:160px;color:var(--fs-text-2)}
+ textarea{width:100%}
+ h2{font-size:1.05rem}h3{font-size:.95rem}
 
-.graph-validation{border:1px solid #527590;border-radius:10px;padding:14px;margin:12px 0;background:#152b40}
- .graph-validation header{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
- .graph-validation ul{padding-left:22px}.graph-validation li{padding:4px 0;overflow-wrap:anywhere}
- .graph-validation li button{background:none;border:0;text-decoration:underline;color:#aedfff;cursor:pointer;font:inherit;text-align:left;padding:2px 0}
- .flow-message{border-left:3px solid #73baff;padding-left:12px}
- .debug-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
- .debug-nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
- .debug-meta{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;margin:8px 0}.debug-meta dt{opacity:.75}.debug-meta dd{margin:0}
- .debug-io{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:10px}
- .debug-io section{min-width:0}.debug-io h5{margin:4px 0}.debug-io pre,.exec-error-hint pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto}
- .run-compare{border:1px solid #3d5d77;border-radius:8px;padding:10px;margin:8px 0}
+ .studio-tabs{display:flex;gap:2px;overflow-x:auto;margin:0 0 20px;border-bottom:1px solid var(--fs-border)}
+ .studio-tab{display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;padding:10px 14px;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;background:transparent;color:var(--fs-muted);font:inherit;font-size:.875rem;font-weight:500;white-space:nowrap}
+ .studio-tab:hover{color:var(--fs-text)}
+ .studio-tab.active{color:var(--fs-text);border-bottom-color:var(--fs-accent)}
+ .studio-tab.active .bi{color:var(--fs-accent-text)}
+
+ .flows-overview{display:grid;gap:16px;margin:0 0 24px}
+ .overview-heading,.overview-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+ .overview-heading{justify-content:space-between}.overview-heading h2{margin:0 0 4px}.overview-heading p{margin:0}
+ .overview-filters{display:flex;flex-wrap:wrap;gap:12px}.overview-filters label{flex:1 1 190px}
+ .flow-overview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:14px}
+ .overview-flow-card{display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);background:var(--fs-surface);box-shadow:var(--fs-shadow-sm);transition:border-color .15s,box-shadow .15s,transform .15s}
+ .overview-flow-card:hover{border-color:color-mix(in srgb,var(--fs-accent) 45%,var(--fs-border));box-shadow:var(--fs-shadow);transform:translateY(-1px)}
+ .overview-flow-top{display:flex;align-items:flex-start;gap:12px}
+ .overview-flow-top h3{font-size:1rem;margin:0 0 2px;overflow-wrap:anywhere}.overview-flow-top p{margin:0;font-size:12px}
+ .flow-glyph{display:grid;place-items:center;flex:0 0 auto;width:36px;height:36px;border-radius:10px;background:var(--fs-accent-soft);color:var(--fs-accent-text)}
+ .overview-flow-trigger{margin:0;color:var(--fs-text-2);font-size:13px;overflow-wrap:anywhere;display:flex;gap:6px;align-items:center}
+ .overview-flow-card>.muted{margin:0;font-size:12px}
+ .overview-flow-card>.overview-actions{margin-top:auto}.overview-flow-card>.overview-actions .btn{flex:1 1 auto}
+ .overview-empty{display:grid;justify-items:center;gap:8px;padding:36px 16px;border:1px dashed var(--fs-border-strong);border-radius:var(--bs-border-radius-lg);text-align:center}
+ .overview-empty>.bi{font-size:1.8rem;color:var(--fs-accent)}.overview-empty h3{margin:0}
+
+ .flow-toolbar,.flow-meta,.flow-actions{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:end;margin:0 0 14px}
+ .flow-toolbar{padding:12px;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);background:var(--fs-surface)}
+ .flow-toolbar label{flex:0 1 220px}
+ .flow-meta label{flex:1 1 200px}
+ .flow-check{flex-direction:row!important;align-items:center;gap:8px!important;flex:0 0 auto!important;min-width:0!important}
+
+ .node-picker{display:grid;gap:12px;margin:0 0 14px;padding:16px;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);background:var(--fs-surface);box-shadow:var(--fs-shadow)}
+ .node-picker-top{display:flex;align-items:center;justify-content:space-between}
+ .node-picker-top button{background:var(--fs-surface-3);border:1px solid var(--fs-border);border-radius:6px;color:var(--fs-text);min-width:32px;min-height:32px}
+ .node-picker label{width:100%;min-width:0}
+ .node-picker-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,180px),1fr));gap:8px;max-height:310px;overflow:auto}
+ .node-picker-items button{display:flex;align-items:center;gap:8px;text-align:left;background:var(--fs-surface-2);color:var(--fs-text);border:1px solid var(--fs-border);border-radius:var(--bs-border-radius);padding:10px 12px;font:inherit;font-size:.875rem}
+ .node-picker-items button:hover{border-color:var(--fs-accent);background:var(--fs-accent-soft)}
+ .node-picker-items .bi{color:var(--fs-accent-text)}
+
+ .blueprint-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;min-height:470px}
+ .canvas-shell{position:relative;min-width:0;min-height:0;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);overflow:hidden;background:var(--fs-canvas-bg)}
+ .canvas-navigation{display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:8px;background:var(--fs-surface);border-bottom:1px solid var(--fs-border)}
+ .canvas-navigation button,.canvas-context-menu button{display:inline-flex;align-items:center;gap:6px;background:var(--fs-surface);color:var(--fs-text-2);border:1px solid var(--fs-border-strong);border-radius:6px;min-height:32px;padding:4px 10px;font:inherit;font-size:.8125rem}
+ .canvas-navigation button:hover,.canvas-context-menu button:hover{background:var(--fs-surface-3);color:var(--fs-text)}
+ .canvas-navigation span{min-width:48px;text-align:center;font-variant-numeric:tabular-nums;font-size:.8125rem;color:var(--fs-muted)}
+ .canvas-connect-hint{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fs-warn);margin-left:auto}
+ .canvas-connect-hint button{border-color:var(--fs-warn)!important;color:var(--fs-warn)!important}
+ .canvas-context-menu{position:absolute;top:55px;left:16px;z-index:5;display:flex;flex-direction:column;gap:4px;min-width:200px;padding:10px;background:var(--fs-surface);border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);box-shadow:var(--fs-shadow-lg)}
+ .canvas-context-menu button{justify-content:flex-start;border-color:transparent}
+
+ .flow-workspace{background:radial-gradient(var(--fs-canvas-dot) 1px,transparent 1px) 0 0/20px 20px,var(--fs-canvas-bg);overflow:auto;min-height:470px}
+ .flow-workspace svg{user-select:none;-webkit-user-select:none}
+ svg{min-width:660px;width:100%;height:auto;display:block;touch-action:none;cursor:grab}
+ .flow-edge{fill:none;stroke:var(--fs-edge);stroke-width:2.2}
+ .edge-arrow{fill:var(--fs-edge)}
+ .wire-ghost{fill:none;stroke:var(--fs-wire-ghost);stroke-width:2.5;stroke-dasharray:6 4}
+ .wire-target{fill:none;stroke:var(--fs-wire-ghost);stroke-width:3}
+ .flow-node{fill:var(--fs-node-bg);stroke:var(--fs-node-border);stroke-width:1.5;filter:drop-shadow(0 2px 4px rgba(15,23,42,.12))}
+ .flow-node.selected{fill:var(--fs-node-selected-bg);stroke:var(--fs-node-selected);stroke-width:2.5}
+ [data-canvas-node]:focus-visible .flow-node{stroke:var(--fs-node-selected);stroke-width:3}
+ [data-canvas-node]:focus,[data-canvas-node]:focus-visible,.exec-node:focus{outline:none}
+ .flow-node-accent{fill:var(--fs-accent)}
+ .flow-node-accent[data-type=trigger]{fill:#0ea5e9}.flow-node-accent[data-type=output]{fill:#10b981}.flow-node-accent[data-type=condition],.flow-node-accent[data-type=loop]{fill:#f59e0b}
+ .flow-node-accent[data-type=workspace_write],.flow-node-accent[data-type=emit_event]{fill:#ef4444}.flow-node-accent[data-type=http_get],.flow-node-accent[data-type=web_search],.flow-node-accent[data-type=web_crawl]{fill:#14b8a6}
+ .node-type{fill:var(--fs-node-sub);font-weight:600;letter-spacing:.04em}
+ .node-label{fill:var(--fs-node-text);font-weight:600}
+ .pin-label{fill:var(--fs-node-sub)}
+ .canvas-port{touch-action:none;stroke:var(--fs-port-stroke);stroke-width:2;cursor:crosshair}
+ .input-port,.pin-in{fill:var(--fs-port-in)}.output-port,.pin-out{fill:var(--fs-port-out)}
+ .port-active,.canvas-port:focus-visible{stroke:var(--fs-wire-ghost);stroke-width:4;outline:none}
+
+ .node-quick-tooltip{position:absolute;right:12px;top:58px;z-index:7;display:flex;flex-direction:column;gap:10px;padding:14px;width:min(480px,calc(100% - 24px));box-sizing:border-box;max-height:min(78vh,780px);overflow:auto;background:color-mix(in srgb,var(--fs-surface) 94%,transparent);backdrop-filter:blur(10px);border:1px solid var(--fs-border);box-shadow:var(--fs-shadow-lg);border-radius:var(--bs-border-radius-lg)}
+ .quick-tooltip-title{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--fs-border)}
+ .quick-tooltip-close{flex:0 0 auto}
+ .node-full-tooltip .inspector-fields{display:flex;flex-direction:column;gap:12px}
+ .node-quick-tooltip label{display:flex;flex-direction:column;gap:4px;min-width:0}
+ .node-quick-delete{background:var(--fs-neg-soft);color:var(--fs-neg);border:1px solid color-mix(in srgb,var(--fs-neg) 45%,transparent);border-radius:var(--bs-border-radius);padding:8px;font-weight:500}
+ .inspector-fields{display:flex;flex-direction:column;gap:12px}
+ .inspector-fields label{min-width:0;width:100%;flex:auto}
+ .field-mapper{display:flex;flex-direction:column;gap:8px;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius);padding:10px;background:var(--fs-surface-2)}
+ .field-mapper strong{font-size:13px}
+ .mapped-edge{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:12px;overflow-wrap:anywhere}
+ .mapped-edge button{color:var(--fs-text-2);background:var(--fs-surface);border:1px solid var(--fs-border-strong);border-radius:5px;padding:3px 8px}
+ .checkbox-row{display:flex!important;flex-direction:row!important;gap:8px;align-items:center}
+ .tool-grants,.capability-box{border:1px solid var(--fs-border);border-radius:var(--bs-border-radius);padding:8px 12px 10px;display:flex;flex-direction:column;gap:6px;margin:4px 0;background:var(--fs-surface-2)}
+ .tool-grants legend,.capability-box legend{float:none;width:auto;padding:0 4px;margin:0;font-size:.8125rem;font-weight:600}
+ .capability-box{border-color:color-mix(in srgb,var(--fs-warn) 45%,var(--fs-border));background:var(--fs-warn-soft)}.capability-box legend{color:var(--fs-warn)}
+
+ .readiness-panel,.capability-summary,.graph-validation,.flow-versions{border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);padding:14px 16px;margin:12px 0;background:var(--fs-surface)}
+ .readiness-panel{border-left:3px solid var(--fs-warn)}.readiness-panel.readiness-ok{border-left-color:var(--fs-pos)}
+ .readiness-panel header,.graph-validation header,.flow-versions header{display:flex;justify-content:space-between;flex-wrap:wrap;align-items:center;gap:10px}
+ .readiness-panel header button{background:var(--fs-surface);color:var(--fs-text-2);border:1px solid var(--fs-border-strong);border-radius:6px;padding:3px 10px;font-size:.8125rem}
+ .readiness-panel p{margin:6px 0}.readiness-panel ul{list-style:none;margin:0;padding:0}
+ .readiness-panel li{color:var(--fs-warn);overflow-wrap:anywhere;margin:3px 0}.readiness-panel li.check-ok{color:var(--fs-pos)}
+ .capability-summary ul{margin:6px 0 0;padding-left:18px}.capability-summary li{overflow-wrap:anywhere}
+ .capability-summary button,.graph-validation li button{background:none;border:0;text-decoration:underline;color:var(--fs-accent-text);font:inherit;padding:0;text-align:left}
+ .graph-validation ul{padding-left:20px;margin:8px 0 0}.graph-validation li{padding:3px 0;overflow-wrap:anywhere}
+ .graph-validation p{margin:6px 0 0}
+ .flow-message{border-left:3px solid var(--fs-accent);background:var(--fs-accent-soft);padding:8px 12px;border-radius:0 6px 6px 0;margin:10px 0}
+ .flow-actions{padding:12px;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);background:var(--fs-surface);align-items:center}
+ .flow-actions label{flex:0 1 220px;min-width:160px}
+
+ .flow-version-publish{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}
+ .flow-version-publish label{flex:1;min-width:200px}
+ .flow-version-list{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:6px}
+ .flow-version-list li{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 12px;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius);overflow-wrap:anywhere}
+ .flow-version-list li.active{border-color:var(--fs-accent);background:var(--fs-accent-soft)}
+ .flow-version-actions{display:flex;flex-wrap:wrap;gap:6px}
+
+ .run-history-heading{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:14px;padding:12px;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);background:var(--fs-surface)}
+ .run-history-heading h3{margin:0 auto 6px 0;flex:1 0 100%}
+ .run-history-heading label{flex:1 1 180px}
+ .flow-run{padding:12px 14px;margin:0 0 8px;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);background:var(--fs-surface)}
+ .flow-run>summary{cursor:pointer;display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;font-size:.875rem}
+ .flow-run>summary::marker{color:var(--fs-muted)}
+ .flow-run>.btn{margin:4px 6px 4px 0}
+ .run-diagnostics{display:flex;flex-wrap:wrap;gap:8px 18px;padding:10px 12px;margin:12px 0;border-radius:var(--bs-border-radius);background:var(--fs-surface-2);font-size:12px;color:var(--fs-text-2)}
+ .run-error-panel{border-left:3px solid var(--fs-neg);background:var(--fs-neg-soft);padding:12px;margin:12px 0;border-radius:0 6px 6px 0}
+ .run-error-panel p{overflow-wrap:anywhere;white-space:pre-wrap;margin:6px 0}
+ .run-step-list{display:flex;flex-direction:column;gap:4px;margin:12px 0;padding:8px;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius)}
+ .run-step{padding:8px 10px;background:var(--fs-surface-2);border-radius:6px}.run-step summary{cursor:pointer;font-size:.8125rem}
+ .step-skipped{opacity:.6}
+ .flow-run pre{white-space:pre-wrap;word-break:break-word;max-height:250px;overflow:auto}
+ .run-compare{border:1px solid var(--fs-border);border-radius:var(--bs-border-radius);padding:10px;margin:8px 0}
  .run-compare-scroll{overflow-x:auto}
  .run-compare table{border-collapse:collapse;width:100%;min-width:480px;font-size:13px}
- .run-compare th,.run-compare td{text-align:left;padding:5px 8px;border-bottom:1px solid #2e4a61}
- .run-compare tr.change-status td,.run-compare tr.change-removed td{color:#ffb3bb}
- .run-compare tr.change-input td,.run-compare tr.change-output td,.run-compare tr.change-added td{color:#f4d686}
- .flow-versions{border:1px solid #527590;border-radius:10px;padding:14px;margin:12px 0;background:#152b40}
- .flow-versions header{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
- .flow-version-publish{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}
- .flow-version-publish label{display:flex;flex-direction:column;gap:5px;flex:1;min-width:200px}
- .flow-version-list{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:6px}
- .flow-version-list li{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 10px;border:1px solid #3d5d77;border-radius:8px;overflow-wrap:anywhere}
- .flow-version-list li.active{border-color:#73baff;background:#1b3854}
- .flow-version-actions{display:flex;flex-wrap:wrap;gap:6px}
- .exec-graph{margin:14px 0;display:grid;gap:10px;padding:14px;border:1px solid #557c99;border-radius:12px;background:#12293d}
- .exec-graph-canvas{overflow:auto;border:1px solid #3c5d77;border-radius:8px;background:#0b1c2e}
+ .run-compare th,.run-compare td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--fs-border)}
+ .run-compare tr.change-status td,.run-compare tr.change-removed td{color:var(--fs-neg)}
+ .run-compare tr.change-input td,.run-compare tr.change-output td,.run-compare tr.change-added td{color:var(--fs-warn)}
+
+ .exec-graph{margin:14px 0;display:grid;gap:10px;padding:14px;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);background:var(--fs-surface-2)}
+ .exec-graph-canvas{overflow:auto;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius);background:radial-gradient(var(--fs-canvas-dot) 1px,transparent 1px) 0 0/20px 20px,var(--fs-canvas-bg)}
  .exec-graph-canvas svg{min-width:0;width:100%;min-height:210px;max-height:520px;height:auto;cursor:default}
- .exec-node{cursor:pointer}.exec-node:focus-visible rect{stroke:#ffe59c;stroke-width:4}
- .exec-selected{padding:12px;border-radius:8px;border:1px solid #52758f;background:#1a354b}
+ .exec-edge{fill:none;stroke:var(--fs-edge);stroke-width:2;opacity:.7}
+ .exec-rect{stroke-width:2;stroke:var(--fs-node-border);fill:var(--fs-node-bg)}
+ .exec-rect.tone-ok{fill:var(--fs-pos-soft);stroke:var(--fs-pos)}
+ .exec-rect.tone-fail{fill:var(--fs-neg-soft);stroke:var(--fs-neg)}
+ .exec-rect.tone-run{fill:var(--fs-warn-soft);stroke:var(--fs-warn)}
+ .exec-rect.tone-skip{opacity:.6}
+ .exec-rect.selected{stroke:var(--fs-node-selected);stroke-width:4}
+ .exec-text{fill:var(--fs-node-text);font-weight:600}.exec-sub{fill:var(--fs-node-sub)}
+ .exec-node{cursor:pointer}.exec-node:focus-visible{outline:none}.exec-node:focus-visible rect{stroke:var(--fs-node-selected);stroke-width:4}
+ .exec-selected{padding:12px;border-radius:var(--bs-border-radius);border:1px solid var(--fs-border);background:var(--fs-surface)}
  .exec-selected pre{max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
- .run-history-heading{display:flex;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:14px}
- .run-history-heading h3{margin:0}
- .run-history-heading label{flex:0 1 220px}
- .run-diagnostics{display:flex;flex-wrap:wrap;gap:10px 18px;padding:12px;margin:12px 0;border:1px solid #48647e;border-radius:8px;font-size:12px}
- .run-summary-status{font-weight:700;color:#bbc7d5}.run-success{color:#79e0a7}.run-failed{color:#ff9da7}.run-active{color:#f4d686}
- .run-error-panel{border-left:4px solid #d26c79;background:#442c39;padding:12px;margin:12px 0;border-radius:6px}
- .run-error-panel p{overflow-wrap:anywhere;white-space:pre-wrap}
- .flow-run{padding:10px;border-top:1px solid #3d5268}.run-step-list{display:flex;flex-direction:column;gap:5px;margin:12px 0;padding:10px;border:1px solid #50738e;border-radius:8px}.run-step{padding:9px;background:#162d40;border-radius:6px}.run-step summary{cursor:pointer}.step-skipped{opacity:.6}.flow-run pre{white-space:pre-wrap;word-break:break-word;max-height:250px;overflow:auto}
+ .exec-error-hint{border-left:3px solid var(--fs-neg);background:var(--fs-neg-soft);padding:8px 12px;border-radius:0 6px 6px 0;margin:8px 0}
+ .debug-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+ .debug-nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+ .debug-meta{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;margin:8px 0;font-size:.8125rem}.debug-meta dt{color:var(--fs-muted);font-weight:500}.debug-meta dd{margin:0}
+ .debug-io{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:10px}
+ .debug-io section{min-width:0}.debug-io h5{margin:4px 0;font-size:.8125rem}.debug-io pre,.exec-error-hint pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto}
+ .tool-calls h5{font-size:.8125rem;margin:6px 0}.tool-calls ul{margin:4px 0 0;padding-left:18px;font-size:13px;overflow-wrap:anywhere}
+ .tool-calls li.tool-failed{color:var(--fs-neg)}.tool-calls .tool-sources{display:block;color:var(--fs-muted);font-size:12px}
+
+ @media(max-width:850px){.blueprint-layout .flow-workspace{min-height:280px}.node-full-tooltip{width:calc(100% - 16px);right:8px}}
  `]
 })
 export class FlowStudioComponent {
  readonly auth=inject(AuthState);
- private readonly dialog = inject(MatDialog);
+ private readonly notify = inject(NotifyService);
  readonly hoveredNode=signal<string>('');
  readonly quickNode=()=>this.node(this.hoveredNode());
  openQuickNode(id:string):void {this.select(id);this.hoveredNode.set(id);}
@@ -830,6 +863,19 @@ export class FlowStudioComponent {
   startFlowFromOverview(){if(!this.allowDiscard())return;this.resetFlow();this.studioTab.set('editor')}
   openFlowFromOverview(id:number){this.loadFlow(id);if(this.selectedId()===id)this.studioTab.set('editor')}
   openHistoryForFlow(id:number){this.selectHistoryFlow(id);this.studioTab.set('runs')}
+  /** Opens a deep link from the Flows page: ?template=, ?flow= (with tab=runs for history) or ?tab=. */
+  async openDeepLink(link:{flow?:number;tab?:string;template?:string}):Promise<void>{
+    if(link.template){this.applyFlowTemplate(link.template);this.studioTab.set('editor');return}
+    if(link.flow){
+      await this.refresh();
+      if(link.tab==='runs')this.openHistoryForFlow(link.flow);
+      else this.openFlowFromOverview(link.flow);
+      return;
+    }
+    const tabs=['overview','editor','library','runs','approvals'] as const;
+    const tab=tabs.find(t=>t===link.tab);
+    if(tab&&(tab!=='library'||this.auth.user()?.role==='SYS_ADMIN'))this.studioTab.set(tab);
+  }
   async runSavedFlow(id:number){
     if(this.busy()||!this.flows().some(f=>f.id===id))return;
     this.busy.set(true);
@@ -1023,7 +1069,8 @@ export class FlowStudioComponent {
  }
  executionStep(id:string):FlowRunStep|undefined{const steps=this.traceSteps().filter(s=>s.node===id);return steps[steps.length-1]}
  executionNodeStatus(id:string):string{return this.executionStep(id)?.status||'NOT RECORDED'}
- executionNodeColor(id:string):string{switch(this.executionNodeStatus(id)){case 'SUCCESS':return '#176349';case 'FAILED':return '#953643';case 'RUNNING':return '#8e6927';case 'SKIPPED':return '#596374';default:return '#24394f'}}
+ /** Status tone of an executed node, used as its canvas class. */
+ executionNodeColor(id:string):string{switch(this.executionNodeStatus(id)){case 'SUCCESS':return 'ok';case 'FAILED':return 'fail';case 'RUNNING':return 'run';case 'SKIPPED':return 'skip';default:return 'none'}}
  executionNodeLabel(id:string):string{return this.executionGraph()?.nodes.find(n=>n.id===id)?.label||id}
  executionViewBox():string{const n=this.executionGraph()?.nodes||[];if(!n.length)return '0 0 820 380';const l=Math.min(...n.map(x=>x.x))-60,t=Math.min(...n.map(x=>x.y))-60,r=Math.max(...n.map(x=>x.x+125))+60,b=Math.max(...n.map(x=>x.y+70))+60;return l+' '+t+' '+(r-l)+' '+(b-t)}
  executionEdgePath(e:FlowEdge,g:FlowGraph):string{const a=g.nodes.find(n=>n.id===e.from),b=g.nodes.find(n=>n.id===e.to);if(!a||!b)return '';const x=a.x+125,y=a.y+35,tx=b.x,ty=b.y+35,d=Math.max(45,Math.abs(tx-x)*.45);return 'M '+x+' '+y+' C '+(x+d)+' '+y+', '+(tx-d)+' '+ty+', '+tx+' '+ty}
@@ -1414,10 +1461,7 @@ export class FlowStudioComponent {
    const id=this.selectedId();
    if(!id||this.busy())return;
    const name=this.flows().find(f=>f.id===id)?.name||this.name();
-   const confirmed=await new Promise<boolean>(resolve=>{
-     this.dialog.open(ConfirmDeleteFlowDialog,{data:{name},width:'420px',maxWidth:'95vw',autoFocus:'first-tabbable'})
-       .afterClosed().subscribe(value=>resolve(value===true));
-   });
+   const confirmed=await this.notify.confirm({title:'Delete flow?',message:'Delete “'+name+'” and its execution history? This cannot be undone.',confirmLabel:'Delete flow',danger:true});
    if(!confirmed||this.selectedId()!==id)return;
    this.busy.set(true);
    try{

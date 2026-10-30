@@ -1,14 +1,13 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { MatButtonModule } from '@angular/material/button';
 import { AuthState } from '../auth.service';
 import { canDecide, decisionProblem, describeAudit, describeCapability, formatBytes, sideEffectStatusLabel, sortForReview, type AuditEntry, type SideEffect } from './side-effects';
 
 /** Side-effect approvals and the audit trail of every workspace write and event emission. */
 @Component({
- selector:'fse-flow-side-effects',
+ selector:'fse-flow-side-effects', host:{class:'fs-native-forms'},
  standalone:true,
- imports:[FormsModule,MatButtonModule],
+ imports:[FormsModule],
  template:`
  <section class="effects" aria-label="Side effect approvals and audit trail">
   <header class="effects-top">
@@ -19,7 +18,7 @@ import { canDecide, decisionProblem, describeAudit, describeCapability, formatBy
      <option value="">All</option><option value="PENDING">Awaiting approval</option><option value="APPLIED">Applied</option>
      <option value="REJECTED">Rejected</option><option value="EXPIRED">Expired</option><option value="CANCELLED">Cancelled</option>
     </select></label>
-    <button mat-stroked-button type="button" (click)="refresh()" [disabled]="busy()">Refresh</button>
+    <button class="btn btn-sm btn-outline-secondary" type="button" (click)="refresh()" [disabled]="busy()">Refresh</button>
    </div>
   </header>
   @if(isAdmin()){
@@ -37,7 +36,7 @@ import { canDecide, decisionProblem, describeAudit, describeCapability, formatBy
       <p class="effect-meta">{{entry.actor_email||'unknown user'}} · {{time(entry.created_at)}} · HTTP {{entry.status_code}}@if(entry.summary){ · {{entry.summary}}}</p></li>
     }
    </ul>
-   @if(changes().length && changes().length%200===0){<button mat-stroked-button type="button" (click)="loadChanges(true)" [disabled]="busy()">Load older changes</button>}
+   @if(changes().length && changes().length%200===0){<button class="btn btn-sm btn-outline-secondary" type="button" (click)="loadChanges(true)" [disabled]="busy()">Load older changes</button>}
   } @else {
   @if(pendingCount()){<p class="effects-pending" role="status">{{pendingCount()}} {{pendingCount()===1?'request is':'requests are'}} waiting for approval.</p>}
   @if(message()){<p class="effects-message" role="status">{{message()}}</p>}
@@ -58,8 +57,8 @@ import { canDecide, decisionProblem, describeAudit, describeCapability, formatBy
       @if(canDecide(effect)){
        <label>Note <textarea [ngModel]="notes()[effect.id]||''" (ngModelChange)="setNote(effect.id,$event)" maxlength="500" rows="2" placeholder="Required when rejecting"></textarea></label>
        <div class="effect-buttons">
-        <button mat-flat-button type="button" [disabled]="busy()" (click)="decide(effect,true)">Approve and resume run</button>
-        <button mat-stroked-button type="button" [disabled]="busy()" (click)="decide(effect,false)">Reject</button>
+        <button class="btn btn-sm btn-primary" type="button" [disabled]="busy()" (click)="decide(effect,true)">Approve and resume run</button>
+        <button class="btn btn-sm btn-outline-secondary" type="button" [disabled]="busy()" (click)="decide(effect,false)">Reject</button>
        </div>
       }
      </details>
@@ -69,27 +68,27 @@ import { canDecide, decisionProblem, describeAudit, describeCapability, formatBy
   }
  </section>`,
  styles:[`
- .effects{display:flex;flex-direction:column;gap:12px;color:#e6f2fd}
- .effects-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.effects-top h3{margin:0 0 4px}
- .effects-actions{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
- .effects-actions select,textarea{display:block;width:100%;box-sizing:border-box;background:#132638;color:#e6f2fd;border:1px solid #527b99;border-radius:6px;padding:8px;font:inherit}
- .effects-pending{background:#3b3540;color:#ffe19a;border:1px solid #ae8c67;border-radius:8px;padding:10px;margin:0}
- .effects-message{background:#17384f;border:1px solid #527b99;border-radius:8px;padding:10px;margin:0}
+ .effects{display:flex;flex-direction:column;gap:12px;color:var(--fs-text)}
+ .effects-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.effects-top h3{margin:0 0 4px;font-size:1rem}.effects-top p{margin:0;max-width:70ch;font-size:.875rem}
+ .effects-actions{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}.effects-actions label{display:flex;flex-direction:column;gap:4px;font-size:13px;min-width:180px}
+ .effects-pending{background:var(--fs-warn-soft);color:var(--fs-warn);border-radius:var(--bs-border-radius);padding:10px 12px;margin:0;font-weight:500}
+ .effects-message{background:var(--fs-accent-soft);border-radius:var(--bs-border-radius);padding:10px 12px;margin:0}
  .effect-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
- .effect{border:1px solid #3d5b74;border-radius:10px;padding:12px;background:#162d40;min-width:0}
- .effect-pending{border-color:#ae8c67}
+ .effect{border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);padding:12px 14px;background:var(--fs-surface);min-width:0}
+ .effect-pending{border-left:3px solid var(--fs-warn)}
  .effect-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;overflow-wrap:anywhere}
- .effect-status{font-size:12px;font-weight:700;border-radius:999px;padding:3px 9px;background:#27445d}
- .effect-status[data-status=PENDING]{background:#5a4626;color:#ffe19a}.effect-status[data-status=APPLIED]{background:#1f4d3c;color:#bff0dc}
- .effect-status[data-status=REJECTED],.effect-status[data-status=EXPIRED]{background:#562632;color:#ffe5e5}
- .effect-meta{margin:6px 0 0;font-size:13px;color:#b8cde0;overflow-wrap:anywhere}
- details{margin-top:8px}summary{cursor:pointer;color:#aedfff}
- .effect-payload{white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;background:#0f1f2d;border-radius:6px;padding:10px}
+ .effect-status{font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;background:var(--fs-surface-3);color:var(--fs-text-2)}
+ .effect-status[data-status=PENDING]{background:var(--fs-warn-soft);color:var(--fs-warn)}.effect-status[data-status=APPLIED]{background:var(--fs-pos-soft);color:var(--fs-pos)}
+ .effect-status[data-status=REJECTED],.effect-status[data-status=EXPIRED]{background:var(--fs-neg-soft);color:var(--fs-neg)}
+ .effect-meta{margin:6px 0 0;font-size:13px;color:var(--fs-muted);overflow-wrap:anywhere}
+ details{margin-top:8px}summary{cursor:pointer;color:var(--fs-accent-text);font-size:.875rem;font-weight:500}
+ .effect-payload{white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;margin:8px 0}
  .effect-digest{font-size:11px;overflow-wrap:anywhere}
- .effects-views{display:flex;gap:6px}.effects-views button{background:transparent;color:#c4d7eb;border:1px solid #527b99;border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}
- .effects-views button.selected{background:#1e435f;color:white;border-color:#6aa5c9}
+ .effects-views{display:inline-flex;gap:2px;padding:3px;background:var(--fs-surface-3);border-radius:var(--bs-border-radius);align-self:flex-start}
+ .effects-views button{background:transparent;color:var(--fs-muted);border:0;border-radius:calc(var(--bs-border-radius) - 2px);padding:5px 12px;font:inherit;font-size:.8125rem;font-weight:500}
+ .effects-views button.selected{background:var(--fs-surface);color:var(--fs-text);box-shadow:var(--fs-shadow-sm)}
  .effect-buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
- .muted{color:#9fb6cb}`]
+ .muted{color:var(--fs-muted)}`]
 })
 export class FlowSideEffectsComponent implements OnInit {
  private readonly auth=inject(AuthState);

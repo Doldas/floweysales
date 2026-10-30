@@ -9,7 +9,7 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 const check = (label, ok, extra = '') =>
   console.log(`${ok ? 'OK  ' : 'FAIL'} ${label}${extra ? ' :: ' + extra : ''}`);
 
-await page.goto('http://localhost:8080/', { waitUntil: 'networkidle' });
+await page.goto(new URL('#/portfolio', process.env.SMOKE_URL || 'http://localhost:8080/').href, { waitUntil: 'networkidle' });
 await page.waitForTimeout(3000);
 
 // ---------------------------------------------------------------- desk shell
@@ -56,12 +56,11 @@ check('position opened', !!posRow && /GIB/.test(posRow) && /75\.3000/.test(posRo
   (posRow || '').replace(/\s+/g, ' ').trim().slice(0, 140));
 
 // ------------------------------------------------------- resting limit + cancel
-const markText = await page.locator('.panel-title ~ .mark .mark-value').textContent().catch(() => '');
+const markText = await page.locator('.panel-title ~ .ticket-mark .mark-value').textContent().catch(() => '');
 const mark = parseFloat((markText || '').replace(/[^\d.]/g, '')) || 0;
 console.log('ticket mark:', mark);
 
-await page.locator('mat-select[name="orderType"]').click();
-await page.getByRole('option', { name: 'Limit', exact: true }).click();
+await page.locator('select[name="orderType"]').selectOption('LIMIT');
 await page.waitForTimeout(300);
 await page.locator('input[name="qty"]').fill('5');
 await page.locator('input[name="limitPrice"]').fill('1.00');
@@ -86,7 +85,7 @@ if (openCount > 0) {
 
   await page.getByRole('tab', { name: /History/i }).click();
   await page.waitForTimeout(500);
-  const cancelled = await page.locator('.status-chip.status-cancelled').count();
+  const cancelled = await page.locator('.desk-table .fs-status', { hasText: 'CANCELLED' }).count();
   check('cancelled order in history', cancelled > 0, `cancelled chips=${cancelled}`);
 }
 

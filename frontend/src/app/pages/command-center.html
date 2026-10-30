@@ -1,0 +1,250 @@
+<div class="fs-page">
+  <header class="fs-page-header">
+    <div>
+      <div class="fs-eyebrow">{{ today }}</div>
+      <h1>{{ greeting }}@if (name()) {, {{ name() }}}</h1>
+      <p>Your agents, markets and decisions in one place.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      @if (access.flowsWrite()) {
+        <a class="btn btn-outline-secondary" routerLink="/flows" [queryParams]="{ tab: 'editor' }"><i class="bi bi-plus-lg" aria-hidden="true"></i>New flow</a>
+      }
+      <a class="btn btn-outline-secondary" routerLink="/markets"><i class="bi bi-graph-up-arrow" aria-hidden="true"></i>Markets</a>
+    </div>
+  </header>
+
+  <!-- Ask the agent -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-inner">
+      <div class="hero-top">
+        <span class="fs-agent-orb" aria-hidden="true"><i class="bi bi-stars"></i></span>
+        <div>
+          <h2 id="hero-title">What should your agent research?</h2>
+          <p>Plans the steps, calls market, SEC and valuation tools, and shows its sources.</p>
+        </div>
+      </div>
+      <form class="hero-form" (submit)="$event.preventDefault(); ask()">
+        <label class="visually-hidden" for="hero-prompt">Research question</label>
+        <input id="hero-prompt" type="text" class="form-control form-control-lg" autocomplete="off"
+               [value]="prompt()" (input)="prompt.set($any($event.target).value)"
+               [placeholder]="market.trackedSymbol() ? 'Ask about ' + market.trackedSymbol() + ' or anything else…' : 'Ask a research question…'">
+        <button type="submit" class="btn btn-agent btn-lg"><i class="bi bi-send" aria-hidden="true"></i><span>Ask</span></button>
+      </form>
+      <div class="hero-chips">
+        @for (c of chips(); track c) {
+          <button type="button" class="fs-chip" (click)="ask(c)">{{ c }}</button>
+        }
+        <button type="button" class="fs-chip palette-chip" (click)="palette.open()"><i class="bi bi-command" aria-hidden="true"></i> More actions <span class="fs-kbd">Ctrl K</span></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- KPIs -->
+  <section class="kpis" aria-label="Workspace summary">
+    <a class="card fs-kpi kpi-link" routerLink="/markets">
+      <span class="fs-kpi-label"><i class="bi bi-crosshair" aria-hidden="true"></i>{{ market.trackedSymbol() || 'No instrument' }}</span>
+      <span class="fs-kpi-value">
+        @if (market.livePrice() > 0) { {{ market.livePrice() | number: '1.2-2' }} <small class="unit">{{ market.currency() }}</small> } @else { — }
+      </span>
+      <span class="fs-kpi-sub">
+        @if (priceChange() !== null) {
+          <span [class.text-pos]="priceChange()! >= 0" [class.text-neg]="priceChange()! < 0">{{ priceChange()! >= 0 ? '+' : '' }}{{ priceChange()! | number: '1.2-2' }}%</span>
+          {{ market.dayChange() !== null ? 'today' : market.historyRange() }}
+        } @else { {{ market.statusLabel() }} }
+      </span>
+      <fs-sparkline class="kpi-spark" [values]="market.sparkline()" [label]="market.trackedSymbol() + ' trend'" />
+    </a>
+    @if (access.flowsRead()) {
+      <a class="card fs-kpi kpi-link" routerLink="/flows">
+        <span class="fs-kpi-label"><i class="bi bi-diagram-3" aria-hidden="true"></i>Agent flows</span>
+        <span class="fs-kpi-value">{{ activity.flows().length }}</span>
+        <span class="fs-kpi-sub">{{ activity.enabledFlows() }} enabled · {{ activity.automatedFlows() }} automated</span>
+      </a>
+      <a class="card fs-kpi kpi-link" routerLink="/flows" [queryParams]="{ tab: 'runs' }">
+        <span class="fs-kpi-label"><i class="bi bi-activity" aria-hidden="true"></i>Runs · 24 h</span>
+        <span class="fs-kpi-value">{{ activity.last24h().total }}</span>
+        <span class="fs-kpi-sub">
+          @if (activity.last24h().successRate !== null) { {{ activity.last24h().successRate }}% succeeded } @else { No finished runs }
+          @if (activity.activeRuns()) { · {{ activity.activeRuns() }} in progress }
+        </span>
+      </a>
+    }
+    @if (access.inbox()) {
+      <a class="card fs-kpi kpi-link" routerLink="/inbox" [class.attention]="activity.inboxCount() > 0">
+        <span class="fs-kpi-label"><i class="bi bi-inbox" aria-hidden="true"></i>Waiting for you</span>
+        <span class="fs-kpi-value">{{ activity.inboxCount() }}</span>
+        <span class="fs-kpi-sub">{{ activity.inboxCount() ? 'Decisions need review' : 'Inbox is clear' }}</span>
+      </a>
+    } @else if (access.liveMarkets()) {
+      <a class="card fs-kpi kpi-link" routerLink="/portfolio">
+        <span class="fs-kpi-label"><i class="bi bi-wallet2" aria-hidden="true"></i>Unrealised P&amp;L</span>
+        <span class="fs-kpi-value" [class.text-pos]="market.totalPnL() > 0" [class.text-neg]="market.totalPnL() < 0">{{ market.totalPnL() >= 0 ? '+' : '' }}{{ market.totalPnL() | number: '1.2-2' }}</span>
+        <span class="fs-kpi-sub">Paper portfolio</span>
+      </a>
+    }
+  </section>
+
+  <div class="cc-grid">
+    <div class="cc-main">
+      @if (access.flowsRead()) {
+        <!-- Agent activity -->
+        <section class="card" aria-labelledby="activity-title">
+          <div class="card-header">
+            <h2 class="card-title me-auto" id="activity-title"><i class="bi bi-activity me-2 text-primary" aria-hidden="true"></i>Agent activity</h2>
+            @if (activity.loading()) { <span class="spinner-border spinner-border-sm text-secondary" aria-label="Refreshing"></span> }
+            <a class="btn btn-sm btn-ghost" routerLink="/flows" [queryParams]="{ tab: 'runs' }">All runs <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+          </div>
+          @if (recentRuns().length) {
+            <ul class="list-group list-group-flush activity-list">
+              @for (run of recentRuns(); track run.flowId + '-' + run.id) {
+                <li class="list-group-item">
+                  <a class="activity-row" routerLink="/flows" [queryParams]="{ flow: run.flowId, tab: 'runs' }">
+                    <span class="run-dot" [class]="runTone(run.status)" aria-hidden="true"></span>
+                    <span class="activity-main">
+                      <span class="activity-title">{{ run.flowName }} <span class="text-muted fw-normal">#{{ run.id }}</span></span>
+                      <span class="activity-sub">
+                        {{ run.trigger }} · {{ timeAgo(run.started_at || run.queued_at || run.finished_at) }}
+                        @if (run.duration_ms) { · {{ duration(run.duration_ms) }} }
+                        @if (run.error && (run.status === 'FAILED' || run.status === 'DEAD')) { · <span class="text-neg">{{ run.error.slice(0, 80) }}</span> }
+                      </span>
+                    </span>
+                    <span class="fs-status" [class]="runTone(run.status)">{{ runLabel(run.status) }}</span>
+                  </a>
+                </li>
+              }
+            </ul>
+          } @else if (activity.loaded()) {
+            <div class="card-body">
+              <div class="fs-empty">
+                <i class="bi bi-robot"></i>
+                <h3>No agent runs yet</h3>
+                <p class="mb-2">Start a flow from a template below, or run one of your automations.</p>
+              </div>
+            </div>
+          } @else {
+            <div class="card-body"><div class="placeholder-glow"><span class="placeholder col-12 mb-2"></span><span class="placeholder col-10 mb-2"></span><span class="placeholder col-8"></span></div></div>
+          }
+        </section>
+
+        <!-- Automations -->
+        <section class="card" aria-labelledby="automations-title">
+          <div class="card-header">
+            <h2 class="card-title me-auto" id="automations-title"><i class="bi bi-diagram-3 me-2 text-primary" aria-hidden="true"></i>Automations</h2>
+            <a class="btn btn-sm btn-ghost" routerLink="/flows">Manage <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+          </div>
+          @if (automations().length) {
+            <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0 automations">
+                <thead><tr><th scope="col">Flow</th><th scope="col">Trigger</th><th scope="col">Last run</th><th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                  @for (f of automations(); track f.id) {
+                    <tr>
+                      <td>
+                        <a routerLink="/flows" [queryParams]="{ flow: f.id }" class="fw-semibold text-reset">{{ f.name }}</a>
+                        <div class="small text-muted">{{ f.graph?.nodes?.length ?? 0 }} nodes · {{ f.enabled ? 'enabled' : 'draft' }}</div>
+                      </td>
+                      <td class="small text-muted">{{ trigger(f) }}</td>
+                      <td>
+                        @if (lastRunByFlow()[f.id]; as last) {
+                          <span class="fs-status" [class]="runTone(last.status)">{{ runLabel(last.status) }}</span>
+                          <div class="small text-muted mt-1">{{ timeAgo(last.at) }}</div>
+                        } @else { <span class="small text-muted">Never</span> }
+                      </td>
+                      <td class="text-end">
+                        @if (access.flowsRun()) {
+                          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="run(f)" [disabled]="runningFlow() === f.id" [attr.aria-label]="'Run ' + f.name">
+                            @if (runningFlow() === f.id) { <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> } @else { <i class="bi bi-play-fill" aria-hidden="true"></i> }
+                            Run
+                          </button>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else if (activity.loaded()) {
+            <div class="card-body"><p class="text-muted mb-0">No saved flows yet.</p></div>
+          }
+        </section>
+      } @else {
+        <section class="card">
+          <div class="card-body">
+            <div class="fs-empty">
+              <i class="bi bi-graph-up-arrow"></i>
+              <h3>Research any listed company</h3>
+              <p class="mb-2">Search a ticker in the top bar to see its price history, indicators and quarterly statements, then ask the agent to interpret them.</p>
+              <a class="btn btn-primary btn-sm" routerLink="/markets">Open Markets</a>
+            </div>
+          </div>
+        </section>
+      }
+    </div>
+
+    <aside class="cc-side">
+      <!-- Watchlist -->
+      <section class="card" aria-labelledby="watch-title">
+        <div class="card-header">
+          <h2 class="card-title me-auto" id="watch-title"><i class="bi bi-eye me-2 text-primary" aria-hidden="true"></i>{{ access.liveMarkets() ? 'Live trackers' : 'Watchlist' }}</h2>
+          <span class="small text-muted">{{ market.trackedAssets().length }}/{{ market.maxTrackers }}</span>
+        </div>
+        @if (market.trackedAssets().length) {
+          <ul class="list-group list-group-flush">
+            @for (t of market.trackedAssets(); track t.provider + '|' + t.symbol) {
+              <li class="list-group-item list-group-item-action watch-row" [class.active-row]="isActive(t)">
+                <button type="button" class="watch-btn" (click)="openTracker(t)" [title]="'Open ' + t.symbol + ' on ' + t.provider">
+                  <span class="watch-sym">{{ t.symbol }}</span>
+                  <span class="watch-prov">{{ t.provider }}</span>
+                </button>
+                @if (isActive(t)) {
+                  <fs-sparkline class="watch-spark" [values]="market.sparkline()" [width]="80" [height]="24" />
+                }
+                @if (freshness(t).label; as label) { <span class="fs-status" [class]="freshness(t).tone">{{ label }}</span> }
+              </li>
+            }
+          </ul>
+        } @else {
+          <div class="card-body"><p class="text-muted small mb-0">Search a ticker in the top bar to start {{ access.liveMarkets() ? 'tracking' : 'your watchlist' }}.</p></div>
+        }
+      </section>
+
+      @if (access.flowsWrite()) {
+        <section class="card" aria-labelledby="tpl-title">
+          <div class="card-header"><h2 class="card-title" id="tpl-title"><i class="bi bi-magic me-2 text-primary" aria-hidden="true"></i>Start from a template</h2></div>
+          <div class="card-body vstack gap-2">
+            @for (t of templates; track t.id) {
+              <a class="template" routerLink="/flows" [queryParams]="{ template: t.id }">
+                <span class="template-icon" aria-hidden="true"><i class="bi" [class]="t.icon"></i></span>
+                <span class="min-w-0"><strong>{{ t.label }}</strong><small>{{ t.description }}</small></span>
+              </a>
+            }
+          </div>
+        </section>
+      }
+
+      @if (access.workspace()) {
+        <section class="card" aria-labelledby="files-title">
+          <div class="card-header">
+            <h2 class="card-title me-auto" id="files-title"><i class="bi bi-folder2-open me-2 text-primary" aria-hidden="true"></i>Workspace</h2>
+            <a class="btn btn-sm btn-ghost" routerLink="/workspace">Open <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+          </div>
+          @if (files().length) {
+            <ul class="list-group list-group-flush">
+              @for (f of files(); track f.path) {
+                <li class="list-group-item d-flex align-items-center gap-2 small">
+                  <i class="bi text-muted" [class]="fileIcon(f)" aria-hidden="true"></i>
+                  <span class="text-truncate flex-grow-1">{{ f.path }}</span>
+                  <span class="text-muted tabular">{{ (f.size / 1024).toFixed(1) }} KiB</span>
+                </li>
+              }
+            </ul>
+          } @else {
+            <div class="card-body"><p class="text-muted small mb-0">Flows can write reports here with a Write File node.</p></div>
+          }
+        </section>
+      }
+    </aside>
+  </div>
+
+  <p class="disclaimer"><i class="bi bi-shield-check" aria-hidden="true"></i> Research only. Agents never place live trades; paper orders and side effects require explicit human approval.</p>
+</div>
