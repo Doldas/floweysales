@@ -81,9 +81,7 @@ try {
     if (response === undefined) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"mock backend unavailable"}' });
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response) });
   });
-  await page.goto(base, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.terminal-container', { timeout: 20000 });
-  await page.getByRole('tab', { name: 'Flow Studio' }).click();
+  await page.goto(new URL('#/flows', base).href, { waitUntil: 'domcontentloaded' });
   const studio = page.locator('fse-flow-studio');
   await studio.getByRole('tab', { name: 'Flow editor', exact: true }).click();
   const validation = studio.locator('[aria-label="Flow graph validation"] [role="status"]');

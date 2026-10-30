@@ -3,6 +3,7 @@
 // Mock backend only, no trading, credentials or DB mutations.
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { installMocks } from './smoke-fixtures.mjs';
 
 const base = process.env.RESPONSIVE_URL || 'http://127.0.0.1:4173/';
 const widths = [
@@ -14,6 +15,7 @@ const widths = [
   ['tablet', 1024, 768],
   ['desktop', 1440, 900],
 ];
+const adminPages = ['', 'agent', 'flows', 'inbox', 'markets', 'financials', 'portfolio', 'workspace', 'community', 'notifications', 'settings'];
 const browser = await chromium.launch({ headless: true });
 const failed = [];
 let assertions = 0;
@@ -28,110 +30,103 @@ async function testViewport(name, width, height, role = 'SYS_ADMIN') {
   const errors = [];
   const financialRangeRequests = [];
   page.on('pageerror', e => errors.push(e.message));
-
-  await page.route('**/api/**', async route => {
-    const pathname = new URL(route.request().url()).pathname;
-    let body;
-    if (pathname === '/api/auth/me') {
-      body = JSON.stringify({ enabled: true, user: { id: 1, email: 'responsive@example.test', role } });
-    } else if (pathname === '/api/config') {
-      body = JSON.stringify({ symbol: 'NVDA', provider: 'YAHOO', trackers: [{ symbol:'NVDA', provider:'YAHOO' }] });
-    } else if (pathname === '/api/financials') {
-      const params = new URL(route.request().url()).searchParams;
-      financialRangeRequests.push({ from: params.get('from_year'), to: params.get('to_year') });
-      body = JSON.stringify({
-        symbol: 'NVDA', provider: 'YAHOO', source: 'yahoo',
-        reports: [{ period:'CY2025 Q4', period_end:'2025-12-31',
-          revenue:100000000,net_income:25000000,eps:2.5,free_cash_flow:15000000,currency:'USD' }],
-      });
-    } else if (pathname === '/api/ai/config') {
-      body = JSON.stringify({ configured: true, model: 'local-test', max_steps: 12, max_tool_calls: 48, can_configure: role === 'SYS_ADMIN', presets: [], tools: [] });
-    } else {
-      return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"mock backend unavailable"}' });
-    }
-    await route.fulfill({ status: 200, contentType: 'application/json', body });
+  page.on('request', req => {
+    const url = new URL(req.url());
+    if (url.pathname === '/api/financials') financialRangeRequests.push({ from: url.searchParams.get('from_year'), to: url.searchParams.get('to_year') });
   });
+  await installMocks(page, { role, permissions: [], email: 'responsive@example.test' });
+
   const check = (label, ok, details = '') => {
     assertions++;
     if (!ok) failed.push(`${name} ${width}px: ${label} ${details}`);
     console.log(`${ok ? 'PASS' : 'FAIL'} ${name} (${width}px): ${label} ${details}`);
   };
+  const go = async path => {
+    await page.goto(new URL('#/' + path, base).href, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#main-content > *:not(router-outlet)', { timeout: 20000 });
+    await page.waitForTimeout(150);
+  };
+  const fits = async (selector, label = selector) => {
+    const box = await page.locator(selector).first().boundingBox();
+    check(`${label} fits horizontally`, !!box && box.x >= -2 && box.x + box.width <= width + 2, box ? `x=${box.x} w=${box.width}` : 'missing');
+  };
+  const noOverflow = async label => {
+    const doc = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+    check(`${label}: no horizontal page overflow`, doc.scroll <= doc.viewport + 2, `document=${doc.scroll}, viewport=${doc.viewport}`);
+  };
+
   try {
-    await page.goto(base, { waitUntil: 'domcontentloaded' });
-    await page.waitForSelector(role === 'USER' ? '.research-container' : '.terminal-container', { timeout: 20000 });
-
-    const layout = await page.evaluate(() => {
-      const doc = document.documentElement;
-      return {
-        viewport: doc.clientWidth,
-        documentWidth: doc.scrollWidth,
-        topbarWidth: document.querySelector('.topbar')?.getBoundingClientRect().width,
-        rowWidth: document.querySelector('.control-card')?.getBoundingClientRect().width,
-      };
-    });
-    check('no horizontal page overflow', layout.documentWidth <= layout.viewport + 2,
-      `document=${layout.documentWidth}, viewport=${layout.viewport}`);
-
     if (role === 'SYS_ADMIN') {
-      // Overview retains the persistent market controls and KPI summary.
-      for (const selector of ['.topbar', '.control-card', '.grid']) {
-        const element = page.locator(selector);
-        check(`${selector} displayed`, await element.isVisible());
-        const box = await element.boundingBox();
-        check(`${selector} fits horizontally`, !!box && box.x >= -2 && box.x + box.width <= width + 2,
-          box ? `x=${box.x} w=${box.width}` : 'missing');
+      for (const path of adminPages) {
+        await go(path);
+        await noOverflow(`#/${path}`);
       }
-      check('workspace tabs present', await page.getByRole('tab', { name: 'Charts' }).isVisible());
-      check('inactive chart workspace hidden', !(await page.locator('.chart-card').isVisible()));
-      const grid = await page.locator('.grid').evaluate(el => getComputedStyle(el).gridTemplateColumns);
-      await page.getByRole('tab', { name: 'Charts' }).click();
-      await page.waitForFunction(() => document.getElementById('workspace-tab-charts')?.getAttribute('aria-selected') === 'true');
-      await page.locator('.chart-card').waitFor({ state: 'visible' });
-      check('chart workspace selected', await page.getByRole('tab', { name: 'Charts' }).getAttribute('aria-selected') === 'true');
-      const chartCard = page.locator('.chart-card');
-      check('.chart-card displayed', await chartCard.isVisible());
-      const chartBox = await chartCard.boundingBox();
-      check('.chart-card fits horizontally', !!chartBox && chartBox.x >= -2 && chartBox.x + chartBox.width <= width + 2,
-        JSON.stringify(chartBox));
+
+      // Shell: the topbar always fits; the sidebar is a drawer below 992px.
+      await go('');
+      await fits('.fs-topbar', 'topbar');
+      const sidebar = await page.locator('.fs-sidebar').boundingBox();
+      if (width < 992) {
+        check('sidebar starts off-canvas', !!sidebar && sidebar.x + sidebar.width <= 1, JSON.stringify(sidebar));
+        await page.getByRole('button', { name: 'Open navigation' }).click();
+        await page.waitForTimeout(300);
+        const open = await page.locator('.fs-sidebar').boundingBox();
+        check('navigation drawer opens within viewport', !!open && open.x >= -1 && open.x + open.width <= width + 1, JSON.stringify(open));
+        await page.locator('.fs-sidebar').getByRole('link', { name: 'Markets', exact: true }).click();
+        await page.waitForTimeout(300);
+        check('drawer closes after navigating', ((await page.locator('.fs-sidebar').boundingBox())?.x ?? 0) < 0);
+      } else {
+        check('sidebar visible', !!sidebar && sidebar.x >= 0 && sidebar.width > 200, JSON.stringify(sidebar));
+      }
+
+      // Markets keeps the instrument controls, key figures and chart.
+      await go('markets');
+      for (const selector of ['.control-card', '.grid', '.chart-card']) {
+        check(`${selector} displayed`, await page.locator(selector).isVisible());
+        await fits(selector);
+      }
       const chart = await page.locator('.chart-container').boundingBox();
-      if (width <= 700) check('mobile chart height fits', !!chart && chart.height <= 280, JSON.stringify({ grid, chartHeight: chart?.height }));
-      await page.getByRole('tab', { name: 'Ledger' }).click();
-      await page.waitForFunction(() => document.getElementById('workspace-tab-ledger')?.getAttribute('aria-selected') === 'true');
-      await page.locator('.ledger-card').waitFor({ state: 'visible' });
-      const ledgerCard = page.locator('.ledger-card');
-      check('.ledger-card displayed', await ledgerCard.isVisible());
-      const ledgerBox = await ledgerCard.boundingBox();
-      check('.ledger-card fits horizontally', !!ledgerBox && ledgerBox.x >= -2 && ledgerBox.x + ledgerBox.width <= width + 2,
-        JSON.stringify(ledgerBox));
-      await page.getByRole('tab', { name: 'AI Assistant' }).click();
-      await page.waitForFunction(() => document.getElementById('workspace-tab-assistant')?.getAttribute('aria-selected') === 'true');
-      await page.locator('.ai-launcher').waitFor({ state: 'visible' });
-      const launcher = page.locator('.ai-launcher');
-      check('AI launcher available', await launcher.isVisible());
-      if (await launcher.isVisible()) {
-        await launcher.click();
-        await page.waitForSelector('.ai-chat-panel');
-        const panel = await page.locator('.ai-chat-panel').boundingBox();
-        check('AI chat remains within viewport', !!panel && panel.x >= -1 && panel.x + panel.width <= width + 1 && panel.y >= -1 && panel.y + panel.height <= height + 2, JSON.stringify(panel));
-        if (width <= 700) check('mobile AI panel is fullscreen', !!panel && Math.abs(panel.width - width) <= 2);
-        check('AI composer visible', await page.locator('.ai-input').isVisible());
-        await page.getByRole('button', { name: 'Minimize' }).click();
-      }
-      // Navigation must not create horizontal document overflow on small screens.
-      const finalWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-      check('workspace switching avoids page overflow', finalWidth <= width + 2, `document=${finalWidth}`);
+      if (width <= 700) check('mobile chart height fits', !!chart && chart.height <= 280, JSON.stringify(chart));
+
+      await go('portfolio');
+      check('.ledger-card displayed', await page.locator('.ledger-card').isVisible());
+      await fits('.ledger-card');
+
+      // The agent dock stays inside the viewport and is full screen on phones.
+      await page.getByRole('button', { name: 'Toggle research agent' }).click();
+      await page.locator('#fs-agent-dock.open').waitFor({ state: 'visible' });
+      await page.waitForTimeout(300);
+      const dock = await page.locator('#fs-agent-dock').boundingBox();
+      check('agent dock remains within viewport', !!dock && dock.x >= -1 && dock.x + dock.width <= width + 1 && dock.y >= -1 && dock.y + dock.height <= height + 2, JSON.stringify(dock));
+      if (width <= 575) check('mobile agent dock is full screen', !!dock && Math.abs(dock.width - width) <= 2);
+      check('agent composer visible', await page.locator('#fs-agent-dock textarea').isVisible());
+      await page.getByRole('button', { name: 'Close agent' }).click();
+      await noOverflow('after closing the agent dock');
     } else {
-      check('research page visible', await page.locator('.research-container').isVisible());
-      check('no admin trading terminal', await page.locator('.ledger-card').count() === 0);
-      await page.locator('mat-button-toggle[value="custom"]').click();
-      await page.locator('.fin-year-selectors mat-select').first().click();
+      // USER: public-market research only.
+      await go('');
+      check('no paper portfolio for research accounts', await page.locator('.fs-sidebar').getByRole('link', { name: 'Paper portfolio' }).count() === 0);
+      await go('portfolio');
+      check('portfolio route redirects home', page.url().endsWith('#/'), page.url());
+      check('no trading desk rendered', await page.locator('.ledger-card').count() === 0);
+
+      await go('markets');
+      await page.locator('.control-card input[role="combobox"]').fill('NVDA');
+      await page.locator('.control-card [role="option"]').first().click();
+      await page.locator('.chart-card').waitFor({ state: 'visible' });
+      check('research chart loads from history', await page.locator('.chart-card').isVisible());
+      await noOverflow('research markets');
+
+      await go('financials');
+      await page.locator('.research-container .fin-year-controls').getByRole('button', { name: 'Year range' }).click();
       const chosenYear = String(new Date().getFullYear() - 5);
-      await page.getByRole('option', { name: chosenYear, exact: true }).click();
+      await page.locator('#fin-from').selectOption(chosenYear);
       await page.waitForTimeout(200);
       check('custom from_year/to_year sent to API',
         financialRangeRequests.some(q => q.from === chosenYear && q.to === String(new Date().getFullYear())),
         JSON.stringify(financialRangeRequests));
       check('mobile quarterly report cards visible', await page.locator('.fin-mobile-report').first().isVisible());
+      await noOverflow('research financials');
     }
     check('no uncaught JavaScript errors', errors.length === 0, errors.join(' | '));
   } catch (e) {

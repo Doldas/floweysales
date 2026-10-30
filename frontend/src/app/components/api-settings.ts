@@ -2,37 +2,32 @@ import { Component, signal } from '@angular/core';
 import { AdminAccessSettingsComponent } from './admin-access-settings';
 import { UpdateSettingsComponent } from './update-settings';
 import { FormsModule } from '@angular/forms';
-import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
 
 interface AIConfig {base_url:string;model:string;max_steps:number;max_tool_calls:number;configured:boolean}
 interface ModelEntry {id:number;model:string;label:string}
 interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_search:{provider:string;has_key:boolean}}
 
 @Component({
- selector:'fse-api-settings',
+ selector:'fse-api-settings', host:{class:'fs-native-forms'},
  standalone:true,
- imports:[FormsModule,MatButtonModule,MatCardModule,AdminAccessSettingsComponent,UpdateSettingsComponent],
+ imports:[FormsModule,AdminAccessSettingsComponent,UpdateSettingsComponent],
  template:`
  <div class="api-settings">
-  <header><h2>System Admin · Settings</h2>
-   <p>Central configuration for AI and web search integrations. Credentials are encrypted on the server and never displayed after saving.</p>
-  </header>
   @if(!encryptionReady()){
-   <p class="warning" role="alert">Persistent API credentials are unavailable until the server administrator configures FLOWEYSALES_SECRETS_KEY as a base64-encoded, 32-byte encryption key. Store this key securely and back it up.</p>
+   <p class="alert alert-warning mb-0" role="alert">Persistent API credentials are unavailable until the server administrator configures FLOWEYSALES_SECRETS_KEY as a base64-encoded, 32-byte encryption key. Store this key securely and back it up.</p>
   }
-  @if(message()){<p role="status">{{message()}}</p>}
+  @if(message()){<p class="alert alert-info py-2 mb-0" role="status">{{message()}}</p>}
   <nav class="settings-tabs" role="tablist" aria-label="System administration">
-    <button type="button" [class.active]="tab()==='integrations'" (click)="tab.set('integrations')">API integrations</button>
-    <button type="button" [class.active]="tab()==='users'" (click)="tab.set('users')">User management</button>
-    <button type="button" [class.active]="tab()==='roles'" (click)="tab.set('roles')">Role management</button>
-    <button type="button" [class.active]="tab()==='permissions'" (click)="tab.set('permissions')">Permission management</button>
-    <button type="button" [class.active]="tab()==='mail'" (click)="tab.set('mail')">Mail configuration</button>
-    <button type="button" [class.active]="tab()==='updates'" (click)="tab.set('updates')">Updates</button>
+    <button type="button" role="tab" [attr.aria-selected]="tab()==='integrations'" [class.active]="tab()==='integrations'" (click)="tab.set('integrations')">API integrations</button>
+    <button type="button" role="tab" [attr.aria-selected]="tab()==='users'" [class.active]="tab()==='users'" (click)="tab.set('users')">User management</button>
+    <button type="button" role="tab" [attr.aria-selected]="tab()==='roles'" [class.active]="tab()==='roles'" (click)="tab.set('roles')">Role management</button>
+    <button type="button" role="tab" [attr.aria-selected]="tab()==='permissions'" [class.active]="tab()==='permissions'" (click)="tab.set('permissions')">Permission management</button>
+    <button type="button" role="tab" [attr.aria-selected]="tab()==='mail'" [class.active]="tab()==='mail'" (click)="tab.set('mail')">Mail configuration</button>
+    <button type="button" role="tab" [attr.aria-selected]="tab()==='updates'" [class.active]="tab()==='updates'" (click)="tab.set('updates')">Updates</button>
   </nav>
   @if(tab()==='integrations'){
   <div class="cards">
-   <mat-card>
+   <div class="card">
     <h3>AI provider</h3>
     <label>OpenAI-compatible endpoint URL
      <input [ngModel]="aiBaseURL()" (ngModelChange)="aiBaseURL.set($event)" placeholder="https://api.openai.com/v1" maxlength="512">
@@ -46,27 +41,27 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
     <label>Maximum tool calls
      <input type="number" min="1" max="128" [ngModel]="maxCalls()" (ngModelChange)="maxCalls.set(+$event)">
     </label>
-    <button mat-flat-button [disabled]="busy()" (click)="saveAIConfig()">Save AI configuration</button>
+    <button class="btn btn-sm btn-primary" [disabled]="busy()" (click)="saveAIConfig()">Save AI configuration</button>
     <hr>
     <p>AI API key: <strong>{{aiKeySaved()?'Configured':'Not configured'}}</strong></p>
     <label>New API key (leave blank to keep current)
      <input type="password" autocomplete="new-password" [ngModel]="aiKey()" (ngModelChange)="aiKey.set($event)" placeholder="Enter replacement AI API key">
     </label>
     <div class="actions">
-     <button mat-flat-button [disabled]="busy()||!encryptionReady()||!aiKey().trim()" (click)="saveKey('ai')">Save encrypted key</button>
-     <button mat-stroked-button [disabled]="busy()||!aiKeySaved()" (click)="deleteKey('ai')">Remove key</button>
+     <button class="btn btn-sm btn-primary" [disabled]="busy()||!encryptionReady()||!aiKey().trim()" (click)="saveKey('ai')">Save encrypted key</button>
+     <button class="btn btn-sm btn-outline-secondary" [disabled]="busy()||!aiKeySaved()" (click)="deleteKey('ai')">Remove key</button>
     </div>
     <h4>Available AI models</h4>
     @for(model of models();track model.id){
      <div class="item"><span>{{model.label}} <small>{{model.model}}</small></span>
-      <button mat-stroked-button [disabled]="busy()" (click)="removeModel(model.id)">Remove</button>
+      <button class="btn btn-sm btn-outline-secondary" [disabled]="busy()" (click)="removeModel(model.id)">Remove</button>
      </div>
     }
     <label>Model name <input [ngModel]="newModel()" (ngModelChange)="newModel.set($event)" maxlength="120" placeholder="gpt-4o-mini"></label>
     <label>Display label <input [ngModel]="newLabel()" (ngModelChange)="newLabel.set($event)" maxlength="120" placeholder="Fast analysis"></label>
-    <button mat-stroked-button [disabled]="busy()||!newModel().trim()||!newLabel().trim()" (click)="addModel()">Add AI model</button>
-   </mat-card>
-   <mat-card>
+    <button class="btn btn-sm btn-outline-secondary" [disabled]="busy()||!newModel().trim()||!newLabel().trim()" (click)="addModel()">Add AI model</button>
+   </div>
+   <div class="card">
     <h3>Web search API</h3>
     <label>Search provider
      <select [ngModel]="webProvider()" (ngModelChange)="webProvider.set($event)">
@@ -79,11 +74,11 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
      <input type="password" autocomplete="new-password" [ngModel]="webKey()" (ngModelChange)="webKey.set($event)" placeholder="Enter search provider API key">
     </label>
     <div class="actions">
-     <button mat-flat-button [disabled]="busy()||!encryptionReady()||!webKey().trim()" (click)="saveKey('web_search')">Save provider and encrypted key</button>
-     <button mat-stroked-button [disabled]="busy()||!webKeySaved()" (click)="deleteKey('web_search')">Remove key</button>
+     <button class="btn btn-sm btn-primary" [disabled]="busy()||!encryptionReady()||!webKey().trim()" (click)="saveKey('web_search')">Save provider and encrypted key</button>
+     <button class="btn btn-sm btn-outline-secondary" [disabled]="busy()||!webKeySaved()" (click)="deleteKey('web_search')">Remove key</button>
     </div>
     <p class="muted">Provider credentials are configured here for upcoming web-search nodes. Crawling public HTML pages does not require a search API key. Search execution is not yet implemented by this settings change.</p>
-   </mat-card>
+   </div>
   </div>
   } @else if(tab()==='updates'){
     <fse-update-settings></fse-update-settings>
@@ -93,20 +88,21 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
  </div>
  `,
  styles:[`
- .settings-tabs{display:flex;flex-wrap:wrap;gap:8px;border-bottom:1px solid #65809b;padding-bottom:12px}
- .settings-tabs button{padding:10px;border-radius:7px;border:1px solid #547892;background:#203b50;color:#f4f8ff;cursor:pointer}
- .settings-tabs button.active{background:#346889;border-color:#b6d3e8}
- .api-settings{display:flex;flex-direction:column;gap:16px;padding:16px;max-width:1150px;margin:0 auto}
+ .settings-tabs{display:flex;gap:2px;overflow-x:auto;border-bottom:1px solid var(--fs-border)}
+ .settings-tabs button{flex:0 0 auto;padding:10px 14px;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;background:transparent;color:var(--fs-muted);font-weight:500;font-size:.875rem;white-space:nowrap}
+ .settings-tabs button:hover{color:var(--fs-text)}
+ .settings-tabs button.active{color:var(--fs-text);border-bottom-color:var(--fs-accent)}
+ .api-settings{display:flex;flex-direction:column;gap:16px;max-width:1150px}
  .api-settings h2,.api-settings h3,.api-settings h4{margin:0 0 10px}
  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:18px}
- mat-card{display:flex;flex-direction:column;gap:12px;padding:22px;background:var(--mat-sys-surface-container, #182d3f)}
+ .card{display:flex;flex-direction:column;gap:12px;padding:22px;background:var(--fs-surface)}
  label{display:flex;flex-direction:column;gap:5px;font-size:14px}
- input,select{width:100%;box-sizing:border-box;border:1px solid #6787a2;background:#11283a;color:#f4f8ff;padding:10px;border-radius:7px;font:inherit}
+ input,select{width:100%;box-sizing:border-box;border:1px solid var(--fs-border-strong);background:var(--fs-surface);color:var(--fs-text);padding:10px;border-radius:7px;font:inherit}
  .actions{display:flex;flex-wrap:wrap;gap:10px}
  .item{display:flex;align-items:center;justify-content:space-between;gap:10px}
- .item small{display:block;color:#bbcee0}
- .muted{opacity:.8}
- .warning{padding:12px;border-left:4px solid #e3ac54;background:#42321f;color:#fff}
+ .item small{display:block;color:var(--fs-muted)}
+ .muted{color:var(--fs-muted);}
+ .warning{padding:12px;border-left:4px solid color-mix(in srgb, var(--fs-warn) 55%, transparent);background:var(--fs-warn-soft);color:var(--fs-text)}
  `]
 })
 export class ApiSettingsComponent{

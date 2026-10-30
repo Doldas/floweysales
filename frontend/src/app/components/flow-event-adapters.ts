@@ -1,15 +1,14 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { MatButtonModule } from '@angular/material/button';
 import { adapterProblem, curlExample, deliveryPath, deliverySummary, type AdapterDelivery, type EventAdapter } from './event-adapters';
 
 interface Trigger { id: number; event_key: string; payload_type: string }
 
 /** Signed inbound webhooks that deliver third-party events to one typed trigger. */
 @Component({
- selector:'fse-flow-event-adapters',
+ selector:'fse-flow-event-adapters', host:{class:'fs-native-forms'},
  standalone:true,
- imports:[FormsModule,MatButtonModule],
+ imports:[FormsModule],
  template:`
  <section class="adapters" aria-label="Inbound webhooks">
   <h3>Inbound webhooks</h3>
@@ -22,7 +21,7 @@ interface Trigger { id: number; event_key: string; payload_type: string }
    </select></label>
    <label>Payload pointer <input name="pointer" [ngModel]="pointer()" (ngModelChange)="pointer.set($event)" maxlength="200" placeholder="/data/value (empty: whole body)"></label>
    <label>Max deliveries / minute <input name="rate" type="number" min="1" max="600" [ngModel]="rate()" (ngModelChange)="rate.set(+$event)"></label>
-   <button mat-stroked-button type="submit" [disabled]="busy()">Create adapter</button>
+   <button class="btn btn-sm btn-outline-secondary" type="submit" [disabled]="busy()">Create adapter</button>
   </form>
   @if(!triggers().length){<p class="muted">Create a custom event trigger above first.</p>}
   @if(message()){<p class="adapter-message" role="status">{{message()}}</p>}
@@ -32,7 +31,7 @@ interface Trigger { id: number; event_key: string; payload_type: string }
     <code>{{r.secret}}</code>
     <p class="muted">Store it in the sending service. Rotating the secret invalidates this one immediately.</p>
     <details><summary>Example signed request</summary><pre>{{curl(r.adapter,r.secret)}}</pre></details>
-    <button mat-stroked-button type="button" (click)="revealed.set(null)">I have stored it</button>
+    <button class="btn btn-sm btn-outline-secondary" type="button" (click)="revealed.set(null)">I have stored it</button>
    </div>
   }
   @if(!adapters().length){<p class="muted">No adapters yet.</p>}
@@ -43,10 +42,10 @@ interface Trigger { id: number; event_key: string; payload_type: string }
      <p class="meta"><code>{{path(a)}}</code></p>
      <p class="meta">Pointer {{a.payload_pointer||'(whole body)'}} · {{a.rate_per_minute}}/min · {{a.accepted}} accepted · {{a.rejected}} rejected@if(a.last_delivery_at){ · last {{time(a.last_delivery_at)}}} · secret from {{time(a.secret_rotated_at)}}</p>
      <div class="buttons">
-      <button mat-stroked-button type="button" [disabled]="busy()" (click)="toggle(a)">{{a.enabled?'Disable':'Enable'}}</button>
-      <button mat-stroked-button type="button" [disabled]="busy()" (click)="rotate(a)">Rotate secret</button>
-      <button mat-stroked-button type="button" [disabled]="busy()" (click)="loadDeliveries(a)">Deliveries</button>
-      <button mat-stroked-button type="button" [disabled]="busy()" (click)="remove(a)">Delete</button>
+      <button class="btn btn-sm btn-outline-secondary" type="button" [disabled]="busy()" (click)="toggle(a)">{{a.enabled?'Disable':'Enable'}}</button>
+      <button class="btn btn-sm btn-outline-secondary" type="button" [disabled]="busy()" (click)="rotate(a)">Rotate secret</button>
+      <button class="btn btn-sm btn-outline-secondary" type="button" [disabled]="busy()" (click)="loadDeliveries(a)">Deliveries</button>
+      <button class="btn btn-sm btn-outline-secondary" type="button" [disabled]="busy()" (click)="remove(a)">Delete</button>
      </div>
      @if(deliveries()[a.id]; as list){
       @if(!list.length){<p class="muted">No deliveries received yet.</p>}
@@ -59,23 +58,23 @@ interface Trigger { id: number; event_key: string; payload_type: string }
   </ul>
  </section>`,
  styles:[`
- .adapters{display:flex;flex-direction:column;gap:10px;margin-top:18px;color:#e6f2fd}.adapters h3{margin:0}
+ .adapters{display:flex;flex-direction:column;gap:10px;margin-top:18px;color:var(--fs-text)}.adapters h3{margin:0}
  .adapter-form{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
  label{display:flex;flex-direction:column;gap:5px;min-width:150px;flex:1}
- input,select{background:#14263a;color:#ecf6ff;border:1px solid #68859b;border-radius:6px;padding:8px;font:inherit}
- .adapter-message{background:#17384f;border:1px solid #527b99;border-radius:8px;padding:10px;margin:0}
- .secret{display:flex;flex-direction:column;gap:8px;background:#3b3540;border:1px solid #ae8c67;border-radius:8px;padding:12px}
- .secret code{overflow-wrap:anywhere;font-size:14px;color:#ffe19a}
- pre{white-space:pre-wrap;word-break:break-all;background:#0f1f2d;border-radius:6px;padding:10px;margin:6px 0 0}
+ input,select{background:var(--fs-surface);color:var(--fs-text);border:1px solid var(--fs-border-strong);border-radius:6px;padding:8px;font:inherit}
+ .adapter-message{background:var(--fs-surface-3);border:1px solid var(--fs-border-strong);border-radius:8px;padding:10px;margin:0}
+ .secret{display:flex;flex-direction:column;gap:8px;background:var(--fs-surface-3);border:1px solid color-mix(in srgb, var(--fs-warn) 55%, transparent);border-radius:8px;padding:12px}
+ .secret code{overflow-wrap:anywhere;font-size:14px;color:var(--fs-text)}
+ pre{white-space:pre-wrap;word-break:break-all;background:var(--fs-surface);border-radius:6px;padding:10px;margin:6px 0 0}
  .adapter-list,.deliveries{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
- .adapter{border:1px solid #3d5b74;border-radius:10px;padding:12px;background:#162d40;min-width:0}.adapter.disabled{opacity:.75}
+ .adapter{border:1px solid var(--fs-border);border-radius:10px;padding:12px;background:var(--fs-surface-2);min-width:0}.adapter.disabled{opacity:.75}
  .adapter-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;overflow-wrap:anywhere}
- .pill{font-size:12px;font-weight:700;border-radius:999px;padding:3px 9px;background:#27445d}
- .meta{margin:6px 0 0;font-size:13px;color:#b8cde0;overflow-wrap:anywhere}
+ .pill{font-size:12px;font-weight:700;border-radius:999px;padding:3px 9px;background:var(--fs-surface-3)}
+ .meta{margin:6px 0 0;font-size:13px;color:var(--fs-muted);overflow-wrap:anywhere}
  .buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
- .deliveries{margin-top:8px;font-size:13px}.deliveries li{border-left:3px solid #2f8f6a;padding-left:8px;overflow-wrap:anywhere}
- .deliveries li[data-status=REJECTED]{border-color:#c25466}
- .muted{color:#9fb6cb;margin:0}`]
+ .deliveries{margin-top:8px;font-size:13px}.deliveries li{border-left:3px solid color-mix(in srgb, var(--fs-pos) 50%, transparent);padding-left:8px;overflow-wrap:anywhere}
+ .deliveries li[data-status=REJECTED]{border-color:color-mix(in srgb, var(--fs-neg) 50%, transparent)}
+ .muted{color:var(--fs-muted);margin:0}`]
 })
 export class FlowEventAdaptersComponent implements OnInit {
  readonly adapters=signal<EventAdapter[]>([]);

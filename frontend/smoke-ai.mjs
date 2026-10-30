@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 
-// End-to-end smoke test for the AI chat panel. Requires:
+// End-to-end smoke test for the research agent dock. Requires:
 //   - backend on :8080 (serving the built app)
 //   - mock OpenAI-compatible server on :8099 (mock_openai.mjs)
 
@@ -20,71 +20,43 @@ const check = (label, ok, extra = '') => {
   console.log(`${ok ? 'OK  ' : 'FAIL'} ${label}${extra ? ' :: ' + extra : ''}`);
 };
 
-await page.goto('http://localhost:8080/', { waitUntil: 'networkidle' });
-await page.waitForTimeout(2500);
+const base = process.env.SMOKE_URL || 'http://localhost:8080/';
+await page.goto(base, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1500);
 
-// 1. Launcher present, panel opens.
-const wrapper = page.locator('fse-ai-chat .ai-chat-wrapper');
-check('ai-chat component rendered', (await wrapper.count()) === 1);
+// 1. Point the server at the mock model (Settings → API integrations does the same PUT).
+const configured = await page.evaluate(async (mock) => {
+  const res = await fetch('/api/ai/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base_url: mock, model: 'mock-model', max_steps: 12, max_tool_calls: 48 }) });
+  return res.ok;
+}, MOCK);
+check('mock model configured', configured);
+await page.reload({ waitUntil: 'networkidle' });
 
-if ((await page.locator('.ai-launcher').count()) === 0) {
-  // starts expanded? collapse first
-  const minBtn = page.locator('.ai-chat-header .icon-btn').last();
-  if (await minBtn.count()) await minBtn.click();
-  await page.waitForTimeout(300);
-}
+// 2. The dock opens from the top bar with contextual suggestions.
+await page.getByRole('button', { name: 'Toggle research agent' }).click();
+await page.locator('#fs-agent-dock.open').waitFor({ state: 'visible' });
+check('agent dock opens', await page.locator('#fs-agent-dock').isVisible());
+const suggestions = await page.locator('#fs-agent-dock .suggestion').count();
+check('suggestions rendered', suggestions > 0, `${suggestions} cards`);
 
-const hasLauncher = (await page.locator('.ai-launcher').count()) === 1;
-check('collapsed launcher visible', hasLauncher);
-
-await page.locator('.ai-launcher').click();
-await page.waitForTimeout(400);
-check('panel expands on click', (await page.locator('.ai-chat-panel').count()) === 1);
-
-// 2. Empty state + quick prompts.
-const suggestions = await page.locator('.ai-suggestion-btn').count();
-check('quick prompts rendered', suggestions > 0, `${suggestions} buttons`);
-
-// 3. Settings loads presets from /api/ai/config.
-await page.locator('.ai-chat-header .icon-btn').first().click();
-await page.waitForTimeout(800);
-const presets = await page.locator('.preset-chip').count();
-check('settings presets loaded', presets >= 4, `${presets} presets`);
-
-// 4. Configure the mock endpoint.
-const inputs = page.locator('.ai-settings .field input');
-await inputs.nth(0).fill(MOCK); // base URL
-await inputs.nth(1).fill('mock-model'); // model
-await page.locator('.ai-settings .settings-actions button').first().click();
-await page.waitForTimeout(500);
-check('settings closed after save', (await page.locator('.ai-settings').count()) === 0);
-
-// 5. Send a message and wait for the streamed answer.
-await page.locator('.ai-input').fill('market stats please');
-await page.locator('.ai-send').click();
-
-await page.waitForSelector('.ai-tool', { timeout: 20000 }).catch(() => {});
-const toolCount = await page.locator('.ai-tool').count();
-check('tool call rendered', toolCount >= 1, `${toolCount} tool card(s)`);
-
-const toolTexts = await page.locator('.ai-tool pre').allTextContents();
-const toolText = toolTexts.join('\n');
+// 3. Send a message; tool calls render as agent steps.
+await page.locator('#fs-agent-dock textarea').fill('market stats please');
+await page.locator('#fs-agent-dock textarea').press('Enter');
+await page.waitForSelector('#fs-agent-dock .step', { timeout: 20000 }).catch(() => {});
+const stepCount = await page.locator('#fs-agent-dock .step').count();
+check('tool call rendered as agent step', stepCount >= 1, `${stepCount} step(s)`);
+await page.locator('#fs-agent-dock .step summary').first().click();
+const toolText = (await page.locator('#fs-agent-dock .step-pre').allTextContents()).join('\n');
 check('tool result has backend data', /record_count|min_price|symbol/.test(toolText), toolText.slice(0, 80).replace(/\n/g, ' '));
 
 await page
-  .waitForFunction(
-    () => {
-      const bubbles = [...document.querySelectorAll('.ai-message.assistant .bubble')];
-      return bubbles.some((b) => (b.textContent || '').trim().length > 0);
-    },
-    null,
-    { timeout: 20000 },
-  )
+  .waitForFunction(() => [...document.querySelectorAll('#fs-agent-dock .msg-agent .bubble.chat-markdown')].some(b => (b.textContent || '').trim().length > 0), null, { timeout: 20000 })
   .then(() => check('assistant streamed response', true))
   .catch(() => check('assistant streamed response', false));
 
 const md = await page.evaluate(() => {
-  const bubble = document.querySelector('.ai-message.assistant .bubble.chat-markdown');
+  const bubble = document.querySelector('#fs-agent-dock .msg-agent .bubble.chat-markdown');
   if (!bubble) return null;
   return {
     headings: bubble.querySelectorAll('h1,h2,h3,h4,h5,h6').length,

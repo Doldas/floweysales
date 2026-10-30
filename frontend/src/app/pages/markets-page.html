@@ -1,0 +1,127 @@
+<div class="fs-page">
+  <!-- Quote header -->
+  <header class="quote-head">
+    <div class="quote-id">
+      <div class="fs-eyebrow">{{ market.provider() }}@if (market.mode() === 'research') { · research mode }</div>
+      <h1>
+        {{ market.trackedSymbol() || 'Markets' }}
+        @if (market.trackedName()) { <span class="quote-name">{{ market.trackedName() }}</span> }
+      </h1>
+      @if (market.trackedSymbol()) {
+        <div class="quote-price">
+          <span class="price tabular">{{ market.livePrice() > 0 ? (market.livePrice() | number: '1.2-4') : '—' }}</span>
+          <span class="cur">{{ market.currency() }}</span>
+          @if (change() !== null) {
+            <span class="chg" [class.up]="change()! >= 0" [class.down]="change()! < 0">
+              <i class="bi" [class.bi-caret-up-fill]="change()! >= 0" [class.bi-caret-down-fill]="change()! < 0" aria-hidden="true"></i>
+              {{ change()! >= 0 ? '+' : '' }}{{ change()! | number: '1.2-2' }}% <small>{{ changeLabel() }}</small>
+            </span>
+          }
+        </div>
+      } @else {
+        <p class="text-muted mb-0">Search for a ticker to load prices, indicators and fundamentals.</p>
+      }
+    </div>
+    <div class="quote-actions">
+      @if (market.trackedSymbol()) {
+        <button type="button" class="btn btn-agent" (click)="askAgent()"><i class="bi bi-stars" aria-hidden="true"></i>Analyze with agent</button>
+        <a class="btn btn-outline-secondary" routerLink="/financials"><i class="bi bi-bank" aria-hidden="true"></i>Financials</a>
+      }
+    </div>
+  </header>
+
+  <!-- Search + trackers -->
+  <section class="card control-card" aria-label="Instrument and trackers">
+    <div class="card-body">
+      <div class="control-row">
+        <fs-symbol-search class="control-search" [navigate]="false" placeholder="Search & track a ticker, e.g. VOLV-B or BTCUSDT" />
+        @if (access.liveMarkets()) {
+          <button type="button" class="btn btn-sm" [class.btn-outline-secondary]="!confirmClear()" [class.btn-outline-danger]="confirmClear()" (click)="clearHistory()"
+                  title="Delete all stored tick history (click twice to confirm)">
+            <i class="bi bi-trash3" aria-hidden="true"></i>{{ confirmClear() ? 'Confirm clear' : 'Clear history' }}
+          </button>
+        }
+      </div>
+      <div class="trackers" [attr.aria-label]="(market.mode() === 'live' ? 'Active market trackers' : 'Watchlist')">
+        <span class="trackers-label">{{ market.mode() === 'live' ? 'Active trackers' : 'Watchlist' }} <span class="tabular">({{ market.trackedAssets().length }}/{{ market.maxTrackers }})</span></span>
+        @for (asset of market.trackedAssets(); track asset.symbol + '|' + asset.provider) {
+          <span class="tracker-chip" [class.selected]="isActive(asset)">
+            <button type="button" class="tracker-select" (click)="market.view(asset)" [title]="'View ' + asset.symbol + ' on ' + asset.provider" [attr.aria-pressed]="isActive(asset)">
+              {{ asset.symbol }} <small>{{ asset.provider }}</small>
+            </button>
+            <button type="button" class="tracker-remove" (click)="stop(asset, $event)" [attr.aria-label]="'Stop tracking ' + asset.symbol + ' on ' + asset.provider" title="Remove">
+              <i class="bi bi-x" aria-hidden="true"></i>
+            </button>
+          </span>
+        } @empty {
+          <span class="text-muted small">Nothing tracked yet.</span>
+        }
+      </div>
+    </div>
+  </section>
+
+  @if (market.trackedSymbol()) {
+    <!-- KPIs -->
+    <section class="grid" aria-label="Key figures">
+      @for (k of kpis(); track k.label) {
+        <div class="card fs-kpi">
+          <span class="fs-kpi-label"><i class="bi" [class]="k.icon" aria-hidden="true"></i>{{ k.label }}</span>
+          <span class="fs-kpi-value" [class.text-pos]="k.tone === 'pos'" [class.text-neg]="k.tone === 'neg' && k.value !== 'Standby'">{{ k.value }}</span>
+          @if (k.sub) { <span class="fs-kpi-sub">{{ k.sub }}</span> }
+        </div>
+      }
+    </section>
+
+    <!-- Chart -->
+    <section class="card chart-card" aria-labelledby="chart-title">
+      <div class="card-header">
+        <h2 class="card-title me-auto" id="chart-title">Price chart</h2>
+        <div class="fs-segmented chart-range" role="group" aria-label="History range">
+          @for (r of market.historyRanges; track r) {
+            <button type="button" [attr.aria-pressed]="market.historyRange() === r" (click)="market.setHistoryRange(r)">{{ r }}</button>
+          }
+        </div>
+        <button type="button" class="btn btn-ghost btn-icon btn-sm" (click)="resetZoom()" aria-label="Reset zoom" title="Reset zoom"><i class="bi bi-arrows-angle-contract"></i></button>
+      </div>
+      @if (market.loadingHistory()) { <div class="progress rounded-0" style="height: 2px"><div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div></div> }
+      <div class="studies" role="group" aria-label="Chart analysis studies">
+        <i class="bi bi-sliders2 text-muted" aria-hidden="true"></i>
+        @for (k of indicatorKeys; track k) {
+          <button type="button" class="fs-chip" [attr.aria-pressed]="market.indicators()[k]" (click)="market.toggleIndicator(k)">{{ indicatorLabels[k] }}</button>
+        }
+      </div>
+      <div class="card-body pt-2">
+        <fse-trading-chart [epoch]="market.chartEpoch()" [flags]="market.indicators()" />
+      </div>
+    </section>
+
+    <!-- Insights -->
+    @if (market.insights().length) {
+      <section class="card insights-card" aria-labelledby="insights-title">
+        <div class="card-header">
+          <h2 class="card-title me-auto" id="insights-title">Analysis insights</h2>
+          <span class="badge text-bg-secondary">{{ market.trackedSymbol() }} · {{ market.historyRange() }}</span>
+        </div>
+        <div class="card-body insights-grid">
+          @for (ins of market.insights(); track ins.label) {
+            <div class="insight" [class.pos]="ins.tone === 'pos'" [class.neg]="ins.tone === 'neg'">
+              <div class="insight-label">{{ ins.label }}</div>
+              <div class="insight-value">{{ ins.value }}</div>
+              @if (ins.sub) { <div class="insight-sub">{{ ins.sub }}</div> }
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    @if (market.hasAssetFundamentals()) {
+      <fse-asset-info [data]="market.marketData()" [currentCurrency]="market.currency()" />
+    }
+  } @else {
+    <div class="fs-empty mt-3">
+      <i class="bi bi-search"></i>
+      <h3>No instrument selected</h3>
+      <p class="mb-0">Use the search above to pick a stock, fund or crypto pair.</p>
+    </div>
+  }
+</div>

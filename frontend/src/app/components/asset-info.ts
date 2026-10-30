@@ -1,23 +1,17 @@
-import { ChangeDetectionStrategy, Component, NO_ERRORS_SCHEMA, computed, input } from '@angular/core';
-import { MatTabsModule } from '@angular/material/tabs';
-import { MatCardModule } from '@angular/material/card';
-import { MatTableModule } from '@angular/material/table';
-import { MatIconModule } from '@angular/material/icon';
-import { MatChipsModule } from '@angular/material/chips';
+import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 
 import { StockHolding, type MarketData } from '../models';
 
 @Component({
   selector: 'fse-asset-info',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  schemas: [NO_ERRORS_SCHEMA],
-  imports: [MatTabsModule, MatCardModule, MatTableModule, MatIconModule, MatChipsModule],
   templateUrl: './asset-info.html',
   styleUrl: './asset-info.scss',
 })
 export class AssetInfoComponent {
   readonly data = input.required<MarketData | null>();
   readonly currentCurrency = input('USD');
+  readonly tab = signal<'overview' | 'ratios' | 'holdings'>('overview');
 
   readonly isStock = computed(() => {
     const d = this.data();
@@ -58,6 +52,6 @@ export class AssetInfoComponent {
     return `${val.toLocaleString()} ${currency}`;
   };
 
-  readonly stars = (n: number | undefined): string => (n ? '⭐'.repeat(n) : 'N/A');
-  readonly seedlings = (n: number | undefined): string => (n ? '🌱'.repeat(n) : 'N/A');
+  readonly stars = (n: number | undefined): string => (n ? `${n} / 5` : 'N/A');
+  readonly seedlings = (n: number | undefined): string => (n ? `${n} / 5` : 'N/A');
 }

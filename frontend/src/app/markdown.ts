@@ -37,10 +37,11 @@ function renderInline(text: string, state: InlineState): string {
 
   out = out.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
   out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  out = out.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  // Underscore emphasis only at word boundaries, so identifiers such as get_sec_facts stay intact.
+  out = out.replace(/(^|[^\w])__([^_\n]+)__(?!\w)/g, '$1<strong>$2</strong>');
   out = out.replace(/~~([^~]+)~~/g, '<del>$1</del>');
   out = out.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
-  out = out.replace(/_([^_\n]+)_/g, '<em>$1</em>');
+  out = out.replace(/(^|[^\w])_([^_\n]+)_(?!\w)/g, '$1<em>$2</em>');
 
   out = out.replace(/\u0000C(\d+)\u0000/g, (_m, i: string) => {
     return `<code>${state.code[Number(i)] ?? ''}</code>`;

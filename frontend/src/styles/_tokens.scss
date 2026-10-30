@@ -1,0 +1,124 @@
+// Design tokens. Components use these custom properties rather than raw
+// colours, so every surface follows the light/dark theme switch.
+
+:root,
+[data-bs-theme='light'] {
+  --fs-bg: #f4f6fb;
+  --fs-surface: #ffffff;
+  --fs-surface-2: #f8fafc;
+  --fs-surface-3: #eef2f8;
+  --fs-sunken: #f1f4f9;
+  --fs-border: #e2e8f0;
+  --fs-border-strong: #c9d3e1;
+  --fs-text: #0f172a;
+  --fs-text-2: #334155;
+  --fs-muted: #5b6b82;
+
+  --fs-accent: #5b5ff0;
+  --fs-accent-hover: #4b4fe0;
+  --fs-accent-soft: rgba(91, 95, 240, 0.1);
+  --fs-accent-text: #4338ca;
+  --fs-agent: #7c3aed;
+  --fs-agent-gradient: linear-gradient(135deg, #5b5ff0 0%, #8b5cf6 55%, #0891b2 100%);
+
+  --fs-pos: #116b31;
+  --fs-pos-soft: rgba(22, 163, 74, 0.1);
+  --fs-neg: #b91c1c;
+  --fs-neg-soft: rgba(220, 38, 38, 0.09);
+  --fs-warn: #8f4f00;
+  --fs-warn-soft: rgba(217, 119, 6, 0.12);
+  --fs-info: #0369a1;
+  --fs-info-soft: rgba(14, 165, 233, 0.1);
+
+  --fs-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --fs-shadow: 0 4px 16px rgba(15, 23, 42, 0.07);
+  --fs-shadow-lg: 0 18px 48px rgba(15, 23, 42, 0.16);
+  --fs-focus: 0 0 0 3px rgba(91, 95, 240, 0.35);
+
+  --fs-canvas-bg: #f7f9fc;
+  --fs-canvas-dot: #d5dce8;
+  --fs-node-bg: #ffffff;
+  --fs-node-border: #b8c4d6;
+  --fs-node-text: #0f172a;
+  --fs-node-sub: #5b6b82;
+  --fs-node-selected-bg: #eef0ff;
+  --fs-node-selected: #5b5ff0;
+  --fs-edge: #7c86d8;
+  --fs-wire-ghost: #d97706;
+  --fs-port-in: #0284c7;
+  --fs-port-out: #059669;
+  --fs-port-stroke: #ffffff;
+
+  --fs-chart-price: #4f46e5;
+  --fs-chart-fast: #db2777;
+  --fs-chart-slow: #d97706;
+  --fs-chart-grid: rgba(15, 23, 42, 0.07);
+  --fs-chart-text: #5b6b82;
+
+  --fs-sidebar-bg: #0f1424;
+  --fs-sidebar-text: #c2c9d8;
+  --fs-sidebar-muted: #8f98ad;
+  --fs-sidebar-active: rgba(124, 127, 247, 0.18);
+  --fs-sidebar-border: #1d2436;
+
+  --fs-sidebar-width: 248px;
+  --fs-topbar-height: 60px;
+  --fs-dock-width: 440px;
+}
+
+[data-bs-theme='dark'] {
+  --fs-bg: #0a0e17;
+  --fs-surface: #101722;
+  --fs-surface-2: #141c2a;
+  --fs-surface-3: #1a2436;
+  --fs-sunken: #0c121c;
+  --fs-border: #1f2a3c;
+  --fs-border-strong: #33415a;
+  --fs-text: #e2e8f0;
+  --fs-text-2: #cbd5e1;
+  --fs-muted: #8b98ad;
+
+  --fs-accent: #7c7ff7;
+  --fs-accent-hover: #9396ff;
+  --fs-accent-soft: rgba(124, 127, 247, 0.15);
+  --fs-accent-text: #b4b6ff;
+  --fs-agent: #a78bfa;
+  --fs-agent-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 55%, #06b6d4 100%);
+
+  --fs-pos: #34d399;
+  --fs-pos-soft: rgba(52, 211, 153, 0.12);
+  --fs-neg: #f87171;
+  --fs-neg-soft: rgba(248, 113, 113, 0.12);
+  --fs-warn: #fbbf24;
+  --fs-warn-soft: rgba(251, 191, 36, 0.12);
+  --fs-info: #38bdf8;
+  --fs-info-soft: rgba(56, 189, 248, 0.12);
+
+  --fs-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --fs-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+  --fs-shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --fs-focus: 0 0 0 3px rgba(124, 127, 247, 0.45);
+
+  --fs-canvas-bg: #0b111b;
+  --fs-canvas-dot: #1f2a3d;
+  --fs-node-bg: #151e2e;
+  --fs-node-border: #3a4862;
+  --fs-node-text: #e2e8f0;
+  --fs-node-sub: #94a3b8;
+  --fs-node-selected-bg: #232a52;
+  --fs-node-selected: #9396ff;
+  --fs-edge: #7f8cf0;
+  --fs-wire-ghost: #fbbf24;
+  --fs-port-in: #38bdf8;
+  --fs-port-out: #34d399;
+  --fs-port-stroke: #0b111b;
+
+  --fs-chart-price: #818cf8;
+  --fs-chart-fast: #f472b6;
+  --fs-chart-slow: #fbbf24;
+  --fs-chart-grid: rgba(226, 232, 240, 0.07);
+  --fs-chart-text: #8b98ad;
+
+  --fs-sidebar-bg: #0b1019;
+  --fs-sidebar-border: #182033;
+}

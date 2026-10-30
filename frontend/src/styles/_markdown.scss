@@ -1,0 +1,72 @@
+// Rendered markdown (agent answers and run output). Injected via innerHTML,
+// so these rules must be global.
+
+.chat-markdown {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+
+  > :first-child { margin-top: 0; }
+  > :last-child { margin-bottom: 0; }
+
+  p { margin: 0 0 0.65em; }
+  h1, h2, h3, h4, h5, h6 { margin: 0.9em 0 0.4em; line-height: 1.3; font-weight: 650; color: var(--fs-text); }
+  h1 { font-size: 1.2em; }
+  h2 { font-size: 1.1em; }
+  h3 { font-size: 1.03em; }
+  h4, h5, h6 { font-size: 0.98em; }
+  a { color: var(--fs-accent-text); text-decoration: underline; word-break: break-word; }
+  strong { color: var(--fs-text); font-weight: 650; }
+  del { color: var(--fs-muted); }
+
+  code {
+    font-size: 0.85em;
+    background: var(--fs-surface-3);
+    border: 1px solid var(--fs-border);
+    border-radius: 4px;
+    padding: 0.08em 0.38em;
+    color: var(--fs-accent-text);
+    word-break: break-word;
+  }
+
+  ul, ol { margin: 0.4em 0 0.75em; padding-left: 1.35em; }
+  li { margin: 0.2em 0; }
+  li::marker { color: var(--fs-accent); }
+
+  blockquote {
+    margin: 0.6em 0;
+    padding: 0.4em 0.85em;
+    border-left: 3px solid var(--fs-accent);
+    background: var(--fs-accent-soft);
+    border-radius: 0 6px 6px 0;
+    color: var(--fs-text-2);
+  }
+
+  hr { border: none; border-top: 1px solid var(--fs-border); margin: 0.9em 0; }
+
+  .md-code { margin: 0.65em 0; background: var(--fs-sunken); border: 1px solid var(--fs-border); border-radius: 8px; overflow: hidden; max-width: 100%; }
+  .md-code-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 8px 4px 10px; background: var(--fs-surface-3); border-bottom: 1px solid var(--fs-border); }
+  .md-lang { font-size: 0.7em; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fs-muted); }
+  .md-copy {
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--fs-text-2);
+    background: var(--fs-surface);
+    border: 1px solid var(--fs-border-strong);
+    border-radius: 5px;
+    padding: 2px 8px;
+    cursor: pointer;
+    &:hover { border-color: var(--fs-accent); color: var(--fs-accent-text); }
+  }
+  .md-code pre { margin: 0; padding: 9px 11px; overflow-x: auto; font-size: 0.8rem; line-height: 1.5; color: var(--fs-text-2); border: 0; background: none; }
+  .md-code code { background: none; border: none; padding: 0; color: inherit; font-size: 1em; white-space: pre; }
+
+  .md-table-wrap { overflow-x: auto; margin: 0.65em 0; border: 1px solid var(--fs-border); border-radius: 8px; max-width: 100%; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+  thead th { background: var(--fs-surface-3); color: var(--fs-text); font-weight: 600; text-align: left; padding: 6px 10px; white-space: nowrap; border-bottom: 1px solid var(--fs-border); }
+  tbody td { padding: 5px 10px; border-top: 1px solid var(--fs-border); color: var(--fs-text-2); white-space: nowrap; }
+  tbody tr:nth-child(even) td { background: var(--fs-surface-2); }
+  img { max-width: 100%; height: auto; }
+}

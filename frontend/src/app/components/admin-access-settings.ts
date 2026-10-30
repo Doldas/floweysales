@@ -1,47 +1,45 @@
 import { Component, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
 
 interface User {id:number;email:string;role:string;active:boolean}
 interface Role {name:string;permissions:string[]}
 
 @Component({
- selector:'fse-admin-access-settings',
+ selector:'fse-admin-access-settings', host:{class:'fs-native-forms'},
  standalone:true,
- imports:[FormsModule,MatButtonModule,MatCardModule],
+ imports:[FormsModule],
  template:`
  @if(message()){<p role="status">{{message()}}</p>}
  @if(tab()==='users'){
-  <mat-card>
+  <div class="card">
    <h3>User management</h3>
    <p>Invite people by email. The activation link is valid for 48 hours.</p>
    <label>Invite email <input type="email" [ngModel]="inviteEmail()" (ngModelChange)="inviteEmail.set($event)" maxlength="254" placeholder="person@example.com"></label>
-   <button mat-flat-button [disabled]="busy()||!inviteEmail().includes('@')" (click)="invite()">Send invitation</button>
+   <button class="btn btn-sm btn-primary" [disabled]="busy()||!inviteEmail().includes('@')" (click)="invite()">Send invitation</button>
    @for(user of users();track user.id){
     <div class="item">
      <div><strong>{{user.email}}</strong><small>{{user.active?'Active':'Pending / disabled'}}</small></div>
      <label>Role<select [ngModel]="user.role" (ngModelChange)="changeUser(user.id,{role:$event})" [disabled]="busy()">
       @for(role of roles();track role.name){<option [value]="role.name">{{role.name}}</option>}
      </select></label>
-     <button mat-stroked-button [disabled]="busy()" (click)="changeUser(user.id,{active:!user.active})">{{user.active?'Disable':'Enable'}}</button>
+     <button class="btn btn-sm btn-outline-secondary" [disabled]="busy()" (click)="changeUser(user.id,{active:!user.active})">{{user.active?'Disable':'Enable'}}</button>
     </div>
    }
-  </mat-card>
+  </div>
  }
  @if(tab()==='roles'){
-  <mat-card>
+  <div class="card">
    <h3>Role management</h3>
    <p>Custom roles begin with no privileges. SYS_ADMIN cannot be changed in this view.</p>
    <label>New role name<input maxlength="40" [ngModel]="roleName()" (ngModelChange)="roleName.set($event.toUpperCase())" placeholder="ANALYST"></label>
-   <button mat-flat-button [disabled]="busy()||roleName().length<2" (click)="createRole()">Create role</button>
+   <button class="btn btn-sm btn-primary" [disabled]="busy()||roleName().length<2" (click)="createRole()">Create role</button>
    @for(role of roles();track role.name){
     <div class="item"><strong>{{role.name}}</strong><small>{{role.permissions.length}} permissions</small></div>
    }
-  </mat-card>
+  </div>
  }
  @if(tab()==='permissions'){
-  <mat-card>
+  <div class="card">
    <h3>Permission management</h3>
    <p>Changes are applied in the backend. SYS_ADMIN always retains platform permissions.</p>
    @for(role of roles();track role.name){
@@ -53,10 +51,10 @@ interface Role {name:string;permissions:string[]}
      </label>
     }
    }
-  </mat-card>
+  </div>
  }
  @if(tab()==='mail'){
-  <mat-card>
+  <div class="card">
    <h3>SMTP configuration</h3>
    <p>Account invitations are sent via TLS-verified SMTP STARTTLS on port 587. The activation URL must be HTTPS.</p>
    <label>SMTP host<input [ngModel]="smtpHost()" (ngModelChange)="smtpHost.set($event)" placeholder="smtp.example.com"></label>
@@ -64,20 +62,20 @@ interface Role {name:string;permissions:string[]}
    <label>Sender email<input type="email" [ngModel]="smtpSender()" (ngModelChange)="smtpSender.set($event)" placeholder="noreply@example.com"></label>
    <label>SMTP username<input [ngModel]="smtpUsername()" (ngModelChange)="smtpUsername.set($event)"></label>
    <label>Public HTTPS app URL<input type="url" [ngModel]="publicURL()" (ngModelChange)="publicURL.set($event)" placeholder="https://floweysales.example.com"></label>
-   <button mat-flat-button [disabled]="busy()" (click)="saveSMTP()">Save mail configuration</button>
+   <button class="btn btn-sm btn-primary" [disabled]="busy()" (click)="saveSMTP()">Save mail configuration</button>
    <p>SMTP password: {{smtpPasswordConfigured()?'Configured':'Not configured'}}</p>
    <label>SMTP password<input type="password" autocomplete="new-password" [ngModel]="smtpPassword()" (ngModelChange)="smtpPassword.set($event)"></label>
-   <button mat-flat-button [disabled]="busy()||!smtpPassword()" (click)="saveSMTPPassword()">Save encrypted password</button>
-  </mat-card>
+   <button class="btn btn-sm btn-primary" [disabled]="busy()||!smtpPassword()" (click)="saveSMTPPassword()">Save encrypted password</button>
+  </div>
  }
  `,
  styles:[`
- mat-card{display:flex;flex-direction:column;gap:12px;padding:22px;background:var(--mat-sys-surface-container,#192e40)}
+ .card{display:flex;flex-direction:column;gap:12px;padding:22px;background:var(--fs-surface)}
  label{display:flex;flex-direction:column;gap:5px}
- input,select{box-sizing:border-box;border:1px solid #6787a2;border-radius:7px;background:#11283a;color:#f4f8ff;padding:10px}
+ input,select{box-sizing:border-box;border:1px solid var(--fs-border-strong);border-radius:7px;background:var(--fs-surface);color:var(--fs-text);padding:10px}
  .check{flex-direction:row;align-items:center}
- .item{display:flex;align-items:center;flex-wrap:wrap;justify-content:space-between;gap:10px;border-bottom:1px solid #36546d;padding:10px}
- .item small{display:block;opacity:.8}
+ .item{display:flex;align-items:center;flex-wrap:wrap;justify-content:space-between;gap:10px;border-bottom:1px solid var(--fs-border);padding:10px}
+ .item small{display:block;color:var(--fs-muted)}
  `]
 })
 export class AdminAccessSettingsComponent{

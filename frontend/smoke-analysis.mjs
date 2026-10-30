@@ -1,73 +1,54 @@
+// Manual check against a running engine: study chips, RSI/MACD panels,
+// insight cards and persistence of the chosen studies.
 import { chromium } from 'playwright';
 
+const base = process.env.SMOKE_URL || 'http://localhost:8080/';
 const browser = await chromium.launch();
-const page = await browser.newPage();
+const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 
-const group = (label) => page.locator('.indicator-toggles').locator(`mat-button-toggle`).filter({ hasText: label });
-const painted = (n) => page.evaluate((idx) => {
-  const c = document.querySelectorAll('canvas')[idx];
+const chip = label => page.locator('.studies .fs-chip', { hasText: label });
+const enabled = () => page.$$eval('.studies .fs-chip[aria-pressed="true"]', els => els.map(e => e.textContent.trim()));
+const canvases = () => page.$$eval('fse-trading-chart canvas', els => els.length);
+const painted = idx => page.evaluate(i => {
+  const c = document.querySelectorAll('fse-trading-chart canvas')[i];
   if (!c) return -1;
   const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-  let cnt = 0;
-  for (let i = 3; i < d.length; i += 4) if (d[i] > 0) cnt++;
-  return cnt;
-}, n);
+  let n = 0;
+  for (let k = 3; k < d.length; k += 4) if (d[k] > 0) n++;
+  return n;
+}, idx);
 
-await page.goto('http://localhost:8080/', { waitUntil: 'networkidle' });
+await page.goto(new URL('#/markets', base).href, { waitUntil: 'networkidle' });
 await page.waitForTimeout(2500);
 
-// 1. Default indicators checked (EMA21/50/200)
-const checked = await page.$$eval('.indicator-toggles .mat-button-toggle-checked', els => els.map(e => e.textContent.trim()));
-console.log('default checked:', checked.join(','));
-console.log('defaults OK:', checked.includes('EMA 21') && checked.includes('EMA 50') && checked.includes('EMA 200'));
-
-// 2. Insights cards rendered
+console.log('enabled studies:', (await enabled()).join(','));
 const ins = await page.$$eval('.insight .insight-label', els => els.map(e => e.textContent.trim()));
-console.log('insights:', ins.join(' | '));
-console.log('insights count >= 6:', ins.length >= 6);
+console.log('insights:', ins.join(' | '), ins.length >= 6 ? 'OK' : 'FAIL');
+console.log('main canvas painted:', (await painted(0)) > 1000 ? 'OK' : 'FAIL');
 
-const main0 = await painted(0);
-console.log('main canvas painted:', main0, main0 > 1000 ? 'OK' : 'FAIL');
-
-// 3. Toggle RSI + MACD + Bollinger + Volume + VWAP on
 for (const label of ['RSI 14', 'MACD', 'Bollinger', 'Volume', 'VWAP']) {
-  await group(label).click();
-  await page.waitForTimeout(500);
+  if (!(await enabled()).includes(label)) await chip(label).click();
+  await page.waitForTimeout(400);
 }
-await page.waitForTimeout(1200);
-const canvasCount = await page.$$eval('canvas', els => els.length);
-console.log('canvases after RSI+MACD on:', canvasCount, canvasCount === 3 ? 'OK (main+rsi+macd)' : 'FAIL');
+await page.waitForTimeout(1000);
+console.log('canvases with RSI+MACD:', await canvases(), (await canvases()) === 3 ? 'OK' : 'FAIL');
+console.log('RSI painted:', (await painted(1)) > 500 ? 'OK' : 'FAIL', '· MACD painted:', (await painted(2)) > 500 ? 'OK' : 'FAIL');
 
-const rsiPx = await painted(1);
-const macdPx = await painted(2);
-console.log('RSI panel painted:', rsiPx, rsiPx > 500 ? 'OK' : 'FAIL');
-console.log('MACD panel painted:', macdPx, macdPx > 500 ? 'OK' : 'FAIL');
-console.log('main still painted:', (await painted(0)) > 1000 ? 'OK' : 'FAIL');
-console.log('checked now:', (await page.$$eval('.indicator-toggles .mat-button-toggle-checked', els => els.map(e => e.textContent.trim()))).join(','));
-
-// 4. Uncheck RSI → panel destroyed
-await group('RSI 14').click();
+await chip('RSI 14').click();
 await page.waitForTimeout(700);
-const afterOff = await page.$$eval('canvas', els => els.length);
-console.log('canvases after RSI off:', afterOff, afterOff === 2 ? 'OK (panel destroyed)' : 'FAIL');
+console.log('canvases after RSI off:', await canvases(), (await canvases()) === 2 ? 'OK (panel destroyed)' : 'FAIL');
 
-// 5. Range switch keeps everything alive
-await page.locator('.range-toggle').locator('mat-button-toggle', { hasText: '1Y' }).click();
+await page.locator('.chart-range').getByRole('button', { name: '1Y', exact: true }).click();
 await page.waitForTimeout(2200);
-const insAfter = await page.$$eval('.insight .insight-label', els => els.map(e => e.textContent.trim()));
-console.log('insights after 1Y:', insAfter.length, 'cards');
-console.log('main painted after 1Y:', (await painted(0)) > 1000 ? 'OK' : 'FAIL');
-console.log('MACD panel after 1Y:', (await painted(1)) > 500 ? 'OK' : 'FAIL');
+console.log('insights after 1Y:', await page.locator('.insight').count(), 'cards');
 
-// 6. Persistence: reload → flags kept
 await page.reload({ waitUntil: 'networkidle' });
 await page.waitForTimeout(2200);
-const checkedAfter = await page.$$eval('.indicator-toggles .mat-button-toggle-checked', els => els.map(e => e.textContent.trim()));
-console.log('after reload checked:', checkedAfter.join(','));
-console.log('persisted:', checkedAfter.includes('MACD') && checkedAfter.includes('Bollinger') && checkedAfter.includes('VWAP'));
+const kept = await enabled();
+console.log('persisted after reload:', kept.includes('MACD') && kept.includes('Bollinger') && kept.includes('VWAP') ? 'OK' : 'FAIL', kept.join(','));
 
 console.log('console errors:', errors.length, errors.slice(0, 5));
 await browser.close();

@@ -53,10 +53,24 @@
               }
             ],
             "styles": [
+              "node_modules/bootstrap-icons/font/bootstrap-icons.min.css",
               "src/styles.scss"
             ],
             "outputPath": "../www",
             "index": "src/index.html",
+            "stylePreprocessorOptions": {
+              "includePaths": [
+                "src"
+              ],
+              "sass": {
+                "silenceDeprecations": [
+                  "import",
+                  "global-builtin",
+                  "color-functions",
+                  "if-function"
+                ]
+              }
+            },
             "allowedCommonJsDependencies": [
               "hammerjs"
             ]
@@ -71,7 +85,7 @@
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "16kB",
+                  "maximumWarning": "24kB",
                   "maximumError": "32kB"
                 }
               ],

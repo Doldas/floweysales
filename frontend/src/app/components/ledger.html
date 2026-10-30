@@ -1,12 +1,4 @@
-<mat-card class="glass ledger-card">
-  <mat-card-header>
-    <mat-card-title>Trading Desk</mat-card-title>
-    <mat-card-subtitle>
-      Order ticket with pre-trade checks, net positions and the execution blotter
-    </mat-card-subtitle>
-  </mat-card-header>
-
-  <mat-card-content>
+<div class="ledger-card">
     <!-- ACCOUNT SUMMARY -->
     <div class="account-strip" aria-label="Account summary">
       @for (tile of tiles(); track tile.label) {
@@ -23,10 +15,10 @@
       <section class="ticket" aria-label="Order ticket">
         <div class="panel-head">
           <div class="panel-title">
-            <mat-icon>receipt_long</mat-icon>
+            <i class="bi bi-receipt" aria-hidden="true"></i>
             <span>Order ticket</span>
           </div>
-          <div class="mark">
+          <div class="ticket-mark">
             <span class="mark-label">Last</span>
             <span class="mark-value">
               {{ mark() > 0 ? (mark() | number: '1.2-4') : '—' }} {{ currency() }}
@@ -36,42 +28,42 @@
 
         @if (step === 'compose') {
           <form class="ticket-form" (ngSubmit)="review()" novalidate>
-            <mat-button-toggle-group class="side-toggle" name="side" [(ngModel)]="side">
-              <mat-button-toggle value="BUY" class="side-buy">
-                <mat-icon>trending_up</mat-icon> Buy
-              </mat-button-toggle>
-              <mat-button-toggle value="SELL" class="side-sell">
-                <mat-icon>trending_down</mat-icon> Sell
-              </mat-button-toggle>
-            </mat-button-toggle-group>
-
-            <div class="field-row">
-              <mat-form-field appearance="outline">
-                <mat-label>Order type</mat-label>
-                <mat-select [(ngModel)]="orderType" name="orderType">
-                  <mat-option value="MARKET">Market</mat-option>
-                  <mat-option value="LIMIT">Limit</mat-option>
-                  <mat-option value="STOP">Stop</mat-option>
-                  <mat-option value="STOP_LIMIT">Stop-limit</mat-option>
-                </mat-select>
-              </mat-form-field>
-
-              <mat-form-field appearance="outline">
-                <mat-label>Time in force</mat-label>
-                <mat-select [(ngModel)]="tif" name="tif">
-                  <mat-option value="GTC">Good till cancelled</mat-option>
-                  <mat-option value="DAY">Day</mat-option>
-                  <mat-option value="IOC">Immediate or cancel</mat-option>
-                </mat-select>
-              </mat-form-field>
+            <div class="side-toggle" role="radiogroup" aria-label="Order side">
+              <button type="button" role="radio" class="side-buy" [class.active]="side === 'BUY'" [attr.aria-checked]="side === 'BUY'" (click)="side = 'BUY'">
+                <i class="bi bi-graph-up-arrow" aria-hidden="true"></i> Buy
+              </button>
+              <button type="button" role="radio" class="side-sell" [class.active]="side === 'SELL'" [attr.aria-checked]="side === 'SELL'" (click)="side = 'SELL'">
+                <i class="bi bi-graph-down-arrow" aria-hidden="true"></i> Sell
+              </button>
             </div>
 
-            <mat-form-field appearance="outline">
-              <mat-label>Quantity</mat-label>
-              <input matInput type="number" min="0" step="any" inputmode="decimal"
-                     [(ngModel)]="qty" name="qty" placeholder="0">
-              <mat-hint align="end">units of {{ symbolLabel }}</mat-hint>
-            </mat-form-field>
+            <div class="field-row">
+              <div>
+                <label class="form-label" for="ticket-type">Order type</label>
+                <select class="form-select" id="ticket-type" [(ngModel)]="orderType" name="orderType">
+                  <option value="MARKET">Market</option>
+                  <option value="LIMIT">Limit</option>
+                  <option value="STOP">Stop</option>
+                  <option value="STOP_LIMIT">Stop-limit</option>
+                </select>
+              </div>
+              <div>
+                <label class="form-label" for="ticket-tif">Time in force</label>
+                <select class="form-select" id="ticket-tif" [(ngModel)]="tif" name="tif">
+                  <option value="GTC">Good till cancelled</option>
+                  <option value="DAY">Day</option>
+                  <option value="IOC">Immediate or cancel</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label class="form-label" for="ticket-qty">Quantity</label>
+              <div class="input-group">
+                <input class="form-control" id="ticket-qty" type="number" min="0" step="any" inputmode="decimal" [(ngModel)]="qty" name="qty" placeholder="0">
+                <span class="input-group-text">{{ symbolLabel }}</span>
+              </div>
+            </div>
 
             <div class="presets">
               @for (p of presets; track p) {
@@ -88,28 +80,28 @@
             </div>
 
             @if (needsLimit()) {
-              <mat-form-field appearance="outline">
-                <mat-label>Limit price</mat-label>
-                <input matInput type="number" min="0" step="any" inputmode="decimal"
-                       [(ngModel)]="limitPrice" name="limitPrice"
-                       placeholder="{{ mark() > 0 ? mark() : '' }}">
-                <mat-hint align="end">{{ currency() }}</mat-hint>
-              </mat-form-field>
+              <div>
+                <label class="form-label" for="ticket-limit">Limit price</label>
+                <div class="input-group">
+                  <input class="form-control" id="ticket-limit" type="number" min="0" step="any" inputmode="decimal" [(ngModel)]="limitPrice" name="limitPrice" placeholder="{{ mark() > 0 ? mark() : '' }}">
+                  <span class="input-group-text">{{ currency() }}</span>
+                </div>
+              </div>
             }
 
             @if (needsStop()) {
-              <mat-form-field appearance="outline">
-                <mat-label>Stop price</mat-label>
-                <input matInput type="number" min="0" step="any" inputmode="decimal"
-                       [(ngModel)]="stopPrice" name="stopPrice"
-                       placeholder="{{ mark() > 0 ? mark() : '' }}">
-                <mat-hint align="end">triggers the order</mat-hint>
-              </mat-form-field>
+              <div>
+                <label class="form-label" for="ticket-stop">Stop price <span class="text-muted fw-normal">(triggers the order)</span></label>
+                <div class="input-group">
+                  <input class="form-control" id="ticket-stop" type="number" min="0" step="any" inputmode="decimal" [(ngModel)]="stopPrice" name="stopPrice" placeholder="{{ mark() > 0 ? mark() : '' }}">
+                  <span class="input-group-text">{{ currency() }}</span>
+                </div>
+              </div>
             }
 
             @if (validationError(); as problem) {
               <div class="ticket-error" role="alert">
-                <mat-icon>error_outline</mat-icon>
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
                 <span>{{ problem }}</span>
               </div>
             }
@@ -124,9 +116,8 @@
             </dl>
 
             <div class="ticket-actions">
-              <button mat-flat-button type="submit" class="primary-action"
-                      [class.buy]="side === 'BUY'" [class.sell]="side === 'SELL'">
-                <mat-icon>{{ side === 'BUY' ? 'shopping_cart' : 'sell' }}</mat-icon>
+              <button type="submit" class="btn primary-action" [class.buy]="side === 'BUY'" [class.sell]="side === 'SELL'">
+                <i class="bi" [class.bi-cart-plus]="side === 'BUY'" [class.bi-tag]="side === 'SELL'" aria-hidden="true"></i>
                 Review {{ side === 'BUY' ? 'buy' : 'sell' }} order
               </button>
             </div>
@@ -134,7 +125,7 @@
         } @else {
           <div class="review">
             <div class="review-head">
-              <mat-icon class="review-icon">fact_check</mat-icon>
+              <i class="bi bi-clipboard-check review-icon" aria-hidden="true"></i>
               <div>
                 <div class="review-title">Review order</div>
                 <div class="review-sub">Nothing is sent to the engine until you confirm.</div>
@@ -161,23 +152,20 @@
 
             @if (serverError; as problem) {
               <div class="ticket-error" role="alert">
-                <mat-icon>error_outline</mat-icon>
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
                 <span>{{ problem }}</span>
               </div>
             }
 
             <div class="ticket-actions">
-              <button mat-stroked-button type="button" class="back-action"
-                      [disabled]="busy()" (click)="backToCompose()">
-                <mat-icon>arrow_back</mat-icon> Back
+              <button type="button" class="btn btn-outline-secondary back-action" [disabled]="busy()" (click)="backToCompose()">
+                <i class="bi bi-arrow-left" aria-hidden="true"></i> Back
               </button>
-              <button mat-flat-button type="button" class="primary-action"
-                      [class.buy]="side === 'BUY'" [class.sell]="side === 'SELL'"
-                      [disabled]="busy()" (click)="submit()">
+              <button type="button" class="btn primary-action" [class.buy]="side === 'BUY'" [class.sell]="side === 'SELL'" [disabled]="busy()" (click)="submit()">
                 @if (busy()) {
-                  <mat-spinner diameter="18" class="btn-spinner"></mat-spinner>
+                  <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
                 } @else {
-                  <mat-icon>check_circle</mat-icon>
+                  <i class="bi bi-check-circle" aria-hidden="true"></i>
                 }
                 Confirm {{ side === 'BUY' ? 'buy' : 'sell' }}
               </button>
@@ -189,7 +177,7 @@
       <!-- BLOTTER -->
       <section class="blotter" aria-label="Positions and orders">
         <div class="blotter-head">
-          <div class="tabs" role="tablist">
+          <div class="fs-segmented tabs" role="tablist" aria-label="Blotter views">
             <button type="button" role="tab" [class.active]="tab() === 'positions'"
                     [attr.aria-selected]="tab() === 'positions'"
                     (click)="tab.set('positions')">
@@ -208,9 +196,8 @@
           </div>
 
           @if (tab() === 'open' && openOrders().length) {
-            <button mat-stroked-button type="button" class="cancel-all"
-                    title="Cancel every working order" [disabled]="busy()" (click)="cancelAll()">
-              <mat-icon>block</mat-icon> Cancel all
+            <button type="button" class="btn btn-sm btn-outline-danger cancel-all" title="Cancel every working order" [disabled]="busy()" (click)="cancelAll()">
+              <i class="bi bi-slash-circle" aria-hidden="true"></i> Cancel all
             </button>
           }
         </div>
@@ -218,7 +205,7 @@
         @switch (tab()) {
           @case ('positions') {
             <div class="table-wrap">
-              <table class="desk-table">
+              <table class="table table-hover desk-table">
                 <thead>
                   <tr>
                     <th>Symbol</th>
@@ -273,7 +260,7 @@
 
           @case ('open') {
             <div class="table-wrap">
-              <table class="desk-table">
+              <table class="table table-hover desk-table">
                 <thead>
                   <tr>
                     <th>Symbol</th>
@@ -315,7 +302,7 @@
 
           @case ('history') {
             <div class="table-wrap">
-              <table class="desk-table">
+              <table class="table table-hover desk-table">
                 <thead>
                   <tr>
                     <th>Symbol</th>
@@ -345,7 +332,7 @@
                       </td>
                       <td data-label="Fee" class="num">{{ o.fee > 0 ? o.fee.toFixed(2) : '—' }}</td>
                       <td data-label="Status">
-                        <span class="status-chip" [ngClass]="statusClass(o.status)">{{ o.status }}</span>
+                        <span class="fs-status" [ngClass]="statusClass(o.status)">{{ o.status }}</span>
                       </td>
                       <td data-label="Time">{{ timeOf(o) | date: 'MMM d, HH:mm:ss' }}</td>
                     </tr>
@@ -360,5 +347,4 @@
         }
       </section>
     </div>
-  </mat-card-content>
-</mat-card>
+</div>

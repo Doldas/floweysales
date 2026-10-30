@@ -1,6 +1,5 @@
 import { Component, input, output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { MatButtonModule } from '@angular/material/button';
 import {
   MAX_PINS, Pin, PinType, V2Edge, V2Graph, V2Node, WireKind, connectWire, inputPorts, outputPorts, pinProblems, removePin, renamePin,
 } from './function-pins';
@@ -13,9 +12,9 @@ const OPERATIONS = ['add', 'subtract', 'multiply', 'divide', 'greater', 'less', 
  * nodes, and data/execution wires between named ports.
  */
 @Component({
-  selector: 'fse-typed-function-editor',
+  selector: 'fse-typed-function-editor', host:{class:'fs-native-forms'},
   standalone: true,
-  imports: [FormsModule, MatButtonModule],
+  imports: [FormsModule],
   template: `
   <section class="typed" aria-label="Typed function editor">
    <div class="pins">
@@ -25,10 +24,10 @@ const OPERATIONS = ['add', 'subtract', 'multiply', 'divide', 'greater', 'less', 
       <div class="row">
        <input [ngModel]="p.name" (change)="renameInput(p.name, $any($event.target).value)" aria-label="Input pin name" maxlength="48">
        <select [ngModel]="p.type" (ngModelChange)="retype('input', p.name, $event)" aria-label="Input pin type"><option value="number">number</option><option value="text">text</option><option value="boolean">boolean</option></select>
-       <button type="button" mat-stroked-button (click)="drop('input', p.name)" [disabled]="graph().inputs.length<=1" [attr.aria-label]="'Remove input '+p.name">Remove</button>
+       <button class="btn btn-sm btn-outline-secondary" type="button" (click)="drop('input', p.name)" [disabled]="graph().inputs.length<=1" [attr.aria-label]="'Remove input '+p.name">Remove</button>
       </div>
      }
-     <button type="button" mat-stroked-button (click)="addPin('input')" [disabled]="graph().inputs.length>=maxPins">+ Input pin</button>
+     <button class="btn btn-sm btn-outline-secondary" type="button" (click)="addPin('input')" [disabled]="graph().inputs.length>=maxPins">+ Input pin</button>
     </fieldset>
     <fieldset>
      <legend>Output pins</legend>
@@ -36,20 +35,20 @@ const OPERATIONS = ['add', 'subtract', 'multiply', 'divide', 'greater', 'less', 
       <div class="row">
        <input [ngModel]="p.name" (change)="renameOutput(p.name, $any($event.target).value)" aria-label="Output pin name" maxlength="48">
        <select [ngModel]="p.type" (ngModelChange)="retype('output', p.name, $event)" aria-label="Output pin type"><option value="number">number</option><option value="text">text</option><option value="boolean">boolean</option></select>
-       <button type="button" mat-stroked-button (click)="drop('output', p.name)" [disabled]="graph().outputs.length<=1" [attr.aria-label]="'Remove output '+p.name">Remove</button>
+       <button class="btn btn-sm btn-outline-secondary" type="button" (click)="drop('output', p.name)" [disabled]="graph().outputs.length<=1" [attr.aria-label]="'Remove output '+p.name">Remove</button>
       </div>
      }
-     <button type="button" mat-stroked-button (click)="addPin('output')" [disabled]="graph().outputs.length>=maxPins">+ Output pin</button>
+     <button class="btn btn-sm btn-outline-secondary" type="button" (click)="addPin('output')" [disabled]="graph().outputs.length>=maxPins">+ Output pin</button>
     </fieldset>
    </div>
    @for(problem of problems(); track problem){<p class="problem" role="alert">{{problem}}</p>}
 
    <h4>Internal nodes</h4>
    <div class="row">
-    <button type="button" mat-stroked-button (click)="addNode('constant')">+ Value</button>
-    <button type="button" mat-stroked-button (click)="addNode('operation')">+ Operation</button>
-    <button type="button" mat-stroked-button (click)="addNode('branch')">+ Branch</button>
-    <button type="button" mat-stroked-button (click)="addNode('output')" title="A second exit; each exit must connect every output pin">+ Extra exit</button>
+    <button class="btn btn-sm btn-outline-secondary" type="button" (click)="addNode('constant')">+ Value</button>
+    <button class="btn btn-sm btn-outline-secondary" type="button" (click)="addNode('operation')">+ Operation</button>
+    <button class="btn btn-sm btn-outline-secondary" type="button" (click)="addNode('branch')">+ Branch</button>
+    <button class="btn btn-sm btn-outline-secondary" type="button" (click)="addNode('output')" title="A second exit; each exit must connect every output pin">+ Extra exit</button>
    </div>
    <ul class="nodes">
     @for(n of graph().nodes; track n.id){
@@ -62,7 +61,7 @@ const OPERATIONS = ['add', 'subtract', 'multiply', 'divide', 'greater', 'less', 
       @if(n.type==='operation'){
        <select [ngModel]="n.operation||'add'" (ngModelChange)="patch(n.id,{operation:$event})" aria-label="Operation">@for(op of operations; track op){<option [value]="op">{{op}}</option>}</select>
       }
-      @if(n.type!=='input' && !(n.type==='output' && outputNodeCount()<=1)){<button type="button" mat-stroked-button (click)="removeNode(n.id)" [attr.aria-label]="'Remove node '+n.id">Remove</button>}
+      @if(n.type!=='input' && !(n.type==='output' && outputNodeCount()<=1)){<button class="btn btn-sm btn-outline-secondary" type="button" (click)="removeNode(n.id)" [attr.aria-label]="'Remove node '+n.id">Remove</button>}
      </li>
     }
    </ul>
@@ -75,26 +74,26 @@ const OPERATIONS = ['add', 'subtract', 'multiply', 'divide', 'greater', 'less', 
     <label>Port <select #fromPort>@for(p of sourcePorts(from.value, kind.value); track p.port){<option [value]="p.port">{{p.port}}@if(p.type){ ({{p.type}})}</option>}</select></label>
     <label>To <select #to>@for(n of targetNodes(kind.value); track n.id){<option [value]="n.id">{{n.id}}</option>}</select></label>
     <label>Port <select #toPort>@for(p of targetPorts(to.value, kind.value); track p.port){<option [value]="p.port">{{p.port}}@if(p.type){ ({{p.type}})}</option>}</select></label>
-    <button type="button" mat-flat-button (click)="wire(kind.value, from.value, fromPort.value, to.value, toPort.value)">Connect</button>
+    <button class="btn btn-sm btn-primary" type="button" (click)="wire(kind.value, from.value, fromPort.value, to.value, toPort.value)">Connect</button>
    </div>
    <ul class="nodes">
     @for(e of graph().edges; track $index){
      <li><span class="muted">{{e.kind}}</span> {{e.from}}.{{e.from_port}} → {{e.to}}.{{e.to_port}}
-      <button type="button" mat-stroked-button (click)="unwire($index)" aria-label="Remove wire">Remove</button></li>
+      <button class="btn btn-sm btn-outline-secondary" type="button" (click)="unwire($index)" aria-label="Remove wire">Remove</button></li>
     }
    </ul>
   </section>`,
   styles: [`
    .typed{display:flex;flex-direction:column;gap:10px}
    .pins{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:12px}
-   fieldset{border:1px solid #50738e;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}
+   fieldset{border:1px solid var(--fs-border-strong);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}
    .row{display:flex;flex-wrap:wrap;align-items:end;gap:8px}
    .row > input,.row > select{min-width:0;flex:1 1 110px}
    .wire-form select{width:100%;min-width:0}
    .nodes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-   .nodes li{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:6px 8px;border:1px solid #3d5d77;border-radius:6px;overflow-wrap:anywhere}
+   .nodes li{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--fs-border);border-radius:6px;overflow-wrap:anywhere}
    .wire-form label{display:flex;flex-direction:column;gap:3px;font-size:12px;flex:1 1 110px}
-   .problem{margin:0;padding:8px;border-left:4px solid #e36a6a;background:#45222a}
+   .problem{margin:0;padding:8px;border-left:4px solid color-mix(in srgb, var(--fs-neg) 50%, transparent);background:var(--fs-neg-soft)}
    .muted{opacity:.75}h4{margin:6px 0 0}
   `],
 })

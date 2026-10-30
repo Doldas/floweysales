@@ -1,78 +1,8 @@
-:host {
-  display: block;
-}
+:host { display: block; min-width: 0; }
 
-.info-card {
-  margin-top: 16px;
-  backdrop-filter: blur(10px);
-}
-
-.dim {
-  opacity: 0.6;
-  font-size: 0.85em;
-  margin-left: 6px;
-}
-
-.description {
-  color: var(--text-muted, rgba(255, 255, 255, 0.65));
-  font-size: 0.9em;
-  margin: 8px 0 12px;
-}
-
-.tile-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 10px;
-  padding: 10px 0 4px;
-}
-
-.tile {
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.tile-label {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  opacity: 0.6;
-  margin-bottom: 4px;
-}
-
-.tile-value {
-  font-size: 1.05rem;
-  font-weight: 600;
-
-  &.positive { color: #00ff9d; }
-  &.negative { color: #ff0055; }
-  &.accent { color: #4facfe; }
-  &.orange { color: #ffaa00; }
-}
-
-.hive-table {
-  width: 100%;
-  background: transparent;
-}
-
-.empty-hint {
-  text-align: center;
-  opacity: 0.6;
-  padding: 12px;
-}
-
-
-@media (max-width: 700px) {
-  .info-card { margin-top: 12px; }
-  .info-card mat-card-title, .info-card mat-card-subtitle { overflow-wrap: anywhere; }
-  .dim { display: inline; margin-left: 4px; }
-  .tile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .tile { min-width: 0; padding: 10px; }
-  .tile-value { font-size: 0.92rem; overflow-wrap: anywhere; }
-  .hive-table { max-width: 100%; }
-  .hive-table td, .hive-table th { overflow-wrap: anywhere; }
-}
-@media (max-width: 340px) {
-  .tile-grid { grid-template-columns: minmax(0, 1fr); }
-}
+.asset-glyph { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 0.6rem; background: var(--fs-accent-soft); color: var(--fs-accent-text); flex: 0 0 auto; }
+.description { color: var(--fs-muted); font-size: 0.875rem; margin: 0 0 1rem; max-width: 80ch; }
+.tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 10px; }
+.tile { border: 1px solid var(--fs-border); border-radius: var(--bs-border-radius-lg); padding: 0.7rem 0.85rem; background: var(--fs-surface-2); min-width: 0; }
+.tile-label { font-size: 0.72rem; color: var(--fs-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+.tile-value { margin-top: 0.2rem; font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }

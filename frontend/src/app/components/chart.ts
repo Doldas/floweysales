@@ -87,12 +87,20 @@ const EMA_PARAMS: Record<string, number> = {
 };
 
 const EMA_COLORS: Record<string, string> = {
-  ema9: '#f0b429',
-  ema21: '#4ea1ff',
-  ema50: '#b478ff',
-  ema100: '#ff8a4c',
-  ema200: '#ff4cd8',
+  ema9: '#eab308',
+  ema21: '#3b82f6',
+  ema50: '#8b5cf6',
+  ema100: '#f97316',
+  ema200: '#ec4899',
 };
+
+/** `#rrggbb` → `rgba(r, g, b, a)`; other colour formats are returned unchanged. */
+function withAlpha(color: string, alpha: number): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(color.trim());
+  if (!m) return color;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
 
 /** Partial OHLC kept per data point for rich tooltips. */
 interface PointMeta {
@@ -108,7 +116,7 @@ interface PointMeta {
   selector: 'fse-trading-chart',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="legend-hint">⚡ <b>Scroll</b> Zoom • <b>Drag</b> Pan Axis</div>
+    <div class="legend-hint"><i class="bi bi-mouse" aria-hidden="true"></i> Scroll to zoom · drag to pan</div>
     <div class="chart-container">
       <canvas #canvas></canvas>
     </div>
@@ -127,7 +135,7 @@ interface PointMeta {
     `
       :host { display: block; }
       :host { min-width: 0; }
-      .legend-hint { font-size: 0.8rem; opacity: 0.7; margin-bottom: 4px; }
+      .legend-hint { font-size: 0.75rem; color: var(--fs-muted); margin-bottom: 6px; display: flex; gap: 6px; align-items: center; }
       .chart-container { height: 380px; position: relative; min-width: 0; width: 100%; }
       .subchart-container { height: 96px; position: relative; min-width: 0; width: 100%; margin-top: 8px; }
       @media (max-width: 700px) {
@@ -166,7 +174,21 @@ export class TradingChartComponent implements AfterViewInit {
       if (this.chart) {
         (this.chart.data.datasets[0] ?? {}).borderColor = def.priceColor;
         (this.chart.data.datasets[2] ?? {}).borderColor = def.fastEmaColor;
+        (this.chart.data.datasets[3] ?? {}).borderColor = def.slowEmaColor;
         this.chart.update('none');
+      }
+      for (const c of [this.chart, this.rsiChart, this.macdChart]) {
+        if (!c) continue;
+        for (const scale of Object.values(c.options.scales ?? {})) {
+          if (!scale) continue;
+          if (scale.grid) scale.grid.color = def.gridColor;
+          if (scale.ticks) scale.ticks.color = def.textColor;
+        }
+        const legend = c.options.plugins?.legend?.labels;
+        if (legend) legend.color = def.textColor;
+        const title = c.options.plugins?.title;
+        if (title) title.color = def.textColor;
+        c.update('none');
       }
     });
 
@@ -251,7 +273,7 @@ export class TradingChartComponent implements AfterViewInit {
     for (let i = 0; i < points.length; i++) {
       const p = points[i];
       fast = p.c * fastK + fast * (1 - fastK);
-      slow = p.c * slowK + slow * (1 - fastK);
+      slow = p.c * slowK + slow * (1 - slowK);
       highest = Math.max(highest, p.h || p.c);
       lowest = Math.min(lowest, p.l || p.c);
 
@@ -542,8 +564,9 @@ export class TradingChartComponent implements AfterViewInit {
               const area = chart.chartArea;
               if (!area) return 'transparent';
               const g = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
-              g.addColorStop(0, 'rgba(0, 255, 157, 0.22)');
-              g.addColorStop(1, 'rgba(0, 255, 157, 0)');
+              const price = this.theme.def().priceColor;
+              g.addColorStop(0, withAlpha(price, 0.22));
+              g.addColorStop(1, withAlpha(price, 0));
               return g;
             },
             pointRadius: (ctx: ScriptableContext<'line'>) => {
@@ -552,10 +575,10 @@ export class TradingChartComponent implements AfterViewInit {
             },
             pointBackgroundColor: (ctx: ScriptableContext<'line'>) => {
               switch (this.signalAt(ctx.dataIndex)) {
-                case 'BUY': return '#00ff9d';
-                case 'SELL': return '#ff0055';
-                case 'GOLDEN_CROSS': return '#ffd700';
-                case 'DEATH_CROSS': return '#9d00ff';
+                case 'BUY': return '#16a34a';
+                case 'SELL': return '#dc2626';
+                case 'GOLDEN_CROSS': return '#eab308';
+                case 'DEATH_CROSS': return '#9333ea';
                 default: return this.theme.def().priceColor;
               }
             },
@@ -566,7 +589,7 @@ export class TradingChartComponent implements AfterViewInit {
           {
             label: 'Stop Loss',
             data: [],
-            borderColor: '#ff0055',
+            borderColor: '#ef4444',
             borderWidth: 1.5,
             borderDash: [4, 4],
             tension: 0,
@@ -580,9 +603,9 @@ export class TradingChartComponent implements AfterViewInit {
             tension: 0.2,
             pointRadius: 0,
           },
-          { label: 'Slow EMA', data: [], borderColor: '#ffaa00', borderWidth: 1.5, tension: 0.2, pointRadius: 0 },
-          { label: 'Highest Ref', data: [], borderColor: '#00ffcc', borderWidth: 1, borderDash: [5, 5], tension: 0, pointRadius: 0 },
-          { label: 'Lowest Ref', data: [], borderColor: '#ff6600', borderWidth: 1, borderDash: [5, 5], tension: 0, pointRadius: 0 },
+          { label: 'Slow EMA', data: [], borderColor: def.slowEmaColor, borderWidth: 1.5, tension: 0.2, pointRadius: 0 },
+          { label: 'Highest Ref', data: [], borderColor: '#14b8a6', borderWidth: 1, borderDash: [5, 5], tension: 0, pointRadius: 0 },
+          { label: 'Lowest Ref', data: [], borderColor: '#f97316', borderWidth: 1, borderDash: [5, 5], tension: 0, pointRadius: 0 },
           // --- analysis datasets (indices 6..15, toggled via chips) ---------
           emaDs('ema9', 'EMA 9'),
           emaDs('ema21', 'EMA 21'),
@@ -592,17 +615,17 @@ export class TradingChartComponent implements AfterViewInit {
           {
             label: 'BB Upper',
             data: [],
-            borderColor: 'rgba(0, 240, 255, 0.65)',
+            borderColor: 'rgba(14, 165, 233, 0.65)',
             borderWidth: 1,
             pointRadius: 0,
             tension: 0.2,
-            fill: { target: 13, above: 'rgba(0, 240, 255, 0.06)' },
+            fill: { target: 13, above: 'rgba(14, 165, 233, 0.07)' },
             hidden: true,
           },
           {
             label: 'BB Basis',
             data: [],
-            borderColor: 'rgba(0, 240, 255, 0.4)',
+            borderColor: 'rgba(14, 165, 233, 0.4)',
             borderWidth: 1,
             borderDash: [3, 3],
             pointRadius: 0,
@@ -612,7 +635,7 @@ export class TradingChartComponent implements AfterViewInit {
           {
             label: 'BB Lower',
             data: [],
-            borderColor: 'rgba(0, 240, 255, 0.65)',
+            borderColor: 'rgba(14, 165, 233, 0.65)',
             borderWidth: 1,
             pointRadius: 0,
             tension: 0.2,
@@ -621,7 +644,7 @@ export class TradingChartComponent implements AfterViewInit {
           {
             label: 'VWAP',
             data: [],
-            borderColor: '#ffd700',
+            borderColor: '#eab308',
             borderWidth: 1.5,
             borderDash: [6, 3],
             pointRadius: 0,
@@ -634,7 +657,7 @@ export class TradingChartComponent implements AfterViewInit {
             type: 'bar',
             order: -1,
             yAxisID: 'vol',
-            backgroundColor: 'rgba(125, 133, 144, 0.35)',
+            backgroundColor: 'rgba(100, 116, 139, 0.32)',
             borderWidth: 0,
             hidden: true,
           } as unknown as ChartDataset<'line'>,
@@ -647,17 +670,17 @@ export class TradingChartComponent implements AfterViewInit {
         interaction: { mode: 'index', intersect: false },
         scales: {
           x: {
-            grid: { color: 'rgba(255,255,255,0.05)' },
-            ticks: { maxTicksLimit: 10, color: '#7d8590' },
+            grid: { color: def.gridColor },
+            ticks: { maxTicksLimit: 10, color: def.textColor },
           },
-          y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#7d8590' } },
+          y: { grid: { color: def.gridColor }, ticks: { color: def.textColor } },
           vol: { display: false, position: 'right', beginAtZero: true, grid: { display: false } },
         },
         plugins: {
           legend: {
             labels: {
-              color: '#f0f6fc',
-              font: { family: 'Orbitron, sans-serif', size: 11 },
+              color: def.textColor,
+              font: { family: 'Inter, sans-serif', size: 11 },
               // Analysis lines are toggled via the chips, not the legend.
               filter: (item) => !DATASET_FLAG[item.datasetIndex ?? -1],
             },
@@ -698,6 +721,7 @@ export class TradingChartComponent implements AfterViewInit {
   }
 
   private buildRsiConfig(labels: string[], vals: (number | null)[]): ChartConfiguration<'line'> {
+    const def = this.theme.def();
     return {
       type: 'line',
       data: {
@@ -706,7 +730,7 @@ export class TradingChartComponent implements AfterViewInit {
           {
             label: 'RSI 14',
             data: vals,
-            borderColor: '#b478ff',
+            borderColor: '#8b5cf6',
             borderWidth: 1.5,
             pointRadius: 0,
             tension: 0.2,
@@ -714,7 +738,7 @@ export class TradingChartComponent implements AfterViewInit {
           {
             label: '70',
             data: labels.map(() => 70),
-            borderColor: 'rgba(255, 80, 80, 0.55)',
+            borderColor: 'rgba(239, 68, 68, 0.55)',
             borderWidth: 1,
             borderDash: [4, 4],
             pointRadius: 0,
@@ -722,7 +746,7 @@ export class TradingChartComponent implements AfterViewInit {
           {
             label: '30',
             data: labels.map(() => 30),
-            borderColor: 'rgba(80, 255, 128, 0.55)',
+            borderColor: 'rgba(22, 163, 74, 0.55)',
             borderWidth: 1,
             borderDash: [4, 4],
             pointRadius: 0,
@@ -736,7 +760,7 @@ export class TradingChartComponent implements AfterViewInit {
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
-          title: { display: true, text: 'RSI (14)', color: '#7d8590', font: { size: 10, weight: 'bold' } },
+          title: { display: true, text: 'RSI (14)', color: def.textColor, font: { size: 10, weight: 'bold' } },
           tooltip: { callbacks: { label: (item) => `${item.dataset.label}: ${this.fmtPrice(item.parsed?.y)}` } },
         },
         scales: {
@@ -744,8 +768,8 @@ export class TradingChartComponent implements AfterViewInit {
           y: {
             min: 0,
             max: 100,
-            ticks: { stepSize: 30, color: '#7d8590', font: { size: 9 } },
-            grid: { color: 'rgba(255,255,255,0.05)' },
+            ticks: { stepSize: 30, color: def.textColor, font: { size: 9 } },
+            grid: { color: def.gridColor },
           },
         },
       },
@@ -753,6 +777,7 @@ export class TradingChartComponent implements AfterViewInit {
   }
 
   private buildMacdConfig(labels: string[], m: ReturnType<typeof macd>): ChartConfiguration<'line'> {
+    const def = this.theme.def();
     return {
       type: 'line',
       data: {
@@ -765,14 +790,14 @@ export class TradingChartComponent implements AfterViewInit {
             order: -1,
             backgroundColor: (ctx: ScriptableContext<'bar'>) => {
               const y = (ctx.parsed as { y?: number } | undefined)?.y ?? 0;
-              return y >= 0 ? 'rgba(0, 255, 157, 0.55)' : 'rgba(255, 0, 85, 0.55)';
+              return y >= 0 ? 'rgba(22, 163, 74, 0.55)' : 'rgba(220, 38, 38, 0.55)';
             },
             borderWidth: 0,
           } as unknown as ChartDataset<'line'>,
           {
             label: 'MACD',
             data: m.line,
-            borderColor: '#00f0ff',
+            borderColor: '#0ea5e9',
             borderWidth: 1.5,
             pointRadius: 0,
             tension: 0.2,
@@ -780,7 +805,7 @@ export class TradingChartComponent implements AfterViewInit {
           {
             label: 'Signal',
             data: m.signal,
-            borderColor: '#ffaa00',
+            borderColor: '#f59e0b',
             borderWidth: 1.2,
             pointRadius: 0,
             tension: 0.2,
@@ -795,14 +820,14 @@ export class TradingChartComponent implements AfterViewInit {
         plugins: {
           legend: {
             display: true,
-            labels: { color: '#7d8590', font: { size: 9 }, boxWidth: 10 },
+            labels: { color: def.textColor, font: { size: 9 }, boxWidth: 10 },
           },
-          title: { display: true, text: 'MACD (12, 26, 9)', color: '#7d8590', font: { size: 10, weight: 'bold' } },
+          title: { display: true, text: 'MACD (12, 26, 9)', color: def.textColor, font: { size: 10, weight: 'bold' } },
           tooltip: { callbacks: { label: (item) => `${item.dataset.label}: ${this.fmtPrice(item.parsed?.y)}` } },
         },
         scales: {
           x: { display: false },
-          y: { ticks: { color: '#7d8590', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          y: { ticks: { color: def.textColor, font: { size: 9 } }, grid: { color: def.gridColor } },
         },
       },
     };

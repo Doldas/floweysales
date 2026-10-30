@@ -10,18 +10,10 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatCardModule } from '@angular/material/card';
-import { MatButtonModule } from '@angular/material/button';
-import { MatButtonToggleModule } from '@angular/material/button-toggle';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatIconModule } from '@angular/material/icon';
-import { MatInputModule } from '@angular/material/input';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSelectModule } from '@angular/material/select';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
 import { MarketService, describeHttpError } from '../services';
 import { OrdersState } from '../orders-state';
+import { NotifyService } from '../core/notify.service';
 import { Order, OrderSide, OrderTif, OrderType, Position } from '../models';
 
 type BlotterTab = 'positions' | 'open' | 'history';
@@ -41,26 +33,14 @@ const EPSILON = 1e-9;
 @Component({
   selector: 'fse-ledger',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [
-    CommonModule,
-    FormsModule,
-    MatCardModule,
-    MatButtonModule,
-    MatButtonToggleModule,
-    MatFormFieldModule,
-    MatIconModule,
-    MatInputModule,
-    MatProgressSpinnerModule,
-    MatSelectModule,
-    MatSnackBarModule,
-  ],
+  imports: [CommonModule, FormsModule],
   templateUrl: './ledger.html',
   styleUrl: './ledger.scss',
 })
 export class LedgerComponent {
   private readonly api = inject(MarketService);
   private readonly state = inject(OrdersState);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toasts = inject(NotifyService);
 
   /** Currently tracked symbol; changing it reloads the book. */
   readonly trackedSymbol = input.required<string>();
@@ -507,13 +487,13 @@ export class LedgerComponent {
   statusClass(status: string): string {
     switch (status) {
       case 'FILLED':
-        return 'status-filled';
+        return 'is-success';
       case 'OPEN':
-        return 'status-open';
+        return 'is-info';
       case 'CANCELLED':
-        return 'status-cancelled';
+        return '';
       default:
-        return 'status-rejected';
+        return 'is-danger';
     }
   }
 
@@ -548,10 +528,8 @@ export class LedgerComponent {
   }
 
   private notify(message: string, error: boolean): void {
-    this.snackBar.open(message, 'OK', {
-      duration: 5000,
-      panelClass: error ? ['snack-error'] : ['snack-ok'],
-    });
+    if (error) this.toasts.error(message);
+    else this.toasts.success(message);
   }
 
 }

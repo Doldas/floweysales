@@ -1,40 +1,69 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, computed, signal } from '@angular/core';
 
-export type ThemeId = 'theme-cyberpunk' | 'theme-deepspace' | 'theme-matrix' | 'theme-mediterranean';
+export type ThemeId = 'dark' | 'light';
 
-interface ThemeDef {
-  id: ThemeId;
-  label: string;
+interface ChartPalette {
   priceColor: string;
   fastEmaColor: string;
+  slowEmaColor: string;
+  gridColor: string;
+  textColor: string;
 }
 
-export const THEMES: ThemeDef[] = [
-  { id: 'theme-cyberpunk', label: '⚡ Neon Cyberpunk', priceColor: '#00f0ff', fastEmaColor: '#ff007f' },
-  { id: 'theme-deepspace', label: '🌌 Deep Space', priceColor: '#6366f1', fastEmaColor: '#a855f7' },
-  { id: 'theme-matrix', label: '🟢 Matrix Grid', priceColor: '#00ff66', fastEmaColor: '#33ff99' },
-  { id: 'theme-mediterranean', label: '🌊 Mediterranean', priceColor: '#00f2fe', fastEmaColor: '#4facfe' },
-];
+const STORAGE_KEY = 'fs.theme';
 
+/** Reads a design token from the document root (falls back during SSR/tests). */
+function token(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback;
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+
+/**
+ * ThemeService switches Bootstrap's colour mode (`data-bs-theme`) and exposes
+ * the chart palette resolved from the current design tokens.
+ */
 @Injectable({ providedIn: 'root' })
 export class ThemeService {
-  private static readonly KEY = 'lastTheme';
+  readonly theme = signal<ThemeId>(this.initial());
 
-  readonly theme = signal<ThemeId>(
-    (localStorage.getItem(ThemeService.KEY) as ThemeId) ?? 'theme-cyberpunk',
-  );
-
-  readonly def = signal<ThemeDef>(THEMES.find((t) => t.id === this.theme()) ?? THEMES[0]);
+  /** Chart colours for the active theme; recomputed whenever the theme changes. */
+  readonly def = computed<ChartPalette>(() => {
+    this.theme();
+    return {
+      priceColor: token('--fs-chart-price', '#818cf8'),
+      fastEmaColor: token('--fs-chart-fast', '#f472b6'),
+      slowEmaColor: token('--fs-chart-slow', '#fbbf24'),
+      gridColor: token('--fs-chart-grid', 'rgba(226,232,240,.07)'),
+      textColor: token('--fs-chart-text', '#8b98ad'),
+    };
+  });
 
   constructor() {
-    document.body.classList.add(this.theme());
+    this.apply(this.theme());
+  }
+
+  toggle(): void {
+    this.set(this.theme() === 'dark' ? 'light' : 'dark');
   }
 
   set(id: ThemeId): void {
-    document.body.classList.remove(this.theme());
-    document.body.classList.add(id);
-    localStorage.setItem(ThemeService.KEY, id);
+    try {
+      localStorage.setItem(STORAGE_KEY, id);
+    } catch {}
+    this.apply(id);
     this.theme.set(id);
-    this.def.set(THEMES.find((t) => t.id === id) ?? THEMES[0]);
+  }
+
+  private apply(id: ThemeId): void {
+    if (typeof document !== 'undefined') document.documentElement.setAttribute('data-bs-theme', id);
+  }
+
+  private initial(): ThemeId {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved === 'dark' || saved === 'light') return saved;
+      if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: light)').matches) return 'light';
+    } catch {}
+    return 'dark';
   }
 }

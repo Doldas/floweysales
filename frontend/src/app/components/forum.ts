@@ -7,15 +7,10 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { MatCardModule } from '@angular/material/card';
-import { MatButtonModule } from '@angular/material/button';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatIconModule } from '@angular/material/icon';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { FormsModule } from '@angular/forms';
 
 import { MarketService, describeHttpError } from '../services';
+import { NotifyService } from '../core/notify.service';
 import { ForumPost } from '../models';
 
 @Component({
@@ -24,12 +19,6 @@ import { ForumPost } from '../models';
   imports: [
     CommonModule,
     DatePipe,
-    MatCardModule,
-    MatButtonModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatIconModule,
-    MatSnackBarModule,
     FormsModule,
   ],
   templateUrl: './forum.html',
@@ -37,7 +26,7 @@ import { ForumPost } from '../models';
 })
 export class ForumComponent {
   private readonly api = inject(MarketService);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toasts = inject(NotifyService);
 
   readonly trackedSymbol = input.required<string>();
 
@@ -98,6 +87,6 @@ export class ForumComponent {
   }
 
   private notify(message: string): void {
-    this.snackBar.open(message, 'OK', { duration: 3500, panelClass: ['snack-error'] });
+    this.toasts.info(message);
   }
 }

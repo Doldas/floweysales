@@ -1,6 +1,4 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
-import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
 import { comparisonLabel, isUpdateRunning, shortCommit, stateLabel, stepProgress } from './update-status';
 
 interface ImageInfo { image: string; tag: string; digest: string; commit?: string; created?: string }
@@ -15,29 +13,29 @@ interface Overview { current: { commit?: string; build_time?: string; image: str
 const POLL_MS = 3000;
 
 @Component({
- selector: 'fse-update-settings',
+ selector: 'fse-update-settings', host:{class:'fs-native-forms'},
  standalone: true,
- imports: [MatButtonModule, MatCardModule],
+ imports: [],
  template: `
  @if(overview();as o){
  <div class="cards">
-  <mat-card>
+  <div class="card">
    <h3>Installed version</h3>
    <dl>
     <dt>Build</dt><dd><code>{{shortCommit(o.current.commit)}}</code>@if(o.current.build_time){ · built {{when(o.current.build_time)}}}</dd>
     <dt>Update channel</dt><dd><code>{{o.current.image}}:{{o.current.tag}}</code></dd>
    </dl>
    <div class="actions">
-    <button mat-flat-button (click)="check()" [disabled]="busy()||running()">Check for updates</button>
+    <button class="btn btn-sm btn-primary" (click)="check()" [disabled]="busy()||running()">Check for updates</button>
    </div>
    @if(o.check;as c){
     <p role="status" class="result" [class.available]="c.comparison==='update_available'" [class.problem]="c.comparison==='check_failed'">{{comparisonLabel(c.comparison)}}</p>
     @if(c.error){<p class="warning">{{c.error}}</p>}
     <p class="muted">Last checked {{when(c.checked_at)}}</p>
    } @else {<p class="muted">{{comparisonLabel(undefined)}}</p>}
-  </mat-card>
+  </div>
 
-  <mat-card>
+  <div class="card">
    <h3>Host updater</h3>
    @if(o.agent;as a){
     <p>Installed for <strong>{{a.engine}}</strong> · {{a.timer?'also updates four times daily':'updates only when requested here'}} · database backups {{a.backups?'on':'off'}}</p>
@@ -49,11 +47,11 @@ const POLL_MS = 3000;
 docker compose -f compose.deploy.yml up -d app</pre>
    }
    @if(o.status_error){<p class="warning">{{o.status_error}}</p>}
-  </mat-card>
+  </div>
  </div>
 
  @if(o.check?.latest;as latest){
- <mat-card class="wide">
+ <div class="card wide">
   <h3>Available version</h3>
   <p><code>{{shortCommit(latest.commit)}}</code>@if(latest.created){ · published {{when(latest.created)}}}</p>
   @if(o.check?.changes;as ch){
@@ -71,16 +69,16 @@ docker compose -f compose.deploy.yml up -d app</pre>
   @if(o.check?.changes_error){<p class="muted">The change list is unavailable ({{o.check?.changes_error}}); the image can still be installed.</p>}
   @if(o.check?.comparison!=='up_to_date' && o.check?.comparison!=='newer_than_latest'){
    <div class="actions">
-    <button mat-flat-button color="primary" (click)="apply()" [disabled]="busy()||!o.can_apply">Download and install update</button>
+    <button class="btn btn-sm btn-primary" (click)="apply()" [disabled]="busy()||!o.can_apply">Download and install update</button>
     @if(!o.agent){<span class="muted">Install the host updater first.</span>}
    </div>
    <p class="muted">Installing backs up MySQL to <code>backups/</code>, downloads the images, runs the migrations, restarts the application (a short interruption) and checks its health. If the new version is unhealthy the previous image is restored; migrations are additive and stay applied.</p>
   }
- </mat-card>
+ </div>
  }
 
  @if(o.status.state!=='idle'){
- <mat-card class="wide" aria-live="polite">
+ <div class="card wide" aria-live="polite">
   <h3>{{running()?'Updating…':'Last update'}}</h3>
   <p role="status" class="result" [class.problem]="o.status.state==='failed'||o.status.state==='rolled_back'" [class.available]="o.status.state==='succeeded'">
    {{stateLabel(o.status.state)}}@if(o.status.message){ · {{o.status.message}}}</p>
@@ -96,10 +94,10 @@ docker compose -f compose.deploy.yml up -d app</pre>
   </p>
   @if(o.status.backup){<p>Backup: <code>{{o.status.backup}}</code></p>}
   @if(o.status.state==='succeeded' && o.status.to_commit && o.current.commit && !o.status.to_commit.startsWith(o.current.commit)){
-   <p class="warning">This page was loaded from the previous version. <button mat-stroked-button (click)="reload()">Reload</button></p>
+   <p class="warning">This page was loaded from the previous version. <button class="btn btn-sm btn-outline-secondary" (click)="reload()">Reload</button></p>
   }
   @if(o.status.log_tail?.length){<details [open]="o.status.state==='failed'||o.status.state==='rolled_back'"><summary>Updater log</summary><pre>{{o.status.log_tail!.join('\\n')}}</pre></details>}
- </mat-card>
+ </div>
  }
  } @else {<p class="muted">{{error()||'Loading update information…'}}</p>}
  @if(message()){<p role="status">{{message()}}</p>}
@@ -107,23 +105,23 @@ docker compose -f compose.deploy.yml up -d app</pre>
  styles: [`
  :host{display:flex;flex-direction:column;gap:18px}
  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:18px}
- mat-card{display:flex;flex-direction:column;gap:10px;padding:22px;background:var(--mat-sys-surface-container, #182d3f);min-width:0}
+ .card{display:flex;flex-direction:column;gap:10px;padding:22px;background:var(--fs-surface);min-width:0}
  h3,h4{margin:0}
- dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:0}dt{opacity:.8}dd{margin:0;overflow-wrap:anywhere}
+ dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:0}dt{color:var(--fs-muted)}dd{margin:0;overflow-wrap:anywhere}
  code{font-size:13px;overflow-wrap:anywhere}
- pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#0f2232;border:1px solid #3d5d77;border-radius:7px;padding:10px;margin:0;font-size:12px;max-height:320px;overflow:auto}
+ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--fs-surface);border:1px solid var(--fs-border);border-radius:7px;padding:10px;margin:0;font-size:12px;max-height:320px;overflow:auto}
  .actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
- .result{margin:0;padding:10px 12px;border-left:4px solid #73baff;background:#1b3854}
- .result.available{border-color:#5fd39a;background:#183f33}
- .result.problem{border-color:#e36a6a;background:#45222a}
- .warning{padding:12px;border-left:4px solid #e3ac54;background:#42321f;color:#fff;margin:0}
- .muted{opacity:.8;margin:0}
+ .result{margin:0;padding:10px 12px;border-left:4px solid var(--fs-accent);background:var(--fs-surface-3)}
+ .result.available{border-color:color-mix(in srgb, var(--fs-pos) 50%, transparent);background:var(--fs-pos-soft)}
+ .result.problem{border-color:color-mix(in srgb, var(--fs-neg) 50%, transparent);background:var(--fs-neg-soft)}
+ .warning{padding:12px;border-left:4px solid color-mix(in srgb, var(--fs-warn) 55%, transparent);background:var(--fs-warn-soft);color:var(--fs-text);margin:0}
+ .muted{color:var(--fs-muted);margin:0}
  .commits{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;overflow-wrap:anywhere}
  .steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:4px}
- .steps li.done{color:#8fe0b5}.steps li.done::marker{content:'✓  '}
- .steps li.active{font-weight:600;color:#bfe2ff}.steps li.active::marker{content:'●  '}
+ .steps li.done{color:var(--fs-text)}.steps li.done::marker{content:'✓  '}
+ .steps li.active{font-weight:600;color:var(--fs-text)}.steps li.active::marker{content:'●  '}
  .steps li.pending{opacity:.6}
- a{color:#9fd3ff}
+ a{color:var(--fs-accent-text)}
  `],
 })
 export class UpdateSettingsComponent {
