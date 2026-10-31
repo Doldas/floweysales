@@ -29,14 +29,16 @@ import { AuthState } from '../auth.service';
           <form (ngSubmit)="acceptInvitation()" class="vstack gap-3">
             <div>
               <label class="form-label" for="invitePassword">Password <span class="text-muted">(at least 14 characters)</span></label>
-              <input class="form-control form-control-lg" id="invitePassword" name="invitePassword" type="password" autocomplete="new-password" [(ngModel)]="invitePassword" minlength="14" required>
+              <input class="form-control form-control-lg" id="invitePassword" name="invitePassword" type="password" autocomplete="new-password" [(ngModel)]="invitePassword" (ngModelChange)="inviteTouched=true" minlength="14" required [class.is-invalid]="inviteTouched && !validInvitePassword" [attr.aria-invalid]="inviteTouched && !validInvitePassword" aria-describedby="invitePasswordHelp"> 
+              @if(inviteTouched && !validInvitePassword){<div id="invitePasswordHelp" class="invalid-feedback d-block" role="status">Password must contain at least 14 characters ({{invitePassword.length}}/14).</div>}
             </div>
             <div>
               <label class="form-label" for="confirmPassword">Confirm password</label>
-              <input class="form-control form-control-lg" id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" [(ngModel)]="confirmPassword" required>
+              <input class="form-control form-control-lg" id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" [(ngModel)]="confirmPassword" (ngModelChange)="confirmTouched=true" required [class.is-invalid]="confirmTouched && !passwordsMatch" [attr.aria-invalid]="confirmTouched && !passwordsMatch" aria-describedby="confirmPasswordHelp">
+              @if(confirmTouched && !passwordsMatch){<div id="confirmPasswordHelp" class="invalid-feedback d-block" role="status">{{confirmPassword ? 'Passwords do not match.' : 'Please confirm your password.'}}</div>}
             </div>
             @if(message()){<div class="alert alert-info py-2 mb-0" role="alert">{{message()}}</div>}
-            <button class="btn btn-primary btn-lg w-100" type="submit" [disabled]="busy()||invitePassword.length<14||invitePassword!==confirmPassword">Activate account</button>
+            <button class="btn btn-primary btn-lg w-100" type="submit" [disabled]="busy()||!validInvitePassword||!passwordsMatch">Activate account</button>
           </form>
         } @else {
           <h1>Sign in</h1>
@@ -44,14 +46,16 @@ import { AuthState } from '../auth.service';
           <form (ngSubmit)="submit()" class="vstack gap-3">
             <div>
               <label class="form-label" for="email">Email</label>
-              <input class="form-control form-control-lg" id="email" name="email" type="email" autocomplete="username" [(ngModel)]="email" required>
+              <input class="form-control form-control-lg" id="email" name="email" type="email" autocomplete="username" [(ngModel)]="email" (ngModelChange)="emailTouched=true" required email [class.is-invalid]="emailTouched && !validEmail" [attr.aria-invalid]="emailTouched && !validEmail" aria-describedby="emailHelp">
+              @if(emailTouched && !validEmail){<div id="emailHelp" class="invalid-feedback d-block" role="status">Enter a valid email address.</div>}
             </div>
             <div>
               <label class="form-label" for="password">Password</label>
-              <input class="form-control form-control-lg" id="password" name="password" type="password" autocomplete="current-password" [(ngModel)]="password" required>
+              <input class="form-control form-control-lg" id="password" name="password" type="password" autocomplete="current-password" [(ngModel)]="password" (ngModelChange)="passwordTouched=true" required [class.is-invalid]="passwordTouched && !password" [attr.aria-invalid]="passwordTouched && !password" aria-describedby="passwordHelp">
+              @if(passwordTouched && !password){<div id="passwordHelp" class="invalid-feedback d-block" role="status">Password is required.</div>}
             </div>
             @if (message()) { <div class="alert alert-danger py-2 mb-0" role="alert">{{ message() }}</div> }
-            <button class="btn btn-primary btn-lg w-100" type="submit" [disabled]="busy() || !email || !password">
+            <button class="btn btn-primary btn-lg w-100" type="submit" [disabled]="busy() || !validEmail || !password">
               @if (busy()) { <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> }
               {{ busy() ? 'Signing in…' : 'Sign in' }}
             </button>
@@ -87,17 +91,24 @@ export class LoginComponent {
   readonly busy = signal(false);
   readonly message = signal('');
   readonly inviteToken=signal(new URLSearchParams(typeof window==='undefined'?'':window.location.search).get('invite')||'');
+  inviteTouched=false;
+  confirmTouched=false;
+  emailTouched=false;
+  passwordTouched=false;
+  get validInvitePassword():boolean { return this.invitePassword.length>=14; }
+  get passwordsMatch():boolean { return !!this.confirmPassword && this.invitePassword===this.confirmPassword; }
+  get validEmail():boolean { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.email.trim()); }
   invitePassword='';
   confirmPassword='';
   async acceptInvitation():Promise<void>{
-   if(this.busy()||!this.inviteToken()||this.invitePassword.length<14||this.invitePassword!==this.confirmPassword)return;
+   if(this.busy()||!this.inviteToken()||!this.validInvitePassword||!this.passwordsMatch)return;
    this.busy.set(true);this.message.set('');
    try{
     const response=await fetch('/api/auth/accept-invite',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
       body:JSON.stringify({token:this.inviteToken(),password:this.invitePassword})});
     const result=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(result.error||'Invitation could not be accepted');
-    this.inviteToken.set('');this.invitePassword='';this.confirmPassword='';
+    this.inviteToken.set('');this.invitePassword='';this.confirmPassword='';this.inviteTouched=false;this.confirmTouched=false;
     if(typeof window!=='undefined')window.history.replaceState({},'',window.location.pathname);
     this.message.set('Account activated. Sign in with your email and password.');
    }catch(e){this.message.set(e instanceof Error?e.message:'Invitation failed')}
@@ -107,7 +118,7 @@ export class LoginComponent {
   email = '';
   password = '';
   async submit(): Promise<void> {
-    if (this.busy() || !this.email || !this.password) return;
+    if (this.busy() || !this.validEmail || !this.password) return;
     this.busy.set(true);
     this.message.set('');
     try {
