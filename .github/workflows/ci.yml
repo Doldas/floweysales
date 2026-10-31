@@ -72,6 +72,15 @@ jobs:
           fi
       - name: Vet
         run: go vet ./...
+      # The plugin SDK is its own module (imported by plugin repositories such
+      # as Doldas/floweysales-plugins); ./... at the root does not reach it.
+      - name: Plugin SDK (tidy, vet, race tests)
+        working-directory: pluginsdk
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod || { echo "::error::Run go mod tidy in pluginsdk."; exit 1; }
+          go vet ./...
+          go test -race -count=1 ./...
       - name: Start disposable Liquibase-backed MySQL for storage tests
         env:
           MYSQL_PASSWORD: ci-only-identity-password
@@ -94,6 +103,11 @@ jobs:
           mkdir -p dist
           go build -trimpath -o dist/floweysales_backend .
           go build -trimpath -o dist/floweysales_mcp ./cmd/mcp
+          # The backend speaks the protocol; it never links plugin code or the SDK.
+          if go list -deps . | grep -E 'pluginsdk|floweysales-plugins'; then
+            echo "::error::The backend imports plugin code; providers are plugins (see docs/plugins.md)."
+            exit 1
+          fi
       - uses: actions/upload-artifact@v7
         with:
           name: go-linux-amd64
@@ -113,7 +127,7 @@ jobs:
       - name: Install frozen dependencies
         run: npm ci --prefix frontend
       - name: Unit tests for Flow Studio helpers
-        run: node --test frontend/src/app/components/flow-history.spec.ts frontend/src/app/components/flow-overview.spec.ts frontend/src/app/components/flow-versions.spec.ts frontend/src/app/components/update-status.spec.ts frontend/src/app/components/function-pins.spec.ts frontend/src/app/components/wire-drag.spec.ts frontend/src/app/components/flow-semantics.spec.ts frontend/src/app/components/side-effects.spec.ts frontend/src/app/components/agent-tools.spec.ts frontend/src/app/components/event-adapters.spec.ts frontend/src/app/ui/format.spec.ts frontend/src/app/markdown.spec.ts
+        run: node --test frontend/src/app/components/flow-history.spec.ts frontend/src/app/components/flow-overview.spec.ts frontend/src/app/components/flow-versions.spec.ts frontend/src/app/components/update-status.spec.ts frontend/src/app/components/function-pins.spec.ts frontend/src/app/components/wire-drag.spec.ts frontend/src/app/components/flow-semantics.spec.ts frontend/src/app/components/side-effects.spec.ts frontend/src/app/components/agent-tools.spec.ts frontend/src/app/components/event-adapters.spec.ts frontend/src/app/ui/format.spec.ts frontend/src/app/markdown.spec.ts frontend/src/app/components/plugin-store.spec.ts
       - name: Production Angular build
         run: npm run build --prefix frontend
       - name: Install headless Chromium for responsive layout tests

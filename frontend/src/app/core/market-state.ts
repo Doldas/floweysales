@@ -7,10 +7,11 @@ import { OrdersState } from '../orders-state';
 import { NotifyService } from './notify.service';
 import {
   HISTORY_RANGES,
-  PROVIDERS,
+  isProviderId,
   type HistoryRange,
   type HistorySeries,
   type MarketData,
+  type ProviderCapability,
   type ProviderId,
   type SymbolInfo,
   type TradingRecord,
@@ -34,10 +35,6 @@ const WATCHLIST_KEY = 'fs.research.watchlist';
  */
 export type MarketMode = 'live' | 'research';
 
-function isProvider(value: unknown): value is ProviderId {
-  return PROVIDERS.some(p => p.id === value);
-}
-
 /**
  * MarketState is the single source of truth for the active instrument:
  * trackers, provider, history range, live ticks, indicators and insights.
@@ -53,7 +50,9 @@ export class MarketState {
   readonly mode = signal<MarketMode>('live');
   readonly initialized = signal(false);
   readonly maxTrackers = MAX_TRACKERS;
-  readonly providers = PROVIDERS;
+  /** Providers of the installed plugins; empty until loaded or when none are installed. */
+  readonly providers = signal<ProviderCapability[]>([]);
+  readonly providersLoaded = signal(false);
   readonly historyRanges = HISTORY_RANGES;
 
   readonly trackedAssets = signal<TrackedAsset[]>([]);
@@ -136,11 +135,12 @@ export class MarketState {
     if (this.initialized()) return;
     this.initialized.set(true);
     this.mode.set(mode);
+    this.refreshProviders();
     if (mode === 'research') {
       this.trackedAssets.set(this.loadWatchlist());
       const last = this.readLocal('lastTrackedSymbol');
       const provider = this.readLocal('lastProvider');
-      if (isProvider(provider)) this.provider.set(provider);
+      if (isProviderId(provider)) this.provider.set(provider);
       const first = last ? { symbol: last, provider: this.provider() } : this.trackedAssets()[0];
       if (first) this.view(first);
       return;
@@ -149,7 +149,7 @@ export class MarketState {
       next: cfg => {
         const symbol = (cfg?.symbol ?? this.readLocal('lastTrackedSymbol') ?? 'GIB').toUpperCase();
         const provider = String(cfg?.provider ?? this.readLocal('lastProvider') ?? 'YAHOO').toUpperCase();
-        this.provider.set(isProvider(provider) ? provider : 'YAHOO');
+        this.provider.set(isProviderId(provider) ? provider : 'YAHOO');
         this.trackedAssets.set(cfg?.trackers ?? []);
         if (this.trackedAssets().length > 0) {
           const active = this.trackedAssets().find(t => t.symbol === symbol && t.provider === this.provider()) ?? this.trackedAssets()[0];
@@ -162,6 +162,26 @@ export class MarketState {
       },
       error: () => this.notify.error('Cannot reach the FloweySales engine. Is the backend running?'),
     });
+  }
+
+  /**
+   * Reloads the installed providers (after a plugin install or removal). When
+   * the selected provider is gone, the first installed one is selected.
+   */
+  refreshProviders(): void {
+    this.api.getProviders().subscribe({
+      next: list => {
+        this.providers.set(list);
+        this.providersLoaded.set(true);
+        if (list.length && !list.some(p => p.id === this.provider())) this.provider.set(list[0].id);
+      },
+      error: () => this.providersLoaded.set(true),
+    });
+  }
+
+  /** Display label of a provider ID. */
+  providerLabel(id: ProviderId): string {
+    return this.providers().find(p => p.id === id)?.label ?? id;
   }
 
   setProvider(provider: ProviderId): void {
@@ -208,7 +228,7 @@ export class MarketState {
   }
 
   view(target: TrackedAsset): void {
-    if (isProvider(target.provider)) this.provider.set(target.provider);
+    if (isProviderId(target.provider)) this.provider.set(target.provider);
     this.launch(target.symbol);
   }
 
@@ -348,7 +368,7 @@ export class MarketState {
     try {
       const raw = JSON.parse(localStorage.getItem(WATCHLIST_KEY) ?? '[]');
       return Array.isArray(raw)
-        ? raw.filter(t => typeof t?.symbol === 'string' && isProvider(t?.provider)).slice(0, MAX_TRACKERS)
+        ? raw.filter(t => typeof t?.symbol === 'string' && isProviderId(t?.provider)).slice(0, MAX_TRACKERS)
         : [];
     } catch {
       return [];

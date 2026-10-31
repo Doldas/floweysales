@@ -9,14 +9,14 @@ import (
 
 // State management must not drop unrelated trackers or exceed its finite cap.
 func TestTrackerRegistryIndependentAssets(t *testing.T) {
-	c := &SharedMarketConfig{Symbol: "GIB", Provider: market.ProviderYahoo}
-	if !c.Add("NVDA", market.ProviderYahoo) || !c.Add("GIB", market.ProviderYahoo) {
+	c := &SharedMarketConfig{Symbol: "GIB", Provider: market.Provider("YAHOO")}
+	if !c.Add("NVDA", market.Provider("YAHOO")) || !c.Add("GIB", market.Provider("YAHOO")) {
 		t.Fatal("add failed")
 	}
 	if len(c.Targets()) != 2 {
 		t.Fatal(c.Targets())
 	}
-	c.Remove("NVDA", market.ProviderYahoo)
+	c.Remove("NVDA", market.Provider("YAHOO"))
 	if len(c.Targets()) != 1 || c.Targets()[0].Symbol != "GIB" {
 		t.Fatal(c.Targets())
 	}
@@ -24,17 +24,17 @@ func TestTrackerRegistryIndependentAssets(t *testing.T) {
 	if len(c.Targets()) != 0 {
 		t.Fatal("stopped trackers must stay removed")
 	}
-	c.SelectPrimary("NVDA", market.ProviderYahoo)
+	c.SelectPrimary("NVDA", market.Provider("YAHOO"))
 	if len(c.Targets()) != 0 {
 		t.Fatal("select should not auto-enable a tracker")
 	}
 	for i := 0; i < MaxActiveTrackers; i++ {
 		symbol := string(rune('A'+i)) + "BTC"
-		if !c.Add(symbol, market.ProviderBinance) {
+		if !c.Add(symbol, market.Provider("BINANCE")) {
 			t.Fatalf("rejected %d", i)
 		}
 	}
-	if c.Add("OVERLIMIT", market.ProviderBinance) {
+	if c.Add("OVERLIMIT", market.Provider("BINANCE")) {
 		t.Fatal("exceeded hard cap")
 	}
 }

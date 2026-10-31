@@ -39,8 +39,10 @@ func TestTrackerOperationsCapability(t *testing.T) {
 	if !started {
 		t.Fatal("tracker start not sent")
 	}
-	if _, err := tools.ExecuteTracker(context.Background(), "tracker_start", `{"symbol":"NVDA","provider":"unknown"}`); err == nil {
-		t.Fatal("invalid provider accepted")
+	// Which providers are installed is the backend's call; malformed IDs never leave the client.
+	started = false
+	if _, err := tools.ExecuteTracker(context.Background(), "tracker_start", `{"symbol":"NVDA","provider":"../yahoo"}`); err == nil || started {
+		t.Fatal("malformed provider accepted")
 	}
 }
 

@@ -55,7 +55,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	t.Cleanup(func() { db.Close() })
 
 	config := &SharedMarketConfig{Symbol: "GIB", Provider: market.ParseProvider("YAHOO")}
-	engine := NewEngine(db, config, nil, "", tracker.DefaultConfig())
+	engine := NewEngine(db, config, nil, tracker.DefaultConfig())
 	engine.ConfigureTrading(trading.Config{
 		BaseCash:   100000,
 		Commission: trading.Commission{Pct: 0.1},

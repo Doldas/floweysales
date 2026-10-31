@@ -22,9 +22,12 @@ go fmt ./...
 go vet ./...
 go test -race ./...
 go build ./...
+(cd pluginsdk && go vet ./... && go test -race ./...)
 cd frontend && npm ci && npm run build
-node --test frontend/src/app/components/flow-history.spec.ts frontend/src/app/components/flow-overview.spec.ts frontend/src/app/components/flow-versions.spec.ts frontend/src/app/components/update-status.spec.ts frontend/src/app/components/function-pins.spec.ts frontend/src/app/components/wire-drag.spec.ts frontend/src/app/components/flow-semantics.spec.ts frontend/src/app/components/side-effects.spec.ts frontend/src/app/components/agent-tools.spec.ts frontend/src/app/components/event-adapters.spec.ts frontend/src/app/ui/format.spec.ts frontend/src/app/markdown.spec.ts
+node --test frontend/src/app/components/flow-history.spec.ts frontend/src/app/components/flow-overview.spec.ts frontend/src/app/components/flow-versions.spec.ts frontend/src/app/components/update-status.spec.ts frontend/src/app/components/function-pins.spec.ts frontend/src/app/components/wire-drag.spec.ts frontend/src/app/components/flow-semantics.spec.ts frontend/src/app/components/side-effects.spec.ts frontend/src/app/components/agent-tools.spec.ts frontend/src/app/components/event-adapters.spec.ts frontend/src/app/ui/format.spec.ts frontend/src/app/markdown.spec.ts frontend/src/app/components/plugin-store.spec.ts
 ```
+
+Market-data providers are plugins, developed and released in [Doldas/floweysales-plugins](https://github.com/Doldas/floweysales-plugins). This repository owns the interfaces they build on: the wire protocol, manifest and store format (`docs/plugins.md`) and the SDK module `pluginsdk/`. The backend must not import the SDK or any plugin; CI fails if it does. A protocol or contract change needs matching updates to `pluginsdk/testdata/contract/` (tested by both the SDK and the backend) and a new `pluginsdk/v<semver>` tag after merge.
 
 `npm run build` creates the Angular bundle; the GitHub Pages site in `site/` is **static documentation**, not a hosted trading engine.
 

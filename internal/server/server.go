@@ -14,6 +14,7 @@ import (
 
 	"floweysales/internal/identity"
 	"floweysales/internal/market"
+	"floweysales/internal/plugins"
 	"floweysales/internal/redact"
 	"floweysales/internal/storage"
 	"floweysales/internal/tracker"
@@ -135,7 +136,9 @@ type Engine struct {
 	authLimiter      authRateLimit
 	db               *storage.Database
 	config           *SharedMarketConfig
-	finnhubAPIKey    string
+	providers        market.Backend
+	plugins          *plugins.Manager
+	defaultProvider  market.Provider
 	trackerCfg       tracker.Config
 
 	trackerMutationMu sync.Mutex // serialize MySQL and in-memory tracker lifecycle writes
@@ -186,11 +189,12 @@ type financialsCacheEntry struct {
 // NewEngine creates the engine and registers all routes. webFS may be nil;
 // when provided it is used to serve the dashboard if no www/ directory exists
 // on disk.
-func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, finnhubAPIKey string, trackerCfg tracker.Config) *Engine {
+func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, trackerCfg tracker.Config) *Engine {
 	e := &Engine{
 		db:              db,
 		config:          config,
-		finnhubAPIKey:   registeredSecret(finnhubAPIKey),
+		providers:       market.NoProviders{},
+		defaultProvider: "YAHOO",
 		trackerCfg:      trackerCfg,
 		webFS:           webFS,
 		hub:             newSSEHub(),
@@ -251,6 +255,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, fi
 	e.registerBlueprintRoutes()
 	e.registerRevisionRoutes()
 	e.registerUpdateRoutes()
+	e.registerPluginRoutes()
 	e.registerUserspaceRoutes()
 	e.registerMCPTrackerRoutes()
 	e.registerStaticRoutes()

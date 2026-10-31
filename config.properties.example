@@ -7,9 +7,14 @@ EMAIL_COOLDOWN_DURATION_MIN=10
 DEFAULT_SMTP_MAIL_RECIPIENT=your@email.com
 # Market Properties
 DEFAULT_MARKET_SYMBOL=GIB
-# YAHOO / BINANCE / FINNHUB / AVANZA
+# Provider ID of an installed plugin (YAHOO, BINANCE, FINNHUB, AVANZA, …)
 DEFAULT_MARKET_PROVIDER=YAHOO
-# FinnHub.io API -  REQUIRED FOR FINNHUB market provider
+# Provider plugins: install with Settings → Plugins or `floweysales_backend plugins install <id>`.
+# PLUGIN_DIR defaults to <user config dir>/floweysales/plugins.
+#PLUGIN_DIR=
+#PLUGIN_STORE_URL=https://doldas.github.io/floweysales-plugins/index.json
+PLUGIN_CHECK_INTERVAL_HOURS=0
+# Forwarded only to the Finnhub plugin, which requires it.
 FINNHUB_API_KEY=
 # Web UI
 REST_API_HOST=0.0.0.0

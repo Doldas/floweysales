@@ -25,8 +25,10 @@ func newPersistedTrackerTestEngine(t *testing.T) (*Engine, *storage.Database, *S
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	cfg := &SharedMarketConfig{Symbol: "NVDA", Provider: market.ProviderYahoo}
-	return NewEngine(db, cfg, nil, "", tracker.DefaultConfig()), db, cfg
+	cfg := &SharedMarketConfig{Symbol: "NVDA", Provider: market.Provider("YAHOO")}
+	engine := NewEngine(db, cfg, nil, tracker.DefaultConfig())
+	engine.providers = stubProviders{} // YAHOO "installed"; trackers need an installed provider
+	return engine, db, cfg
 }
 
 func trackerRequest(e *Engine, method, path, body string) int {
@@ -40,7 +42,7 @@ func trackerRequest(e *Engine, method, path, body string) int {
 // becomes unavailable. The dashboard's selected symbol must not drift either.
 func TestTrackerFailedSaveKeepsActiveState(t *testing.T) {
 	engine, db, cfg := newPersistedTrackerTestEngine(t)
-	if !cfg.Add("NVDA", market.ProviderYahoo) {
+	if !cfg.Add("NVDA", market.Provider("YAHOO")) {
 		t.Fatal("failed to prepare active stream")
 	}
 	if err := db.Close(); err != nil {
@@ -58,7 +60,7 @@ func TestTrackerFailedSaveKeepsActiveState(t *testing.T) {
 		t.Fatalf("dashboard save with closed database: got %d, want 500", code)
 	}
 	sym, provider := cfg.Get()
-	if sym != "NVDA" || provider != market.ProviderYahoo || len(cfg.Targets()) != 1 {
+	if sym != "NVDA" || provider != market.Provider("YAHOO") || len(cfg.Targets()) != 1 {
 		t.Fatalf("database failure changed dashboard or targets: %s %s %+v", sym, provider, cfg.Targets())
 	}
 	if code := trackerRequest(engine, http.MethodPost, "/api/config",

@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"floweysales/internal/market"
 )
 
 // HTTPTrackerOperations is an opt-in mutation boundary separate from market read tools.
@@ -39,9 +41,8 @@ func (t *HTTPTrackerOperations) ExecuteTracker(ctx context.Context, name, args s
 		if params.Symbol == "" || len(params.Symbol) > 48 {
 			return "", fmt.Errorf("invalid tracker symbol")
 		}
-		switch params.Provider {
-		case "YAHOO", "FINNHUB", "BINANCE", "AVANZA":
-		default:
+		// The backend checks that a plugin provides it.
+		if !market.ParseProvider(params.Provider).Valid() {
 			return "", fmt.Errorf("invalid tracker provider")
 		}
 		payload, _ := json.Marshal(params)

@@ -38,7 +38,7 @@ func TestMySQLAuthGate(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	engine := NewEngine(store, &SharedMarketConfig{Symbol: "NVDA", Provider: market.ParseProvider("YAHOO")}, nil, "", tracker.DefaultConfig())
+	engine := NewEngine(store, &SharedMarketConfig{Symbol: "NVDA", Provider: market.ParseProvider("YAHOO")}, nil, tracker.DefaultConfig())
 	engine.ConfigureAuth(auth, false) // Test is local HTTP only.
 	engine.ConfigureAI("http://localhost:11434/v1", "", "test-model")
 	// Unreachable registry: checks fail closed and nothing can be applied.

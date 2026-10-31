@@ -71,7 +71,11 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
-      AVANZA_UNOFFICIAL_ENABLED: ${AVANZA_UNOFFICIAL_ENABLED:-false}
+      # Market-data provider plugins (Settings → Plugins). Variables a plugin
+      # declares, such as FINNHUB_API_KEY, are forwarded to that plugin only.
+      PLUGIN_DIR: /plugins
+      PLUGIN_STORE_URL: ${PLUGIN_STORE_URL:-https://doldas.github.io/floweysales-plugins/index.json}
+      PLUGIN_CHECK_INTERVAL_HOURS: ${PLUGIN_CHECK_INTERVAL_HOURS:-12}
       SEC_USER_AGENT: ${SEC_USER_AGENT:-}
       BRAVE_SEARCH_API_KEY: ${BRAVE_SEARCH_API_KEY:-}
       AI_MAX_STEPS: ${AI_MAX_STEPS:-12}
@@ -99,6 +103,7 @@ services:
     volumes:
       - trading_data:/data:ro
       - secrets_data:/secrets
+      - plugins_data:/plugins
       # Created by scripts/install-auto-update.sh; only request/status files live here.
       - type: bind
         source: ./update-control
@@ -122,3 +127,4 @@ volumes:
   mysql_data:
   trading_data:
   secrets_data:
+  plugins_data:

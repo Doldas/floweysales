@@ -1,14 +1,15 @@
 package server
 
 import (
+	"context"
 	"io"
 	"net/http"
+	"time"
 
-	"floweysales/internal/market"
 	"floweysales/internal/storage"
 )
 
-// registerForumRoutes wires the community forum and Avanza forum proxy.
+// registerForumRoutes wires the community forum and provider plugin forums.
 func (e *Engine) registerForumRoutes() {
 	e.mux.HandleFunc("POST /api/forum", func(w http.ResponseWriter, r *http.Request) {
 		corsHeader(w)
@@ -48,18 +49,26 @@ func (e *Engine) registerForumRoutes() {
 			}
 		}
 
-		includeAvanza := true
-		switch r.URL.Query().Get("include_avanza") {
-		case "false", "0":
-			includeAvanza = false
+		// Provider forums (from plugins that offer one) come first. The legacy
+		// include_avanza=false switch turns all of them off.
+		includeProviders := true
+		for _, key := range []string{"include_providers", "include_avanza"} {
+			if v := r.URL.Query().Get(key); v == "false" || v == "0" {
+				includeProviders = false
+			}
 		}
 
 		jList := []map[string]any{}
 
-		if includeAvanza && symbol != "" {
-			for _, post := range market.FetchAvanzaForumPosts(symbol, limit) {
-				jList = append(jList, post)
+		if includeProviders && symbol != "" {
+			ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+			for _, post := range e.providers.ForumPosts(ctx, symbol, limit) {
+				jList = append(jList, map[string]any{
+					"id": post.ID, "author": post.Author, "title": post.Title, "content": post.Content,
+					"symbol": post.Symbol, "timestamp": post.Timestamp, "upvotes": post.Upvotes,
+				})
 			}
+			cancel()
 		}
 
 		for _, post := range e.db.GetForumPosts(symbol, limit) {

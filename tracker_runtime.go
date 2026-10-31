@@ -15,8 +15,8 @@ import (
 // Tracker loops are independently cancellable; no shared mutable EMA state,
 // no per-tick console logging, and a finite maximum of 16 workers.
 func runActiveTrackers(ctx context.Context, config *server.SharedMarketConfig, db *storage.Database,
-	api *market.MarketApi, dispatch func(context.Context, string, string, string, string, string), cfg tracker.Config,
-	requestedInterval, cooldown time.Duration, finnhubKey string) {
+	providers market.Backend, dispatch func(context.Context, string, string, string, string, string), cfg tracker.Config,
+	requestedInterval, cooldown time.Duration) {
 	_ = cooldown // Legacy global cooldown is superseded by per-user preferences.
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -49,7 +49,7 @@ func runActiveTrackers(ctx context.Context, config *server.SharedMarketConfig, d
 			wg.Add(1)
 			go func(t server.MarketTarget) {
 				defer wg.Done()
-				runOneTracker(workerCtx, t, db, api, dispatch, cfg, rateForProvider(requestedInterval, t.Provider), cooldown, finnhubKey)
+				runOneTracker(workerCtx, t, db, providers, dispatch, cfg, requestedInterval, cooldown)
 			}(item)
 		}
 	}
@@ -63,26 +63,27 @@ func runActiveTrackers(ctx context.Context, config *server.SharedMarketConfig, d
 		}
 	}
 }
-func rateForProvider(requested time.Duration, provider market.Provider) time.Duration {
-	// Avoid provider quotas and provider/network fanout when tracking many assets.
+
+// rateForProvider respects the plugin's declared minimum poll interval, so
+// tracking many assets cannot exhaust a provider's quota. Providers that are
+// not installed are rechecked at a relaxed pace until their plugin returns.
+func rateForProvider(requested time.Duration, providers market.Backend, provider market.Provider) time.Duration {
 	min := 5 * time.Second
-	switch provider {
-	case market.ProviderFinnhub:
-		min = 20 * time.Second
-	case market.ProviderAvanza:
-		min = 10 * time.Second
-	case market.ProviderBinance:
-		min = 2 * time.Second
+	if c, ok := market.Capability(providers, provider); !ok {
+		min = 30 * time.Second
+	} else if c.MinPollSeconds > 0 {
+		min = time.Duration(c.MinPollSeconds) * time.Second
 	}
 	if requested < min {
 		return min
 	}
 	return requested
 }
-func runOneTracker(ctx context.Context, target server.MarketTarget, db *storage.Database, api *market.MarketApi,
-	dispatch func(context.Context, string, string, string, string, string), cfg tracker.Config, interval, cooldown time.Duration, finnhubKey string) {
+func runOneTracker(ctx context.Context, target server.MarketTarget, db *storage.Database, providers market.Backend,
+	dispatch func(context.Context, string, string, string, string, string), cfg tracker.Config, requestedInterval, cooldown time.Duration) {
 	t := tracker.NewTracker(cfg)
-	seedTrackerFromHistory(t, target.Symbol, target.Provider, finnhubKey)
+	seeded := seedTrackerFromHistory(ctx, t, providers, target.Symbol, target.Provider)
+	interval := rateForProvider(requestedInterval, providers, target.Provider)
 	intervalTicker := time.NewTicker(interval)
 	defer intervalTicker.Stop()
 	var firstPrice float64
@@ -95,9 +96,18 @@ func runOneTracker(ctx context.Context, target server.MarketTarget, db *storage.
 			return
 		default:
 		}
-		asset, err := api.FetchAsset(target.Symbol, target.Provider)
-		if err == nil && asset != nil && asset.Price() > 0 {
-			price := asset.Price()
+		// A provider installed, updated or removed while running is picked up here.
+		if next := rateForProvider(requestedInterval, providers, target.Provider); next != interval {
+			interval = next
+			intervalTicker.Reset(interval)
+		}
+		asset, err := providers.Quote(ctx, target.Provider, target.Symbol)
+		if err == nil && asset.Price > 0 {
+			if !seeded && firstPrice <= 0 {
+				// The provider was not available at start (plugin installed later).
+				seeded = seedTrackerFromHistory(ctx, t, providers, target.Symbol, target.Provider)
+			}
+			price := asset.Price
 			if firstPrice <= 0 {
 				firstPrice = price
 			}
@@ -135,8 +145,8 @@ func runOneTracker(ctx context.Context, target server.MarketTarget, db *storage.
 			record := storage.TradingRecord{
 				Timestamp: time.Now().Unix(), Symbol: target.Symbol, Provider: target.ProviderID, Price: price,
 				StopLoss: t.StopLoss(), FastEMA: fast, SlowEMA: slow,
-				Currency: asset.Currency(), Status: state,
-				RawMarketJSON: mustJSON(asset.ToJSON()),
+				Currency: asset.Currency, Status: state,
+				RawMarketJSON: rawMarketJSON(asset),
 			}
 			db.InsertRecord(record)
 			if decision == tracker.Sell {
@@ -151,4 +161,12 @@ func runOneTracker(ctx context.Context, target server.MarketTarget, db *storage.
 		case <-intervalTicker.C:
 		}
 	}
+}
+
+// rawMarketJSON is the provider payload stored with a tick ("{}" when none).
+func rawMarketJSON(asset market.Asset) []byte {
+	if asset.Data == nil {
+		return []byte("{}")
+	}
+	return mustJSON(asset.Data)
 }

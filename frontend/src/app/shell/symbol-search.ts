@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, computed, inject, input, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Subject, debounceTime, switchMap, tap } from 'rxjs';
 
@@ -26,7 +26,10 @@ let nextId = 0;
       @if (searching()) { <span class="spinner-border spinner-border-sm text-secondary me-1" aria-hidden="true"></span> }
       <select class="provider-select" [value]="market.provider()" (change)="setProvider($any($event.target).value)"
               aria-label="Market data provider">
-        @for (p of market.providers; track p.id) { <option [value]="p.id">{{ p.label }}</option> }
+        @for (p of market.providers(); track p.id) { <option [value]="p.id">{{ p.label }}</option> }
+        @if (!installedProvider()) {
+          <option [value]="market.provider()">{{ market.provider() }} (not installed)</option>
+        }
       </select>
     </div>
     @if (open()) {
@@ -92,6 +95,10 @@ export class SymbolSearchComponent {
   readonly searching = signal(false);
   readonly open = signal(false);
   readonly active = signal(-1);
+  /** Whether the selected provider is installed; until the list loads it is assumed to be. */
+  readonly installedProvider = computed(
+    () => !this.market.providersLoaded() || this.market.providers().some(p => p.id === this.market.provider()),
+  );
 
   private readonly typed = new Subject<string>();
 
