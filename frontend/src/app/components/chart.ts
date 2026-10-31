@@ -691,9 +691,10 @@ export class TradingChartComponent implements AfterViewInit {
                 const m = this.meta[items[0]?.dataIndex ?? -1];
                 if (!m) return '';
                 const d = new Date(m.t * 1000);
-                return d.toLocaleString(undefined, {
-                  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                });
+                return d.toLocaleString('en-GB', {
+                  timeZone: 'UTC', year: 'numeric', month: 'short', day: '2-digit',
+                  hour: '2-digit', minute: '2-digit', hour12: false,
+                }) + ' UTC';
               },
               label: (item) => `${item.dataset.label}: ${this.fmtPrice(item.parsed?.y)}`,
               afterBody: (items) => {
