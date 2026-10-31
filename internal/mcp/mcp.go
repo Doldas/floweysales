@@ -21,7 +21,7 @@ const ProtocolVersion = "2024-11-05"
 const ServerName = "floweysales-mcp"
 
 // Instructions is surfaced to the model by MCP clients after initialize.
-const Instructions = `FloweySales market data server. Tools query a live trading backend for OHLC history, technical indicators, quarterly financial statements, engine stats and recorded ticks. Prefer provider YAHOO for equities and BINANCE for crypto. Use search_symbols when a ticker is unknown.`
+const Instructions = `FloweySales market data server. Tools query a live trading backend for OHLC history, technical indicators, quarterly financial statements, engine stats and recorded ticks. Providers are installed plugins: call get_provider_capabilities to see which exist; prefer YAHOO for equities and BINANCE for crypto when installed. Use search_symbols when a ticker is unknown.`
 
 // Server dispatches MCP requests to an ai.DataSource (normally an
 // ai.HTTPDataSource pointed at the FloweySales backend).
@@ -190,7 +190,7 @@ func (s *Server) listTools() []mcpTool {
 	return append(tools,
 		mcpTool{Name: "tracker_list", Description: "List currently configured tracked assets (requires explicitly configured tracker management capability).", InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}},
 		mcpTool{Name: "tracker_status", Description: "Inspect last tick and age for every tracker.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}},
-		mcpTool{Name: "tracker_start", Description: "Start tracking a validated symbol and provider; this mutates the persistent tracker registry, and should only be called when explicitly requested by the user.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"symbol": map[string]any{"type": "string"}, "provider": map[string]any{"type": "string", "enum": []string{"YAHOO", "FINNHUB", "AVANZA", "BINANCE"}}}, "required": []string{"symbol", "provider"}}},
+		mcpTool{Name: "tracker_start", Description: "Start tracking a validated symbol and provider; this mutates the persistent tracker registry, and should only be called when explicitly requested by the user.", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"symbol": map[string]any{"type": "string"}, "provider": map[string]any{"type": "string", "description": "Installed provider ID (see get_provider_capabilities), e.g. YAHOO"}}, "required": []string{"symbol", "provider"}}},
 	)
 }
 func mcpTools() []mcpTool {

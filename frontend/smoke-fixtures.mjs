@@ -91,6 +91,36 @@ const steps = { steps: [
  * Builds the JSON body for an API path, or undefined when unmocked.
  * `role` is SYS_ADMIN or USER; `permissions` are the USER role's grants.
  */
+const PROVIDER_LABELS = { YAHOO: 'Yahoo Finance', BINANCE: 'Binance', AVANZA: 'Avanza', FINNHUB: 'Finnhub' };
+function provider(id) {
+  return { id, label: PROVIDER_LABELS[id], plugin_id: id.toLowerCase(), plugin_version: '1.0.0', official_api: id !== 'YAHOO' && id !== 'AVANZA',
+    search: true, ohlc: true, fundamentals: true, capabilities: ['quote', 'history', 'search', 'financials'], quote_kind: 'ohlc_bar_close',
+    requires_key: id === 'FINNHUB', experimental: id === 'AVANZA', enabled: true, min_poll_seconds: 5, cache_ttl_seconds: 60, notes: '' };
+}
+function pluginManifest(id, version = '1.0.0') {
+  const p = provider(id.toUpperCase());
+  return { protocol: 1, id, name: p.label, version, description: `${p.label} market data.`, publisher: 'FloweySales',
+    homepage: `https://github.com/Doldas/floweysales/tree/main/plugins/${id}`, terms: p.official_api ? undefined : 'Unofficial public interface.',
+    provider: { id: p.id, label: p.label, official_api: p.official_api, experimental: p.experimental, capabilities: p.capabilities,
+      quote_kind: p.quote_kind, min_poll_seconds: 5, cache_ttl_seconds: 60, notes: 'Not guaranteed real-time.' },
+    env: id === 'finnhub' ? [{ name: 'FINNHUB_API_KEY', secret: true, required: true, description: 'Finnhub API token' }] : [] };
+}
+const pluginOverview = {
+  platform: 'linux-amd64', protocol: 1, store_url: 'https://doldas.github.io/floweysales-plugins/index.json', dir: '/plugins',
+  installed: [
+    { manifest: pluginManifest('yahoo'), installed_at: '2026-10-30T10:00:00Z', source: 'store', sha256: 'a'.repeat(64), running: true, env: [], ready: true, latest_version: '1.1.0', update_available: true, log: ['started'] },
+    { manifest: pluginManifest('finnhub'), installed_at: '2026-10-30T10:00:00Z', source: 'store', sha256: 'b'.repeat(64), running: false,
+      env: [{ name: 'FINNHUB_API_KEY', secret: true, required: true, description: 'Finnhub API token', configured: false }], ready: false, latest_version: '1.0.0', update_available: false, log: [] },
+  ],
+  store: { checked_at: '2026-10-31T08:00:00Z', plugins: [
+    { manifest: pluginManifest('yahoo', '1.1.0'), versions: ['1.1.0', '1.0.0'], latest_version: '1.1.0', installable: true, installed_version: '1.0.0', update_available: true, released_at: '2026-10-31T07:00:00Z', notes: 'Faster search.' },
+    { manifest: pluginManifest('finnhub'), versions: ['1.0.0'], latest_version: '1.0.0', installable: true, installed_version: '1.0.0', update_available: false },
+    { manifest: pluginManifest('binance'), versions: ['1.0.0'], latest_version: '1.0.0', installable: true, update_available: false },
+    { manifest: pluginManifest('avanza'), versions: ['1.0.0'], latest_version: '1.0.0', installable: true, update_available: false },
+  ] },
+  trackers: { yahoo: ['NVDA'], finnhub: [] },
+};
+
 export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.read'], email = 'analyst@example.test' } = {}) {
   const u = new URL(url);
   const p = u.pathname;
@@ -134,6 +164,9 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     '/api/admin/roles': { roles: [{ name: 'SYS_ADMIN', permissions: [] }, { name: 'USER', permissions: ['research.read', 'ai.chat'] }], permissions: ['research.read', 'ai.chat', 'flows.read', 'flows.write', 'flows.run'] },
     '/api/admin/settings/smtp': { configuration: {}, has_password: false },
     '/api/admin/updates': { current: { commit: 'abc123def456', image: 'ghcr.io/doldas/floweysales', tag: 'latest' }, can_apply: false, status: { state: 'idle' } },
+    '/api/providers': ['YAHOO', 'BINANCE', 'AVANZA'].map(id => provider(id)),
+    '/api/admin/plugins': pluginOverview,
+    '/api/admin/plugins/check': pluginOverview,
   };
   const flowMatch = /^\/api\/admin\/flows\/(\d+)(?:\/(.*))?$/.exec(p);
   if (flowMatch) {

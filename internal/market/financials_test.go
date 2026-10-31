@@ -2,12 +2,6 @@ package market
 
 import "testing"
 
-func TestQuarterLabelIsExplicitCalendar(t *testing.T) {
-	if got := quarterLabel("2026-07-31"); got != "CY2026 Q3" {
-		t.Fatalf("calendar quarter = %q, want CY2026 Q3", got)
-	}
-}
-
 func TestFinancialYearRangeValidationAndFiltering(t *testing.T) {
 	valid := FinancialYearRange{FromYear: 2018, ToYear: 2023}
 	if err := valid.Validate(); err != nil {

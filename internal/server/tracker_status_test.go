@@ -27,10 +27,10 @@ func TestTrackerStatusLastPersistedTick(t *testing.T) {
 	symbol := fmt.Sprintf("STATUS%d", time.Now().UnixNano())
 	emptySymbol := fmt.Sprintf("EMPTY%d", time.Now().UnixNano())
 	cfg := &SharedMarketConfig{}
-	if !cfg.Add(symbol, market.ProviderYahoo) || !cfg.Add(emptySymbol, market.ProviderFinnhub) {
+	if !cfg.Add(symbol, market.Provider("YAHOO")) || !cfg.Add(emptySymbol, market.Provider("FINNHUB")) {
 		t.Fatal("could not register fixtures")
 	}
-	engine := NewEngine(db, cfg, nil, "", tracker.DefaultConfig())
+	engine := NewEngine(db, cfg, nil, tracker.DefaultConfig())
 	check := func() []struct {
 		Symbol            string `json:"symbol"`
 		Provider          string `json:"provider"`

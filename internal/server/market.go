@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -30,20 +31,18 @@ func netListen(addr string) (net.Listener, error) {
 // registerMarketRoutes wires prices, stats, symbols and the SSE stream.
 func (e *Engine) registerMarketRoutes() {
 	e.mux.HandleFunc("GET /api/provider/endpoints", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, market.ResearchOperations())
+		writeJSON(w, http.StatusOK, e.providers.ResearchOperations())
 	})
 	e.mux.HandleFunc("GET /api/provider/research", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		result, err := market.FetchResearchOperation(r.Context(), q.Get("provider"), q.Get("operation"),
-			q.Get("symbol"), q.Get("from"), q.Get("to"), e.finnhubAPIKey)
+		provider := market.ParseProvider(q.Get("provider"))
+		if !provider.Valid() || strings.TrimSpace(q.Get("operation")) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "provider and operation are required"})
+			return
+		}
+		result, err := e.providers.Research(r.Context(), provider, q.Get("operation"), q.Get("symbol"), q.Get("from"), q.Get("to"))
 		if err != nil {
-			code := http.StatusBadRequest
-			if strings.Contains(err.Error(), "FINNHUB_API_KEY") {
-				code = http.StatusServiceUnavailable
-			} else if strings.Contains(err.Error(), "returned HTTP") || strings.Contains(err.Error(), "provider request failed") || strings.Contains(err.Error(), "did not return") {
-				code = http.StatusBadGateway
-			}
-			writeJSON(w, code, map[string]any{"error": err.Error()})
+			writeJSON(w, providerErrorStatus(err), map[string]any{"error": err.Error()})
 			return
 		}
 		writeJSON(w, http.StatusOK, result)
@@ -64,12 +63,12 @@ func (e *Engine) registerMarketRoutes() {
 		writeJSON(w, 200, result)
 	})
 	e.mux.HandleFunc("GET /api/providers", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, market.ProviderCapabilities())
+		writeJSON(w, 200, e.providers.Providers())
 	})
 	e.mux.HandleFunc("GET /api/quote", func(w http.ResponseWriter, r *http.Request) {
 		symbol := r.URL.Query().Get("symbol")
-		provider := market.ParseProvider(r.URL.Query().Get("provider"))
-		out, err := market.LatestSnapshot(symbol, provider, e.finnhubAPIKey)
+		provider := e.parseProvider(r.URL.Query().Get("provider"))
+		out, err := market.LatestSnapshot(r.Context(), e.providers, symbol, provider)
 		if err != nil {
 			writeJSON(w, 502, map[string]any{"error": err.Error()})
 			return
@@ -173,7 +172,11 @@ func (e *Engine) registerMarketRoutes() {
 		corsHeader(w)
 		query := queryParam(r, "query", "")
 		provider := queryParam(r, "provider", "")
-		results := market.SearchAssets(query, market.ParseProvider(provider), e.finnhubAPIKey)
+		// Autocompletes treat failures as "no hits"; the provider list says what is installed.
+		results, _ := e.providers.Search(r.Context(), e.parseProvider(provider), query)
+		if results == nil {
+			results = []market.SearchResult{}
+		}
 		writeJSON(w, http.StatusOK, results)
 	})
 
@@ -186,12 +189,12 @@ func (e *Engine) registerMarketRoutes() {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "symbol query parameter is required"})
 			return
 		}
-		provider := market.ParseProvider(queryParam(r, "provider", "YAHOO"))
+		provider := e.parseProvider(queryParam(r, "provider", ""))
 		rng := market.ValidRange(queryParam(r, "range", market.Range1M))
 
-		series, err := e.GetHistory(symbol, provider, rng)
+		series, err := e.GetHistory(r.Context(), symbol, provider, rng)
 		if err != nil {
-			writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error()})
+			writeJSON(w, providerErrorStatus(err), map[string]any{"error": err.Error()})
 			return
 		}
 		writeJSON(w, http.StatusOK, series)
@@ -206,15 +209,15 @@ func (e *Engine) registerMarketRoutes() {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "symbol query parameter is required"})
 			return
 		}
-		provider := market.ParseProvider(queryParam(r, "provider", "YAHOO"))
+		provider := e.parseProvider(queryParam(r, "provider", ""))
 		years, err := parseFinancialYearRange(r)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 			return
 		}
-		res, err := e.GetFinancialsRange(symbol, provider, years)
+		res, err := e.GetFinancialsRange(r.Context(), symbol, provider, years)
 		if err != nil {
-			writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error()})
+			writeJSON(w, providerErrorStatus(err), map[string]any{"error": err.Error()})
 			return
 		}
 		writeJSON(w, http.StatusOK, res)
@@ -261,7 +264,7 @@ func (e *Engine) registerMarketRoutes() {
 
 // GetHistory returns a provider OHLC series, reusing a short-lived cache so
 // repeated UI range switches don't hammer the upstream APIs.
-func (e *Engine) GetHistory(symbol string, provider market.Provider, rng string) (market.HistorySeries, error) {
+func (e *Engine) GetHistory(ctx context.Context, symbol string, provider market.Provider, rng string) (market.HistorySeries, error) {
 	key := provider.String() + "|" + symbol + "|" + rng
 
 	e.historyMu.Lock()
@@ -271,7 +274,7 @@ func (e *Engine) GetHistory(symbol string, provider market.Provider, rng string)
 	}
 	e.historyMu.Unlock()
 
-	series, err := market.FetchHistory(symbol, provider, rng, e.finnhubAPIKey)
+	series, err := e.providers.History(ctx, provider, symbol, rng)
 	if err != nil {
 		return market.HistorySeries{}, err
 	}
@@ -332,13 +335,13 @@ func parseFinancialYearRange(r *http.Request) (market.FinancialYearRange, error)
 }
 
 // GetFinancials returns recent financial reports (backwards compatible).
-func (e *Engine) GetFinancials(symbol string, provider market.Provider) (market.FinancialsResponse, error) {
-	return e.GetFinancialsRange(symbol, provider, market.FinancialYearRange{})
+func (e *Engine) GetFinancials(ctx context.Context, symbol string, provider market.Provider) (market.FinancialsResponse, error) {
+	return e.GetFinancialsRange(ctx, symbol, provider, market.FinancialYearRange{})
 }
 
 // GetFinancialsRange returns source-fetched quarterly reports for requested years.
 // Cache keys include the range so default and historical data never collide.
-func (e *Engine) GetFinancialsRange(symbol string, provider market.Provider, years market.FinancialYearRange) (market.FinancialsResponse, error) {
+func (e *Engine) GetFinancialsRange(ctx context.Context, symbol string, provider market.Provider, years market.FinancialYearRange) (market.FinancialsResponse, error) {
 	if err := years.Validate(); err != nil {
 		return market.FinancialsResponse{}, err
 	}
@@ -351,7 +354,7 @@ func (e *Engine) GetFinancialsRange(symbol string, provider market.Provider, yea
 	}
 	e.financialsMu.Unlock()
 
-	res, err := market.FetchQuarterlyFinancialsRange(symbol, provider, e.finnhubAPIKey, years)
+	res, err := e.providers.Financials(ctx, provider, symbol, years)
 	if err != nil {
 		return market.FinancialsResponse{}, err
 	}

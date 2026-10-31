@@ -43,7 +43,7 @@ LABEL org.opencontainers.image.revision="${GIT_COMMIT}" \
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd -g 10001 flowey && useradd -m -u 10001 -g 10001 flowey \
- && mkdir -p /data /secrets && chown flowey:flowey /data /secrets
+ && mkdir -p /data /secrets /plugins && chown flowey:flowey /data /secrets /plugins
 WORKDIR /app
 COPY --from=go-builder /out/floweysales_backend /app/floweysales_backend
 USER flowey:flowey

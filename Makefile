@@ -35,8 +35,15 @@ mcp: ## Build the MCP server binary (floweysales_mcp)
 build: frontend backend mcp ## Build everything (Angular -> www/, Go backend, MCP server)
 
 .PHONY: test
-test: ## Run Go unit tests
+test: ## Run Go unit tests (backend and plugin SDK)
 	$(GO) test ./...
+	cd pluginsdk && $(GO) test ./...
+
+.PHONY: plugins-install
+plugins-install: backend ## Install the Yahoo, Binance and Finnhub plugins from the plugin store
+	./$(BINARY) plugins install yahoo --accept-terms
+	./$(BINARY) plugins install binance
+	./$(BINARY) plugins install finnhub
 
 .PHONY: run
 run: build ## Build everything, then launch the backend on :8080

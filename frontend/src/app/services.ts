@@ -10,6 +10,7 @@ import {
   OrderRequest,
   OrderResponse,
   PortfolioResponse,
+  ProviderCapability,
   SymbolInfo,
   TradingRecord,
 } from './models';
@@ -33,6 +34,11 @@ export class MarketService {
   }
   stopTracker(t:TrackedAsset):Observable<{trackers:TrackedAsset[]}>{
     return this.http.delete<{trackers:TrackedAsset[]}>('/api/trackers',{params:{symbol:t.symbol,provider:t.provider}});
+  }
+
+  /** Providers contributed by installed plugins. */
+  getProviders(): Observable<ProviderCapability[]> {
+    return this.http.get<ProviderCapability[]>('/api/providers').pipe(map(list => list ?? []));
   }
 
   getConfig(): Observable<SharedConfig> {

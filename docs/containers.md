@@ -21,6 +21,20 @@ identity database has no users, using the bootstrap credentials in .env.
 app with `docker compose up -d app`. The existing account is not reset by
 environment changes. Only expose the port through HTTPS when deploying off-host.
 
+### Market-data plugins
+
+The app starts without any market-data provider. Sign in as SYS_ADMIN and
+install providers from **Settings → Plugins**, or from the host:
+
+```sh
+docker compose -f compose.yml exec app /app/floweysales_backend plugins install yahoo --accept-terms
+docker compose -f compose.yml exec app /app/floweysales_backend plugins install binance
+docker compose -f compose.yml restart app   # only needed after CLI changes
+```
+
+Plugins live in the `plugins_data` volume (`/plugins`), so they survive image
+updates and container recreation. See [provider plugins](plugins.md).
+
 ## Podman Compose
 
 Requires Podman and a supported Compose provider (`podman compose` delegates
@@ -45,7 +59,7 @@ containers or disable SELinux as a workaround.
 docker compose -f compose.yml logs -f app
 docker compose -f compose.yml --profile migration run --rm migrate status --verbose
 docker compose -f compose.yml down             # preserves named volumes
-# Destructive: docker compose -f compose.yml down -v (deletes trading and identity data)
+# Destructive: docker compose -f compose.yml down -v (deletes trading, identity and plugin data)
 ```
 
 `make stack-up` and `make stack-down` accept `COMPOSE='podman compose'`.

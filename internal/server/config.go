@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"floweysales/internal/market"
@@ -65,8 +64,8 @@ func (e *Engine) registerConfigRoutes() {
 			return
 		}
 		provider := market.ParseProvider(b.Provider)
-		if !validTrackerProvider(b.Provider) {
-			writeJSON(w, 400, map[string]any{"error": "invalid provider"})
+		if !e.trackableProvider(provider) {
+			writeJSON(w, 400, map[string]any{"error": "provider is not installed; install its plugin from Settings → Plugins"})
 			return
 		}
 		allowed, err := e.addPersistedTracker(symbol, provider)
@@ -86,12 +85,12 @@ func (e *Engine) registerConfigRoutes() {
 			writeJSON(w, 400, map[string]any{"error": err.Error()})
 			return
 		}
-		p := r.URL.Query().Get("provider")
-		if !validTrackerProvider(p) {
+		// Trackers of an uninstalled provider can still be removed.
+		provider := market.ParseProvider(r.URL.Query().Get("provider"))
+		if !provider.Valid() {
 			writeJSON(w, 400, map[string]any{"error": "invalid provider"})
 			return
 		}
-		provider := market.ParseProvider(p)
 		if err := e.removePersistedTracker(symbol, provider); err != nil {
 			writeJSON(w, 500, map[string]any{"error": "could not delete tracker"})
 			return
@@ -133,11 +132,11 @@ func (e *Engine) registerConfigRoutes() {
 			symbol = sym
 		}
 		if provStr, ok := j["provider"].(string); ok && provStr != "" {
-			if !validTrackerProvider(provStr) {
-				writeJSON(w, 400, map[string]any{"error": "invalid provider"})
+			provider = market.ParseProvider(provStr)
+			if !e.trackableProvider(provider) {
+				writeJSON(w, 400, map[string]any{"error": "provider is not installed; install its plugin from Settings → Plugins"})
 				return
 			}
-			provider = market.ParseProvider(provStr)
 		}
 
 		normalized, err := market.CanonicalSymbol(symbol)
@@ -166,13 +165,19 @@ func (e *Engine) registerConfigRoutes() {
 	})
 }
 
-func validTrackerProvider(value string) bool {
-	switch strings.ToUpper(strings.TrimSpace(value)) {
-	case "YAHOO", "FINNHUB", "BINANCE", "AVANZA":
-		return true
-	default:
+// trackableProvider reports whether an installed plugin can feed a tracker
+// (it must offer quotes).
+func (e *Engine) trackableProvider(p market.Provider) bool {
+	c, ok := market.Capability(e.providers, p)
+	if !ok {
 		return false
 	}
+	for _, have := range c.Capabilities {
+		if have == "quote" {
+			return true
+		}
+	}
+	return false
 }
 
 // addPersistedTracker writes MySQL before exposing a new active target to the

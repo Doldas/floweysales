@@ -63,10 +63,13 @@ func parseInt(s string, fallback int) int {
 }
 
 func main() {
+	defaults := app.LoadProperties("config.properties")
+	if len(os.Args) > 1 && os.Args[1] == "plugins" {
+		os.Exit(runPluginsCommand(os.Args[2:], defaults, os.Stdout, os.Stderr))
+	}
 	if err := server.EnsureAPISecretsKey(); err != nil {
 		log.Fatalf("[CONFIG] initialize integration secret encryption: %v", err)
 	}
-	defaults := app.LoadProperties("config.properties")
 
 	emailCooldownDuration := time.Duration(parseInt(
 		app.ResolveConfig("EMAIL_COOLDOWN_DURATION_MIN", "10", defaults), 10)) * time.Minute
@@ -132,8 +135,22 @@ func main() {
 	portfolio.AllowShort = strings.EqualFold(
 		app.ResolveConfig("ALLOW_SHORT_SELLING", "false", defaults), "true")
 
-	api := market.NewMarketApi(app.ResolveConfig("FINNHUB_API_KEY", "", defaults))
-	finnhubAPIKey := app.ResolveConfig("FINNHUB_API_KEY", "", defaults)
+	pluginManager, err := openPlugins(defaults)
+	if err != nil {
+		log.Fatalf("[Plugins] %v", err)
+	}
+	defer pluginManager.Close()
+	if installed := pluginManager.Installed(); len(installed) == 0 {
+		log.Printf("[Plugins] No market-data provider plugins installed in %s; install them from Settings → Plugins or with `floweysales_backend plugins install yahoo`", pluginManager.Dir())
+	} else {
+		for _, p := range installed {
+			log.Printf("[Plugins] %s %s provides %s", p.Manifest.ID, p.Manifest.Version, p.Manifest.Provider.ID)
+		}
+	}
+	pluginCheckHours := parseInt(app.ResolveConfig("PLUGIN_CHECK_INTERVAL_HOURS", "0", defaults), 0)
+	if pluginCheckHours < 0 || pluginCheckHours > 168 {
+		log.Fatal("PLUGIN_CHECK_INTERVAL_HOURS must be between 0 (manual only) and 168")
+	}
 
 	db, err := storage.Open(mysqlDSN)
 	if err != nil {
@@ -150,7 +167,8 @@ func main() {
 		}
 	}
 
-	restAPI := server.NewEngine(db, sharedConfig, wwwFS, finnhubAPIKey, cfg)
+	restAPI := server.NewEngine(db, sharedConfig, wwwFS, cfg)
+	restAPI.ConfigurePlugins(pluginManager, sharedConfig.Provider)
 	if strings.EqualFold(app.ResolveConfig("AUTH_ENABLED", "false", defaults), "true") {
 		// Auth credentials are deliberately environment-only, never committed properties.
 		identityDB, err := identity.Open(mysqlDSN)
@@ -233,7 +251,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go updateService.Run(ctx, time.Duration(updateCheckHours)*time.Hour)
-	runActiveTrackers(ctx, sharedConfig, db, api, restAPI.DispatchTrackerAlert, cfg, updateRate, emailCooldownDuration, finnhubAPIKey)
+	go pluginManager.Run(ctx, time.Duration(pluginCheckHours)*time.Hour)
+	runActiveTrackers(ctx, sharedConfig, db, restAPI.Providers(), restAPI.DispatchTrackerAlert, cfg, updateRate, emailCooldownDuration)
 	restAPI.Stop()
 }
 
@@ -248,17 +267,15 @@ func mustJSON(v any) []byte {
 
 // seedTrackerFromHistory warms the tracker with recent market data (1M bars)
 // so EMAs and the stop-loss start realistic instead of cold. Best-effort:
-// when the provider has no history the tracker starts normally.
-func seedTrackerFromHistory(tkr *tracker.Tracker, symbol string, provider market.Provider, finnhubKey string) {
-	series, err := market.FetchHistory(symbol, provider, market.Range1M, finnhubKey)
+// when the provider has no history the tracker starts normally. It reports
+// whether the provider answered, so an unavailable one can be retried.
+func seedTrackerFromHistory(ctx context.Context, tkr *tracker.Tracker, providers market.Backend, symbol string, provider market.Provider) bool {
+	series, err := providers.History(ctx, provider, symbol, market.Range1M)
 	if err != nil {
-		_ = err
-		return
+		return false
 	}
-	closes := series.Closes()
-	if len(closes) < 2 {
-		return
+	if closes := series.Closes(); len(closes) >= 2 {
+		tkr.Seed(closes)
 	}
-	tkr.Seed(closes)
-
+	return true
 }

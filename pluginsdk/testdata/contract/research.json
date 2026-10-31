@@ -1,0 +1,1 @@
+{"provider":"BINANCE","operation":"server_time","upstream_path":"/api/v3/time","retrieved_at_utc":"2026-10-31T12:00:00Z","source":"https://data-api.binance.vision/api/v3/time","data":{"serverTime":1761912000000},"note":"Provider-sourced snapshot."}

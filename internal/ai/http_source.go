@@ -111,6 +111,27 @@ func (s *HTTPDataSource) ProviderResearch(provider, operation, symbol, from, to 
 	return out, err
 }
 
+// ProviderCapabilities implements ProviderCatalog.
+func (s *HTTPDataSource) ProviderCapabilities() ([]market.ProviderCapability, error) {
+	var out []market.ProviderCapability
+	err := s.get("/api/providers", url.Values{}, &out)
+	return out, err
+}
+
+// ProviderEndpoints implements ProviderCatalog.
+func (s *HTTPDataSource) ProviderEndpoints() ([]market.ResearchEndpoint, error) {
+	var out []market.ResearchEndpoint
+	err := s.get("/api/provider/endpoints", url.Values{}, &out)
+	return out, err
+}
+
+// ProviderQuote implements ProviderCatalog.
+func (s *HTTPDataSource) ProviderQuote(symbol, provider string) (market.QuoteSnapshot, error) {
+	var out market.QuoteSnapshot
+	err := s.get("/api/quote", url.Values{"symbol": {symbol}, "provider": {provider}}, &out)
+	return out, err
+}
+
 // Stats implements DataSource.
 func (s *HTTPDataSource) Stats(symbol string) (storage.MarketStats, error) {
 	var out storage.MarketStats

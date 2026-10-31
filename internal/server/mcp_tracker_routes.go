@@ -61,11 +61,11 @@ func (e *Engine) registerMCPTrackerRoutes() {
 			return
 		}
 		symbol, err := market.CanonicalSymbol(request.Symbol)
-		if err != nil || !validTrackerProvider(request.Provider) {
-			writeJSON(w, 400, map[string]string{"error": "invalid symbol or provider"})
+		provider := market.ParseProvider(request.Provider)
+		if err != nil || !e.trackableProvider(provider) {
+			writeJSON(w, 400, map[string]string{"error": "invalid symbol or provider not installed"})
 			return
 		}
-		provider := market.ParseProvider(strings.ToUpper(request.Provider))
 		allowed, err := e.addPersistedTracker(symbol, provider)
 		if err != nil {
 			writeJSON(w, 503, map[string]string{"error": "tracker persistence failed"})

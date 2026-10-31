@@ -22,7 +22,10 @@ uppdateras. Den hostar inte själva REST-backenden eller MCP-servern.
 
 ## Nytillkomna anslutna read-only operationer
 
-`GET /api/provider/endpoints` returnerar den faktiska whitelisten.
+Operationerna deklareras av de installerade provider-pluginen (deras
+`plugin.json`, se [plugins](plugins.md)); en provider utan installerat
+plugin har inga operationer. `GET /api/provider/endpoints` returnerar den
+faktiska whitelisten för installerade plugin.
 `GET /api/provider/research?provider=FINNHUB&operation=company_profile&symbol=NVDA`
 är Finnhub bolagsprofil. Finnhub-nyckeln konfigureras på servern via
 `FINNHUB_API_KEY` och skickas i headern `X-Finnhub-Token`.
@@ -34,8 +37,9 @@ Andra tillåtna operationer visas direkt i katalogen.
 
 Inofficiella extra anrop: `YAHOO/market_news` använder en publikt nåbar,
 odokumenterad Yahoo Finance-sökfunktion. `AVANZA/instrument_snapshot`
-använder bara den redan existerande publika read-only adaptern och
-fungerar enbart när `AVANZA_UNOFFICIAL_ENABLED=true`.
+använder Avanza-pluginens publika read-only ögonblicksbild och finns bara
+när Avanza-pluginet är installerat (installationen kräver att villkoren
+godkänns).
 
 ## Säkerhet och tillgänglighet
 
@@ -54,11 +58,26 @@ fungerar enbart när `AVANZA_UNOFFICIAL_ENABLED=true`.
 - Svar är *provider-sourced*, inte verifierade SEC-tal, revisionsdata
   eller rekommendationer om köp/sälj.
 
+## Plugin-administration (SYS_ADMIN, kräver inloggning)
+
+| Metod | Sökväg | Beskrivning |
+|---|---|---|
+| GET | `/api/providers` | Installerade providers: kapaciteter, om de är konfigurerade, pollintervall |
+| GET | `/api/admin/plugins` | Installerade plugin, senast hämtade butikskatalog och trackers per plugin |
+| POST | `/api/admin/plugins/check` | Hämtar butikskatalogen nu (sök efter uppdateringar) |
+| POST | `/api/admin/plugins/install` | `{"id":"yahoo","version":"","accept_terms":true}` installerar eller uppdaterar; tom version = senaste. 409 med `terms` om villkor måste godkännas |
+| DELETE | `/api/admin/plugins/{id}` | Avinstallerar; 409 med `trackers` om aktiva trackers använder providern, `?force=true` bekräftar |
+
+En provider vars plugin inte är installerat ger HTTP 404 på `/api/history`,
+`/api/financials`, `/api/quote` och `/api/provider/research`; saknad
+konfiguration (t.ex. API-nyckel) ger 503.
+
 ## Underhåll och tester
 
-- `go test ./internal/market ./internal/mcp`: säkerställer att det som
-  dokumenteras som ny tillgänglig operation existerar och att alla
-  aktuella MCP-verktyg faktiskt finns i katalogen.
+- `go test ./internal/mcp`: säkerställer att alla MCP-verktyg finns i
+  katalogen. Providerdelen av katalogen beskriver de officiella pluginen i
+  [floweysales-plugins](https://github.com/Doldas/floweysales-plugins), vars
+  `plugin.json` är den bindande listan över operationer.
 - `npm run smoke:api-pages --prefix frontend` kör Playwright med
   API Pages på lokal server för mobil (360px), surfplatta och desktop.
 - Validering av HTML, CSS, JS och JSON ingår i GitHub Actions.

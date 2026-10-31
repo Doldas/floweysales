@@ -11,7 +11,7 @@ import { ApiSettingsComponent } from '../components/api-settings';
         <div>
           <div class="fs-eyebrow">System administration</div>
           <h1>Settings</h1>
-          <p>AI and search integrations, people and roles, mail and updates. Credentials are encrypted on the server and never shown again.</p>
+          <p>AI and search integrations, people and roles, mail, market-data plugins and updates. Credentials are encrypted on the server and never shown again.</p>
         </div>
       </header>
       <fse-api-settings />

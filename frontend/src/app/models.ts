@@ -172,14 +172,36 @@ export interface MarketStats {
   record_count: number;
 }
 
-export type ProviderId = 'YAHOO' | 'AVANZA' | 'FINNHUB' | 'BINANCE';
+/** Provider ID contributed by an installed plugin, e.g. 'YAHOO'. */
+export type ProviderId = string;
 
-export const PROVIDERS: { id: ProviderId; label: string }[] = [
-  { id: 'YAHOO', label: 'Yahoo Finance' },
-  { id: 'AVANZA', label: 'Avanza' },
-  { id: 'FINNHUB', label: 'Finnhub' },
-  { id: 'BINANCE', label: 'Binance' },
-];
+const PROVIDER_ID = /^[A-Z][A-Z0-9_]{1,31}$/;
+
+/** True for a well-formed provider ID (whether or not it is installed). */
+export function isProviderId(value: unknown): value is ProviderId {
+  return typeof value === 'string' && PROVIDER_ID.test(value);
+}
+
+/** An installed provider, as served by GET /api/providers. */
+export interface ProviderCapability {
+  id: ProviderId;
+  label: string;
+  plugin_id: string;
+  plugin_version: string;
+  official_api: boolean;
+  search: boolean;
+  ohlc: boolean;
+  fundamentals: boolean;
+  capabilities: string[];
+  quote_kind: string;
+  requires_key: boolean;
+  experimental: boolean;
+  /** False when a required setting such as an API key is missing. */
+  enabled: boolean;
+  min_poll_seconds: number;
+  cache_ttl_seconds: number;
+  notes: string;
+}
 
 /** A single OHLC bar from the provider. */
 export interface HistoryPoint {

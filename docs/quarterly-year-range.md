@@ -22,7 +22,7 @@ GET /api/financials?symbol=GIB&provider=YAHOO
   all available periods **before** filtering. The legacy eight-quarter cap
   applies only to requests without year range. This prevents dropping
   older reports and preserves earlier YTD facts for quarterly deltas.
-- Avanza (when opted in) uses the same Yahoo reporting dates through its
+- Avanza (when its plugin is installed) uses the same Yahoo reporting dates through its
   ticker mapping. Binance reports no issuer financials.
 - Responses return `from_year`, `to_year` when a range is supplied,
   report rows newest-first, and an explanatory note if nothing is available.

@@ -1,6 +1,7 @@
 import { Component, signal } from '@angular/core';
 import { AdminAccessSettingsComponent } from './admin-access-settings';
 import { UpdateSettingsComponent } from './update-settings';
+import { PluginSettingsComponent } from './plugin-settings';
 import { FormsModule } from '@angular/forms';
 
 interface AIConfig {base_url:string;model:string;max_steps:number;max_tool_calls:number;configured:boolean}
@@ -10,7 +11,7 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
 @Component({
  selector:'fse-api-settings', host:{class:'fs-native-forms'},
  standalone:true,
- imports:[FormsModule,AdminAccessSettingsComponent,UpdateSettingsComponent],
+ imports:[FormsModule,AdminAccessSettingsComponent,UpdateSettingsComponent,PluginSettingsComponent],
  template:`
  <div class="api-settings">
   @if(!encryptionReady()){
@@ -23,6 +24,7 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
     <button type="button" role="tab" [attr.aria-selected]="tab()==='roles'" [class.active]="tab()==='roles'" (click)="tab.set('roles')">Role management</button>
     <button type="button" role="tab" [attr.aria-selected]="tab()==='permissions'" [class.active]="tab()==='permissions'" (click)="tab.set('permissions')">Permission management</button>
     <button type="button" role="tab" [attr.aria-selected]="tab()==='mail'" [class.active]="tab()==='mail'" (click)="tab.set('mail')">Mail configuration</button>
+    <button type="button" role="tab" [attr.aria-selected]="tab()==='plugins'" [class.active]="tab()==='plugins'" (click)="tab.set('plugins')">Plugins</button>
     <button type="button" role="tab" [attr.aria-selected]="tab()==='updates'" [class.active]="tab()==='updates'" (click)="tab.set('updates')">Updates</button>
   </nav>
   @if(tab()==='integrations'){
@@ -80,6 +82,8 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
     <p class="muted">Provider credentials are configured here for upcoming web-search nodes. Crawling public HTML pages does not require a search API key. Search execution is not yet implemented by this settings change.</p>
    </div>
   </div>
+  } @else if(tab()==='plugins'){
+    <fse-plugin-settings></fse-plugin-settings>
   } @else if(tab()==='updates'){
     <fse-update-settings></fse-update-settings>
   } @else {

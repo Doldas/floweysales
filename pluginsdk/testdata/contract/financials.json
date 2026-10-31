@@ -1,0 +1,1 @@
+{"from_year":2024,"to_year":2025,"symbol":"NVDA","provider":"FINNHUB","source":"finnhub","reports":[{"period":"Q2 FY2025","period_basis":"fiscal","period_end":"2025-07-27","revenue":46743000000,"net_income":26422000000,"eps":1.08,"data_quality_warnings":["example warning"],"currency":"USD","form":"10-Q"}],"note":"example note"}

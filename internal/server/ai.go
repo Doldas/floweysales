@@ -23,22 +23,34 @@ type engineSource struct {
 }
 
 func (s engineSource) Search(query, provider string) ([]market.SearchResult, error) {
-	return market.SearchAssets(query, market.ParseProvider(provider), s.e.finnhubAPIKey), nil
+	return s.e.providers.Search(context.Background(), s.e.parseProvider(provider), query)
 }
 
 func (s engineSource) History(symbol, provider, rng string) (market.HistorySeries, error) {
-	return s.e.GetHistory(symbol, market.ParseProvider(provider), market.ValidRange(rng))
+	return s.e.GetHistory(context.Background(), symbol, s.e.parseProvider(provider), market.ValidRange(rng))
 }
 
 func (s engineSource) ProviderResearch(provider, operation, symbol, from, to string) (market.ResearchResult, error) {
-	return market.FetchResearchOperation(context.Background(), provider, operation, symbol, from, to, s.e.finnhubAPIKey)
+	return s.e.providers.Research(context.Background(), market.ParseProvider(provider), operation, symbol, from, to)
 }
 
 func (s engineSource) Financials(symbol, provider string) (market.FinancialsResponse, error) {
-	return s.e.GetFinancials(symbol, market.ParseProvider(provider))
+	return s.e.GetFinancials(context.Background(), symbol, s.e.parseProvider(provider))
 }
 func (s engineSource) FinancialsRange(symbol, provider string, years market.FinancialYearRange) (market.FinancialsResponse, error) {
-	return s.e.GetFinancialsRange(symbol, market.ParseProvider(provider), years)
+	return s.e.GetFinancialsRange(context.Background(), symbol, s.e.parseProvider(provider), years)
+}
+
+func (s engineSource) ProviderCapabilities() ([]market.ProviderCapability, error) {
+	return s.e.providers.Providers(), nil
+}
+
+func (s engineSource) ProviderEndpoints() ([]market.ResearchEndpoint, error) {
+	return s.e.providers.ResearchOperations(), nil
+}
+
+func (s engineSource) ProviderQuote(symbol, provider string) (market.QuoteSnapshot, error) {
+	return market.LatestSnapshot(context.Background(), s.e.providers, symbol, s.e.parseProvider(provider))
 }
 
 func (s engineSource) Stats(symbol string) (storage.MarketStats, error) {

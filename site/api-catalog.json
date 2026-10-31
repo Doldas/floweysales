@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-20",
+  "updated_at": "2026-10-31",
   "scope": "Read-only research inventory: implemented FloweySales HTTP/MCP surfaces plus known external provider endpoints (not an exhaustive list of vendor-specific, private or trading APIs).",
   "status_legend": {
     "implemented": "Implementerad i FloweySales och exponerad via angiven yta (kräver normalt inloggning).",
@@ -8,6 +8,38 @@
     "experimental": "Inofficiell/experimentell leverantör; kan ändras och kräver opt-in eller ytterligare granskning."
   },
   "rest": [
+    {
+      "method": "GET",
+      "path": "/api/admin/plugins",
+      "description": "Installerade provider-plugin, butikskatalog, tillgängliga uppdateringar och trackers per plugin",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/plugins/check",
+      "description": "Hämta plugin-butikens katalog nu (sök efter uppdateringar)",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/plugins/install",
+      "description": "Installera eller uppdatera ett provider-plugin (SHA-256-verifierat; villkor måste godkännas)",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/plugins/{id}",
+      "description": "Avinstallera ett provider-plugin (bekräftelse krävs om trackers använder det)",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
     {
       "method": "GET",
       "path": "/api/admin/runtime",
@@ -251,7 +283,7 @@
     {
       "method": "GET",
       "path": "/api/providers",
-      "description": "Providerförmågor och tillgänglighet",
+      "description": "Installerade provider-plugin: kapaciteter, konfigurationsstatus och pollintervall",
       "access": "USER / SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -575,7 +607,7 @@
       "official": true,
       "documentation": "https://finnhub.io/docs/api",
       "base": "https://finnhub.io/api/v1",
-      "auth": "FINNHUB_API_KEY på servern; plan och dataåtkomst kan begränsa",
+      "auth": "FINNHUB_API_KEY på servern (skickas bara till Finnhub-pluginet); plan och dataåtkomst kan begränsa",
       "note": "Analytikermått och nyheter är inte verifierade revisionsdata. Stäm av mot SEC och originalrapporter.",
       "endpoints": [
         {
@@ -859,7 +891,7 @@
       "official": false,
       "documentation": "https://github.com/vmorsell/avanza-sdk-go",
       "base": "https://www.avanza.se (inofficiell)",
-      "auth": "AVANZA_UNOFFICIAL_ENABLED=true krävs; inga privata sessionsflöden",
+      "auth": "Avanza-pluginet måste installeras och dess villkor godkännas; inga privata sessionsflöden",
       "note": "Avanza har inget stabilt publikt dokumenterat API. Endpoints från tredjeparts-SDK är vägledande, inte officiellt kontrakt; inga BankID- eller order-API:er exponerade.",
       "endpoints": [
         {

@@ -1,4 +1,5 @@
-import {Component,signal} from '@angular/core';
+import {Component,effect,inject,signal} from '@angular/core';
+import {MarketState} from '../core/market-state';
 import {FormsModule} from '@angular/forms';
 
 interface Subscription {symbol:string;provider:string;golden_cross:boolean;death_cross:boolean;stop_loss:boolean;cooldown_minutes:number}
@@ -12,9 +13,10 @@ interface Subscription {symbol:string;provider:string;golden_cross:boolean;death
   <div class="new-sub">
    <label>Symbol <input [ngModel]="symbol()" (ngModelChange)="symbol.set($event.toUpperCase())" maxlength="32" placeholder="AAPL"></label>
    <label>Provider <select [ngModel]="provider()" (ngModelChange)="provider.set($event)">
-    <option value="YAHOO">Yahoo</option><option value="FINNHUB">Finnhub</option><option value="AVANZA">Avanza</option><option value="BINANCE">Binance</option>
+    @for(p of market.providers();track p.id){<option [value]="p.id">{{p.label}}</option>}
+    @empty{<option value="" disabled>No provider plugins installed</option>}
    </select></label>
-   <button class="btn btn-sm btn-primary" [disabled]="busy()||!symbol().trim()" (click)="subscribe()">Subscribe</button>
+   <button class="btn btn-sm btn-primary" [disabled]="busy()||!symbol().trim()||!provider()" (click)="subscribe()">Subscribe</button>
   </div>
   @for(item of subscriptions();track item.provider+'|'+item.symbol){
    <section class="subscription">
@@ -41,9 +43,15 @@ interface Subscription {symbol:string;provider:string;golden_cross:boolean;death
  `]
 })
 export class TrackerEmailSettingsComponent {
+ readonly market=inject(MarketState);
  readonly subscriptions=signal<Subscription[]>([]);
- readonly symbol=signal('');readonly provider=signal('YAHOO');readonly busy=signal(false);readonly message=signal('');
- constructor(){void this.load()}
+ readonly symbol=signal('');readonly provider=signal('');readonly busy=signal(false);readonly message=signal('');
+ constructor(){
+  void this.load();
+  if(!this.market.providersLoaded())this.market.refreshProviders();
+  // Default to the first installed provider once the list is known.
+  effect(()=>{const list=this.market.providers();if(list.length&&!list.some(p=>p.id===this.provider()))this.provider.set(list[0].id)});
+ }
  private async api(path:string,init?:RequestInit):Promise<any>{
   const res=await fetch(path,{...init,credentials:'same-origin',headers:{'Content-Type':'application/json',...init?.headers}});
   const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||'HTTP '+res.status);return data;

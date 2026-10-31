@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
 	"sort"
 	"strings"
 
@@ -27,13 +26,21 @@ type DataSource interface {
 	EngineConfig() (map[string]any, error)
 }
 
+// ProviderCatalog is the optional part of a DataSource that describes the
+// installed provider plugins. Providers are plugins, so every tool learns
+// what exists from here rather than from a fixed list.
+type ProviderCatalog interface {
+	ProviderCapabilities() ([]market.ProviderCapability, error)
+	ProviderEndpoints() ([]market.ResearchEndpoint, error)
+	ProviderQuote(symbol, provider string) (market.QuoteSnapshot, error)
+}
+
 // ToolDefs returns the tool catalogue advertised to models and MCP clients.
 func ToolDefs() []Tool {
 	str := func(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 	providerProp := map[string]any{
 		"type":        "string",
-		"description": "Market data provider. One of YAHOO, FINNHUB, AVANZA, BINANCE. Defaults to YAHOO (use BINANCE for crypto pairs like BTC).",
-		"enum":        []string{"YAHOO", "FINNHUB", "AVANZA", "BINANCE"},
+		"description": "Market data provider ID of an installed provider plugin (list them with get_provider_capabilities), e.g. YAHOO for equities or BINANCE for crypto pairs when installed. Omit to use the server default.",
 	}
 	rangeProp := map[string]any{
 		"type":        "string",
@@ -51,14 +58,14 @@ func ToolDefs() []Tool {
 
 	return []Tool{
 		{Type: "function", Function: ToolFunction{
-			Name: "get_provider_endpoints", Description: "List whitelisted read-only Finnhub and Binance research operations exposed through REST and MCP, with actual upstream paths.",
+			Name: "get_provider_endpoints", Description: "List the allowlisted read-only research operations declared by the installed provider plugins, with their upstream paths.",
 			Parameters: obj(map[string]any{}),
 		}},
 		{Type: "function", Function: ToolFunction{
 			Name:        "get_provider_research",
-			Description: "Call a strictly whitelisted provider research operation from get_provider_endpoints: official Binance/Finnhub, unofficial Yahoo news search, or opt-in Avanza public instrument. No arbitrary URL proxy, private accounts or orders.",
+			Description: "Call one allowlisted provider research operation listed by get_provider_endpoints. No arbitrary URL proxy, private accounts or orders.",
 			Parameters: obj(map[string]any{
-				"provider":  map[string]any{"type": "string", "enum": []string{"BINANCE", "FINNHUB", "YAHOO", "AVANZA"}},
+				"provider":  map[string]any{"type": "string", "description": "Provider ID from get_provider_endpoints"},
 				"operation": str("Whitelisted operation e.g. company_profile, ticker_24h, order_book"),
 				"symbol":    str("NVDA for Finnhub or BTCUSDT for Binance (not needed for server_time)"),
 				"from":      str("For company_news only: YYYY-MM-DD"),
@@ -71,7 +78,7 @@ func ToolDefs() []Tool {
 			Parameters:  obj(map[string]any{"symbol": str("Issuer ticker, e.g. NVDA"), "form": str("SEC form: 10-K, 10-Q or 8-K"), "item": str("Filing Item (e.g. 7 for 10-K, 2 for 10-Q, 2.02 for 8-K)")}, "symbol", "form", "item"),
 		}},
 		{Type: "function", Function: ToolFunction{
-			Name: "get_provider_capabilities", Description: "Get each market data provider's official/unofficial access, available capabilities, subscription requirements, cache TTL and quote type.",
+			Name: "get_provider_capabilities", Description: "List the installed market data provider plugins with their official/unofficial access, capabilities, whether they are configured, cache TTL and quote type.",
 			Parameters: obj(map[string]any{}),
 		}},
 		{Type: "function", Function: ToolFunction{
@@ -273,7 +280,15 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 
 	switch name {
 	case "get_provider_endpoints":
-		return toJSON(market.ResearchOperations())
+		catalog, ok := src.(ProviderCatalog)
+		if !ok {
+			return "", fmt.Errorf("provider catalogue unavailable for this data source")
+		}
+		ops, err := catalog.ProviderEndpoints()
+		if err != nil {
+			return "", err
+		}
+		return toJSON(ops)
 	case "get_provider_research":
 		provider, operation := strArg(args, "provider"), strArg(args, "operation")
 		if provider == "" || operation == "" {
@@ -301,13 +316,25 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 		}
 		return toJSON(out)
 	case "get_provider_capabilities":
-		return toJSON(market.ProviderCapabilities())
+		catalog, ok := src.(ProviderCatalog)
+		if !ok {
+			return "", fmt.Errorf("provider catalogue unavailable for this data source")
+		}
+		caps, err := catalog.ProviderCapabilities()
+		if err != nil {
+			return "", err
+		}
+		return toJSON(caps)
 	case "get_provider_quote":
 		s := strArg(args, "symbol")
 		if s == "" {
 			return "", fmt.Errorf("symbol required")
 		}
-		result, err := market.LatestSnapshot(s, market.ParseProvider(providerArg(args)), os.Getenv("FINNHUB_API_KEY"))
+		catalog, ok := src.(ProviderCatalog)
+		if !ok {
+			return "", fmt.Errorf("provider quotes unavailable for this data source")
+		}
+		result, err := catalog.ProviderQuote(s, providerArg(args))
 		if err != nil {
 			return "", err
 		}
@@ -588,11 +615,8 @@ func strArg(args map[string]any, key string) string {
 }
 
 func providerArg(args map[string]any) string {
-	p := strings.ToUpper(strArg(args, "provider"))
-	if p == "" {
-		return "YAHOO"
-	}
-	return p
+	// Empty means "server default"; the data source resolves it.
+	return strings.ToUpper(strArg(args, "provider"))
 }
 
 func rangeArg(args map[string]any) string {

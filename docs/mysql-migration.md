@@ -80,9 +80,9 @@ work are managed and tested independently in the same change series.
 - REST history cache has a hard 32-key limit; financial cache 48 keys.
   SSE subscribers are capped at 64 and their channel buffers at four ticks.
 - Each symbol+provider has independent EMA/stop state, bounded to 16 active
-  streams. Polling is clamped by provider quota to avoid a single
-  configuration storm after a pod restart (Finnhub at least 20s,
-  Avanza 10s, Yahoo 5s, Binance 2s).
+  streams. Polling is clamped to each provider plugin's declared
+  `min_poll_seconds` to avoid a single configuration storm after a pod
+  restart (bundled plugins: Finnhub 20s, Avanza 10s, Yahoo 5s, Binance 2s).
 - Console per-tick/tracking debug logs are removed. Market ticks and
   simulated orders remain persisted in MySQL.
 - Optional SMTP alerts are disabled by default. Set

@@ -84,6 +84,13 @@ try {
       await audit(page, `Page ${path || 'command-center'} (${theme})`, 'body');
     }
   }
+  // Settings → Plugins: installed plugins, an available update and the store.
+  await page.goto(new URL('#/settings', base).href, { waitUntil: 'networkidle' });
+  await page.getByRole('tab', { name: 'Plugins', exact: true }).click();
+  await page.locator('fse-plugin-settings article').first().waitFor({ state: 'visible', timeout: 5000 });
+  await page.addScriptTag({ content: axeSource });
+  await audit(page, 'Settings: plugin store', 'fse-plugin-settings');
+
   // Overlays: the agent dock with a finished answer and the command palette.
   await page.goto(new URL('#/', base).href, { waitUntil: 'networkidle' });
   await page.addScriptTag({ content: axeSource });

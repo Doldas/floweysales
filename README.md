@@ -34,7 +34,7 @@ Then open http://localhost:8080.
 
 ## Project status and roadmap
 
-FloweySales is an open-source, local-first research application with Go market adapters, a paper-trading engine, an Angular UI and an OpenAI-compatible agent. See [container setup](docs/containers.md), [database & roles](docs/database-and-auth.md), [vision](docs/vision.md), [roadmap](docs/roadmap.md), [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md) and [GitHub setup](docs/github-operations.md). The hosted [GitHub Pages site](https://doldas.github.io/floweysales/) is **static project documentation**, not a remote brokerage app.
+FloweySales is an open-source, local-first research application with installable market-data plugins, a paper-trading engine, an Angular UI and an OpenAI-compatible agent. See [container setup](docs/containers.md), [database & roles](docs/database-and-auth.md), [vision](docs/vision.md), [roadmap](docs/roadmap.md), [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md) and [GitHub setup](docs/github-operations.md). The hosted [GitHub Pages site](https://doldas.github.io/floweysales/) is **static project documentation**, not a remote brokerage app.
 
 Data and model outputs are research aids, not investment advice. Fully automatic live trading is **not supported**; future work requires separate security, compliance and risk gates.
 
@@ -108,12 +108,36 @@ flow, catch an unconnected node in preflight, wire it with click-to-connect,
 save (checking the exact graph sent), publish, run and inspect the node trace
 with its tool calls. CI runs all three.
 
+## Market-data provider plugins
+
+Providers are plugins installed from a plugin store, not part of the
+backend: **Settings → Plugins** (SYS_ADMIN) installs, updates and removes
+them, or on the server:
+
+```bash
+floweysales_backend plugins install yahoo --accept-terms
+floweysales_backend plugins install binance
+floweysales_backend plugins list
+```
+
+The official plugins live in
+[Doldas/floweysales-plugins](https://github.com/Doldas/floweysales-plugins):
+Yahoo Finance, Binance, Finnhub (needs `FINNHUB_API_KEY`) and Avanza
+(unofficial, experimental). This repository provides the interfaces they
+build on — the protocol, the store format and the Go SDK
+`github.com/Doldas/floweysales/pluginsdk` with a conformance test kit — so
+anyone can write and publish their own. Plugins are pinned by SHA-256 and run
+as separate processes with only the settings they declare. See
+[provider plugins](docs/plugins.md) and
+[ADR 0002](docs/adr/0002-provider-plugins.md).
+
 ## Market history
 
 `GET /api/history?symbol=MSFT&provider=YAHOO&range=MAX` returns provider OHLC
 bars (`1D/5D/1M/3M/1Y/3Y/5Y/10Y/MAX`) used to seed the chart and the EMA
 tracker when an asset is tracked. `MAX` reaches as far back as the listing
-allows — for old stocks that means decades (e.g. MSFT back to 1986):
+allows — for old stocks that means decades (e.g. MSFT back to 1986). With the
+bundled plugins:
 
 - **Yahoo** — v8 chart API (`5m/15m/1h/4h/1d` intervals)
 - **Binance** — klines with `endTime` pagination for multi-year ranges
@@ -149,7 +173,7 @@ All indicators are computed client-side over the full close series
 `GET /api/financials?symbol=MSFT&provider=YAHOO` returns the most recent
 quarterly income statements (revenue, gross/operating profit, net income,
 diluted EPS, free cash flow, currency) rendered in the "Quarterly Financials"
-card:
+card. With the bundled plugins:
 
 - **Yahoo** — `ws/fundamentals-timeseries` endpoint (last ~5 quarters)
 - **Avanza** — resolved through the market-guide ticker mapping to Yahoo
@@ -240,8 +264,9 @@ environment variable of the same name.
 | `REST_API_HOST` / `REST_API_PORT` | Server bind address (default `0.0.0.0:8080`) |
 | `REST_API_UPDATE_RATE` | Ticker poll interval in ms (min 250) |
 | `SQLITE_STORAGE_PATH` | `:memory:` or a file path |
-| `DEFAULT_MARKET_SYMBOL` / `DEFAULT_MARKET_PROVIDER` | Initial asset (`YAHOO`/`BINANCE`/`FINNHUB`/`AVANZA`) |
-| `FINNHUB_API_KEY` | Required for the Finnhub provider |
+| `DEFAULT_MARKET_SYMBOL` / `DEFAULT_MARKET_PROVIDER` | Initial asset; the provider is the ID of an installed plugin (`YAHOO`, `BINANCE`, …) |
+| `PLUGIN_DIR` / `PLUGIN_STORE_URL` / `PLUGIN_CHECK_INTERVAL_HOURS` | Provider plugins: install directory, store index, background update checks (see [plugins](docs/plugins.md)) |
+| `FINNHUB_API_KEY` | Passed to the Finnhub plugin, which requires it |
 | `SMTP_APP_MAIL` + `SMTP_APP_MAIL_PSW` | Alert sender credentials |
 | `DEFAULT_SMTP_MAIL_RECIPIENT` | Alert recipient |
 | `EMAIL_COOLDOWN_DURATION_MIN` | Minutes between alert emails |
