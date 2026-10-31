@@ -3,7 +3,6 @@ package market
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/url"
 	"strings"
 )
@@ -75,5 +74,3 @@ func CleanNews(items []NewsItem, p Provider, limit int) []NewsItem {
 	}
 	return out
 }
-
-func (n NewsItem) String() string { return fmt.Sprintf("%s (%s)", n.Title, n.URL) }
