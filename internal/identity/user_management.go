@@ -156,3 +156,19 @@ func (s *Service) RevokeInvitation(ctx context.Context, token string) error {
 	}
 	return tx.Commit()
 }
+
+ // DeleteUser permanently removes an account after revoking its sessions and invitations.
+ // Related records protected by foreign keys cause this transaction to fail safely.
+func (s *Service) DeleteUser(ctx context.Context, id int64) error {
+ if id <= 0 { return ErrInvalidBootstrap }
+ tx, err := s.db.BeginTx(ctx, nil)
+ if err != nil { return err }
+ defer tx.Rollback()
+ var role string
+ if err = tx.QueryRowContext(ctx, "SELECT role FROM auth_users WHERE id=? FOR UPDATE", id).Scan(&role); err != nil { return err }
+ if role == "SYS_ADMIN" { return errors.New("SYS_ADMIN accounts cannot be deleted") }
+ if _, err = tx.ExecContext(ctx, "DELETE FROM auth_sessions WHERE user_id=?", id); err != nil { return err }
+ if _, err = tx.ExecContext(ctx, "DELETE FROM auth_invitations WHERE user_id=?", id); err != nil { return err }
+ if _, err = tx.ExecContext(ctx, "DELETE FROM auth_users WHERE id=?", id); err != nil { return err }
+ return tx.Commit()
+}
