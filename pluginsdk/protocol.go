@@ -22,6 +22,7 @@ const (
 	MethodFinancials = "financials"
 	MethodResearch   = "research"
 	MethodForumPosts = "forum_posts"
+	MethodNews       = "news"
 )
 
 // Capabilities a provider can declare.
@@ -32,6 +33,7 @@ const (
 	CapFinancials = "financials"
 	CapResearch   = "research"
 	CapForum      = "forum"
+	CapNews       = "news"
 )
 
 // Manifest describes a plugin. Each plugin ships it as plugin.json (embedded
@@ -104,7 +106,7 @@ var (
 )
 
 var knownCapabilities = map[string]bool{
-	CapQuote: true, CapHistory: true, CapSearch: true, CapFinancials: true, CapResearch: true, CapForum: true,
+	CapQuote: true, CapHistory: true, CapSearch: true, CapFinancials: true, CapResearch: true, CapForum: true, CapNews: true,
 }
 
 // reservedEnv can never be forwarded to a plugin: they belong to the backend.
@@ -228,6 +230,11 @@ type (
 		To        string `json:"to,omitempty"`
 	}
 	ForumParams struct {
+		Symbol string `json:"symbol"`
+		Limit  int    `json:"limit"`
+	}
+	// NewsParams asks for the most recent headlines about one instrument.
+	NewsParams struct {
 		Symbol string `json:"symbol"`
 		Limit  int    `json:"limit"`
 	}

@@ -120,6 +120,19 @@ type ForumPost struct {
 	Timestamp any    `json:"timestamp"`
 }
 
+// NewsItem is one headline about an instrument. Published is unix seconds,
+// or 0 when the source gives no date. URL must be the article's public
+// address; Summary is optional plain text.
+type NewsItem struct {
+	Title     string `json:"title"`
+	URL       string `json:"url"`
+	Source    string `json:"source,omitempty"`
+	Published int64  `json:"published,omitempty"`
+	Summary   string `json:"summary,omitempty"`
+	Symbol    string `json:"symbol,omitempty"`
+	Provider  string `json:"provider,omitempty"`
+}
+
 // Supported history ranges.
 const (
 	Range1D  = "1D"
