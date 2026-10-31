@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"html"
 	"io"
 	"net"
 	"net/http"
@@ -62,7 +64,11 @@ func sendInvitation(ctx context.Context, cfg identity.SMTPSettings, password, em
 		return err
 	}
 	link := strings.TrimSuffix(cfg.PublicURL, "/") + "/?invite=" + url.QueryEscape(token)
-	body := "From: " + cfg.Sender + "\r\nTo: " + email + "\r\nSubject: FloweySales account invitation\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nYour FloweySales account is ready. Set your password within 48 hours:\r\n" + link + "\r\n\r\nIf you did not expect this invitation, ignore this email.\r\n"
+	boundary := "floweysales-invitation-mixed-2026"
+	plain := "You've been invited to FloweySales. Activate your account within 48 hours:\r\n" + link + "\r\n\r\nIf you did not expect this invitation, you can ignore this email.\r\n"
+	safeLink := html.EscapeString(link)
+	rich := fmt.Sprintf(`<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:32px 12px;background:#0b1020;font-family:Arial,Helvetica,sans-serif;color:#e2e8f0"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%%;max-width:560px;margin:auto;background:#151d32;border:1px solid #334155;border-radius:16px"><tr><td style="padding:32px"><p style="font-size:19px;font-weight:bold;color:#a5b4fc;margin:0 0 28px">✦ FloweySales</p><h1 style="font-size:27px;line-height:1.25;color:#ffffff;margin:0 0 14px">Your research workspace awaits</h1><p style="color:#cbd5e1;line-height:1.6;font-size:16px">You've been invited to FloweySales. Set your password to activate your private research workspace.</p><p style="margin:30px 0"><a href="%s" style="display:inline-block;padding:14px 24px;background:#6366f1;color:#ffffff;text-decoration:none;font-weight:bold;border-radius:9px">Activate your account</a></p><p style="font-size:13px;color:#a5b4fc">This invitation expires in 48 hours.</p><p style="font-size:13px;color:#94a3b8;line-height:1.6">If the button doesn't work, copy this link:<br><a href="%s" style="color:#67e8f9;overflow-wrap:anywhere">%s</a></p><hr style="border:0;border-top:1px solid #334155;margin:26px 0"><p style="font-size:12px;color:#94a3b8;line-height:1.6">If you weren't expecting this invitation, ignore this message. FloweySales is a research aid, not investment advice.</p></td></tr></table></body></html>`, safeLink, safeLink, safeLink)
+	body := "From: " + cfg.Sender + "\r\nTo: " + email + "\r\nSubject: FloweySales account invitation\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=\"" + boundary + "\"\r\n\r\n--" + boundary + "\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n" + plain + "\r\n--" + boundary + "\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n" + rich + "\r\n--" + boundary + "--\r\n"
 	_, err = io.WriteString(writer, body)
 	if err != nil {
 		writer.Close()
@@ -191,6 +197,30 @@ func (e *Engine) registerUserManagementRoutes() {
 			return
 		}
 		writeJSON(w, 201, map[string]bool{"invited": true})
+	})
+	e.mux.HandleFunc("DELETE /api/admin/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if !e.flowAdmin(w, r) {
+			return
+		}
+		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil || id <= 0 {
+			writeJSON(w, 400, map[string]string{"error": "Invalid user ID"})
+			return
+		}
+		actor, ok := e.currentUser(r)
+		if !ok || actor.ID == id {
+			writeJSON(w, 409, map[string]string{"error": "Cannot delete your own account"})
+			return
+		}
+		if err := e.authService.DeleteUser(r.Context(), id); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				writeJSON(w, 404, map[string]string{"error": "User not found"})
+				return
+			}
+			writeJSON(w, 409, map[string]string{"error": "Unable to delete user. Accounts with protected dependent records must be handled before deletion."})
+			return
+		}
+		writeJSON(w, 200, map[string]bool{"deleted": true})
 	})
 	e.mux.HandleFunc("PATCH /api/admin/users/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {

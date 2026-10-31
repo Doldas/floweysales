@@ -103,6 +103,40 @@ func (e *Engine) registerUserspaceRoutes() {
 		}
 		writeJSON(w, 200, map[string]any{"deleted": true, "files_deleted": count})
 	})
+	e.mux.HandleFunc("POST /api/userspace/transfer", func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticate(w, r)
+		if !ok {
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 2048)
+		defer r.Body.Close()
+		var data struct {
+			Source      string `json:"source"`
+			Destination string `json:"destination"`
+			Copy        bool   `json:"copy"`
+		}
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if dec.Decode(&data) != nil {
+			writeJSON(w, 400, map[string]string{"error": "Invalid transfer request"})
+			return
+		}
+		var extra any
+		if dec.Decode(&extra) != io.EOF {
+			writeJSON(w, 400, map[string]string{"error": "Unexpected data"})
+			return
+		}
+		err := e.db.TransferUserspaceFile(r.Context(), owner, data.Source, data.Destination, data.Copy)
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, 404, map[string]string{"error": "Source file not found"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, 400, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "path": data.Destination})
+	})
 	e.mux.HandleFunc("DELETE /api/userspace/file", func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticate(w, r)
 		if !ok {

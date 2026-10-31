@@ -326,9 +326,37 @@ func (e *Engine) registerAIRoutes() {
 			baseURL = firstNonEmpty(req.BaseURL, defBase)
 			apiKey = firstNonEmpty(req.APIKey, defKey)
 			model = firstNonEmpty(req.Model, defModel)
-		} else if req.BaseURL != "" || req.APIKey != "" || req.Model != "" || req.SystemPrompt != "" {
-			writeJSON(w, http.StatusForbidden, map[string]any{"error": "Only SYS_ADMIN can configure the AI endpoint. Remove chat-level model, key and system prompt overrides."})
-			return
+		} else {
+			// Endpoint credentials and system instructions are server-managed for
+			// every authenticated account, including SYS_ADMIN.
+			if req.BaseURL != "" || req.APIKey != "" || req.SystemPrompt != "" {
+				writeJSON(w, http.StatusForbidden, map[string]any{"error": "Chat-level endpoint, API key and system prompt overrides are not allowed. Configure the AI endpoint in Settings."})
+				return
+			}
+			if req.Model != "" && req.Model != defModel {
+				user, ok := e.currentUser(r)
+				if !ok || user.Role != identity.RoleSysAdmin {
+					writeJSON(w, http.StatusForbidden, map[string]any{"error": "Only SYS_ADMIN may select a different AI model."})
+					return
+				}
+				models, err := e.db.ListAIModels(r.Context())
+				if err != nil {
+					writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "Model catalog unavailable"})
+					return
+				}
+				allowed := false
+				for _, entry := range models {
+					if entry.Model == req.Model {
+						allowed = true
+						break
+					}
+				}
+				if !allowed {
+					writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Selected model is not in the configured model catalog."})
+					return
+				}
+				model = req.Model
+			}
 		}
 
 		if strings.TrimSpace(baseURL) == "" {

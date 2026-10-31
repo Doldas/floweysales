@@ -23,8 +23,10 @@ interface Role {name:string;permissions:string[]}
       @for(role of roles();track role.name){<option [value]="role.name">{{role.name}}</option>}
      </select></label>
      <button class="btn btn-sm btn-outline-secondary" [disabled]="busy()" (click)="changeUser(user.id,{active:!user.active})">{{user.active?'Disable':'Enable'}}</button>
+     @if(user.role!=='SYS_ADMIN') {<button class="btn btn-sm btn-outline-danger" type="button" [disabled]="busy()" (click)="deleteTarget.set(user)">Delete user</button>}
     </div>
    }
+   @if(deleteTarget();as target){<div class="delete-user-confirm" role="alertdialog" aria-label="Confirm account deletion"><strong>Delete {{target.email}}?</strong><p>This permanently removes the account. Existing related records may prevent deletion. This cannot be undone.</p><button class="btn btn-sm btn-outline-secondary" (click)="deleteTarget.set(null)">Cancel</button><button class="btn btn-sm btn-outline-danger" [disabled]="busy()" (click)="deleteUser(target.id)">Permanently delete</button></div>}
   </div>
  }
  @if(tab()==='roles'){
@@ -76,6 +78,7 @@ interface Role {name:string;permissions:string[]}
  .check{flex-direction:row;align-items:center}
  .item{display:flex;align-items:center;flex-wrap:wrap;justify-content:space-between;gap:10px;border-bottom:1px solid var(--fs-border);padding:10px}
  .item small{display:block;color:var(--fs-muted)}
+ .delete-user-confirm{border:1px solid var(--fs-border);border-radius:8px;padding:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}.delete-user-confirm p{flex-basis:100%;margin:0}
  `]
 })
 export class AdminAccessSettingsComponent{
@@ -83,6 +86,7 @@ export class AdminAccessSettingsComponent{
  readonly busy=signal(false);
  readonly message=signal('');
  readonly users=signal<User[]>([]);
+ readonly deleteTarget=signal<User|null>(null);
  readonly roles=signal<Role[]>([]);
  readonly permissions=signal<string[]>([]);
  readonly inviteEmail=signal('');
@@ -130,6 +134,10 @@ export class AdminAccessSettingsComponent{
  async changeUser(id:number,changes:{role?:string;active?:boolean}){await this.submit(async()=>{
   await this.request('/api/admin/users/'+id,{method:'PATCH',body:JSON.stringify(changes)});
   await this.refresh();this.message.set('User updated.');
+ })}
+ async deleteUser(id:number){await this.submit(async()=>{
+  await this.request('/api/admin/users/'+id,{method:'DELETE'});
+  this.deleteTarget.set(null);await this.refresh();this.message.set('User permanently deleted.');
  })}
  async createRole(){await this.submit(async()=>{
   await this.request('/api/admin/roles',{method:'POST',body:JSON.stringify({name:this.roleName().trim()})});

@@ -42,13 +42,13 @@ interface TreeItem { name:string; path:string; depth:number; }
   <div class="explorer-grid">
    <nav class="folder-tree" aria-label="Folders">
     <strong>Folders</strong>
-    <div class="folder-item">
+    <div class="folder-item" (dragover)="allowDrop($event, '/')" (drop)="dropFile($event, '/')">
      <button type="button" class="folder-toggle" (click)="workspaceExpanded.update(v=>!v)" [attr.aria-expanded]="workspaceExpanded()" aria-label="Toggle Workspace folders"><i class="bi" [class.bi-chevron-down]="workspaceExpanded()" [class.bi-chevron-right]="!workspaceExpanded()" aria-hidden="true"></i></button>
      <button type="button" [class.active]="folder()==='/'" (click)="navigate('/')">Workspace</button>
     </div>
     @if(workspaceExpanded()){
      @for(dir of visibleDirectories();track dir.path){
-      <div class="folder-item" [style.padding-left.px]="dir.depth*16">
+      <div class="folder-item" [style.padding-left.px]="dir.depth*16" (dragover)="allowDrop($event, dir.path)" (drop)="dropFile($event, dir.path)">
        <button type="button" class="folder-toggle" (click)="toggleDirectory(dir.path)" [attr.aria-expanded]="!isCollapsed(dir.path)" [attr.aria-label]="'Toggle '+dir.name"><i class="bi" [class.bi-chevron-right]="isCollapsed(dir.path)" [class.bi-chevron-down]="!isCollapsed(dir.path)" aria-hidden="true"></i></button>
        <button type="button" [class.active]="folder()===dir.path" (click)="navigate(dir.path)">{{dir.name}}</button>
        <button type="button" class="folder-delete" [disabled]="busy()" (click)="requestFolderDelete(dir.path)" [attr.aria-label]="'Delete folder '+dir.name" title="Delete folder and contents"><i class="bi bi-trash3" aria-hidden="true"></i></button>
@@ -61,13 +61,13 @@ interface TreeItem { name:string; path:string; depth:number; }
     <div class="file-table">
      <div class="file-row heading"><span>Name</span><span>Type</span><span>Size</span></div>
      @for(dir of childFolders();track dir.path){
-      <div class="folder-row">
+      <div class="folder-row" (dragover)="allowDrop($event, dir.path)" (drop)="dropFile($event, dir.path)">
        <button type="button" class="file-row" (click)="navigate(dir.path)"><span><i class="bi bi-folder-fill text-warning me-2" aria-hidden="true"></i>{{dir.name}}</span><span>Folder</span><span>—</span></button>
        <button type="button" class="folder-delete" [disabled]="busy()" (click)="requestFolderDelete(dir.path)" [attr.aria-label]="'Delete folder '+dir.name" title="Delete folder and contents"><i class="bi bi-trash3" aria-hidden="true"></i></button>
       </div>
      }
      @for(file of visibleFiles();track file.path){
-      <button type="button" class="file-row" [class.active]="path()===file.path" (click)="open(file.path)">
+      <button type="button" class="file-row" draggable="true" (dragstart)="startDrag($event,file.path)" [class.active]="selectedPath()===file.path" (click)="open(file.path)">
        <span><i class="bi bi-file-earmark-text text-muted me-2" aria-hidden="true"></i>{{basename(file.path)}}</span><span>{{file.content_type}}</span><span>{{(file.size/1024).toFixed(1)}} KiB</span>
       </button>
      }
@@ -105,12 +105,22 @@ interface TreeItem { name:string; path:string; depth:number; }
     <div class="file-actions">
      <button class="btn btn-sm btn-primary" (click)="save()" [disabled]="busy()||!path()">Save</button>
      <button class="btn btn-sm btn-outline-secondary" (click)="download()" [disabled]="!path()">Download</button>
-     <button class="btn btn-sm btn-outline-danger" (click)="deleteRequested.set(true)" [disabled]="busy()||!files().some(f=>f.path===path())">Delete</button>
+     <button class="btn btn-sm btn-outline-secondary" (click)="startTransfer('copy')" [disabled]="busy()||!selectedPath()">Duplicate</button>
+     <button class="btn btn-sm btn-outline-secondary" (click)="startTransfer('move')" [disabled]="busy()||!selectedPath()">Move</button>
+     <button class="btn btn-sm btn-outline-danger" (click)="deleteRequested.set(true)" [disabled]="busy()||!selectedPath()">Delete</button>
      <button class="btn btn-sm btn-outline-secondary ms-auto" (click)="askAgent()" [disabled]="!content().trim()"><i class="bi bi-stars" aria-hidden="true"></i>Ask agent about this file</button>
     </div>
+    @if(transferMode()){
+     <div class="transfer-form" role="group" aria-label="Move or duplicate file">
+      <label>Destination folder <select [ngModel]="transferFolder()" (ngModelChange)="transferFolder.set($event)"><option value="/">Workspace</option>@for(dir of directories();track dir.path){<option [value]="dir.path">{{dir.path}}</option>}</select></label>
+      <label>File name <input [ngModel]="transferName()" (ngModelChange)="transferName.set($event)" maxlength="255"></label>
+      <button class="btn btn-sm btn-primary" (click)="transferFile()" [disabled]="busy()||!transferName().trim()">Confirm {{transferMode()}}</button>
+      <button class="btn btn-sm btn-outline-secondary" (click)="transferMode.set('')">Cancel</button>
+     </div>
+    }
     @if(deleteRequested()){
      <div class="delete-confirm" role="group" aria-label="Confirm file deletion">
-      <p>Permanently delete <strong>{{path()}}</strong>?</p>
+      <p>Permanently delete <strong>{{selectedPath()}}</strong>?</p>
       <button class="btn btn-sm btn-outline-secondary" (click)="deleteRequested.set(false)">Cancel</button>
       <button class="btn btn-sm btn-primary" (click)="remove()" [disabled]="busy()">Confirm delete</button>
      </div>
@@ -186,6 +196,10 @@ export class UserspaceFilesComponent {
  readonly message=signal('');
  readonly busy=signal(false);
  readonly deleteRequested=signal(false);
+ readonly selectedPath=signal('');
+ readonly transferMode=signal<''|'move'|'copy'>('');
+ readonly transferFolder=signal('/');
+ readonly transferName=signal('');
  readonly folderDeleteTarget=signal('');
  readonly folderDeleteFileCount=computed(()=>this.files().filter(f=>f.path.startsWith(this.folderDeleteTarget()+'/')).length);
  requestFolderDelete(path:string){if(this.busy()||path==='/'||!this.directories().some(d=>d.path===path))return;this.folderDeleteTarget.set(path);this.deleteRequested.set(false)}
@@ -295,7 +309,7 @@ export class UserspaceFilesComponent {
   }catch(e){this.message.set('Could not create folder: '+String(e))}
   finally{this.busy.set(false)}
  }
- newFile(){this.path.set((this.folder()==='/'?'':this.folder())+'/new.md');this.mime.set('text/markdown');this.content.set('');this.view.set('edit');this.deleteRequested.set(false)}
+ newFile(){this.selectedPath.set('');this.transferMode.set('');this.path.set((this.folder()==='/'?'':this.folder())+'/new.md');this.mime.set('text/markdown');this.content.set('');this.view.set('edit');this.deleteRequested.set(false)}
  private escape(s:string){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
  private async api(url:string,options?:RequestInit):Promise<any>{
   const response=await fetch(url,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...options?.headers}});
@@ -307,7 +321,7 @@ export class UserspaceFilesComponent {
   try{
    const response=await fetch('/api/userspace/file?path='+encodeURIComponent(path),{credentials:'same-origin'});
    if(!response.ok)throw Error('Cannot open file');
-   const text=await response.text();this.path.set(path);this.content.set(text);this.view.set('edit');
+   const text=await response.text();this.path.set(path);this.selectedPath.set(path);this.content.set(text);this.view.set('edit');
    this.mime.set(this.files().find(f=>f.path===path)?.content_type||'text/plain');
   }catch(e){this.message.set(String(e))}finally{this.busy.set(false)}
  }
@@ -317,12 +331,53 @@ export class UserspaceFilesComponent {
   if(this.mime()==='application/json')JSON.parse(this.content());
   if(this.mime()==='application/xml'&&this.xmlError())throw Error(this.xmlError());
   await this.api('/api/userspace/file',{method:'PUT',body:JSON.stringify({path:this.path(),content_type:this.mime(),content:this.content()})});
-  const target=this.path();await this.refresh();this.navigate(this.parent(target));this.message.set('File saved');
+  const target=this.path();this.selectedPath.set(target);await this.refresh();this.navigate(this.parent(target));this.message.set('File saved');
  }catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
- async remove(){if(!this.deleteRequested())return;this.busy.set(true);
-  try{await this.api('/api/userspace/file?path='+encodeURIComponent(this.path()),{method:'DELETE'});
+ async remove(){if(!this.deleteRequested()||!this.selectedPath())return;this.busy.set(true);
+  try{await this.api('/api/userspace/file?path='+encodeURIComponent(this.selectedPath()),{method:'DELETE'});
    this.deleteRequested.set(false);this.newFile();await this.refresh();this.message.set('File deleted');
   }catch(e){this.message.set(String(e))}finally{this.busy.set(false)}
+ }
+ startDrag(event:DragEvent,path:string):void {
+  if(this.busy()||!event.dataTransfer)return;
+  event.dataTransfer.setData('text/plain',path);
+  event.dataTransfer.effectAllowed='move';
+ }
+ allowDrop(event:DragEvent,target:string):void {
+  if(this.busy()||!event.dataTransfer||!this.directories().some(d=>d.path===target)&&target!=='/')return;
+  event.preventDefault();event.dataTransfer.dropEffect='move';
+ }
+ dropFile(event:DragEvent,target:string):void {
+  event.preventDefault();
+  const source=event.dataTransfer?.getData('text/plain')||'';
+  if(!this.files().some(f=>f.path===source&&!this.isFolderMarker(f.path)))return;
+  void this.transfer(source,(target==='/'?'':target)+'/'+this.basename(source),false);
+ }
+ startTransfer(mode:'move'|'copy'):void {
+  if(!this.selectedPath())return;
+  this.transferMode.set(mode);this.transferFolder.set(this.parent(this.selectedPath()));
+  const name=this.basename(this.selectedPath());
+  this.transferName.set(mode==='copy'?'copy-'+name:name);
+ }
+ async transferFile():Promise<void>{
+  if(!this.selectedPath()||!this.transferMode())return;
+  const destination=(this.transferFolder()==='/'?'':this.transferFolder())+'/'+this.transferName().trim();
+  await this.transfer(this.selectedPath(),destination,this.transferMode()==='copy');
+ }
+ private async transfer(source:string,destination:string,copy:boolean):Promise<void>{
+  if(this.busy())return;
+  if(destination===source||this.files().some(f=>f.path===destination)){
+   this.message.set('Choose a different, unused destination.');return;
+  }
+  this.busy.set(true);
+  try{
+   await this.api('/api/userspace/transfer',{method:'POST',body:JSON.stringify({source,destination,copy})});
+   this.transferMode.set('');
+   await this.refresh();this.navigate(this.parent(destination));
+   await this.open(destination);
+   this.message.set(copy?'File duplicated.':'File moved.');
+  }catch(e){this.message.set('Could not '+(copy?'duplicate':'move')+' file: '+String(e))}
+  finally{this.busy.set(false)}
  }
  download(){const blob=new Blob([this.content()],{type:this.mime()});const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download=this.basename(this.path());anchor.click();URL.revokeObjectURL(url)}
 }
