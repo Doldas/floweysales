@@ -7,10 +7,13 @@ import {
   type SideEffect,
 } from './side-effects.ts';
 
-test('only workspace writes and event emission have capabilities', () => {
+test('only workspace writes, event emission and notifications have capabilities', () => {
   assert.deepEqual(nodeCapability({ id: 'w', type: 'workspace_write', value: '/r.md' }), { capability: 'workspace.write', target: '/r.md' });
   assert.deepEqual(nodeCapability({ id: 'e', type: 'emit_event', event: 'market.close' }), { capability: 'events.emit', target: 'market.close' });
-  for (const type of ['agent', 'http_get', 'workspace_read', 'save_result', 'web_search']) assert.equal(nodeCapability({ id: 'x', type }), null);
+  assert.deepEqual(nodeCapability({ id: 'n', type: 'notify', channel: 'webhook' }), { capability: 'notify.send', target: 'webhook' });
+  assert.deepEqual(nodeCapability({ id: 'n', type: 'notify' }), { capability: 'notify.send', target: 'email:flow-owner' });
+  assert.equal(describeCapability('notify.send', 'email:flow-owner'), 'Email the flow owner');
+  for (const type of ['agent', 'http_get', 'workspace_read', 'save_result', 'web_search', 'watchlist_quotes', 'only_new', 'screen']) assert.equal(nodeCapability({ id: 'x', type }), null);
 });
 
 test('the manifest lists each side effect with its approval setting', () => {

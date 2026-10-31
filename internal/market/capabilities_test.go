@@ -107,4 +107,20 @@ func TestPluginContractFixturesDecodeLosslessly(t *testing.T) {
 	check("asset.json", &Asset{})
 	check("financials.json", &FinancialsResponse{})
 	check("research.json", &ResearchResult{})
+
+	raw, err := os.ReadFile(filepath.Join("..", "..", "pluginsdk", "testdata", "contract", "news.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var news []NewsItem
+	if err := json.Unmarshal(raw, &news); err != nil {
+		t.Fatal(err)
+	}
+	again, _ := json.Marshal(news)
+	var want, got any
+	_ = json.Unmarshal(raw, &want)
+	_ = json.Unmarshal(again, &got)
+	if !reflect.DeepEqual(want, got) {
+		t.Fatalf("news.json lost fields:\nwant %s\ngot  %s", raw, again)
+	}
 }

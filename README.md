@@ -10,6 +10,7 @@ web app. One binary serves the API, the SSE price stream and the web UI.
 | **Command Center** | Home: ask the agent, KPIs, agent run activity across flows, automations, live trackers, flow templates and recent files |
 | **Research Agent** | Conversational research with read-only market, SEC and valuation tools. Every tool call is shown as a step with its arguments and result. Available as a dock on every page (Ctrl/⌘ J) and as a full page |
 | **Flows** | Flow Studio: build, version, run and audit multi-step agent automations |
+| **Investor playbooks** | Ready-made automations: morning watchlist brief, price-move alerts, technical setups, SEC filing monitor, news digest and a quality & value screen, built from deterministic watchlist, technical, fundamentals, filings, news, screen, "only new" and notify nodes. See [Investor automations](docs/investor-automations.md) |
 | **Inbox** | Decisions agents are waiting on: flow side effects that need approval, and paper-trade proposals that need a second SYS_ADMIN |
 | **Markets / Financials** | Trackers, live chart with indicators and insights, fundamentals and quarterly statements, each with an "Analyze with agent" hand-off |
 | **Paper portfolio** | Simulated order ticket, positions and blotter (SYS_ADMIN) |

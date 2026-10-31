@@ -14,11 +14,15 @@ import (
 	"floweysales/internal/ai"
 )
 
-func TestGroundingRequiresGrantedTools(t *testing.T) {
+func TestGroundingWithAndWithoutTools(t *testing.T) {
 	graph := flowGraph{Version: 2, Nodes: []flowNode{{ID: "start", Type: "trigger"}, {ID: "agent", Type: "agent", Prompt: "x", RequireGrounding: true}},
 		Edges: []flowEdge{{From: "start", To: "agent"}}}
-	if err := validateFlowAgentTools(graph.Nodes[1]); err == nil {
-		t.Fatal("grounding without tools must be rejected")
+	// Without tools the node input is the evidence, e.g. watchlist rows.
+	if err := validateFlowAgentTools(graph.Nodes[1]); err != nil {
+		t.Fatal(err)
+	}
+	if opts := flowAgentOptions(graph.Nodes[1], "sys"); !opts.DisableTools || !strings.Contains(opts.SystemPrompt, "appear in the input") {
+		t.Fatal("an agent grounded on its input has no tools and is told to use only input figures")
 	}
 	graph.Nodes[1].Tools = []string{"calculate_wacc"}
 	if err := validateFlowAgentTools(graph.Nodes[1]); err != nil {

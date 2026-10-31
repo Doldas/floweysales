@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, Injectable, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { INVESTOR_PLAYBOOKS } from '../components/investor-nodes';
 import { Router } from '@angular/router';
 
 import { AuthState } from '../auth.service';
@@ -28,10 +29,11 @@ interface Command {
 }
 
 export const FLOW_TEMPLATES = [
+  ...INVESTOR_PLAYBOOKS.map(p => ({ id: p.id, label: p.label, description: p.description, icon: p.icon })),
   { id: 'research', label: 'Market research report', description: 'An agent researches a company and returns a scored JSON report.', icon: 'bi-file-earmark-bar-graph' },
   { id: 'risk', label: 'Risk-score decision', description: 'Score risk, then branch to “review required” or “low risk”.', icon: 'bi-signpost-split' },
   { id: 'event', label: 'Event-driven analysis', description: 'Run research whenever a custom event such as research.requested fires.', icon: 'bi-lightning-charge' },
-] as const;
+];
 
 /** Lower is better; -1 means no match. Substring beats subsequence. */
 function score(haystack: string, needle: string): number {

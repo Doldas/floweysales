@@ -164,6 +164,30 @@ try {
   check('node trace shows the recorded tool call', await studio.getByText('get_sec_facts').first().isVisible());
   check('run history labels the revision', (await studio.locator('summary', { hasText: '#100' }).first().innerText()).includes('rev 1'));
 
+  // 8. Investor playbook: a price-alert automation starts valid, takes a
+  // custom watchlist and screen rule, and saves exactly that graph.
+  await studio.getByRole('tab', { name: 'Flow editor', exact: true }).click();
+  await studio.getByLabel('Starter templates').selectOption('price-alerts');
+  await studio.getByText('Playbook copied as a new, disabled flow').waitFor();
+  check('playbook passes preflight', (await validation.innerText()) === 'No structural issues', await validation.innerText());
+  await studio.locator('[aria-label="Select Watchlist quotes"]').click();
+  await settings.getByLabel('Watchlist (up to 25 symbols)').fill('VOLV-B.ST, ERIC-B.ST');
+  await settings.getByRole('button', { name: 'Close node settings' }).click();
+  await studio.locator('[aria-label="Select Big moves"]').click();
+  await settings.getByLabel('Rule').fill('change_1d_pct <= -5');
+  check('screen settings suggest fields from the watchlist node', await settings.getByRole('button', { name: 'from_high_pct' }).isVisible());
+  await settings.getByRole('button', { name: 'Close node settings' }).click();
+  await studio.getByRole('button', { name: 'Save flow' }).click();
+  await studio.getByText('All changes saved').waitFor();
+  const playbookSave = state.requests.filter(r => r.method === 'POST' && r.pathname === '/api/admin/flows').at(-1);
+  const pg = playbookSave?.body?.graph;
+  const nodeOf = type => pg?.nodes.find(n => n.type === type);
+  check('playbook saves the custom watchlist', nodeOf('watchlist_quotes')?.symbols === 'VOLV-B.ST, ERIC-B.ST', JSON.stringify(nodeOf('watchlist_quotes')));
+  check('playbook saves the edited screen rule', nodeOf('screen')?.rule === 'change_1d_pct <= -5', JSON.stringify(nodeOf('screen')));
+  check('playbook remembers alerts for a day and skips empty reports', nodeOf('only_new')?.cooldown_hours === 24 && nodeOf('report_table')?.skip_empty === true);
+  check('playbook notifies the owner by email', nodeOf('notify')?.channel === 'email', JSON.stringify(nodeOf('notify')));
+  check('playbook saves disabled with its suggested hourly schedule', playbookSave?.body?.enabled === false && playbookSave?.body?.interval_minutes === 60 && pg?.version === 2, JSON.stringify(playbookSave?.body));
+
   check('no uncaught JavaScript errors', errors.length === 0, errors.join(' | '));
 } catch (e) {
   failed.push(e.stack || e.message);

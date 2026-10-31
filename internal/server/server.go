@@ -16,6 +16,7 @@ import (
 	"floweysales/internal/market"
 	"floweysales/internal/plugins"
 	"floweysales/internal/redact"
+	"floweysales/internal/sec"
 	"floweysales/internal/storage"
 	"floweysales/internal/tracker"
 	"floweysales/internal/trading"
@@ -174,6 +175,9 @@ type Engine struct {
 	flowRunsMu     sync.Mutex
 	flowRunCancels map[int64]context.CancelFunc
 	adapterLimits  adapterLimiter
+	// Test seams for investor nodes; nil uses SEC EDGAR and the database.
+	secFilings func(ctx context.Context, ticker string, limit int) (sec.Filings, error)
+	flowState  flowNodeStateStore
 }
 
 type historyCacheEntry struct {
@@ -248,6 +252,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerTrackerEmailRoutes()
 	e.registerFlowRoutes()
 	e.registerFlowSideEffectRoutes()
+	e.registerFlowNotifyRoutes()
 	e.registerFlowAuditRoutes()
 	e.registerFlowReadinessRoutes()
 	e.registerFlowEventAdapterRoutes()

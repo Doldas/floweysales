@@ -73,6 +73,18 @@ try {
   await page.locator('fse-flow-studio').getByText('not granted to this agent').first().waitFor({ state: 'visible', timeout: 5000 });
   await audit(page, 'Run history: agent step with tool calls');
 
+  // An investor playbook with the screen and notify settings open.
+  await page.locator('fse-flow-studio').getByRole('tab', { name: 'Flow editor', exact: true }).click();
+  page.once('dialog', d => d.accept());
+  await page.locator('fse-flow-studio').getByLabel('Starter templates').selectOption('price-alerts');
+  await page.locator('fse-flow-studio [aria-label="Select Big moves"]').click();
+  await page.locator('fse-flow-studio [aria-label="Complete node settings"]').getByLabel('Rule').waitFor({ state: 'visible', timeout: 5000 });
+  await audit(page, 'Flow editor: investor screen settings');
+  await page.locator('fse-flow-studio [aria-label="Select Email me"]').focus();
+  await page.keyboard.press('Enter');
+  await page.locator('fse-flow-studio [aria-label="Complete node settings"]').getByLabel('Send to').waitFor({ state: 'visible', timeout: 5000 });
+  await audit(page, 'Flow editor: notify settings');
+
   // Every page of the workspace, with the shell, in both themes.
   const pages = ['', 'agent', 'flows', 'inbox', 'markets', 'financials', 'portfolio', 'workspace', 'community', 'notifications', 'settings'];
   for (const theme of ['dark', 'light']) {

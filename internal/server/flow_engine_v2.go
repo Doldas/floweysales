@@ -85,6 +85,10 @@ func flowV2Condition(value, operator, operand string) (bool, error) {
 		return value != operand, nil
 	case "contains":
 		return strings.Contains(value, operand), nil
+	case "is_empty":
+		return flowEmpty(value), nil
+	case "not_empty":
+		return !flowEmpty(value), nil
 	case "greater_than", "less_than":
 		a, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
 		if err != nil {

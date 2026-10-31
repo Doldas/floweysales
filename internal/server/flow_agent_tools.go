@@ -73,9 +73,6 @@ func validateFlowAgentTools(n flowNode) error {
 		}
 		seen[name] = true
 	}
-	if n.RequireGrounding && len(n.Tools) == 0 {
-		return fmt.Errorf("agent %s: grounded figures need granted tools", n.ID)
-	}
 	if n.MaxToolCalls < 0 || n.MaxToolCalls > maxFlowAgentToolCalls || (n.MaxToolCalls > 0 && len(n.Tools) == 0) {
 		return fmt.Errorf("agent %s: tool-call budget must be 1–%d and needs granted tools", n.ID, maxFlowAgentToolCalls)
 	}
@@ -86,6 +83,11 @@ func validateFlowAgentTools(n flowNode) error {
 // grant the agent has no tools at all.
 func flowAgentOptions(n flowNode, systemPrompt string) ai.AgentOptions {
 	if len(n.Tools) == 0 {
+		if n.RequireGrounding {
+			// Without tools the input is the only evidence, typically rows
+			// from watchlist, scan or fundamentals nodes.
+			systemPrompt += "\nState only figures that appear in the input, copied at their precision or rounded; if a figure is unavailable, say so instead of estimating it."
+		}
 		return ai.AgentOptions{MaxSteps: 4, DisableTools: true, SystemPrompt: systemPrompt}
 	}
 	budget := n.MaxToolCalls

@@ -12,13 +12,14 @@ export interface SideEffect {
   requested_at: string; decided_by_email?: string; decided_at?: string; decision_note?: string; applied_at?: string;
 }
 
-export interface CapabilityNode { id: string; type: string; label?: string; value?: string; event?: string; approval?: string }
+export interface CapabilityNode { id: string; type: string; label?: string; value?: string; event?: string; approval?: string; channel?: string }
 export interface CapabilityUse { node: string; label: string; capability: string; target: string; approvalRequired: boolean }
 
 /** The capability and fixed scope of a side-effect node, or null for nodes without side effects. */
 export function nodeCapability(n: CapabilityNode): { capability: string; target: string } | null {
   if (n.type === 'workspace_write') return { capability: 'workspace.write', target: n.value || '' };
   if (n.type === 'emit_event') return { capability: 'events.emit', target: n.event || '' };
+  if (n.type === 'notify') return { capability: 'notify.send', target: n.channel === 'webhook' ? 'webhook' : 'email:flow-owner' };
   return null;
 }
 
@@ -36,6 +37,7 @@ export function capabilityManifest(nodes: readonly CapabilityNode[]): Capability
 export function describeCapability(capability: string, target: string): string {
   if (capability === 'workspace.write') return `Write the workspace file ${target || '(no path yet)'}`;
   if (capability === 'events.emit') return `Emit event ${target || '(no event yet)'} to subscribed flows`;
+  if (capability === 'notify.send') return target === 'webhook' ? 'Post a message to the configured chat webhook' : 'Email the flow owner';
   return `${capability} ${target}`;
 }
 

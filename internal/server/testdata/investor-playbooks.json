@@ -1,0 +1,947 @@
+{
+ "morning-brief/admin": {
+  "name": "Morning watchlist brief",
+  "intervalMinutes": 1440,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "quotes",
+     "type": "watchlist_quotes",
+     "label": "Watchlist quotes",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "tech",
+     "type": "technical_scan",
+     "label": "Technicals",
+     "x": 390,
+     "y": 270
+    },
+    {
+     "id": "data",
+     "type": "merge",
+     "label": "Combine data",
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "brief",
+     "type": "agent",
+     "label": "Write brief",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Write a concise morning brief for an investor: the biggest movers, stocks near their 52-week high or low, notable technical signals (RSI, trend, crosses) and what to watch today. End with a short risk note. Markdown, under 300 words.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Morning brief {{date}}",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "quotes"
+    },
+    {
+     "from": "quotes",
+     "to": "tech"
+    },
+    {
+     "from": "quotes",
+     "to": "data"
+    },
+    {
+     "from": "tech",
+     "to": "data"
+    },
+    {
+     "from": "data",
+     "to": "brief"
+    },
+    {
+     "from": "brief",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Runs daily once enabled. The agent can only state figures found in the quotes and technicals."
+ },
+ "morning-brief/user": {
+  "name": "Morning watchlist brief",
+  "intervalMinutes": 1440,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "quotes",
+     "type": "watchlist_quotes",
+     "label": "Watchlist quotes",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "tech",
+     "type": "technical_scan",
+     "label": "Technicals",
+     "x": 390,
+     "y": 270
+    },
+    {
+     "id": "data",
+     "type": "merge",
+     "label": "Combine data",
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "brief",
+     "type": "agent",
+     "label": "Write brief",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Write a concise morning brief for an investor: the biggest movers, stocks near their 52-week high or low, notable technical signals (RSI, trend, crosses) and what to watch today. End with a short risk note. Markdown, under 300 words.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "quotes"
+    },
+    {
+     "from": "quotes",
+     "to": "tech"
+    },
+    {
+     "from": "quotes",
+     "to": "data"
+    },
+    {
+     "from": "tech",
+     "to": "data"
+    },
+    {
+     "from": "data",
+     "to": "brief"
+    },
+    {
+     "from": "brief",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Runs daily once enabled. The agent can only state figures found in the quotes and technicals."
+ },
+ "price-alerts/admin": {
+  "name": "Price move alerts",
+  "intervalMinutes": 60,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "quotes",
+     "type": "watchlist_quotes",
+     "label": "Watchlist quotes",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "moves",
+     "type": "screen",
+     "label": "Big moves",
+     "rule": "change_1d_pct <= -4 or from_high_pct <= -20",
+     "sort_by": "change_1d_pct",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "Once a day",
+     "key_fields": "symbol",
+     "cooldown_hours": 24,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "report",
+     "type": "report_table",
+     "label": "Alert table",
+     "title": "Price alerts",
+     "columns": "symbol,price,currency,change_1d_pct,from_high_pct,as_of",
+     "skip_empty": true,
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "{{count}} price alert(s) {{date}}",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "quotes"
+    },
+    {
+     "from": "quotes",
+     "to": "moves"
+    },
+    {
+     "from": "moves",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "report"
+    },
+    {
+     "from": "report",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Checks hourly once enabled and alerts at most once per symbol per day. Edit the screen rule to change the thresholds."
+ },
+ "price-alerts/user": {
+  "name": "Price move alerts",
+  "intervalMinutes": 60,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "quotes",
+     "type": "watchlist_quotes",
+     "label": "Watchlist quotes",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "moves",
+     "type": "screen",
+     "label": "Big moves",
+     "rule": "change_1d_pct <= -4 or from_high_pct <= -20",
+     "sort_by": "change_1d_pct",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "Once a day",
+     "key_fields": "symbol",
+     "cooldown_hours": 24,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "report",
+     "type": "report_table",
+     "label": "Alert table",
+     "title": "Price alerts",
+     "columns": "symbol,price,currency,change_1d_pct,from_high_pct,as_of",
+     "skip_empty": true,
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "quotes"
+    },
+    {
+     "from": "quotes",
+     "to": "moves"
+    },
+    {
+     "from": "moves",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "report"
+    },
+    {
+     "from": "report",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Checks hourly once enabled and alerts at most once per symbol per day. Edit the screen rule to change the thresholds."
+ },
+ "technical-setups/admin": {
+  "name": "Technical setups scanner",
+  "intervalMinutes": 1440,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "tech",
+     "type": "technical_scan",
+     "label": "Technical scan",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "setups",
+     "type": "screen",
+     "label": "Setups",
+     "rule": "(rsi14 < 35 and above_sma200) or cross == \"golden\"",
+     "sort_by": "rsi14",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "New setups",
+     "key_fields": "symbol",
+     "cooldown_hours": 72,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "report",
+     "type": "report_table",
+     "label": "Setup table",
+     "title": "Technical setups",
+     "columns": "symbol,price,rsi14,ema_stack,sma200,cross,as_of",
+     "skip_empty": true,
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Technical setups {{date}}",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "tech"
+    },
+    {
+     "from": "tech",
+     "to": "setups"
+    },
+    {
+     "from": "setups",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "report"
+    },
+    {
+     "from": "report",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Oversold stocks still above their 200-day average, and fresh golden crosses. A setup is reported again after 3 days at most."
+ },
+ "technical-setups/user": {
+  "name": "Technical setups scanner",
+  "intervalMinutes": 1440,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "tech",
+     "type": "technical_scan",
+     "label": "Technical scan",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "setups",
+     "type": "screen",
+     "label": "Setups",
+     "rule": "(rsi14 < 35 and above_sma200) or cross == \"golden\"",
+     "sort_by": "rsi14",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "New setups",
+     "key_fields": "symbol",
+     "cooldown_hours": 72,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "report",
+     "type": "report_table",
+     "label": "Setup table",
+     "title": "Technical setups",
+     "columns": "symbol,price,rsi14,ema_stack,sma200,cross,as_of",
+     "skip_empty": true,
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "tech"
+    },
+    {
+     "from": "tech",
+     "to": "setups"
+    },
+    {
+     "from": "setups",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "report"
+    },
+    {
+     "from": "report",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Oversold stocks still above their 200-day average, and fresh golden crosses. A setup is reported again after 3 days at most."
+ },
+ "filings-monitor/admin": {
+  "name": "SEC filing monitor",
+  "intervalMinutes": 360,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "filings",
+     "type": "sec_filings",
+     "label": "Recent filings",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "forms": "8-K, 10-Q, 10-K",
+     "lookback_days": 3,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "New filings",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "summary",
+     "type": "agent",
+     "label": "Summarize",
+     "skip_empty": true,
+     "prompt": "For each new SEC filing in the input, say what kind of filing it is and what an investor should check in it. Flag 8-Ks that may be material (results, guidance, leadership, deals, financing). Link every filing URL. Do not guess the contents of a filing you have not read.",
+     "tools": [
+      "get_sec_section"
+     ],
+     "max_tool_calls": 6,
+     "timeout_seconds": 90,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "New SEC filings {{date}}",
+     "x": 740,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "filings"
+    },
+    {
+     "from": "filings",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "summary"
+    },
+    {
+     "from": "summary",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Needs SEC_USER_AGENT on the server. Nothing runs past \"New filings\" when there is nothing new, so the agent costs nothing on quiet days."
+ },
+ "filings-monitor/user": {
+  "name": "SEC filing monitor",
+  "intervalMinutes": 360,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "filings",
+     "type": "sec_filings",
+     "label": "Recent filings",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "forms": "8-K, 10-Q, 10-K",
+     "lookback_days": 3,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "New filings",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "summary",
+     "type": "agent",
+     "label": "Summarize",
+     "skip_empty": true,
+     "prompt": "For each new SEC filing in the input, say what kind of filing it is and what an investor should check in it. Flag 8-Ks that may be material (results, guidance, leadership, deals, financing). Link every filing URL. Do not guess the contents of a filing you have not read.",
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 740,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "filings"
+    },
+    {
+     "from": "filings",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "summary"
+    },
+    {
+     "from": "summary",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Needs SEC_USER_AGENT on the server. Nothing runs past \"New filings\" when there is nothing new, so the agent costs nothing on quiet days."
+ },
+ "news-digest/admin": {
+  "name": "News catalyst digest",
+  "intervalMinutes": 240,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "news",
+     "type": "news",
+     "label": "Headlines",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "limit": 5,
+     "lookback_days": 2,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "New headlines",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "digest",
+     "type": "agent",
+     "label": "Digest",
+     "skip_empty": true,
+     "prompt": "Group the new headlines in the input by symbol into likely catalysts and risks. One line each, with the link. Treat headlines as claims from their source, not facts, and skip duplicates.",
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "News digest {{date}}",
+     "x": 740,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "news"
+    },
+    {
+     "from": "news",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "digest"
+    },
+    {
+     "from": "digest",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Needs a provider plugin with the news capability (Yahoo or Finnhub). Silent when there are no new headlines."
+ },
+ "news-digest/user": {
+  "name": "News catalyst digest",
+  "intervalMinutes": 240,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "news",
+     "type": "news",
+     "label": "Headlines",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "limit": 5,
+     "lookback_days": 2,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "New headlines",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "digest",
+     "type": "agent",
+     "label": "Digest",
+     "skip_empty": true,
+     "prompt": "Group the new headlines in the input by symbol into likely catalysts and risks. One line each, with the link. Treat headlines as claims from their source, not facts, and skip duplicates.",
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 740,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "news"
+    },
+    {
+     "from": "news",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "digest"
+    },
+    {
+     "from": "digest",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Needs a provider plugin with the news capability (Yahoo or Finnhub). Silent when there are no new headlines."
+ },
+ "quality-screen/admin": {
+  "name": "Quality & value screen",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "fund",
+     "type": "fundamentals",
+     "label": "Fundamentals",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "screen",
+     "type": "screen",
+     "label": "Quality & value",
+     "rule": "revenue_growth_pct >= 10 and net_margin_pct >= 15 and pe_ttm < 35",
+     "sort_by": "-revenue_growth_pct",
+     "limit": 10,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Shortlist",
+     "title": "Quality & value shortlist",
+     "columns": "symbol,price,pe_ttm,revenue_growth_pct,net_margin_pct,eps_growth_pct,ttm_through",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "Memo bullets",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. For each company in the shortlist write three bullets: what the numbers show (facts), what would have to be true for the stock to work (assumptions), and the main risk. Keep the table at the top. This is research, not a recommendation.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Quality & value shortlist {{date}}",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "fund"
+    },
+    {
+     "from": "fund",
+     "to": "screen"
+    },
+    {
+     "from": "screen",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Weekly screen on trailing-twelve-month figures. Adjust the thresholds in the screen rule."
+ },
+ "quality-screen/user": {
+  "name": "Quality & value screen",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "fund",
+     "type": "fundamentals",
+     "label": "Fundamentals",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "screen",
+     "type": "screen",
+     "label": "Quality & value",
+     "rule": "revenue_growth_pct >= 10 and net_margin_pct >= 15 and pe_ttm < 35",
+     "sort_by": "-revenue_growth_pct",
+     "limit": 10,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Shortlist",
+     "title": "Quality & value shortlist",
+     "columns": "symbol,price,pe_ttm,revenue_growth_pct,net_margin_pct,eps_growth_pct,ttm_through",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "Memo bullets",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. For each company in the shortlist write three bullets: what the numbers show (facts), what would have to be true for the stock to work (assumptions), and the main risk. Keep the table at the top. This is research, not a recommendation.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "fund"
+    },
+    {
+     "from": "fund",
+     "to": "screen"
+    },
+    {
+     "from": "screen",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Weekly screen on trailing-twelve-month figures. Adjust the thresholds in the screen rule."
+ }
+}

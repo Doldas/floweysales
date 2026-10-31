@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="032-flow-node-state" author="floweysales" dbms="mysql">
+  <createTable tableName="agent_flow_node_state" remarks="State a flow node keeps between runs, such as the items an Only New node has already passed on">
+   <column name="flow_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="node_id" type="VARCHAR(48)"><constraints nullable="false"/></column>
+   <column name="state" type="MEDIUMTEXT"><constraints nullable="false"/></column>
+   <column name="updated_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <addPrimaryKey tableName="agent_flow_node_state" columnNames="flow_id,node_id" constraintName="pk_agent_flow_node_state"/>
+  <addForeignKeyConstraint baseTableName="agent_flow_node_state" baseColumnNames="flow_id"
+   referencedTableName="agent_flows" referencedColumnNames="id" constraintName="fk_flow_node_state_flow" onDelete="CASCADE"/>
+  <rollback><dropTable tableName="agent_flow_node_state"/></rollback>
+ </changeSet>
+</databaseChangeLog>

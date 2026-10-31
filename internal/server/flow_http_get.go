@@ -57,24 +57,20 @@ func flowAllowedIP(ip net.IP) bool {
 	}
 	return true
 }
-func flowFetchPublic(ctx context.Context, raw, format string) (string, error) {
-	u, err := flowPublicURL(raw)
-	if err != nil {
-		return "", err
-	}
-	if format != "json" && format != "xml" && format != "html" {
-		return "", errors.New("format must be json, xml or html")
-	}
-	resolver := net.DefaultResolver
+
+// flowPinnedClient resolves u's host once, refuses non-public addresses and
+// returns a client that connects only to the checked address and never
+// follows redirects, so DNS rebinding cannot redirect a request inward.
+func flowPinnedClient(ctx context.Context, u *url.URL) (*http.Client, func(), error) {
 	lookupCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
-	ips, err := resolver.LookupIPAddr(lookupCtx, u.Hostname())
+	ips, err := net.DefaultResolver.LookupIPAddr(lookupCtx, u.Hostname())
 	if err != nil || len(ips) == 0 {
-		return "", fmt.Errorf("could not resolve public URL host")
+		return nil, nil, fmt.Errorf("could not resolve public URL host")
 	}
 	for _, candidate := range ips {
 		if !flowAllowedIP(candidate.IP) {
-			return "", errors.New("URL resolves to a forbidden network")
+			return nil, nil, errors.New("URL resolves to a forbidden network")
 		}
 	}
 	ip := ips[0].IP
@@ -91,8 +87,23 @@ func flowFetchPublic(ctx context.Context, raw, format string) (string, error) {
 			return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "tcp", net.JoinHostPort(ip.String(), port))
 		},
 	}
-	defer transport.CloseIdleConnections()
 	client := &http.Client{Timeout: 15 * time.Second, Transport: transport, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
+	return client, transport.CloseIdleConnections, nil
+}
+
+func flowFetchPublic(ctx context.Context, raw, format string) (string, error) {
+	u, err := flowPublicURL(raw)
+	if err != nil {
+		return "", err
+	}
+	if format != "json" && format != "xml" && format != "html" {
+		return "", errors.New("format must be json, xml or html")
+	}
+	client, closeClient, err := flowPinnedClient(ctx, u)
+	if err != nil {
+		return "", err
+	}
+	defer closeClient()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return "", err

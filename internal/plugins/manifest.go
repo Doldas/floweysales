@@ -27,6 +27,7 @@ const (
 	CapFinancials = "financials"
 	CapResearch   = "research"
 	CapForum      = "forum"
+	CapNews       = "news"
 )
 
 // Manifest is a plugin's plugin.json; see pluginsdk.Manifest.
@@ -92,7 +93,7 @@ var (
 )
 
 var knownCapabilities = map[string]bool{
-	CapQuote: true, CapHistory: true, CapSearch: true, CapFinancials: true, CapResearch: true, CapForum: true,
+	CapQuote: true, CapHistory: true, CapSearch: true, CapFinancials: true, CapResearch: true, CapForum: true, CapNews: true,
 }
 
 // reservedEnv are backend secrets that a plugin can never ask for.

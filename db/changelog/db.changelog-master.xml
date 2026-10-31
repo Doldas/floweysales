@@ -33,4 +33,5 @@
   <include file="029-flow-audit-log.xml" relativeToChangelogFile="true"/>
   <include file="030-flow-event-adapters.xml" relativeToChangelogFile="true"/>
   <include file="031-flow-agent-tool-calls.xml" relativeToChangelogFile="true"/>
+  <include file="032-flow-node-state.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

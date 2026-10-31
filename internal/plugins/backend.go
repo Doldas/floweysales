@@ -11,7 +11,10 @@ import (
 	"floweysales/internal/market"
 )
 
-var _ market.Backend = (*Manager)(nil)
+var (
+	_ market.Backend    = (*Manager)(nil)
+	_ market.NewsSource = (*Manager)(nil)
+)
 
 // call routes one request to the plugin providing p, checking that it
 // declares capability first.
@@ -171,4 +174,35 @@ func (m *Manager) ForumPosts(ctx context.Context, symbol string, limit int) []ma
 	}
 	wg.Wait()
 	return out
+}
+
+// NewsProviders lists the installed providers that offer headlines.
+func (m *Manager) NewsProviders() []market.Provider {
+	out := []market.Provider{}
+	for _, p := range m.Providers() {
+		if p.Enabled && contains(p.Capabilities, CapNews) {
+			out = append(out, market.Provider(p.ID))
+		}
+	}
+	return out
+}
+
+func (m *Manager) News(ctx context.Context, p market.Provider, symbol string, limit int) ([]market.NewsItem, error) {
+	out := []market.NewsItem{}
+	if strings.TrimSpace(symbol) == "" {
+		return out, fmt.Errorf("[News] empty symbol")
+	}
+	if err := m.call(ctx, p, CapNews, "news", map[string]any{"symbol": strings.TrimSpace(symbol), "limit": limit}, &out); err != nil {
+		return []market.NewsItem{}, err
+	}
+	return market.CleanNews(out, p, limit), nil
+}
+
+func contains(list []string, want string) bool {
+	for _, v := range list {
+		if v == want {
+			return true
+		}
+	}
+	return false
 }
