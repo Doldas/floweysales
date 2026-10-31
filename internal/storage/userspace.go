@@ -122,32 +122,54 @@ func (d *Database) DeleteUserspaceFile(ctx context.Context, owner int64, rawPath
 // TransferUserspaceFile atomically moves or copies a file within the same owner's workspace.
 // Existing destinations are never overwritten.
 func (d *Database) TransferUserspaceFile(ctx context.Context, owner int64, source, destination string, copyFile bool) error {
- src, err := CleanUserspacePath(source)
- if err != nil { return err }
- dst, err := CleanUserspacePath(destination)
- if err != nil { return err }
- if owner <= 0 || src == dst || strings.HasSuffix(src, "/.folder") || strings.HasSuffix(dst, "/.folder") {
-  return errors.New("invalid source or destination")
- }
- tx, err := d.db.BeginTx(ctx, nil)
- if err != nil { return err }
- defer tx.Rollback()
- var id int64
- if err = tx.QueryRowContext(ctx, "SELECT id FROM auth_users WHERE id=? FOR UPDATE", owner).Scan(&id); err != nil { return err }
- var count int
- if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM userspace_files WHERE owner_id=? AND path=?", owner, src).Scan(&count); err != nil { return err }
- if count == 0 { return sql.ErrNoRows }
- if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM userspace_files WHERE owner_id=? AND path=?", owner, dst).Scan(&count); err != nil { return err }
- if count != 0 { return errors.New("destination already exists") }
- if copyFile {
-  if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM userspace_files WHERE owner_id=?", owner).Scan(&count); err != nil { return err }
-  if count >= UserspaceMaxFiles { return fmt.Errorf("maximum %d files per userspace", UserspaceMaxFiles) }
-  _, err = tx.ExecContext(ctx, "INSERT INTO userspace_files(owner_id,path,content_type,content,byte_size) SELECT owner_id,?,content_type,content,byte_size FROM userspace_files WHERE owner_id=? AND path=?", dst, owner, src)
- } else {
-  _, err = tx.ExecContext(ctx, "UPDATE userspace_files SET path=?,updated_at=UTC_TIMESTAMP(6) WHERE owner_id=? AND path=?", dst, owner, src)
- }
- if err != nil { return err }
- return tx.Commit()
+	src, err := CleanUserspacePath(source)
+	if err != nil {
+		return err
+	}
+	dst, err := CleanUserspacePath(destination)
+	if err != nil {
+		return err
+	}
+	if owner <= 0 || src == dst || strings.HasSuffix(src, "/.folder") || strings.HasSuffix(dst, "/.folder") {
+		return errors.New("invalid source or destination")
+	}
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var id int64
+	if err = tx.QueryRowContext(ctx, "SELECT id FROM auth_users WHERE id=? FOR UPDATE", owner).Scan(&id); err != nil {
+		return err
+	}
+	var count int
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM userspace_files WHERE owner_id=? AND path=?", owner, src).Scan(&count); err != nil {
+		return err
+	}
+	if count == 0 {
+		return sql.ErrNoRows
+	}
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM userspace_files WHERE owner_id=? AND path=?", owner, dst).Scan(&count); err != nil {
+		return err
+	}
+	if count != 0 {
+		return errors.New("destination already exists")
+	}
+	if copyFile {
+		if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM userspace_files WHERE owner_id=?", owner).Scan(&count); err != nil {
+			return err
+		}
+		if count >= UserspaceMaxFiles {
+			return fmt.Errorf("maximum %d files per userspace", UserspaceMaxFiles)
+		}
+		_, err = tx.ExecContext(ctx, "INSERT INTO userspace_files(owner_id,path,content_type,content,byte_size) SELECT owner_id,?,content_type,content,byte_size FROM userspace_files WHERE owner_id=? AND path=?", dst, owner, src)
+	} else {
+		_, err = tx.ExecContext(ctx, "UPDATE userspace_files SET path=?,updated_at=UTC_TIMESTAMP(6) WHERE owner_id=? AND path=?", dst, owner, src)
+	}
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func userspaceFolderPrefix(rawPath string) (string, error) {
