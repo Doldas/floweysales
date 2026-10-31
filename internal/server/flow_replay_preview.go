@@ -41,7 +41,7 @@ func replayFlowPreview(g flowGraph, order []string, fromID, seed string) ([]flow
 		if err != nil {
 			return steps, fmt.Errorf("node %s: %w", id, err)
 		}
-		if !present {
+		if !present || (n.SkipEmpty && flowEmpty(input)) {
 			steps = append(steps, flowV2Step{Node: id, Label: n.Label, Status: "SKIPPED"})
 			continue
 		}
@@ -61,6 +61,10 @@ func replayFlowPreview(g flowGraph, order []string, fromID, seed string) ([]flow
 					output = "false"
 				}
 			}
+		case "screen":
+			output, err = screenRows(input, n.Rule, n.SortBy, n.Limit)
+		case "report_table":
+			output, err = reportTable(input, n.Title, n.Columns, n.Limit)
 		case "merge", "output", "save_result":
 			output = input
 		case "constant":

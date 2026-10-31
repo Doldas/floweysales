@@ -41,6 +41,11 @@ func flowCapability(n flowNode) (capability, target string) {
 		return capabilityWorkspaceWrite, n.Value
 	case "emit_event":
 		return capabilityEventsEmit, n.Event
+	case "notify":
+		if n.Channel == "email" {
+			return capabilityNotifySend, "email:flow-owner"
+		}
+		return capabilityNotifySend, "webhook"
 	}
 	return "", ""
 }
@@ -51,7 +56,7 @@ func validateFlowApproval(n flowNode) error {
 		return nil
 	}
 	if capability, _ := flowCapability(n); capability == "" || n.Approval != approvalRequired {
-		return fmt.Errorf("node %s: approval can only be required on Workspace write and Emit Event nodes", n.ID)
+		return fmt.Errorf("node %s: approval can only be required on Workspace write, Emit Event and Notify nodes", n.ID)
 	}
 	return nil
 }

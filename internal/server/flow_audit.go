@@ -48,6 +48,9 @@ var flowAuditRoutes = map[string]auditedRoute{
 	"PUT /api/admin/flow-event-adapters/{id}":                           {"adapter.update", "adapter", "id"},
 	"DELETE /api/admin/flow-event-adapters/{id}":                        {"adapter.delete", "adapter", "id"},
 	"POST /api/admin/flow-event-adapters/{id}/rotate-secret":            {"adapter.rotate_secret", "adapter", "id"},
+	"PUT /api/admin/flow-notify-channels/webhook":                       {"notify.webhook_save", "notify_channel", ""},
+	"DELETE /api/admin/flow-notify-channels/webhook":                    {"notify.webhook_delete", "notify_channel", ""},
+	"POST /api/admin/flow-notify-channels/test":                         {"notify.webhook_test", "notify_channel", ""},
 }
 
 // flowAuditExempt lists mutating-method routes that change nothing.

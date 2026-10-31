@@ -51,9 +51,26 @@ type flowNode struct {
 	MaxToolCalls int      `json:"max_tool_calls,omitempty"`
 	// RequireGrounding fails an attempt whose answer states figures that are
 	// not in its tool results or input.
-	RequireGrounding bool    `json:"require_grounding,omitempty"`
-	X                float64 `json:"x"`
-	Y                float64 `json:"y"`
+	RequireGrounding bool `json:"require_grounding,omitempty"`
+	// Investor nodes (see flow_investor.go).
+	Symbols       string `json:"symbols,omitempty"`
+	Provider      string `json:"provider,omitempty"`
+	Rule          string `json:"rule,omitempty"`
+	SortBy        string `json:"sort_by,omitempty"`
+	Limit         int    `json:"limit,omitempty"`
+	Columns       string `json:"columns,omitempty"`
+	Title         string `json:"title,omitempty"`
+	KeyFields     string `json:"key_fields,omitempty"`
+	CooldownHours int    `json:"cooldown_hours,omitempty"`
+	LookbackDays  int    `json:"lookback_days,omitempty"`
+	Forms         string `json:"forms,omitempty"`
+	Channel       string `json:"channel,omitempty"`
+	Subject       string `json:"subject,omitempty"`
+	// SkipEmpty skips the node, and so everything that depends on it, when
+	// its input is empty ("", [] or {}), e.g. no new filings or no alerts.
+	SkipEmpty bool    `json:"skip_empty,omitempty"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
 }
 type flowEdge struct {
 	From     string `json:"from"`
@@ -154,8 +171,22 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		if n.FlowRevision < 0 || n.FunctionRevision < 0 || (n.FlowRevision != 0 && n.Type != "flow") || (n.FunctionRevision != 0 && n.Type != "function") {
 			return g, nil, fmt.Errorf("revision pins are only valid on call flow and function nodes")
 		}
-		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" && n.Type != "output" && (g.Version != 2 || n.Type != "loop") && n.Type != "http_get" && (g.Version != 2 || n.Type != "web_search") && (g.Version != 2 || n.Type != "web_crawl") && (g.Version != 2 || (n.Type != "condition" && n.Type != "merge" && n.Type != "json_get")) && (g.Version != 2 || n.Type != "emit_event") {
+		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" && n.Type != "output" && (g.Version != 2 || n.Type != "loop") && n.Type != "http_get" && (g.Version != 2 || n.Type != "web_search") && (g.Version != 2 || n.Type != "web_crawl") && (g.Version != 2 || (n.Type != "condition" && n.Type != "merge" && n.Type != "json_get")) && (g.Version != 2 || n.Type != "emit_event") && !investorNodeTypes[n.Type] {
 			return g, nil, fmt.Errorf("only trigger, research agent, constant and subflow nodes are allowed")
+		}
+		if n.SkipEmpty && (g.Version != 2 || n.Type == "trigger" || n.Type == "merge" || n.Type == "constant") {
+			return g, nil, fmt.Errorf("node %s: skip when empty needs graph version 2 and a node with an input", n.ID)
+		}
+		if investorNodeTypes[n.Type] {
+			utilities++
+			if n.Prompt != "" || n.FlowID != 0 || n.FunctionID != 0 || n.Model != "" {
+				return g, nil, fmt.Errorf("investor nodes cannot call agents, flows or functions")
+			}
+			if err := validateInvestorNode(n, g.Version); err != nil {
+				return g, nil, err
+			}
+		} else if n.Symbols != "" || n.Provider != "" || n.Rule != "" || n.SortBy != "" || n.Limit != 0 || n.Columns != "" || n.Title != "" || n.KeyFields != "" || n.CooldownHours != 0 || n.LookbackDays != 0 || n.Forms != "" || n.Channel != "" || n.Subject != "" {
+			return g, nil, fmt.Errorf("node %s: investor settings are only valid on investor nodes", n.ID)
 		}
 		if g.Version == 2 && (n.Type == "condition" || n.Type == "merge" || n.Type == "json_get") {
 			utilities++
@@ -164,7 +195,7 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 			}
 			if n.Type == "condition" {
 				switch n.Operator {
-				case "equals", "not_equals", "contains", "greater_than", "less_than":
+				case "equals", "not_equals", "contains", "greater_than", "less_than", "is_empty", "not_empty":
 				default:
 					return g, nil, fmt.Errorf("invalid condition operator")
 				}
@@ -538,7 +569,8 @@ func (e *Engine) configuredFlowModelsAllowed(ctx context.Context, graph flowGrap
 func flowAllowedForNonAdmin(graph flowGraph) bool {
 	for _, node := range graph.Nodes {
 		switch node.Type {
-		case "trigger", "agent", "constant", "condition", "merge", "json_get", "transform", "loop", "output", "http_get", "web_crawl", "web_search":
+		case "trigger", "agent", "constant", "condition", "merge", "json_get", "transform", "loop", "output", "http_get", "web_crawl", "web_search",
+			"watchlist_quotes", "technical_scan", "fundamentals", "sec_filings", "news", "screen", "only_new", "report_table":
 		default:
 			return false
 		}
@@ -1186,7 +1218,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			if inputErr != nil {
 				return "", inputErr
 			}
-			if !present {
+			if !present || (n.SkipEmpty && flowEmpty(previous)) {
 				state.Steps = append(state.Steps, flowV2Step{Node: n.ID, Label: n.Label, Status: "SKIPPED"})
 				record(map[string]string{"node": n.ID, "label": n.Label, "status": "SKIPPED"})
 				continue
@@ -1234,6 +1266,19 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			}
 			// The payload passes through unchanged, so emitting can sit mid-chain.
 			record(map[string]string{"node": n.ID, "label": n.Label, "output": summary})
+			continue
+		}
+		if investorNodeTypes[n.Type] {
+			output, note, err := e.runInvestorNode(ctx, f, n, depth, previous)
+			if err != nil {
+				return "", fmt.Errorf("%s node %s: %w", strings.ReplaceAll(n.Type, "_", " "), n.ID, err)
+			}
+			previous = output
+			// Notify passes its input on; its trace shows the delivery instead.
+			if note == "" {
+				note = previous
+			}
+			record(map[string]string{"node": n.ID, "label": n.Label, "output": note})
 			continue
 		}
 		if n.Type == "web_search" {

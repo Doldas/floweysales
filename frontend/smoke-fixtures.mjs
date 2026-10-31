@@ -157,6 +157,7 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     '/api/admin/blueprint-functions': { functions: [] },
     '/api/admin/blueprint-triggers': { triggers: [{ id: 1, event_key: 'filing.published', payload_type: 'text' }] },
     '/api/admin/flow-event-adapters': { adapters: [] },
+    '/api/admin/flow-notify-channels': { email: { configured: true }, webhook: { configured: false } },
     '/api/admin/flow-audit': { entries: [] },
     '/api/admin/flow-agent-tools': { tools: [{ name: 'get_sec_facts', description: 'SEC XBRL facts' }, { name: 'search_web', description: 'Web search' }], max_tools: 8, max_tool_calls: 16, default_tool_calls: 6 },
     '/api/admin/integrations': { encryption_ready: true, ai: { has_key: false }, web_search: { provider: 'brave', has_key: false } },

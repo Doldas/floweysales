@@ -115,12 +115,16 @@ Responses may arrive in any order. Lines are limited to 1 MiB (requests) and
 | `financials` | `symbol`, `from_year`, `to_year` | quarterly reports | `financials` |
 | `research` | `operation`, `symbol`, `from`, `to` | research envelope | `research` |
 | `forum_posts` | `symbol`, `limit` | `[{id,title,content,symbol,upvotes,author,timestamp}]` | `forum` |
+| `news` | `symbol`, `limit` (1–20) | `[{title,url,source,published,summary,symbol,provider}]` (`published` unix seconds, optional) | `news` |
 
 Error codes: `unsupported`, `invalid_argument` (HTTP 400), `not_configured`
 (503), `upstream` and `internal` (502). An uninstalled provider is HTTP 404.
 
 The exact JSON shapes are pinned by golden files in
 `pluginsdk/testdata/contract/`, tested by both the SDK and the backend.
+
+The backend keeps news items with a title and a public http(s) URL only and
+labels the provider; the Flow Studio **News headlines** node reads them.
 
 Provider rules from [CONTRIBUTING](../CONTRIBUTING.md) apply to plugins too:
 a missing figure stays absent rather than `0`; currency is never guessed; a

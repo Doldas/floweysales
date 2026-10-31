@@ -16,9 +16,11 @@ import { listOverviewFlows } from './flow-overview';
 import { semanticIssues } from './flow-semantics';
 import { nearestPort, portPoints, wireFromDrag, edgeKey, wirePath, type PortPoint } from './wire-drag';
 import { bindInputPin, declaredPins, mixesPinAndPlainInputs, pinBindings, pinEdgeProblem, pinOffset, routeOutputPin, unboundInputPins } from './function-pins';
+import { FlowNotifyChannelsComponent } from './flow-notify-channels';
+import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, SCREEN_FIELDS, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'; label:string; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number;require_grounding?:boolean; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'|'watchlist_quotes'|'technical_scan'|'fundamentals'|'sec_filings'|'news'|'screen'|'only_new'|'report_table'|'notify'; label:string; symbols?:string; provider?:string; rule?:string; sort_by?:string; limit?:number; columns?:string; title?:string; key_fields?:string; cooldown_hours?:number; lookback_days?:number; forms?:string; channel?:'email'|'webhook'; subject?:string; skip_empty?:boolean; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number;require_grounding?:boolean; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FunctionDef { id:number; name:string; graph?:unknown }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
@@ -29,7 +31,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
 
 @Component({
  selector:'fse-flow-studio', standalone:true,
- imports:[CommonModule,FormsModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,FlowSideEffectsComponent,FlowEventAdaptersComponent],
+ imports:[CommonModule,FormsModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,FlowSideEffectsComponent,FlowEventAdaptersComponent,FlowNotifyChannelsComponent],
  host:{class:'fs-native-forms'},
  changeDetection:ChangeDetectionStrategy.Default,
  template:`
@@ -75,6 +77,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
        <option value="research">Market research report</option>
        <option value="risk">Risk-score decision</option>
        <option value="event">Event-driven analysis</option>
+       <optgroup label="Investor playbooks">@for(p of playbooks;track p.id){<option [value]="p.id">{{p.label}} ({{p.schedule}})</option>}</optgroup>
       </select>
      </label>
      <button class="btn btn-sm btn-outline-danger" (click)="confirmDeleteFlow()" [disabled]="!selectedId()||busy()">Delete flow</button>
@@ -123,7 +126,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
           (keydown.enter)="openQuickNode(n.id)" [attr.aria-label]="'Select '+n.label">
          <rect class="flow-node" [class.selected]="n.id===selectedNode()?.id" [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="12"/>
          <rect class="flow-node-accent" [attr.data-type]="n.type" [attr.x]="n.x" [attr.y]="n.y" width="4" height="70" rx="2"/>
-         <text class="node-type" [attr.x]="n.x+12" [attr.y]="n.y+24" font-size="11">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':n.type==='workspace_read'?'▤ READ FILE':n.type==='workspace_write'?'▣ WRITE FILE':n.type==='output'?'→ OUTPUT':n.type==='condition'?'◇ IF / ELSE':n.type==='merge'?'⇉ MERGE':n.type==='json_get'?'{} JSON FIELD':n.type==='emit_event'?'⇢ EMIT EVENT':'✦ AGENT'}}</text>
+         <text class="node-type" [attr.x]="n.x+12" [attr.y]="n.y+24" font-size="11">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':n.type==='workspace_read'?'▤ READ FILE':n.type==='workspace_write'?'▣ WRITE FILE':n.type==='output'?'→ OUTPUT':n.type==='condition'?'◇ IF / ELSE':n.type==='merge'?'⇉ MERGE':n.type==='json_get'?'{} JSON FIELD':n.type==='emit_event'?'⇢ EMIT EVENT':investorTag(n.type)}}</text>
          <text class="node-label" [attr.x]="n.x+12" [attr.y]="n.y+48" font-size="13">{{n.label.slice(0,16)}}</text>
           @for(pin of functionPins(n).inputs;track pin.name;let i=$index){<g><circle [attr.cx]="n.x" [attr.cy]="n.y+pinOffset(i,functionPins(n).inputs.length,70)" r="6" class="canvas-port pin-in" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation()"><title>Input {{pin.name}} ({{pin.type}})</title></circle><text [attr.x]="n.x+8" [attr.y]="n.y+pinOffset(i,functionPins(n).inputs.length,70)+3" font-size="8" class="pin-label">{{pin.name.slice(0,8)}}</text></g>}
           @for(pin of functionPins(n).outputs;track pin.name;let i=$index){<g><circle [attr.cx]="n.x+125" [attr.cy]="n.y+pinOffset(i,functionPins(n).outputs.length,70)" r="6" class="canvas-port pin-out" (pointerdown)="startWire($event,n.id,pin.name)" (click)="$event.stopPropagation()"><title>Output {{pin.name}} ({{pin.type}})</title></circle><text [attr.x]="n.x+117" [attr.y]="n.y+pinOffset(i,functionPins(n).outputs.length,70)+3" font-size="8" class="pin-label" text-anchor="end">{{pin.name.slice(0,8)}}</text></g>}
@@ -177,11 +180,11 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
           @for(tool of agentTools();track tool.name){
            <label class="checkbox-row" [title]="tool.description"><input type="checkbox" [checked]="n.tools?.includes(tool.name)" (change)="toggleAgentTool(n.id,tool.name)"> {{toolLabel(tool.name)}}</label>
           }
-          @if(n.tools?.length){<label>Max tool calls (0 = default {{toolLimits().default_tool_calls}}) <input type="number" min="0" [max]="toolLimits().max_tool_calls" step="1" [ngModel]="n.max_tool_calls||0" (ngModelChange)="updateToolBudget(n.id,+$event)"></label>
-           <label class="checkbox-row"><input type="checkbox" [checked]="!!n.require_grounding" (change)="setGrounding(n.id,$any($event.target).checked)"> Require grounded figures</label>
-           <p class="muted">When on, every figure in the answer must appear in this attempt's tool results or the node input. Otherwise the attempt fails and lists the unsupported figures.</p>}
+          @if(n.tools?.length){<label>Max tool calls (0 = default {{toolLimits().default_tool_calls}}) <input type="number" min="0" [max]="toolLimits().max_tool_calls" step="1" [ngModel]="n.max_tool_calls||0" (ngModelChange)="updateToolBudget(n.id,+$event)"></label>}
          </fieldset>
         } @else if(n.tools?.length){<p class="muted">This agent has {{n.tools.length}} research tool(s) granted by an administrator.</p>}
+        <label class="checkbox-row"><input type="checkbox" [checked]="!!n.require_grounding" (change)="setGrounding(n.id,$any($event.target).checked)"> Require grounded figures</label>
+        <p class="muted">Every figure in the answer must appear in {{n.tools?.length?'this attempt\'s tool results or ':''}}the node input, for example rows from a Watchlist or Fundamentals node. Otherwise the attempt fails and lists the unsupported figures.</p>
         @if(n.output_mode==='json'){
           <label>JSON output contract <textarea rows="8" spellcheck="false" [ngModel]="n.json_contract||''" (ngModelChange)="updateNodeFor(n.id,'json_contract',$event)" maxlength="3000" placeholder='{"type":"object","required":["symbol"],"properties":{"symbol":{"type":"string"},"score":{"type":"number"}}}'></textarea></label>
           <p class="muted">Optional contract: object properties, required fields and primitive types. Invalid results fail rather than reaching downstream nodes.</p>
@@ -193,8 +196,9 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
          <label>Condition <select [ngModel]="n.operator||'equals'" (ngModelChange)="updateNodeFor(n.id,'operator',$event)">
            <option value="equals">Equals</option><option value="not_equals">Not equals</option>
            <option value="contains">Contains</option><option value="greater_than">Greater than</option><option value="less_than">Less than</option>
+           <option value="not_empty">Has rows / is not empty</option><option value="is_empty">Is empty</option>
          </select></label>
-         <label>Compare with <input [ngModel]="n.value||''" (ngModelChange)="updateNodeFor(n.id,'value',$event)"></label>
+         @if(n.operator!=='is_empty'&&n.operator!=='not_empty'){<label>Compare with <input [ngModel]="n.value||''" (ngModelChange)="updateNodeFor(n.id,'value',$event)"></label>}
          <label>True → <select #trueTarget><option value="">Select node</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id){<option [value]="other.id">{{other.label}}</option>}}</select></label>
          <button class="btn btn-sm btn-outline-secondary" (click)="connectBranch(n.id,trueTarget.value,'true')">Connect TRUE</button>
          <label>False → <select #falseTarget><option value="">Select node</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id){<option [value]="other.id">{{other.label}}</option>}}</select></label>
@@ -227,6 +231,47 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
          @if(n.transform==='prefix'||n.transform==='suffix'||n.transform==='replace'){
            <label>Operand <input [ngModel]="n.value||''" (ngModelChange)="updateUtility('value',$event)" maxlength="1000" [placeholder]="n.transform==='replace'?'find=>replacement':'Text to add'"></label>
          }
+       }
+       @if(isInvestorNode(n.type)){
+        <p class="muted investor-help">{{investorNode(n.type)?.description}}</p>
+        @if(n.type==='watchlist_quotes'||n.type==='technical_scan'||n.type==='fundamentals'||n.type==='sec_filings'||n.type==='news'){
+         <label>Watchlist (up to 25 symbols) <textarea rows="2" spellcheck="false" [ngModel]="n.symbols||''" (ngModelChange)="updateInvestor(n.id,'symbols',$event)" maxlength="600" placeholder="AAPL, MSFT, VOLV-B.ST"></textarea></label>
+         <p class="muted">Leave empty to use the symbols in this node's input, for example the rows of a screen or another watchlist node.</p>
+         @if(n.type!=='sec_filings'){<label>Provider <select [ngModel]="n.provider||''" (ngModelChange)="updateInvestor(n.id,'provider',$event)"><option value="">{{n.type==='news'?'First provider with news':'Server default'}}</option>@for(p of providers();track p.id){<option [value]="p.id">{{p.label||p.id}}</option>}</select></label>}
+        }
+        @if(n.type==='sec_filings'){
+         <label>Forms <input [ngModel]="n.forms||''" (ngModelChange)="updateInvestor(n.id,'forms',$event)" maxlength="80" placeholder="8-K, 10-Q, 10-K (empty: all)"></label>
+        }
+        @if(n.type==='sec_filings'||n.type==='news'){
+         <label>Look back (days, 1–90) <input type="number" min="1" max="90" [ngModel]="n.lookback_days||(n.type==='news'?3:7)" (ngModelChange)="updateInvestorNumber(n.id,'lookback_days',+$event,1,90)"></label>
+        }
+        @if(n.type==='news'){<label>Headlines per symbol (1–20) <input type="number" min="1" max="20" [ngModel]="n.limit||5" (ngModelChange)="updateInvestorNumber(n.id,'limit',+$event,1,20)"></label>}
+        @if(n.type==='screen'){
+         <label>Rule <textarea rows="2" spellcheck="false" [ngModel]="n.rule||''" (ngModelChange)="updateInvestor(n.id,'rule',$event)" maxlength="500" placeholder="rsi14 < 30 and above_sma200"></textarea></label>
+         <p class="muted">Compare fields with &lt; &lt;= &gt; &gt;= == != or contains, and combine with and, or, not and parentheses. Rows without a field never match. Empty keeps every row.</p>
+         @if(screenFields(n.id).length){<p class="muted field-hints">Fields from {{screenSourceLabel(n.id)}}: @for(f of screenFields(n.id);track f){<button type="button" class="field-chip" (click)="appendRuleField(n.id,f)">{{f}}</button>}</p>}
+         <label>Sort by <input [ngModel]="n.sort_by||''" (ngModelChange)="updateInvestor(n.id,'sort_by',$event)" maxlength="64" placeholder="change_1d_pct (prefix - for descending)"></label>
+         <label>Keep at most (0 = all) <input type="number" min="0" max="100" [ngModel]="n.limit||0" (ngModelChange)="updateInvestorNumber(n.id,'limit',+$event,0,100)"></label>
+        }
+        @if(n.type==='only_new'){
+         <label>Identify rows by <input [ngModel]="n.key_fields||''" (ngModelChange)="updateInvestor(n.id,'key_fields',$event)" maxlength="120" placeholder="id, url or symbol by default"></label>
+         <label>Let a row through again after (hours, 0 = never) <input type="number" min="0" max="2160" [ngModel]="n.cooldown_hours||0" (ngModelChange)="updateInvestorNumber(n.id,'cooldown_hours',+$event,0,2160)"></label>
+         <p class="muted">Remembers up to 2,000 rows for 180 days per node. Use a cooldown for conditions that last, such as "RSI below 30", so you hear about them once a day instead of every run.</p>
+        }
+        @if(n.type==='report_table'){
+         <label>Title <input [ngModel]="n.title||''" (ngModelChange)="updateInvestor(n.id,'title',$event)" maxlength="150"></label>
+         <label>Columns <input [ngModel]="n.columns||''" (ngModelChange)="updateInvestor(n.id,'columns',$event)" maxlength="300" placeholder="symbol, price, change_1d_pct (empty: automatic)"></label>
+         <label>Rows (1–100) <input type="number" min="0" max="100" [ngModel]="n.limit||0" (ngModelChange)="updateInvestorNumber(n.id,'limit',+$event,0,100)"></label>
+        }
+        @if(n.type==='notify'){
+         <label>Send to <select [ngModel]="n.channel||'email'" (ngModelChange)="updateInvestor(n.id,'channel',$event)"><option value="email">Email the flow owner</option><option value="webhook">Chat webhook (Slack, Discord, Teams)</option></select></label>
+         <label>Subject <input [ngModel]="n.subject||''" (ngModelChange)="updateInvestor(n.id,'subject',$event)" maxlength="150" placeholder="{{'{{flow}}'}}: {{'{{count}}'}} alerts on {{'{{date}}'}}"></label>
+         <p class="muted">Placeholders: {{'{{flow}}'}}, {{'{{date}}'}} and {{'{{count}}'}} (rows in the input). JSON rows are sent as a table. Nothing is sent when the input is empty. Configure the webhook under Function library &amp; triggers → Notifications.</p>
+        }
+       }
+       @if(graph().version===2&&n.type!=='trigger'&&n.type!=='merge'&&n.type!=='constant'){
+        <label class="checkbox-row"><input type="checkbox" [checked]="!!n.skip_empty" (change)="updateInvestor(n.id,'skip_empty',$any($event.target).checked)"> Skip when the input is empty</label>
+        @if(n.skip_empty){<p class="muted">When there is nothing in the input (no rows, no new items) this node and everything after it are skipped, so agents and notifications only run when there is something to say.</p>}
        }
        @if(nodeCapability(n);as cap){
         <fieldset class="capability-box">
@@ -388,7 +433,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
    }
    @if (studioTab()==='library') {
      <fse-blueprint-library (functionsChanged)="loadFunctions()"></fse-blueprint-library>
-     @if(auth.user()?.role==='SYS_ADMIN'){ <fse-flow-event-adapters></fse-flow-event-adapters> }
+     @if(auth.user()?.role==='SYS_ADMIN'){ <fse-flow-event-adapters></fse-flow-event-adapters><fse-flow-notify-channels></fse-flow-notify-channels> }
    }
    @if (studioTab()==='approvals') { <fse-flow-side-effects></fse-flow-side-effects> }
    @if (studioTab()==='runs') {
@@ -615,6 +660,8 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
  .flow-node-accent{fill:var(--fs-accent)}
  .flow-node-accent[data-type=trigger]{fill:#0ea5e9}.flow-node-accent[data-type=output]{fill:#10b981}.flow-node-accent[data-type=condition],.flow-node-accent[data-type=loop]{fill:#f59e0b}
  .flow-node-accent[data-type=workspace_write],.flow-node-accent[data-type=emit_event]{fill:#ef4444}.flow-node-accent[data-type=http_get],.flow-node-accent[data-type=web_search],.flow-node-accent[data-type=web_crawl]{fill:#14b8a6}
+ .flow-node-accent[data-type=watchlist_quotes],.flow-node-accent[data-type=technical_scan],.flow-node-accent[data-type=fundamentals],.flow-node-accent[data-type=sec_filings],.flow-node-accent[data-type=news]{fill:#f59e0b}.flow-node-accent[data-type=screen],.flow-node-accent[data-type=only_new],.flow-node-accent[data-type=report_table]{fill:#8b5cf6}.flow-node-accent[data-type=notify]{fill:#ef4444}
+ .field-hints{display:flex;flex-wrap:wrap;gap:4px;align-items:center}.field-chip{border:1px solid var(--fs-border);background:var(--fs-surface-2);color:var(--fs-text);border-radius:999px;padding:1px 8px;font:inherit;font-size:.75rem}.field-chip:hover{border-color:var(--fs-accent)}
  .node-type{fill:var(--fs-node-sub);font-weight:600;letter-spacing:.04em}
  .node-label{fill:var(--fs-node-text);font-weight:600}
  .pin-label{fill:var(--fs-node-sub)}
@@ -844,12 +891,12 @@ export class FlowStudioComponent {
  readonly logView=signal<'markdown'|'raw'|'json'>('markdown');
  readonly nodePickerOpen=signal(false);
   readonly nodePickerQuery=signal('');
-  readonly nodeTypes=[{"id":0,"label":"Agent","admin":false},{"id":1,"label":"If / Else","admin":false},{"id":2,"label":"Merge","admin":false},{"id":3,"label":"JSON Field","admin":false},{"id":4,"label":"Loop","admin":false},{"id":5,"label":"HTTP JSON/XML","admin":false},{"id":6,"label":"Web crawler","admin":false},{"id":7,"label":"Web search","admin":false},{"id":8,"label":"Output","admin":false},{"id":9,"label":"Call Flow","admin":true},{"id":10,"label":"Value","admin":false},{"id":11,"label":"Function","admin":true},{"id":12,"label":"Save Result","admin":true},{"id":13,"label":"Load Result","admin":true},{"id":14,"label":"Transform","admin":false},{"id":15,"label":"Read File","admin":true},{"id":16,"label":"Write File","admin":true},{"id":17,"label":"Emit Event","admin":true}];
+  readonly nodeTypes=[{"id":0,"label":"Agent","admin":false},{"id":1,"label":"If / Else","admin":false},{"id":2,"label":"Merge","admin":false},{"id":3,"label":"JSON Field","admin":false},{"id":4,"label":"Loop","admin":false},{"id":5,"label":"HTTP JSON/XML","admin":false},{"id":6,"label":"Web crawler","admin":false},{"id":7,"label":"Web search","admin":false},{"id":8,"label":"Output","admin":false},{"id":9,"label":"Call Flow","admin":true},{"id":10,"label":"Value","admin":false},{"id":11,"label":"Function","admin":true},{"id":12,"label":"Save Result","admin":true},{"id":13,"label":"Load Result","admin":true},{"id":14,"label":"Transform","admin":false},{"id":15,"label":"Read File","admin":true},{"id":16,"label":"Write File","admin":true},{"id":17,"label":"Emit Event","admin":true},...INVESTOR_NODES.map((n,i)=>({id:100+i,label:n.label,admin:n.admin,investor:true}))];
   readonly visibleNodeTypes=()=>this.nodeTypes.filter(n=>(!n.admin||this.auth.user()?.role==='SYS_ADMIN')&&n.label.toLowerCase().includes(this.nodePickerQuery().trim().toLowerCase()));
   toggleNodePicker(){this.nodePickerOpen.update(v=>!v);this.nodePickerQuery.set('')}
   addPickedNode(id:number){
     if(!this.visibleNodeTypes().some(n=>n.id===id))return;
-    switch(id){case 0:this.addAgent();break;case 1:this.addV2Node('condition');break;case 2:this.addV2Node('merge');break;case 3:this.addV2Node('json_get');break;case 4:this.addPureLoop();break;case 5:this.addHTTPGet();break;case 6:this.addWebCrawler();break;case 7:this.addWebSearch();break;case 8:this.addOutput();break;case 9:this.addSubflow();break;case 10:this.addConstant();break;case 11:this.addFunctionCall();break;case 12:this.addUtility('save_result');break;case 13:this.addUtility('load_result');break;case 14:this.addUtility('transform');break;case 15:this.addUtility('workspace_read');break;case 16:this.addUtility('workspace_write');break;case 17:this.addEmitEvent();break;default:return;}
+    switch(id){case 0:this.addAgent();break;case 1:this.addV2Node('condition');break;case 2:this.addV2Node('merge');break;case 3:this.addV2Node('json_get');break;case 4:this.addPureLoop();break;case 5:this.addHTTPGet();break;case 6:this.addWebCrawler();break;case 7:this.addWebSearch();break;case 8:this.addOutput();break;case 9:this.addSubflow();break;case 10:this.addConstant();break;case 11:this.addFunctionCall();break;case 12:this.addUtility('save_result');break;case 13:this.addUtility('load_result');break;case 14:this.addUtility('transform');break;case 15:this.addUtility('workspace_read');break;case 16:this.addUtility('workspace_write');break;case 17:this.addEmitEvent();break;default:{const spec=INVESTOR_NODES[id-100];if(!spec)return;this.addInvestorNode(spec.type);}}
     this.nodePickerOpen.set(false);
   }
   readonly studioTab=signal<'overview'|'editor'|'library'|'runs'|'files'|'approvals'>('overview');
@@ -954,7 +1001,8 @@ export class FlowStudioComponent {
       if(n.type==='emit_event'&&!n.event)add('Choose the event to emit: '+n.label,n.id);
       else if(n.type==='emit_event'&&this.auth.user()?.role==='SYS_ADMIN'&&!this.triggers().some(t=>t.event_key===n.event))add('Event '+n.event+' is not defined; create it under Function library & triggers: '+n.label,n.id);
       if(n.type==='json_get'&&!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(n.property||''))add('Enter a valid JSON property: '+n.label,n.id);
-      if(n.type==='condition'&&!['equals','not_equals','contains','greater_than','less_than'].includes(n.operator||''))add('Select a condition operator: '+n.label,n.id);
+      if(n.type==='condition'&&!['equals','not_equals','contains','greater_than','less_than','is_empty','not_empty'].includes(n.operator||''))add('Select a condition operator: '+n.label,n.id);
+      if(isInvestorNode(n.type)){for(const problem of this.investorProblems(n))add(problem+': '+n.label,n.id)}
       if(n.type==='loop'&&(!n.loop_limit||n.loop_limit<1||n.loop_limit>100))add('Set loop limit from 1 to 100: '+n.label,n.id);
       if((n.type==='save_result'||n.type==='load_result')&&!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(n.variable||''))add('Run variable must start with a letter and be at most 48 characters: '+n.label,n.id);
       if(n.type==='agent'&&(n.timeout_seconds||0)>90)add('Agent timeout exceeds 90 seconds: '+n.label,n.id);
@@ -1085,7 +1133,7 @@ export class FlowStudioComponent {
  constructor(){
   // Load the revision list of the selected call node's target for its pin selector.
   effect(()=>{const n=this.selectedNode();if(n?.type==='flow'&&n.flow_id)void this.loadTargetRevisions('flow',n.flow_id);if(n?.type==='function'&&n.function_id)void this.loadTargetRevisions('function',n.function_id)});
-  this.resetGraphHistory();this.savedSnapshot.set(this.currentSnapshot());void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN'){void this.loadFunctions();void this.loadAgentTools()}void this.loadModels();
+  this.resetGraphHistory();this.savedSnapshot.set(this.currentSnapshot());void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN'){void this.loadFunctions();void this.loadAgentTools()}void this.loadModels();void this.loadProviders();
     effect(()=>{
       const current=JSON.stringify(this.graph());
       if(current===this.lastGraphVersion||this.dragHistoryStart!==null)return;
@@ -1113,9 +1161,57 @@ export class FlowStudioComponent {
  ],edges:[{from:'start',to:'agent-1'}]}}
  node(id:string):FlowNode|undefined{return this.graph().nodes.find(n=>n.id===id)}
  select(id:string){this.chosen.set(id)}
+ readonly playbooks=INVESTOR_PLAYBOOKS;
+ readonly isInvestorNode=isInvestorNode;
+ readonly investorNode=investorNode;
+ readonly providers=signal<{id:string;label:string}[]>([]);
+ investorTag(type:string):string{return investorNode(type)?.tag||'✦ AGENT'}
+ async loadProviders():Promise<void>{try{const r=await fetch('/api/providers',{credentials:'same-origin'});if(r.ok){const data=await r.json();this.providers.set((Array.isArray(data)?data:data.providers||[]).filter((p:{enabled?:boolean})=>p.enabled!==false))}}catch{}}
+ addInvestorNode(type:string):void{
+   const spec=investorNode(type);if(!spec)return;
+   const count=this.graph().nodes.length;
+   const id=type.replace(/_/g,'-')+'-'+Date.now().toString(36);
+   this.graph.update(g=>({...g,version:2,nodes:[...g.nodes,{id,type:spec.type,label:spec.label,...spec.defaults,x:260+(count%4)*140,y:40+Math.floor(count/4)*100} as FlowNode]}));
+   this.chosen.set(id);
+ }
+ updateInvestor(id:string,field:'symbols'|'provider'|'rule'|'sort_by'|'columns'|'title'|'key_fields'|'forms'|'channel'|'subject'|'skip_empty',value:string|boolean):void{
+   this.graph.update(g=>({...g,nodes:g.nodes.map(n=>{if(n.id!==id)return n;const next:FlowNode={...n};if(value===''||value===false)delete (next as unknown as Record<string,unknown>)[field];else (next as unknown as Record<string,unknown>)[field]=value;return next})}));
+ }
+ updateInvestorNumber(id:string,field:'limit'|'lookback_days'|'cooldown_hours',value:number,min:number,max:number):void{
+   const safe=Number.isFinite(value)?Math.max(min,Math.min(max,Math.trunc(value))):min;
+   this.graph.update(g=>({...g,nodes:g.nodes.map(n=>{if(n.id!==id)return n;const next:FlowNode={...n};if(!safe)delete next[field];else next[field]=safe;return next})}));
+ }
+ /** The node feeding a screen, used to suggest field names. */
+ private screenSource(id:string):FlowNode|undefined{const e=this.graph().edges.find(x=>x.to===id);return e?this.node(e.from):undefined}
+ screenFields(id:string):string[]{
+   let source=this.screenSource(id);
+   for(let hops=0;source&&hops<4&&!SCREEN_FIELDS[source.type];hops++)source=this.screenSource(source.id);
+   return source?SCREEN_FIELDS[source.type]||[]:[];
+ }
+ screenSourceLabel(id:string):string{return this.screenSource(id)?.label||''}
+ appendRuleField(id:string,field:string):void{const rule=(this.node(id)?.rule||'').trim();this.updateInvestor(id,'rule',rule?rule+' and '+field+' ':field+' ')}
+ investorProblems(n:FlowNode):string[]{
+   const problems:string[]=[];
+   if(this.graph().version!==2)problems.push('Investor nodes need a version 2 graph');
+   const symbolsProblem=watchlistProblem(n.symbols||'');if(symbolsProblem)problems.push(symbolsProblem);
+   if(n.type==='screen'&&(n.rule||'').length>500)problems.push('Screen rule is longer than 500 characters');
+   if(n.type==='notify'&&this.auth.user()?.role!=='SYS_ADMIN')problems.push('Only administrators can add Notify nodes');
+   return problems;
+ }
  applyFlowTemplate(id:string):void{
   if(!id||!this.allowDiscard())return;
   this.resetFlow();
+  const playbook=buildPlaybook(id,{admin:this.auth.user()?.role==='SYS_ADMIN'});
+  if(playbook){
+   this.name.set(playbook.name);
+   this.graph.set(playbook.graph as FlowGraph);
+   this.enabled.set(false);
+   // The schedule is a suggestion; only administrators can automate flows.
+   this.interval.set(this.auth.user()?.role==='SYS_ADMIN'?playbook.intervalMinutes:0);
+   this.resetGraphHistory();
+   this.message.set('Playbook copied as a new, disabled flow. Set your watchlist on the data node, save, run it once, then publish and enable it. '+playbook.note);
+   return;
+  }
   const start:FlowNode={id:'start',type:'trigger',label:'Start',x:45,y:145};
   const agent:FlowNode={id:'research',type:'agent',label:'Research',prompt:'Analyze this company using verifiable evidence and identify uncertainties.',output_mode:'json',
     json_contract:JSON.stringify({type:'object',required:['symbol','score'],properties:{symbol:{type:'string'},score:{type:'number'},summary:{type:'string'}}}),x:230,y:145};
@@ -1282,10 +1378,10 @@ export class FlowStudioComponent {
  toggleAgentTool(id:string,name:string){
    const n=this.node(id);const next=toggleTool(n?.tools,name,this.toolLimits().max_tools);
    if(!next){this.message.set('An agent can be granted at most '+this.toolLimits().max_tools+' tools');return}
-   this.graph.update(g=>({...g,nodes:g.nodes.map(x=>{if(x.id!==id)return x;const {tools:_t,max_tool_calls:_m,require_grounding:_g,...rest}=x;return next.length?{...rest,tools:next,...(_m?{max_tool_calls:_m}:{}),...(_g?{require_grounding:true}:{})}:rest})}));
+   this.graph.update(g=>({...g,nodes:g.nodes.map(x=>{if(x.id!==id)return x;const {tools:_t,max_tool_calls:_m,require_grounding:_g,...rest}=x;return next.length?{...rest,tools:next,...(_m?{max_tool_calls:_m}:{}),...(_g?{require_grounding:true}:{})}:{...rest,...(_g?{require_grounding:true}:{})}})}));
  }
  setGrounding(id:string,on:boolean){
-   this.graph.update(g=>({...g,nodes:g.nodes.map(x=>{if(x.id!==id)return x;const {require_grounding:_g,...rest}=x;return on&&x.tools?.length?{...rest,require_grounding:true}:rest})}));
+   this.graph.update(g=>({...g,nodes:g.nodes.map(x=>{if(x.id!==id)return x;const {require_grounding:_g,...rest}=x;return on?{...rest,require_grounding:true}:rest})}));
  }
  updateToolBudget(id:string,value:number){
    const budget=clampToolBudget(value,this.toolLimits().max_tool_calls);

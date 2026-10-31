@@ -289,7 +289,7 @@ func (e *Engine) GetHistory(ctx context.Context, symbol string, provider market.
 
 	e.historyMu.Lock()
 	e.historyCache[key] = historyCacheEntry{fetched: time.Now(), series: series}
-	for len(e.historyCache) > 32 {
+	for len(e.historyCache) > 128 { // room for a full watchlist on several ranges
 		oldestKey := ""
 		oldest := time.Now()
 		for k, entry := range e.historyCache {
