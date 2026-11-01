@@ -43,6 +43,19 @@
           </ul>
         }
       }
+      @if (toolItems().length) {
+        <div class="sidebar-section">Tools</div>
+        <ul>
+          @for (item of toolItems(); track item.path) {
+            <li>
+              <a [routerLink]="item.path" routerLinkActive="active" ariaCurrentWhenActive="page" class="sidebar-link">
+                <i class="bi" [class]="item.icon" aria-hidden="true"></i>
+                <span>{{ item.label }}</span>
+              </a>
+            </li>
+          }
+        </ul>
+      }
     </nav>
 
     <div class="sidebar-footer">
