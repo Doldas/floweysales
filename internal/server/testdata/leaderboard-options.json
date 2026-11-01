@@ -1,0 +1,17 @@
+{
+ "universes": [
+  "us_mega",
+  "us_tech",
+  "us_dividend",
+  "se_large",
+  "eu_leaders"
+ ],
+ "strategies": [
+  "best",
+  "value",
+  "growth",
+  "momentum",
+  "quality",
+  "dip"
+ ]
+}

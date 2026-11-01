@@ -5,6 +5,7 @@ import {
   ForumPost,
   FinancialsResponse,
   HistorySeries,
+  LeaderboardResponse,
   MarketData,
   Order,
   OrderRequest,
@@ -67,6 +68,14 @@ export class MarketService {
       params['to_year'] = String(toYear);
     }
     return this.http.get<FinancialsResponse>('/api/financials', { params });
+  }
+
+  /** Ranks a preset universe, or up to 25 symbols, for a strategy. */
+  getLeaderboard(universe: string, strategy: string, symbols: string[] = []): Observable<LeaderboardResponse> {
+    const params: Record<string, string> = { strategy };
+    if (symbols.length) params['symbols'] = symbols.join(',');
+    else params['universe'] = universe;
+    return this.http.get<LeaderboardResponse>('/api/market/leaderboard', { params });
   }
 
   getStats(symbol: string): Observable<MarketStatsJSON> {

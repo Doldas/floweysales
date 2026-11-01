@@ -7,6 +7,7 @@ import { AgentSession } from '../core/agent-session';
 import { MarketState } from '../core/market-state';
 import { NotifyService } from '../core/notify.service';
 import { AssetInfoComponent } from '../components/asset-info';
+import { LeaderboardComponent } from '../components/leaderboard';
 import { TradingChartComponent } from '../components/chart';
 import { SymbolSearchComponent } from '../shell/symbol-search';
 import { INDICATOR_KEYS, INDICATOR_LABELS } from '../indicators';
@@ -14,11 +15,11 @@ import type { TrackedAsset } from '../services';
 
 interface Kpi { label: string; value: string; sub?: string; tone?: 'pos' | 'neg' | ''; icon: string }
 
-/** Markets: active instrument, trackers, chart with studies, insights and fundamentals. */
+/** Markets: active instrument, trackers, chart with studies, insights, fundamentals and the leaderboard. */
 @Component({
   selector: 'fs-markets-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, RouterLink, AssetInfoComponent, TradingChartComponent, SymbolSearchComponent],
+  imports: [DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, SymbolSearchComponent],
   templateUrl: './markets-page.html',
   styleUrl: './markets-page.scss',
 })

@@ -121,6 +121,49 @@ const pluginOverview = {
   trackers: { yahoo: ['NVDA'], finnhub: [] },
 };
 
+const boardUniverses = [
+  { id: 'us_mega', label: 'US mega caps', description: 'The 25 largest US-listed companies across sectors.' },
+  { id: 'us_tech', label: 'US technology', description: 'Large US software, semiconductor and internet companies.' },
+  { id: 'us_dividend', label: 'US dividend & value', description: 'Established US dividend payers.' },
+  { id: 'se_large', label: 'Sweden large caps', description: 'Stockholm large caps in the style of OMXS30.' },
+  { id: 'eu_leaders', label: 'European leaders', description: 'Large European companies.' },
+];
+const boardStrategies = [
+  { id: 'best', label: 'Best buy now', description: 'Balanced: reasonably priced, profitable, growing companies in an uptrend that are not overextended.' },
+  { id: 'value', label: 'Cheap & solid', description: 'High earnings yield and low PEG, backed by margins, at a calm entry.' },
+  { id: 'growth', label: 'Growth at a fair price', description: 'Fast, accelerating growth with value as a brake.' },
+  { id: 'momentum', label: 'Momentum leaders', description: 'The strongest 12-month and 3-month trends.' },
+  { id: 'quality', label: 'Quality compounders', description: 'The highest and steadiest margins.' },
+  { id: 'dip', label: 'Quality on a dip', description: 'Profitable companies that pulled back while the trend holds.' },
+];
+/** Same shape as GET /api/market/leaderboard; the order shifts with the strategy. */
+function leaderboard(universe, strategy) {
+  const base = [
+    ['GOOGL', 84, 'A', [82, 88, 74, 79, 70, 66], 172.4, 21.3, 14, 31, -6, 52, 'value: P/E 21.3, PEG 1.1; quality: net margin 28%, FCF margin 22%; momentum: 12-1M +31%, above 200-day', ''],
+    ['META', 79, 'A', [70, 90, 85, 76, 52, 44], 588.1, 26.8, 22, 44, -9, 58, 'quality: net margin 34%, FCF margin 30%; growth: revenue +22% y/y, EPS +35%; momentum: 12-1M +44%, above 200-day', ''],
+    ['MSFT', 74, 'B', [48, 92, 70, 66, 61, 80], 431.9, 34.1, 15, 18, -4, 49, 'quality: net margin 36%, FCF margin 28%; growth: revenue +15% y/y, EPS +18%; risk: volatility 19%, max drawdown -14%', ''],
+    ['JPM', 71, 'B', [90, 60, 55, 70, 64, 72], 214.6, 12.4, 9, 26, -3, 55, 'value: P/E 12.4, PEG 0.9; momentum: 12-1M +26%, above 200-day; risk: volatility 18%, max drawdown -12%', ''],
+    ['NVDA', 68, 'B', [36, 96, 98, 94, 18, 22], 121.4, 48.9, 94, 120, -2, 74, 'growth: revenue +94% y/y, EPS +110%; quality: net margin 55%, FCF margin 48%; momentum: 12-1M +120%, above 200-day', 'overbought'],
+    ['V', 64, 'B', [44, 86, 52, 58, 72, 88], 282.3, 29.5, 10, 14, -7, 46, 'quality: net margin 54%, FCF margin 52%; risk: volatility 15%, max drawdown -10%', ''],
+    ['AMZN', 61, 'C', [52, 58, 66, 72, 46, 50], 186.2, 38.2, 11, 29, -11, 61, 'momentum: 12-1M +29%, above 200-day; growth: revenue +11% y/y, EPS +56%', ''],
+    ['XOM', 55, 'C', [80, 52, 18, 40, 62, 60], 112.8, 13.9, -6, 4, -12, 43, 'value: P/E 13.9; timing: 12% below 52w high, RSI 43', 'shrinking_revenue'],
+    ['UNH', 47, 'D', [66, 54, 38, 12, 40, 46], 498.7, 18.2, 7, -18, -24, 33, 'value: P/E 18.2, PEG 1.6', 'below_sma200'],
+    ['TSLA', 38, 'D', [6, 30, 22, 48, 30, 10], 214.2, 66.1, -3, 8, -31, 39, 'momentum: 3M +12%', 'shrinking_revenue'],
+    ['INTC', 24, 'E', [12, 8, 6, 10, 44, 34], 21.6, undefined, -8, -42, -48, 41, '', 'below_sma200, unprofitable, shrinking_revenue'],
+  ];
+  const factors = ['value', 'quality', 'growth', 'momentum', 'timing', 'risk'];
+  const weight = { best: null, value: 0, growth: 2, momentum: 3, quality: 1, dip: 4 }[strategy] ?? null;
+  const rows = base.map(([symbol, score, grade, f, price, pe, rev, mom, high, rsi, reasons, flags]) => {
+    const s = weight === null ? score : Math.round((score + f[weight]) / 2);
+    const row = { symbol, score: s, grade, coverage_pct: 100, price, currency: 'USD', as_of: '2026-10-28', pe_ttm: pe, revenue_growth_pct: rev,
+      momentum_12_1_pct: mom, from_high_pct: high, rsi14: rsi, above_sma200: !flags.includes('below_sma200'), reasons, flags, ttm_through: '2026-09-30' };
+    factors.forEach((k, i) => { row[k] = f[i]; });
+    return row;
+  }).sort((a, b) => b.score - a.score).map((r, i) => ({ ...r, rank: i + 1 }));
+  return { universe, strategy, provider: 'YAHOO', as_of: '2026-10-28', generated_at: '2026-10-28T15:30:00Z', rows,
+    unranked: [{ symbol: 'BRK-B', error: 'fewer than four reported quarters' }], universes: boardUniverses, strategies: boardStrategies };
+}
+
 export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.read'], email = 'analyst@example.test' } = {}) {
   const u = new URL(url);
   const p = u.pathname;
@@ -137,6 +180,7 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     ], checked_at: NOW },
     '/api/history': history(q.get('symbol') ?? 'NVDA', q.get('range') ?? '1M'),
     '/api/financials': financials(q.get('symbol') ?? 'NVDA'),
+    '/api/market/leaderboard': leaderboard(q.get('universe') ?? 'custom', q.get('strategy') ?? 'best'),
     '/api/search': [{ symbol: 'NVDA', name: 'NVIDIA Corporation', type: 'EQUITY', exchange: 'NMS' }, { symbol: 'NVDL', name: 'GraniteShares 2x Long NVDA', type: 'ETF', exchange: 'NGM' }],
     '/api/orders': [],
     '/api/positions': { positions: [{ symbol: 'NVDA', quantity: 10, avg_entry: 110, cost_basis: 1100, last_price: 121.4, market_value: 1214, unrealized_pnl: 114, realized_pnl: 0, open_orders: 0, first_fill_at: NOW - 5 * DAY, last_fill_at: NOW - 5 * DAY }],

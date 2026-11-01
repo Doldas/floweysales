@@ -21,6 +21,14 @@ schedule; other users get an Output node and run the flow manually.
 | SEC filing monitor | SEC filings (8-K/10-Q/10-K) → Only new → agent summary with filing links → Notify | Every 6 h |
 | News catalyst digest | News headlines → Only new → agent groups catalysts and risks → Notify | Every 4 h |
 | Quality & value screen | Fundamentals → Screen growth, margin, P/E → table → grounded memo bullets | Weekly |
+| Top 10 buy-now leaderboard | Leaderboard (US mega caps, *Best buy now*, top 10) → table → grounded memo per pick | Daily |
+| New leaderboard entrants | Leaderboard top 10 → Only new (14 days per company) → table → Notify | Daily |
+| Cheap & solid bargains | Leaderboard (US dividend & value, *Cheap & solid*) → Screen `pe_ttm < 20`, margin, trend, growing revenue → table → value-trap memo | Weekly |
+| Growth at a reasonable price | Leaderboard (US technology, *Growth*) → Screen revenue growth ≥ 10% and `peg < 2` → table → memo | Weekly |
+| Momentum leaders alert | Leaderboard (*Momentum*) → Screen above 200-day, not overbought → Only new (7 days) → table → Notify | Daily |
+| Quality on a dip (Sweden) | Leaderboard (Sweden large caps, *Quality on a dip*) → Screen 8 %+ below the high, quality ≥ 60 → Only new (3 days) → table → agent (web search for admins) | Daily |
+| Quarterly reports, scored | SEC 10-Q/10-K → Only new → Leaderboard of the watchlist, kept to the filers → table → grounded "what changed" memo | Every 6 h |
+| Watchlist health check | Leaderboard of the watchlist → Screen score < 45 or warning flags → table → review notes | Weekly |
 
 Alert playbooks use **Skip when the input is empty**, so on quiet days nothing
 runs past the filter: no model calls, no messages.
@@ -41,6 +49,7 @@ every symbol fails. Outputs are JSON arrays of rows, at most 16 KB.
 | **Fundamentals** | `revenue_ttm`, `revenue_growth_pct`, `gross/operating/net/fcf_margin_pct`, `eps_ttm`, `eps_growth_pct`, `pe_ttm`, `ttm_through` | TTM from the four latest reported quarters; a figure is absent unless every quarter it needs was reported. P/E only when price and EPS share a currency |
 | **SEC filings** | `id` (accession), `form`, `filed`, `period_end`, `company`, `url` | SEC EDGAR, last 1–90 days (default 7), optional form filter. Needs `SEC_USER_AGENT` |
 | **News headlines** | `id` (URL), `title`, `source`, `published`, `summary`, `url` | From a provider plugin with the `news` capability (Yahoo, Finnhub); only http(s) links are kept |
+| **Leaderboard** | `rank`, `score`, `grade`, the six factor scores, `coverage_pct`, key figures, `reasons`, `flags` | See [Leaderboard](#leaderboard). A preset universe or a watchlist; passes on the top 1–25 |
 | **Screen** | the matching rows | Rule, sort (`-field` for descending) and limit; rows with `error` never pass |
 | **Only new since last run** | rows not passed on before | Remembers up to 2,000 keys per node for 180 days (Liquibase 032, `agent_flow_node_state`). Key: chosen fields, else `id`, `url` or `symbol`. A cooldown lets a row through again after N hours |
 | **Report table** | Markdown table | Columns chosen or automatic; empty input renders nothing |
@@ -74,6 +83,58 @@ has **Has rows / is not empty** and **Is empty** operators.
 figure in the answer must appear in the node input, for example the rows of a
 watchlist or fundamentals node; otherwise the attempt fails and its retries
 apply. This is how the brief and memo playbooks keep agents to the data.
+
+## Leaderboard
+
+The leaderboard ranks companies that look worth buying now. It is on the
+**Markets** page (pick a universe and a strategy, click a row to open the
+company, *Research the top 5* with the agent or *Automate as a flow*), in the
+Leaderboard flow node and at `GET /api/market/leaderboard?universe=…&strategy=…`
+(or `symbols=` with up to 25 tickers; readable by `research.read`).
+
+For every company it loads a year of daily prices and the reported quarters,
+then scores six factors. Each factor is the weighted average percentile of its
+metrics **within the ranked universe** (0 = worst, 100 = best of these):
+
+| Factor | Metrics |
+| --- | --- |
+| Value | earnings yield (1 / trailing P/E; losses count as −10 %), PEG (P/E ÷ EPS growth) |
+| Quality | operating, net, free-cash-flow and gross margin (TTM), profitable quarters of the last four |
+| Growth | TTM revenue and EPS growth year over year, revenue acceleration (latest quarter's growth minus the previous quarter's) |
+| Momentum | 12-1 month return (skips the latest month), 3-month return, trend points (above the 200-day average, bullish EMA stack, bullish MACD) |
+| Entry timing | closeness to a ~12 % pullback from the 52-week high and to RSI 45: cheaper than the peak, not broken, not overbought |
+| Risk | annualized volatility (lower is better), maximum drawdown over the year |
+
+Hard caps keep a relative ranking honest: a loss-making company scores at most
+15 on value, RSI 75+ at most 20 on timing, and a price below the 200-day
+average at most 35 on momentum. A metric only one company has is ignored; a
+factor with no data counts as 40 and lowers `coverage_pct`. A strategy weighs
+the factors into the score (grades A ≥ 75, B ≥ 62, C ≥ 48, D ≥ 35, else E):
+
+| Strategy | Value | Quality | Growth | Momentum | Timing | Risk |
+| --- | --- | --- | --- | --- | --- | --- |
+| Best buy now | 22 % | 20 % | 20 % | 18 % | 12 % | 8 % |
+| Cheap & solid | 50 % | 25 % | | | 15 % | 10 % |
+| Growth at a fair price | 20 % | 20 % | 45 % | 15 % | | |
+| Momentum leaders | | 10 % | 20 % | 60 % | | 10 % |
+| Quality compounders | 10 % | 50 % | 20 % | | | 20 % |
+| Quality on a dip | 20 % | 30 % | | 15 % | 35 % | |
+
+`reasons` cites the figures behind the strongest weighted factors and `flags`
+lists what to check before buying: `overbought`, `below_sma200`,
+`death_cross`, `unprofitable`, `shrinking_revenue`, `no_fundamentals`,
+`stale_price`. Screens can use both, e.g. `not (flags contains "overbought")`.
+
+Universes (Yahoo tickers): **US mega caps**, **US technology**, **US dividend &
+value** (25 each), **Sweden large caps** (30, OMXS30 style) and **European
+leaders** (25). A universe's metrics are reused for 15 minutes, so switching
+strategy is instant and concurrent viewers share one fetch. Symbols without
+data are listed as not ranked. When a node has a universe or watchlist and its
+input is JSON naming symbols (for example new filings), the whole list is
+ranked and only those symbols are passed on, each with its rank in the list.
+
+Scores compare companies with each other on reported and price data. They are
+not forecasts or price targets and nothing here trades.
 
 ## Notifications
 

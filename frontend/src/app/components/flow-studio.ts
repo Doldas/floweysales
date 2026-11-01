@@ -17,10 +17,10 @@ import { semanticIssues } from './flow-semantics';
 import { nearestPort, portPoints, wireFromDrag, edgeKey, wirePath, type PortPoint } from './wire-drag';
 import { bindInputPin, declaredPins, mixesPinAndPlainInputs, pinBindings, pinEdgeProblem, pinOffset, routeOutputPin, unboundInputPins } from './function-pins';
 import { FlowNotifyChannelsComponent } from './flow-notify-channels';
-import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, SCREEN_FIELDS, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes';
+import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES, SCREEN_FIELDS, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'|'watchlist_quotes'|'technical_scan'|'fundamentals'|'sec_filings'|'news'|'screen'|'only_new'|'report_table'|'notify'; label:string; symbols?:string; provider?:string; rule?:string; sort_by?:string; limit?:number; columns?:string; title?:string; key_fields?:string; cooldown_hours?:number; lookback_days?:number; forms?:string; channel?:'email'|'webhook'; subject?:string; skip_empty?:boolean; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number;require_grounding?:boolean; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'|'watchlist_quotes'|'technical_scan'|'fundamentals'|'sec_filings'|'news'|'leaderboard'|'screen'|'only_new'|'report_table'|'notify'; label:string; symbols?:string; universe?:string; strategy?:string; provider?:string; rule?:string; sort_by?:string; limit?:number; columns?:string; title?:string; key_fields?:string; cooldown_hours?:number; lookback_days?:number; forms?:string; channel?:'email'|'webhook'; subject?:string; skip_empty?:boolean; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number;require_grounding?:boolean; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FunctionDef { id:number; name:string; graph?:unknown }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
@@ -238,6 +238,17 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
          <label>Watchlist (up to 25 symbols) <textarea rows="2" spellcheck="false" [ngModel]="n.symbols||''" (ngModelChange)="updateInvestor(n.id,'symbols',$event)" maxlength="600" placeholder="AAPL, MSFT, VOLV-B.ST"></textarea></label>
          <p class="muted">Leave empty to use the symbols in this node's input, for example the rows of a screen or another watchlist node.</p>
          @if(n.type!=='sec_filings'){<label>Provider <select [ngModel]="n.provider||''" (ngModelChange)="updateInvestor(n.id,'provider',$event)"><option value="">{{n.type==='news'?'First provider with news':'Server default'}}</option>@for(p of providers();track p.id){<option [value]="p.id">{{p.label||p.id}}</option>}</select></label>}
+        }
+        @if(n.type==='leaderboard'){
+         <label>Rank <select [ngModel]="n.universe||''" (ngModelChange)="setLeaderboardUniverse(n.id,$event)">@for(u of leaderboardUniverses;track u.id){<option [value]="u.id">{{u.label}}</option>}<option value="">My watchlist, or the symbols in the input</option></select></label>
+         @if(!n.universe){
+          <label>Watchlist (up to 25 symbols) <textarea rows="2" spellcheck="false" [ngModel]="n.symbols||''" (ngModelChange)="updateInvestor(n.id,'symbols',$event)" maxlength="600" placeholder="AAPL, MSFT, VOLV-B.ST"></textarea></label>
+         }
+         <p class="muted">With a universe or watchlist set and symbol rows in the input (for example new filings), the whole list is ranked and only the input's symbols are passed on, with their rank.</p>
+         <label>Strategy <select [ngModel]="n.strategy||'best'" (ngModelChange)="updateInvestor(n.id,'strategy',$event==='best'?'':$event)">@for(s of leaderboardStrategies;track s.id){<option [value]="s.id">{{s.label}}</option>}</select></label>
+         <label>Provider <select [ngModel]="n.provider||''" (ngModelChange)="updateInvestor(n.id,'provider',$event)"><option value="">Server default</option>@for(p of providers();track p.id){<option [value]="p.id">{{p.label||p.id}}</option>}</select></label>
+         <label>Pass on the top (1–25) <input type="number" min="1" max="25" [ngModel]="n.limit||10" (ngModelChange)="updateInvestorNumber(n.id,'limit',+$event,1,25)"></label>
+         <p class="muted">Each factor is a 0–100 percentile within the ranked list; a missing factor counts as 40. Rows carry rank, score, grade, the six factor scores, key figures, reasons and flags such as overbought or below_sma200.</p>
         }
         @if(n.type==='sec_filings'){
          <label>Forms <input [ngModel]="n.forms||''" (ngModelChange)="updateInvestor(n.id,'forms',$event)" maxlength="80" placeholder="8-K, 10-Q, 10-K (empty: all)"></label>
@@ -660,7 +671,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
  .flow-node-accent{fill:var(--fs-accent)}
  .flow-node-accent[data-type=trigger]{fill:#0ea5e9}.flow-node-accent[data-type=output]{fill:#10b981}.flow-node-accent[data-type=condition],.flow-node-accent[data-type=loop]{fill:#f59e0b}
  .flow-node-accent[data-type=workspace_write],.flow-node-accent[data-type=emit_event]{fill:#ef4444}.flow-node-accent[data-type=http_get],.flow-node-accent[data-type=web_search],.flow-node-accent[data-type=web_crawl]{fill:#14b8a6}
- .flow-node-accent[data-type=watchlist_quotes],.flow-node-accent[data-type=technical_scan],.flow-node-accent[data-type=fundamentals],.flow-node-accent[data-type=sec_filings],.flow-node-accent[data-type=news]{fill:#f59e0b}.flow-node-accent[data-type=screen],.flow-node-accent[data-type=only_new],.flow-node-accent[data-type=report_table]{fill:#8b5cf6}.flow-node-accent[data-type=notify]{fill:#ef4444}
+ .flow-node-accent[data-type=watchlist_quotes],.flow-node-accent[data-type=technical_scan],.flow-node-accent[data-type=fundamentals],.flow-node-accent[data-type=sec_filings],.flow-node-accent[data-type=news],.flow-node-accent[data-type=leaderboard]{fill:#f59e0b}.flow-node-accent[data-type=screen],.flow-node-accent[data-type=only_new],.flow-node-accent[data-type=report_table]{fill:#8b5cf6}.flow-node-accent[data-type=notify]{fill:#ef4444}
  .field-hints{display:flex;flex-wrap:wrap;gap:4px;align-items:center}.field-chip{border:1px solid var(--fs-border);background:var(--fs-surface-2);color:var(--fs-text);border-radius:999px;padding:1px 8px;font:inherit;font-size:.75rem}.field-chip:hover{border-color:var(--fs-accent)}
  .node-type{fill:var(--fs-node-sub);font-weight:600;letter-spacing:.04em}
  .node-label{fill:var(--fs-node-text);font-weight:600}
@@ -1174,13 +1185,17 @@ export class FlowStudioComponent {
    this.graph.update(g=>({...g,version:2,nodes:[...g.nodes,{id,type:spec.type,label:spec.label,...spec.defaults,x:260+(count%4)*140,y:40+Math.floor(count/4)*100} as FlowNode]}));
    this.chosen.set(id);
  }
- updateInvestor(id:string,field:'symbols'|'provider'|'rule'|'sort_by'|'columns'|'title'|'key_fields'|'forms'|'channel'|'subject'|'skip_empty',value:string|boolean):void{
+ updateInvestor(id:string,field:'symbols'|'universe'|'strategy'|'provider'|'rule'|'sort_by'|'columns'|'title'|'key_fields'|'forms'|'channel'|'subject'|'skip_empty',value:string|boolean):void{
    this.graph.update(g=>({...g,nodes:g.nodes.map(n=>{if(n.id!==id)return n;const next:FlowNode={...n};if(value===''||value===false)delete (next as unknown as Record<string,unknown>)[field];else (next as unknown as Record<string,unknown>)[field]=value;return next})}));
  }
  updateInvestorNumber(id:string,field:'limit'|'lookback_days'|'cooldown_hours',value:number,min:number,max:number):void{
    const safe=Number.isFinite(value)?Math.max(min,Math.min(max,Math.trunc(value))):min;
    this.graph.update(g=>({...g,nodes:g.nodes.map(n=>{if(n.id!==id)return n;const next:FlowNode={...n};if(!safe)delete next[field];else next[field]=safe;return next})}));
  }
+ readonly leaderboardUniverses=LEADERBOARD_UNIVERSES;
+ readonly leaderboardStrategies=LEADERBOARD_STRATEGIES;
+ /** A preset universe replaces the node's own watchlist. */
+ setLeaderboardUniverse(id:string,universe:string):void{this.updateInvestor(id,'universe',universe);if(universe)this.updateInvestor(id,'symbols','')}
  /** The node feeding a screen, used to suggest field names. */
  private screenSource(id:string):FlowNode|undefined{const e=this.graph().edges.find(x=>x.to===id);return e?this.node(e.from):undefined}
  screenFields(id:string):string[]{

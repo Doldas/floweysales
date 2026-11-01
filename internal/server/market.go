@@ -361,7 +361,7 @@ func (e *Engine) GetFinancialsRange(ctx context.Context, symbol string, provider
 
 	e.financialsMu.Lock()
 	e.financialsCache[key] = financialsCacheEntry{fetched: time.Now(), res: res}
-	for len(e.financialsCache) > 48 {
+	for len(e.financialsCache) > 160 { // room for the largest leaderboard universes
 		oldestKey := ""
 		oldest := time.Now()
 		for k, entry := range e.financialsCache {

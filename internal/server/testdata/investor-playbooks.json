@@ -943,5 +943,1376 @@
    ]
   },
   "note": "Weekly screen on trailing-twelve-month figures. Adjust the thresholds in the screen rule."
+ },
+ "top10-buy-now/admin": {
+  "name": "Top 10 buy-now leaderboard",
+  "intervalMinutes": 1440,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Score & rank",
+     "universe": "us_mega",
+     "strategy": "best",
+     "limit": 10,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Leaderboard",
+     "title": "Top 10 to research now",
+     "columns": "rank,symbol,score,grade,pe_ttm,revenue_growth_pct,momentum_12_1_pct,from_high_pct,reasons,flags",
+     "skip_empty": true,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "Pick memos",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. Keep the table at the top. Then for each company, in rank order, write two lines: why it ranks there (cite the strongest factor scores and their figures from reasons) and what to check before buying (flags, weakest factor, the next quarterly report). End with one paragraph on what the top 10 have in common. Research, not a recommendation.",
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Top 10 leaderboard {{date}}",
+     "x": 740,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Ranks the US mega caps universe; change the universe or strategy on the leaderboard node, or set your own watchlist of up to 25 symbols."
+ },
+ "top10-buy-now/user": {
+  "name": "Top 10 buy-now leaderboard",
+  "intervalMinutes": 1440,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Score & rank",
+     "universe": "us_mega",
+     "strategy": "best",
+     "limit": 10,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Leaderboard",
+     "title": "Top 10 to research now",
+     "columns": "rank,symbol,score,grade,pe_ttm,revenue_growth_pct,momentum_12_1_pct,from_high_pct,reasons,flags",
+     "skip_empty": true,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "Pick memos",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. Keep the table at the top. Then for each company, in rank order, write two lines: why it ranks there (cite the strongest factor scores and their figures from reasons) and what to check before buying (flags, weakest factor, the next quarterly report). End with one paragraph on what the top 10 have in common. Research, not a recommendation.",
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 740,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Ranks the US mega caps universe; change the universe or strategy on the leaderboard node, or set your own watchlist of up to 25 symbols."
+ },
+ "leaderboard-entrants/admin": {
+  "name": "New leaderboard entrants",
+  "intervalMinutes": 1440,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Top 10",
+     "universe": "us_mega",
+     "strategy": "best",
+     "limit": 10,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "New in top 10",
+     "key_fields": "symbol",
+     "cooldown_hours": 336,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Entrants",
+     "title": "New in the top 10",
+     "columns": "rank,symbol,score,grade,reasons,flags,price,as_of",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "{{count}} new leaderboard entrant(s) {{date}}",
+     "x": 740,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "The first run reports the whole top 10; after that only companies that enter it, at most once every 14 days each."
+ },
+ "leaderboard-entrants/user": {
+  "name": "New leaderboard entrants",
+  "intervalMinutes": 1440,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Top 10",
+     "universe": "us_mega",
+     "strategy": "best",
+     "limit": 10,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "New in top 10",
+     "key_fields": "symbol",
+     "cooldown_hours": 336,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Entrants",
+     "title": "New in the top 10",
+     "columns": "rank,symbol,score,grade,reasons,flags,price,as_of",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 740,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "The first run reports the whole top 10; after that only companies that enter it, at most once every 14 days each."
+ },
+ "value-bargains/admin": {
+  "name": "Cheap & solid bargains",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Rank for value",
+     "universe": "us_dividend",
+     "strategy": "value",
+     "limit": 25,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "screen",
+     "type": "screen",
+     "label": "Bargains",
+     "rule": "pe_ttm < 20 and net_margin_pct >= 8 and above_sma200 and not (flags contains \"shrinking_revenue\")",
+     "sort_by": "-score",
+     "limit": 10,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Shortlist",
+     "title": "Cheap & solid shortlist",
+     "columns": "rank,symbol,score,pe_ttm,earnings_yield_pct,net_margin_pct,revenue_growth_pct,from_high_pct,ttm_through",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "Value memo",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. Keep the table at the top. For each company: the facts that make it cheap (P/E, earnings yield, margins), the assumption that must hold for the discount to close, and the value-trap risk (low growth, falling margins). Research, not a recommendation.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Value bargains {{date}}",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "screen"
+    },
+    {
+     "from": "screen",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Weekly. A low P/E alone is not a bargain: the screen also asks for margins, an intact trend and growing revenue."
+ },
+ "value-bargains/user": {
+  "name": "Cheap & solid bargains",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Rank for value",
+     "universe": "us_dividend",
+     "strategy": "value",
+     "limit": 25,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "screen",
+     "type": "screen",
+     "label": "Bargains",
+     "rule": "pe_ttm < 20 and net_margin_pct >= 8 and above_sma200 and not (flags contains \"shrinking_revenue\")",
+     "sort_by": "-score",
+     "limit": 10,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Shortlist",
+     "title": "Cheap & solid shortlist",
+     "columns": "rank,symbol,score,pe_ttm,earnings_yield_pct,net_margin_pct,revenue_growth_pct,from_high_pct,ttm_through",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "Value memo",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. Keep the table at the top. For each company: the facts that make it cheap (P/E, earnings yield, margins), the assumption that must hold for the discount to close, and the value-trap risk (low growth, falling margins). Research, not a recommendation.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "screen"
+    },
+    {
+     "from": "screen",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Weekly. A low P/E alone is not a bargain: the screen also asks for margins, an intact trend and growing revenue."
+ },
+ "garp-growth/admin": {
+  "name": "Growth at a reasonable price",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Rank for growth",
+     "universe": "us_tech",
+     "strategy": "growth",
+     "limit": 25,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "screen",
+     "type": "screen",
+     "label": "Fair-priced growth",
+     "rule": "revenue_growth_pct >= 10 and peg < 2 and not (flags contains \"unprofitable\")",
+     "sort_by": "-score",
+     "limit": 10,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Shortlist",
+     "title": "Growth at a reasonable price",
+     "columns": "rank,symbol,score,revenue_growth_pct,eps_growth_pct,pe_ttm,peg,net_margin_pct,ttm_through",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "Growth memo",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. Keep the table at the top. For each company: the growth the numbers show, what has to keep going right for the PEG to stay reasonable, and the first sign that would break the thesis. Research, not a recommendation.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Growth at a reasonable price {{date}}",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "screen"
+    },
+    {
+     "from": "screen",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "PEG is the trailing P/E divided by trailing EPS growth; companies with shrinking EPS have none and do not pass."
+ },
+ "garp-growth/user": {
+  "name": "Growth at a reasonable price",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Rank for growth",
+     "universe": "us_tech",
+     "strategy": "growth",
+     "limit": 25,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "screen",
+     "type": "screen",
+     "label": "Fair-priced growth",
+     "rule": "revenue_growth_pct >= 10 and peg < 2 and not (flags contains \"unprofitable\")",
+     "sort_by": "-score",
+     "limit": 10,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Shortlist",
+     "title": "Growth at a reasonable price",
+     "columns": "rank,symbol,score,revenue_growth_pct,eps_growth_pct,pe_ttm,peg,net_margin_pct,ttm_through",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "Growth memo",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. Keep the table at the top. For each company: the growth the numbers show, what has to keep going right for the PEG to stay reasonable, and the first sign that would break the thesis. Research, not a recommendation.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "screen"
+    },
+    {
+     "from": "screen",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "PEG is the trailing P/E divided by trailing EPS growth; companies with shrinking EPS have none and do not pass."
+ },
+ "momentum-leaders/admin": {
+  "name": "Momentum leaders alert",
+  "intervalMinutes": 1440,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Rank for momentum",
+     "universe": "us_mega",
+     "strategy": "momentum",
+     "limit": 10,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "screen",
+     "type": "screen",
+     "label": "Healthy trends",
+     "rule": "above_sma200 and momentum >= 60 and not (flags contains \"overbought\")",
+     "sort_by": "rank",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "Once a week",
+     "key_fields": "symbol",
+     "cooldown_hours": 168,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Leaders",
+     "title": "Momentum leaders",
+     "columns": "rank,symbol,score,momentum_12_1_pct,change_3m_pct,rsi14,from_high_pct,as_of",
+     "skip_empty": true,
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Momentum leaders {{date}}",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "screen"
+    },
+    {
+     "from": "screen",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Leaves out overbought names (RSI 70+) so you hear about strong trends at a calmer entry."
+ },
+ "momentum-leaders/user": {
+  "name": "Momentum leaders alert",
+  "intervalMinutes": 1440,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Rank for momentum",
+     "universe": "us_mega",
+     "strategy": "momentum",
+     "limit": 10,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "screen",
+     "type": "screen",
+     "label": "Healthy trends",
+     "rule": "above_sma200 and momentum >= 60 and not (flags contains \"overbought\")",
+     "sort_by": "rank",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "Once a week",
+     "key_fields": "symbol",
+     "cooldown_hours": 168,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Leaders",
+     "title": "Momentum leaders",
+     "columns": "rank,symbol,score,momentum_12_1_pct,change_3m_pct,rsi14,from_high_pct,as_of",
+     "skip_empty": true,
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "screen"
+    },
+    {
+     "from": "screen",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Leaves out overbought names (RSI 70+) so you hear about strong trends at a calmer entry."
+ },
+ "quality-dip/admin": {
+  "name": "Quality on a dip (Sweden)",
+  "intervalMinutes": 1440,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Rank for dips",
+     "universe": "se_large",
+     "strategy": "dip",
+     "limit": 25,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "screen",
+     "type": "screen",
+     "label": "Real dips",
+     "rule": "from_high_pct <= -8 and quality >= 60 and above_sma200",
+     "sort_by": "-score",
+     "limit": 8,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "New dips",
+     "key_fields": "symbol",
+     "cooldown_hours": 72,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Dips",
+     "title": "Quality on a dip",
+     "columns": "rank,symbol,score,from_high_pct,rsi14,quality,net_margin_pct,pe_ttm,as_of",
+     "skip_empty": true,
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "why",
+     "type": "agent",
+     "label": "Why it fell",
+     "skip_empty": true,
+     "prompt": "Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. Keep the table at the top. For each company, say how far it is below its high and what its quality score rests on. Then give the likely reason for the pullback only if you can source it, otherwise say it is unexplained and what to look up. Research, not a recommendation.",
+     "tools": [
+      "search_web"
+     ],
+     "max_tool_calls": 6,
+     "timeout_seconds": 90,
+     "x": 915,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Quality on a dip {{date}}",
+     "x": 1090,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "screen"
+    },
+    {
+     "from": "screen",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "why"
+    },
+    {
+     "from": "why",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Uses the Sweden large caps universe. A company is reported again after 3 days at most."
+ },
+ "quality-dip/user": {
+  "name": "Quality on a dip (Sweden)",
+  "intervalMinutes": 1440,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Rank for dips",
+     "universe": "se_large",
+     "strategy": "dip",
+     "limit": 25,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "screen",
+     "type": "screen",
+     "label": "Real dips",
+     "rule": "from_high_pct <= -8 and quality >= 60 and above_sma200",
+     "sort_by": "-score",
+     "limit": 8,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "New dips",
+     "key_fields": "symbol",
+     "cooldown_hours": 72,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Dips",
+     "title": "Quality on a dip",
+     "columns": "rank,symbol,score,from_high_pct,rsi14,quality,net_margin_pct,pe_ttm,as_of",
+     "skip_empty": true,
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "why",
+     "type": "agent",
+     "label": "Why it fell",
+     "skip_empty": true,
+     "prompt": "Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. Keep the table at the top. For each company, say how far it is below its high and what its quality score rests on. Then give the likely reason for the pullback only if you can source it, otherwise say it is unexplained and what to look up. Research, not a recommendation.",
+     "x": 915,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 1090,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "screen"
+    },
+    {
+     "from": "screen",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "why"
+    },
+    {
+     "from": "why",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Uses the Sweden large caps universe. A company is reported again after 3 days at most."
+ },
+ "earnings-scored/admin": {
+  "name": "Quarterly reports, scored",
+  "intervalMinutes": 360,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "filings",
+     "type": "sec_filings",
+     "label": "New reports",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "forms": "10-Q, 10-K",
+     "lookback_days": 7,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "Not seen yet",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Score the filers",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "strategy": "best",
+     "limit": 25,
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Scores",
+     "title": "Fresh quarterly reports, scored",
+     "columns": "rank,symbol,score,grade,revenue_growth_pct,eps_growth_pct,net_margin_pct,pe_ttm,ttm_through,flags",
+     "skip_empty": true,
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "What changed",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. These companies just filed a quarterly or annual report; their rank is within the whole watchlist. Keep the table at the top. For each: what the trailing-twelve-month figures show now, how it ranks against the watchlist and why, and what to read in the filing next. Research, not a recommendation.",
+     "x": 915,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Quarterly reports scored {{date}}",
+     "x": 1090,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "filings"
+    },
+    {
+     "from": "filings",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Needs SEC_USER_AGENT. The leaderboard ranks your whole watchlist and keeps only the companies that just filed, so nothing is scored on quiet days."
+ },
+ "earnings-scored/user": {
+  "name": "Quarterly reports, scored",
+  "intervalMinutes": 360,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "filings",
+     "type": "sec_filings",
+     "label": "New reports",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "forms": "10-Q, 10-K",
+     "lookback_days": 7,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "Not seen yet",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Score the filers",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "strategy": "best",
+     "limit": 25,
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Scores",
+     "title": "Fresh quarterly reports, scored",
+     "columns": "rank,symbol,score,grade,revenue_growth_pct,eps_growth_pct,net_margin_pct,pe_ttm,ttm_through,flags",
+     "skip_empty": true,
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "What changed",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. These companies just filed a quarterly or annual report; their rank is within the whole watchlist. Keep the table at the top. For each: what the trailing-twelve-month figures show now, how it ranks against the watchlist and why, and what to read in the filing next. Research, not a recommendation.",
+     "x": 915,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 1090,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "filings"
+    },
+    {
+     "from": "filings",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Needs SEC_USER_AGENT. The leaderboard ranks your whole watchlist and keeps only the companies that just filed, so nothing is scored on quiet days."
+ },
+ "watchlist-health/admin": {
+  "name": "Watchlist health check",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Score watchlist",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "strategy": "best",
+     "limit": 25,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "laggards",
+     "type": "screen",
+     "label": "Laggards",
+     "rule": "score < 45 or flags contains \"below_sma200\" or flags contains \"unprofitable\" or flags contains \"shrinking_revenue\"",
+     "sort_by": "score",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Laggards",
+     "title": "Watchlist laggards",
+     "columns": "rank,symbol,score,grade,flags,from_high_pct,revenue_growth_pct,net_margin_pct",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "Review notes",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. Keep the table at the top. For each laggard: which factor or flag pulled it down, what would repair the thesis, and what would confirm it is broken. Do not tell anyone to sell; this is a review list.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Watchlist health check {{date}}",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "laggards"
+    },
+    {
+     "from": "laggards",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Weekly. Silent when every company on the watchlist scores 45 or more with no warning flags."
+ },
+ "watchlist-health/user": {
+  "name": "Watchlist health check",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Score watchlist",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "strategy": "best",
+     "limit": 25,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "laggards",
+     "type": "screen",
+     "label": "Laggards",
+     "rule": "score < 45 or flags contains \"below_sma200\" or flags contains \"unprofitable\" or flags contains \"shrinking_revenue\"",
+     "sort_by": "score",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Laggards",
+     "title": "Watchlist laggards",
+     "columns": "rank,symbol,score,grade,flags,from_high_pct,revenue_growth_pct,net_margin_pct",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "Review notes",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. Keep the table at the top. For each laggard: which factor or flag pulled it down, what would repair the thesis, and what would confirm it is broken. Do not tell anyone to sell; this is a review list.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "laggards"
+    },
+    {
+     "from": "laggards",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Weekly. Silent when every company on the watchlist scores 45 or more with no warning flags."
  }
 }

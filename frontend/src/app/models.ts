@@ -283,3 +283,35 @@ export interface ToolCall {
     arguments: string;
   };
 }
+
+/** One ranked company from GET /api/market/leaderboard (see leaderboard.go). */
+export interface LeaderboardRow {
+  rank: number;
+  symbol: string;
+  score: number;
+  grade: string;
+  coverage_pct: number;
+  value?: number; quality?: number; growth?: number; momentum?: number; timing?: number; risk?: number;
+  price?: number; currency?: string; as_of?: string;
+  pe_ttm?: number; peg?: number; earnings_yield_pct?: number;
+  revenue_growth_pct?: number; eps_growth_pct?: number; net_margin_pct?: number; fcf_margin_pct?: number;
+  change_1m_pct?: number; change_3m_pct?: number; change_1y_pct?: number; momentum_12_1_pct?: number;
+  from_high_pct?: number; rsi14?: number; above_sma200?: boolean; volatility_pct?: number; max_drawdown_pct?: number;
+  ttm_through?: string;
+  reasons: string;
+  flags: string;
+}
+
+export interface LeaderboardOption { id: string; label: string; description: string }
+
+export interface LeaderboardResponse {
+  universe: string;
+  strategy: string;
+  provider: string;
+  as_of: string;
+  generated_at: string;
+  rows: LeaderboardRow[];
+  unranked: { symbol: string; error: string }[];
+  universes: LeaderboardOption[];
+  strategies: LeaderboardOption[];
+}

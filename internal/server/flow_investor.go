@@ -29,7 +29,7 @@ const (
 
 var investorNodeTypes = map[string]bool{
 	"watchlist_quotes": true, "technical_scan": true, "fundamentals": true, "sec_filings": true,
-	"news": true, "screen": true, "only_new": true, "report_table": true, "notify": true,
+	"news": true, "leaderboard": true, "screen": true, "only_new": true, "report_table": true, "notify": true,
 }
 
 // flowSymbols reads the node's watchlist, or, when it has none, the symbols
@@ -781,7 +781,7 @@ func validateInvestorNode(n flowNode, version int) error {
 	if version != 2 {
 		return fmt.Errorf("node %s: investor nodes require graph version 2", n.ID)
 	}
-	if len(n.Symbols) > 600 || len(n.Provider) > 32 || len(n.Rule) > 500 || len(n.SortBy) > 64 || len(n.Columns) > 300 || len(n.KeyFields) > 120 || len(n.Subject) > 150 || len(n.Forms) > 80 {
+	if len(n.Symbols) > 600 || len(n.Provider) > 32 || len(n.Rule) > 500 || len(n.SortBy) > 64 || len(n.Columns) > 300 || len(n.KeyFields) > 120 || len(n.Subject) > 150 || len(n.Forms) > 80 || len(n.Universe) > 32 || len(n.Strategy) > 32 {
 		return fmt.Errorf("node %s: setting is too long", n.ID)
 	}
 	if n.Provider != "" && !market.ParseProvider(n.Provider).Valid() {
@@ -795,7 +795,14 @@ func validateInvestorNode(n flowNode, version int) error {
 	if n.Limit < 0 || n.Limit > 100 || n.LookbackDays < 0 || n.LookbackDays > 90 || n.CooldownHours < 0 || n.CooldownHours > 24*90 {
 		return fmt.Errorf("node %s: limit must be 0–100, lookback 0–90 days and cooldown 0–2160 hours", n.ID)
 	}
+	if (n.Universe != "" || n.Strategy != "") && n.Type != "leaderboard" {
+		return fmt.Errorf("node %s: universe and strategy are leaderboard settings", n.ID)
+	}
 	switch n.Type {
+	case "leaderboard":
+		if err := validateLeaderboardNode(n); err != nil {
+			return err
+		}
 	case "screen":
 		if _, err := parseScreenRule(n.Rule); strings.TrimSpace(n.Rule) != "" && err != nil {
 			return fmt.Errorf("node %s: %w", n.ID, err)
@@ -851,6 +858,9 @@ func (e *Engine) runInvestorNode(ctx context.Context, f storage.AgentFlow, n flo
 		return output, note, err
 	case "only_new":
 		output, _, err = e.filterOnlyNew(ctx, f.ID, n, input, time.Now())
+		return output, "", err
+	case "leaderboard":
+		output, err = e.runLeaderboardNode(ctx, n, input)
 		return output, "", err
 	case "notify":
 		if flowEmpty(input) {

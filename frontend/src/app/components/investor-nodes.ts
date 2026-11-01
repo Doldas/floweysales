@@ -5,7 +5,7 @@
  */
 
 export type InvestorNodeType =
-  'watchlist_quotes' | 'technical_scan' | 'fundamentals' | 'sec_filings' | 'news' |
+  'watchlist_quotes' | 'technical_scan' | 'fundamentals' | 'sec_filings' | 'news' | 'leaderboard' |
   'screen' | 'only_new' | 'report_table' | 'notify';
 
 export interface InvestorNodeSpec {
@@ -30,6 +30,8 @@ export const INVESTOR_NODES: readonly InvestorNodeSpec[] = [
     description: 'Filings made in the last days, from SEC EDGAR, with links to the documents.' },
   { type: 'news', label: 'News headlines', tag: '✎ NEWS', admin: false, defaults: { symbols: DEFAULT_WATCHLIST, limit: 5, lookback_days: 3 },
     description: 'Recent headlines per symbol from an installed provider plugin with the news capability.' },
+  { type: 'leaderboard', label: 'Leaderboard (score & rank)', tag: '★ LEADERBOARD', admin: false, defaults: { universe: 'us_mega', strategy: 'best', limit: 10 },
+    description: 'Scores a universe on value, quality, growth, momentum, entry timing and risk from quarterly reports and prices, then ranks it for a strategy.' },
   { type: 'screen', label: 'Screen (filter rows)', tag: '⧩ SCREEN', admin: false, defaults: { rule: 'change_1d_pct <= -3' },
     description: 'Keeps the rows that match a rule such as rsi14 < 30 and above_sma200, then sorts and limits them.' },
   { type: 'only_new', label: 'Only new since last run', tag: '✓ ONLY NEW', admin: false, defaults: {},
@@ -39,6 +41,26 @@ export const INVESTOR_NODES: readonly InvestorNodeSpec[] = [
   { type: 'notify', label: 'Notify (email / chat)', tag: '✉ NOTIFY', admin: true, defaults: { channel: 'email', subject: '{{flow}}: {{count}} item(s) on {{date}}' },
     description: 'Emails the flow owner or posts to the configured Slack, Discord or Teams webhook. Empty input sends nothing.' },
 ];
+
+/** Mirrors leaderboardUniverses and leaderboardStrategies in leaderboard.go. */
+export const LEADERBOARD_UNIVERSES: readonly { id: string; label: string }[] = [
+  { id: 'us_mega', label: 'US mega caps' },
+  { id: 'us_tech', label: 'US technology' },
+  { id: 'us_dividend', label: 'US dividend & value' },
+  { id: 'se_large', label: 'Sweden large caps' },
+  { id: 'eu_leaders', label: 'European leaders' },
+];
+
+export const LEADERBOARD_STRATEGIES: readonly { id: string; label: string }[] = [
+  { id: 'best', label: 'Best buy now' },
+  { id: 'value', label: 'Cheap & solid' },
+  { id: 'growth', label: 'Growth at a fair price' },
+  { id: 'momentum', label: 'Momentum leaders' },
+  { id: 'quality', label: 'Quality compounders' },
+  { id: 'dip', label: 'Quality on a dip' },
+];
+
+export const LEADERBOARD_FACTORS = ['value', 'quality', 'growth', 'momentum', 'timing', 'risk'] as const;
 
 const byType = new Map(INVESTOR_NODES.map(n => [n.type, n]));
 
@@ -57,6 +79,8 @@ export const SCREEN_FIELDS: Record<string, string[]> = {
   fundamentals: ['revenue_ttm', 'revenue_growth_pct', 'gross_margin_pct', 'operating_margin_pct', 'net_margin_pct', 'fcf_margin_pct', 'eps_ttm', 'eps_growth_pct', 'pe_ttm'],
   sec_filings: ['form', 'filed', 'company', 'period_end'],
   news: ['title', 'source', 'published', 'summary'],
+  leaderboard: ['rank', 'score', 'grade', ...LEADERBOARD_FACTORS, 'coverage_pct', 'flags', 'pe_ttm', 'peg', 'earnings_yield_pct', 'revenue_growth_pct', 'eps_growth_pct',
+    'net_margin_pct', 'fcf_margin_pct', 'change_3m_pct', 'momentum_12_1_pct', 'from_high_pct', 'rsi14', 'above_sma200', 'volatility_pct', 'max_drawdown_pct'],
 };
 
 /** Splits a watchlist the way the server does; returns the problem, if any. */
@@ -92,11 +116,29 @@ export const INVESTOR_PLAYBOOKS: readonly PlaybookInfo[] = [
     description: 'New headlines for your watchlist, grouped into catalysts and risks with links. Silent when nothing is new.' },
   { id: 'quality-screen', label: 'Quality & value screen', icon: 'bi-funnel', schedule: 'Weekly',
     description: 'Screens for growth, margins and a reasonable P/E, then drafts memo bullets that separate facts from assumptions.' },
+  { id: 'top10-buy-now', label: 'Top 10 buy-now leaderboard', icon: 'bi-trophy', schedule: 'Daily',
+    description: 'Scores 25 US mega caps on quarterly reports, valuation, trend, entry timing and risk, ranks the top 10 and writes a grounded memo per pick.' },
+  { id: 'leaderboard-entrants', label: 'New leaderboard entrants', icon: 'bi-box-arrow-in-up-right', schedule: 'Daily',
+    description: 'Alerts when a company enters the top 10 of the buy-now leaderboard, at most once per company every two weeks.' },
+  { id: 'value-bargains', label: 'Cheap & solid bargains', icon: 'bi-piggy-bank', schedule: 'Weekly',
+    description: 'Low P/E dividend and value stocks that are still profitable and above their 200-day average, with a facts-vs-assumptions memo.' },
+  { id: 'garp-growth', label: 'Growth at a reasonable price', icon: 'bi-rocket-takeoff', schedule: 'Weekly',
+    description: 'Tech companies growing revenue 10%+ with a PEG under 2, ranked for growth, with what has to keep going right.' },
+  { id: 'momentum-leaders', label: 'Momentum leaders alert', icon: 'bi-speedometer2', schedule: 'Daily',
+    description: 'The strongest uptrends that are not overbought, reported once a week per company.' },
+  { id: 'quality-dip', label: 'Quality on a dip (Sweden)', icon: 'bi-arrow-down-right-circle', schedule: 'Daily',
+    description: 'Profitable Stockholm large caps that pulled back 8%+ while the 200-day trend holds, with an agent note on why each fell.' },
+  { id: 'earnings-scored', label: 'Quarterly reports, scored', icon: 'bi-clipboard-data', schedule: 'Every 6 hours',
+    description: 'When a watchlist company files a 10-Q or 10-K, ranks it against the watchlist on the new numbers and summarizes what changed.' },
+  { id: 'watchlist-health', label: 'Watchlist health check', icon: 'bi-heart-pulse', schedule: 'Weekly',
+    description: 'Finds laggards in your watchlist: low scores, broken trends, losses or shrinking revenue, and what would repair the thesis.' },
 ];
 
 interface BuildOptions { admin: boolean; symbols?: string }
 
 const GROUNDED = 'Use only figures that appear in the input data and name the date they are as of. ';
+const LEADERBOARD_GUIDE = 'Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. ';
+const LEADERBOARD_COLUMNS = 'rank,symbol,score,grade,pe_ttm,revenue_growth_pct,momentum_12_1_pct,from_high_pct,reasons,flags';
 
 /** Builds a playbook as a disabled, versioned flow graph. */
 export function buildPlaybook(id: string, opts: BuildOptions): Playbook | null {
@@ -182,6 +224,94 @@ export function buildPlaybook(id: string, opts: BuildOptions): Playbook | null {
         prompt: GROUNDED + 'For each company in the shortlist write three bullets: what the numbers show (facts), what would have to be true for the stock to work (assumptions), and the main risk. Keep the table at the top. This is research, not a recommendation.' }, 'table');
       deliver('memo', 'Quality & value shortlist {{date}}');
       note = 'Weekly screen on trailing-twelve-month figures. Adjust the thresholds in the screen rule.';
+      break;
+    }
+    case 'top10-buy-now': {
+      name = 'Top 10 buy-now leaderboard'; interval = 1440;
+      add({ id: 'board', type: 'leaderboard', label: 'Score & rank', universe: 'us_mega', strategy: 'best', limit: 10 }, 'start');
+      add({ id: 'table', type: 'report_table', label: 'Leaderboard', title: 'Top 10 to research now', columns: LEADERBOARD_COLUMNS, skip_empty: true }, 'board');
+      add({ id: 'memo', type: 'agent', label: 'Pick memos', require_grounding: true,
+        prompt: GROUNDED + LEADERBOARD_GUIDE + 'Keep the table at the top. Then for each company, in rank order, write two lines: why it ranks there (cite the strongest factor scores and their figures from reasons) and what to check before buying (flags, weakest factor, the next quarterly report). End with one paragraph on what the top 10 have in common. Research, not a recommendation.' }, 'table');
+      deliver('memo', 'Top 10 leaderboard {{date}}');
+      note = 'Ranks the US mega caps universe; change the universe or strategy on the leaderboard node, or set your own watchlist of up to 25 symbols.';
+      break;
+    }
+    case 'leaderboard-entrants': {
+      name = 'New leaderboard entrants'; interval = 1440;
+      add({ id: 'board', type: 'leaderboard', label: 'Top 10', universe: 'us_mega', strategy: 'best', limit: 10 }, 'start');
+      add({ id: 'new', type: 'only_new', label: 'New in top 10', key_fields: 'symbol', cooldown_hours: 336 }, 'board');
+      add({ id: 'table', type: 'report_table', label: 'Entrants', title: 'New in the top 10', columns: 'rank,symbol,score,grade,reasons,flags,price,as_of', skip_empty: true }, 'new');
+      deliver('table', '{{count}} new leaderboard entrant(s) {{date}}');
+      note = 'The first run reports the whole top 10; after that only companies that enter it, at most once every 14 days each.';
+      break;
+    }
+    case 'value-bargains': {
+      name = 'Cheap & solid bargains'; interval = 10080;
+      add({ id: 'board', type: 'leaderboard', label: 'Rank for value', universe: 'us_dividend', strategy: 'value', limit: 25 }, 'start');
+      add({ id: 'screen', type: 'screen', label: 'Bargains', rule: 'pe_ttm < 20 and net_margin_pct >= 8 and above_sma200 and not (flags contains "shrinking_revenue")', sort_by: '-score', limit: 10 }, 'board');
+      add({ id: 'table', type: 'report_table', label: 'Shortlist', title: 'Cheap & solid shortlist', columns: 'rank,symbol,score,pe_ttm,earnings_yield_pct,net_margin_pct,revenue_growth_pct,from_high_pct,ttm_through', skip_empty: true }, 'screen');
+      add({ id: 'memo', type: 'agent', label: 'Value memo', require_grounding: true,
+        prompt: GROUNDED + LEADERBOARD_GUIDE + 'Keep the table at the top. For each company: the facts that make it cheap (P/E, earnings yield, margins), the assumption that must hold for the discount to close, and the value-trap risk (low growth, falling margins). Research, not a recommendation.' }, 'table');
+      deliver('memo', 'Value bargains {{date}}');
+      note = 'Weekly. A low P/E alone is not a bargain: the screen also asks for margins, an intact trend and growing revenue.';
+      break;
+    }
+    case 'garp-growth': {
+      name = 'Growth at a reasonable price'; interval = 10080;
+      add({ id: 'board', type: 'leaderboard', label: 'Rank for growth', universe: 'us_tech', strategy: 'growth', limit: 25 }, 'start');
+      add({ id: 'screen', type: 'screen', label: 'Fair-priced growth', rule: 'revenue_growth_pct >= 10 and peg < 2 and not (flags contains "unprofitable")', sort_by: '-score', limit: 10 }, 'board');
+      add({ id: 'table', type: 'report_table', label: 'Shortlist', title: 'Growth at a reasonable price', columns: 'rank,symbol,score,revenue_growth_pct,eps_growth_pct,pe_ttm,peg,net_margin_pct,ttm_through', skip_empty: true }, 'screen');
+      add({ id: 'memo', type: 'agent', label: 'Growth memo', require_grounding: true,
+        prompt: GROUNDED + LEADERBOARD_GUIDE + 'Keep the table at the top. For each company: the growth the numbers show, what has to keep going right for the PEG to stay reasonable, and the first sign that would break the thesis. Research, not a recommendation.' }, 'table');
+      deliver('memo', 'Growth at a reasonable price {{date}}');
+      note = 'PEG is the trailing P/E divided by trailing EPS growth; companies with shrinking EPS have none and do not pass.';
+      break;
+    }
+    case 'momentum-leaders': {
+      name = 'Momentum leaders alert'; interval = 1440;
+      add({ id: 'board', type: 'leaderboard', label: 'Rank for momentum', universe: 'us_mega', strategy: 'momentum', limit: 10 }, 'start');
+      add({ id: 'screen', type: 'screen', label: 'Healthy trends', rule: 'above_sma200 and momentum >= 60 and not (flags contains "overbought")', sort_by: 'rank' }, 'board');
+      add({ id: 'new', type: 'only_new', label: 'Once a week', key_fields: 'symbol', cooldown_hours: 168 }, 'screen');
+      add({ id: 'table', type: 'report_table', label: 'Leaders', title: 'Momentum leaders', columns: 'rank,symbol,score,momentum_12_1_pct,change_3m_pct,rsi14,from_high_pct,as_of', skip_empty: true }, 'new');
+      deliver('table', 'Momentum leaders {{date}}');
+      note = 'Leaves out overbought names (RSI 70+) so you hear about strong trends at a calmer entry.';
+      break;
+    }
+    case 'quality-dip': {
+      name = 'Quality on a dip (Sweden)'; interval = 1440;
+      add({ id: 'board', type: 'leaderboard', label: 'Rank for dips', universe: 'se_large', strategy: 'dip', limit: 25 }, 'start');
+      add({ id: 'screen', type: 'screen', label: 'Real dips', rule: 'from_high_pct <= -8 and quality >= 60 and above_sma200', sort_by: '-score', limit: 8 }, 'board');
+      add({ id: 'new', type: 'only_new', label: 'New dips', key_fields: 'symbol', cooldown_hours: 72 }, 'screen');
+      add({ id: 'table', type: 'report_table', label: 'Dips', title: 'Quality on a dip', columns: 'rank,symbol,score,from_high_pct,rsi14,quality,net_margin_pct,pe_ttm,as_of', skip_empty: true }, 'new');
+      const agent: Omit<PlaybookNode, 'x' | 'y'> = { id: 'why', type: 'agent', label: 'Why it fell', skip_empty: true,
+        prompt: LEADERBOARD_GUIDE + 'Keep the table at the top. For each company, say how far it is below its high and what its quality score rests on. Then give the likely reason for the pullback only if you can source it, otherwise say it is unexplained and what to look up. Research, not a recommendation.' };
+      if (opts.admin) Object.assign(agent, { tools: ['search_web'], max_tool_calls: 6, timeout_seconds: 90 });
+      add(agent, 'table');
+      deliver('why', 'Quality on a dip {{date}}');
+      note = 'Uses the Sweden large caps universe. A company is reported again after 3 days at most.';
+      break;
+    }
+    case 'earnings-scored': {
+      name = 'Quarterly reports, scored'; interval = 360;
+      add({ id: 'filings', type: 'sec_filings', label: 'New reports', symbols, forms: '10-Q, 10-K', lookback_days: 7 }, 'start');
+      add({ id: 'new', type: 'only_new', label: 'Not seen yet' }, 'filings');
+      add({ id: 'board', type: 'leaderboard', label: 'Score the filers', symbols, strategy: 'best', limit: 25, skip_empty: true }, 'new');
+      add({ id: 'table', type: 'report_table', label: 'Scores', title: 'Fresh quarterly reports, scored', columns: 'rank,symbol,score,grade,revenue_growth_pct,eps_growth_pct,net_margin_pct,pe_ttm,ttm_through,flags', skip_empty: true }, 'board');
+      add({ id: 'memo', type: 'agent', label: 'What changed', require_grounding: true,
+        prompt: GROUNDED + LEADERBOARD_GUIDE + 'These companies just filed a quarterly or annual report; their rank is within the whole watchlist. Keep the table at the top. For each: what the trailing-twelve-month figures show now, how it ranks against the watchlist and why, and what to read in the filing next. Research, not a recommendation.' }, 'table');
+      deliver('memo', 'Quarterly reports scored {{date}}');
+      note = 'Needs SEC_USER_AGENT. The leaderboard ranks your whole watchlist and keeps only the companies that just filed, so nothing is scored on quiet days.';
+      break;
+    }
+    case 'watchlist-health': {
+      name = 'Watchlist health check'; interval = 10080;
+      add({ id: 'board', type: 'leaderboard', label: 'Score watchlist', symbols, strategy: 'best', limit: 25 }, 'start');
+      add({ id: 'laggards', type: 'screen', label: 'Laggards', rule: 'score < 45 or flags contains "below_sma200" or flags contains "unprofitable" or flags contains "shrinking_revenue"', sort_by: 'score' }, 'board');
+      add({ id: 'table', type: 'report_table', label: 'Laggards', title: 'Watchlist laggards', columns: 'rank,symbol,score,grade,flags,from_high_pct,revenue_growth_pct,net_margin_pct', skip_empty: true }, 'laggards');
+      add({ id: 'memo', type: 'agent', label: 'Review notes', require_grounding: true,
+        prompt: GROUNDED + LEADERBOARD_GUIDE + 'Keep the table at the top. For each laggard: which factor or flag pulled it down, what would repair the thesis, and what would confirm it is broken. Do not tell anyone to sell; this is a review list.' }, 'table');
+      deliver('memo', 'Watchlist health check {{date}}');
+      note = 'Weekly. Silent when every company on the watchlist scores 45 or more with no warning flags.';
       break;
     }
     default:
