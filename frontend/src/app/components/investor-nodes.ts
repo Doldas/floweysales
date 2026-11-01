@@ -6,7 +6,7 @@
 
 export type InvestorNodeType =
   'watchlist_quotes' | 'technical_scan' | 'fundamentals' | 'sec_filings' | 'news' | 'leaderboard' |
-  'screen' | 'only_new' | 'report_table' | 'notify' | 'insider_activity' | 'macro_regime' | 'portfolio_check' | 'corporate_events';
+  'screen' | 'only_new' | 'report_table' | 'notify' | 'insider_activity' | 'macro_regime' | 'portfolio_check' | 'corporate_events' | 'wealth_plan' | 'backtest';
 
 export interface InvestorNodeSpec {
   type: InvestorNodeType;
@@ -40,6 +40,10 @@ export const INVESTOR_NODES: readonly InvestorNodeSpec[] = [
     description: 'Concentration, correlation, drawdown from peak and drift from your wealth plan for the paper portfolio, with rebalancing suggestions as rows.' },
   { type: 'corporate_events', label: 'Dividends & earnings', tag: '☷ EVENTS', admin: false, defaults: { symbols: DEFAULT_WATCHLIST, limit: 30 },
     description: 'Upcoming dividends, splits and earnings dates from an installed provider plugin with the events capability.' },
+  { type: 'wealth_plan', label: 'Wealth plan', tag: '◈ PLAN', admin: false, defaults: {},
+    description: 'Your saved wealth plan as one row: phase, target allocation, probability of reaching the goal, years to goal and the next checklist item.' },
+  { type: 'backtest', label: 'Strategy backtest', tag: '⏱ BACKTEST', admin: false, defaults: { universe: 'us_mega', strategy: 'best', limit: 10, years: 3 },
+    description: 'Replays a leaderboard strategy month by month over past prices and published quarters. One row per strategy, with the bias warnings. Slow on a cold cache; one per flow.' },
   { type: 'screen', label: 'Screen (filter rows)', tag: '⧩ SCREEN', admin: false, defaults: { rule: 'change_1d_pct <= -3' },
     description: 'Keeps the rows that match a rule such as rsi14 < 30 and above_sma200, then sorts and limits them.' },
   { type: 'only_new', label: 'Only new since last run', tag: '✓ ONLY NEW', admin: false, defaults: {},
@@ -91,6 +95,8 @@ export const SCREEN_FIELDS: Record<string, string[]> = {
   macro_regime: ['regime', 'signals', 'reasons', 'curve_spread', 'curve_inverted', 'curve_uninverting', 'unemployment', 'sahm_rule', 'fed_funds', 'hy_spread', 'credit_stress', 'vix', 'vol_regime'],
   portfolio_check: ['kind', 'drawdown_from_peak_pct', 'total_value', 'top_weight_pct', 'volatility_pct', 'beta', 'max_drawdown_1y_pct', 'effective_holdings', 'side', 'amount', 'symbol', 'reason'],
   corporate_events: ['kind', 'date', 'days_until', 'amount', 'currency', 'ratio', 'confirmed'],
+  wealth_plan: ['phase', 'probability_goal_pct', 'years_to_goal_p50', 'required_contribution_75', 'fi_ratio_pct', 'invested', 'monthly_contribution', 'core_equity_pct', 'bonds_pct', 'cash_pct', 'satellite_pct'],
+  backtest: ['strategy', 'cagr_pct', 'excess_cagr_pct', 'volatility_pct', 'sharpe', 'sortino', 'max_drawdown_pct', 'calmar', 'hit_rate_pct', 'avg_turnover_pct', 'rebalances'],
   leaderboard: ['rank', 'score', 'grade', ...LEADERBOARD_FACTORS, 'coverage_pct', 'flags', 'pe_ttm', 'peg', 'earnings_yield_pct', 'revenue_growth_pct', 'eps_growth_pct',
     'net_margin_pct', 'fcf_margin_pct', 'change_3m_pct', 'momentum_12_1_pct', 'from_high_pct', 'rsi14', 'above_sma200', 'volatility_pct', 'max_drawdown_pct'],
 };
@@ -113,7 +119,7 @@ export interface Playbook {
   note: string;
 }
 
-export interface PlaybookInfo { id: string; label: string; description: string; icon: string; schedule: string }
+export interface PlaybookInfo { id: string; label: string; description: string; icon: string; schedule: string; adminOnly?: boolean }
 
 export const INVESTOR_PLAYBOOKS: readonly PlaybookInfo[] = [
   { id: 'morning-brief', label: 'Morning watchlist brief', icon: 'bi-sunrise', schedule: 'Daily',
@@ -144,6 +150,22 @@ export const INVESTOR_PLAYBOOKS: readonly PlaybookInfo[] = [
     description: 'When a watchlist company files a 10-Q or 10-K, ranks it against the watchlist on the new numbers and summarizes what changed.' },
   { id: 'watchlist-health', label: 'Watchlist health check', icon: 'bi-heart-pulse', schedule: 'Weekly',
     description: 'Finds laggards in your watchlist: low scores, broken trends, losses or shrinking revenue, and what would repair the thesis.' },
+  { id: 'insider-cluster', label: 'Insider buying clusters', icon: 'bi-person-check', schedule: 'Daily',
+    description: 'Alerts when three or more insiders buy the same stock on the open market, or an officer buys more than $250,000, from SEC Form 4 filings.' },
+  { id: 'macro-regime', label: 'Macro regime shift', icon: 'bi-globe2', schedule: 'Daily',
+    description: 'Reads the yield curve, unemployment, credit spreads and volatility from FRED and explains what changed when the regime moves. Needs the FRED plugin.' },
+  { id: 'drawdown-guard', label: 'Portfolio drawdown guard', icon: 'bi-shield-exclamation', schedule: 'Hourly', adminOnly: true,
+    description: 'Alerts when the paper portfolio is 10% or more below its peak, or its holdings would have fallen more than 20% over the past year.' },
+  { id: 'rebalance-check', label: 'Monthly rebalance check', icon: 'bi-arrow-left-right', schedule: 'Monthly', adminOnly: true,
+    description: 'Compares the paper portfolio with your wealth plan and writes up the moves that bring it back to target. Suggestions only; nothing is ordered.' },
+  { id: 'dividend-calendar', label: 'Dividend & earnings calendar', icon: 'bi-calendar-event', schedule: 'Weekly',
+    description: 'Upcoming dividends, splits and earnings dates for your watchlist over the next 30 days, each reported once. Needs a provider plugin with events.' },
+  { id: 'phase-checkin', label: 'Monthly phase check-in', icon: 'bi-bullseye', schedule: 'Monthly',
+    description: 'A short progress note on your wealth plan: your phase, the probability of reaching your goal and the next item on your checklist.' },
+  { id: 'earnings-week', label: 'Earnings this week, scored', icon: 'bi-calendar-check', schedule: 'Weekly',
+    description: 'Companies on your watchlist reporting earnings in the next 7 days, ranked on the leaderboard with a memo on what to look for.' },
+  { id: 'strategy-scorecard', label: 'Strategy scorecard', icon: 'bi-clipboard-pulse', schedule: 'Monthly',
+    description: 'Backtests all six leaderboard strategies on US mega caps and compares them, with the survivorship and benchmark caveats stated.' },
 ];
 
 interface BuildOptions { admin: boolean; symbols?: string }
@@ -154,6 +176,7 @@ const LEADERBOARD_COLUMNS = 'rank,symbol,score,grade,pe_ttm,revenue_growth_pct,m
 
 /** Builds a playbook as a disabled, versioned flow graph. */
 export function buildPlaybook(id: string, opts: BuildOptions): Playbook | null {
+  if (INVESTOR_PLAYBOOKS.find(p => p.id === id)?.adminOnly && !opts.admin) return null;
   const symbols = (opts.symbols || '').trim() || DEFAULT_WATCHLIST;
   const nodes: PlaybookNode[] = [{ id: 'start', type: 'trigger', label: 'Start', x: 40, y: 160 }];
   const edges: PlaybookEdge[] = [];
@@ -324,6 +347,86 @@ export function buildPlaybook(id: string, opts: BuildOptions): Playbook | null {
         prompt: GROUNDED + LEADERBOARD_GUIDE + 'Keep the table at the top. For each laggard: which factor or flag pulled it down, what would repair the thesis, and what would confirm it is broken. Do not tell anyone to sell; this is a review list.' }, 'table');
       deliver('memo', 'Watchlist health check {{date}}');
       note = 'Weekly. Silent when every company on the watchlist scores 45 or more with no warning flags.';
+      break;
+    }
+    case 'insider-cluster': {
+      name = 'Insider buying clusters'; interval = 1440;
+      add({ id: 'insiders', type: 'insider_activity', label: 'Insider activity', symbols, lookback_days: 30 }, 'start');
+      add({ id: 'clusters', type: 'screen', label: 'Clusters & big officer buys', rule: 'cluster_buy or (officer_buy and net_value > 250000)', sort_by: '-largest_buy_value' }, 'insiders');
+      add({ id: 'new', type: 'only_new', label: 'Once per two weeks', key_fields: 'symbol', cooldown_hours: 336 }, 'clusters');
+      add({ id: 'table', type: 'report_table', label: 'Insider buys', title: 'Insider buying', columns: 'symbol,buyers,buy_count,net_value,largest_buy_value,largest_buyer,officer_buy,latest,url', skip_empty: true }, 'new');
+      deliver('table', 'Insider buying {{date}}');
+      note = 'Needs SEC_USER_AGENT. Counts open-market purchases only (Form 4 code P). Insiders buy for many reasons; treat a cluster as a reason to read the filings, not as a signal to buy.';
+      break;
+    }
+    case 'macro-regime': {
+      name = 'Macro regime shift'; interval = 1440;
+      add({ id: 'macro', type: 'macro_regime', label: 'Macro regime' }, 'start');
+      add({ id: 'new', type: 'only_new', label: 'Regime changed', key_fields: 'regime', cooldown_hours: 336 }, 'macro');
+      add({ id: 'why', type: 'agent', label: 'What changed', skip_empty: true, require_grounding: true,
+        prompt: GROUNDED + 'The input is the current macro regime (risk_on, caution or risk_off) with the signals behind it. Explain in under 150 words what changed and what such a regime has usually meant for a long-term investor: keep contributions going, check the plan, avoid reacting to one reading. Do not predict markets.' }, 'new');
+      deliver('why', 'Macro regime: {{date}}');
+      note = 'Needs the FRED plugin and FRED_API_KEY. Reports when the regime changes and reminds you every two weeks while it holds.';
+      break;
+    }
+    case 'drawdown-guard': {
+      name = 'Portfolio drawdown guard'; interval = 60;
+      add({ id: 'check', type: 'portfolio_check', label: 'Portfolio check' }, 'start');
+      add({ id: 'guard', type: 'screen', label: 'Drawdowns', rule: 'drawdown_from_peak_pct <= -10 or kind == "deep_drawdown"' }, 'check');
+      add({ id: 'new', type: 'only_new', label: 'Once per 3 days', key_fields: 'id', cooldown_hours: 72 }, 'guard');
+      add({ id: 'table', type: 'report_table', label: 'Drawdown', title: 'Portfolio drawdown', columns: 'kind,total_value,peak_equity,drawdown_from_peak_pct,max_drawdown_1y_pct', skip_empty: true }, 'new');
+      deliver('table', 'Portfolio drawdown {{date}}');
+      note = 'Administrators only, like the paper portfolio. Checks hourly and alerts at most once every 3 days.';
+      break;
+    }
+    case 'rebalance-check': {
+      name = 'Monthly rebalance check'; interval = 43200;
+      add({ id: 'check', type: 'portfolio_check', label: 'Portfolio check' }, 'start');
+      add({ id: 'moves', type: 'screen', label: 'Suggested moves', rule: 'kind == "suggestion"' }, 'check');
+      add({ id: 'table', type: 'report_table', label: 'Moves', title: 'Rebalancing suggestions', columns: 'side,symbol,amount,reason', skip_empty: true }, 'moves');
+      add({ id: 'notes', type: 'agent', label: 'Rebalance notes', require_grounding: true,
+        prompt: GROUNDED + 'Keep the table at the top. Then, in a short paragraph, say which asset classes drifted from the wealth plan and what the moves would do. Mention that selling can trigger tax and costs. These are suggestions to review, not orders.' }, 'table');
+      deliver('notes', 'Rebalance check {{date}}');
+      note = 'Administrators only. Needs a saved wealth plan; without one there are no suggestions. Runs every 30 days.';
+      break;
+    }
+    case 'dividend-calendar': {
+      name = 'Dividend & earnings calendar'; interval = 10080;
+      add({ id: 'events', type: 'corporate_events', label: 'Upcoming events', symbols, limit: 30 }, 'start');
+      add({ id: 'new', type: 'only_new', label: 'New events', key_fields: 'id' }, 'events');
+      add({ id: 'table', type: 'report_table', label: 'Calendar', title: 'Dividends & earnings, next 30 days', columns: 'date,symbol,kind,amount,currency,ratio,days_until,confirmed', skip_empty: true }, 'new');
+      deliver('table', 'Dividend & earnings calendar {{date}}');
+      note = 'Needs a provider plugin with the events capability (Yahoo or Finnhub). Each event is reported once.';
+      break;
+    }
+    case 'phase-checkin': {
+      name = 'Monthly phase check-in'; interval = 43200;
+      add({ id: 'plan', type: 'wealth_plan', label: 'Wealth plan' }, 'start');
+      add({ id: 'note', type: 'agent', label: 'Progress note', skip_empty: true, require_grounding: true,
+        prompt: GROUNDED + 'Write a short progress note (under 120 words) from the wealth plan in the input: the phase and what it is for, the probability of reaching the goal (say what the percentage means using probability_label), and the next checklist item. Be encouraging and plain; no predictions.' }, 'plan');
+      deliver('note', 'Phase check-in {{date}}');
+      note = 'Save your plan on the Wealth plan page first; without one this flow stays silent.';
+      break;
+    }
+    case 'earnings-week': {
+      name = 'Earnings this week, scored'; interval = 10080;
+      add({ id: 'events', type: 'corporate_events', label: 'Earnings dates', symbols, kinds: 'earnings', limit: 7 }, 'start');
+      add({ id: 'board', type: 'leaderboard', label: 'Score the reporters', symbols, strategy: 'best', limit: 25, skip_empty: true }, 'events');
+      add({ id: 'table', type: 'report_table', label: 'Scores', title: 'Reporting this week, scored', columns: 'rank,symbol,score,grade,pe_ttm,revenue_growth_pct,eps_growth_pct,flags,ttm_through', skip_empty: true }, 'board');
+      add({ id: 'memo', type: 'agent', label: 'What to look for', require_grounding: true,
+        prompt: GROUNDED + LEADERBOARD_GUIDE + 'These companies report earnings in the next 7 days. Keep the table at the top. For each: where it ranks in the watchlist and why, and the one figure in the next report that would change that picture. Research, not a recommendation.' }, 'table');
+      deliver('memo', 'Earnings this week {{date}}');
+      note = 'Needs a provider plugin with the events capability. The leaderboard ranks your whole watchlist and keeps only the companies reporting this week.';
+      break;
+    }
+    case 'strategy-scorecard': {
+      name = 'Strategy scorecard'; interval = 43200;
+      add({ id: 'backtest', type: 'backtest', label: 'Backtest all strategies', universe: 'us_mega', strategy: 'all', limit: 10, years: 3 }, 'start');
+      add({ id: 'table', type: 'report_table', label: 'Scorecard', title: 'Strategy scorecard (US mega caps, 3 years, monthly)', columns: 'strategy_label,cagr_pct,excess_cagr_pct,max_drawdown_pct,sharpe,hit_rate_pct,avg_turnover_pct,from,to', skip_empty: true }, 'backtest');
+      add({ id: 'compare', type: 'agent', label: 'Compare strategies', require_grounding: true,
+        prompt: GROUNDED + 'Keep the table at the top. Compare the strategies: which returned most, which fell least, which turned over most, and how the best one compares with the benchmark. State the caveats from warning_text (survivorship bias, price-index benchmark) in plain words and say that past results do not predict future ones.' }, 'table');
+      deliver('compare', 'Strategy scorecard {{date}}');
+      note = 'Replays six strategies, so the first run takes a while; later runs reuse results for six hours. Change the universe or years on the backtest node.';
       break;
     }
     default:

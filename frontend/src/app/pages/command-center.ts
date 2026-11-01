@@ -39,7 +39,7 @@ export class CommandCenterPage {
   private readonly notify = inject(NotifyService);
   private readonly marketApi = inject(MarketService);
 
-  readonly templates = FLOW_TEMPLATES;
+  readonly templates = FLOW_TEMPLATES.filter(t => !('adminOnly' in t && t.adminOnly) || this.access.isAdmin());
   readonly greeting = greeting();
   readonly today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
   readonly name = computed(() => {

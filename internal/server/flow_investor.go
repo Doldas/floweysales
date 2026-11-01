@@ -30,7 +30,7 @@ const (
 var investorNodeTypes = map[string]bool{
 	"watchlist_quotes": true, "technical_scan": true, "fundamentals": true, "sec_filings": true,
 	"news": true, "leaderboard": true, "screen": true, "only_new": true, "report_table": true, "notify": true,
-	"insider_activity": true, "macro_regime": true, "portfolio_check": true, "corporate_events": true,
+	"insider_activity": true, "macro_regime": true, "portfolio_check": true, "corporate_events": true, "wealth_plan": true, "backtest": true,
 }
 
 // flowSymbols reads the node's watchlist, or, when it has none, the symbols
@@ -821,6 +821,20 @@ func validateInvestorNode(n flowNode, version int) error {
 		if f := strings.TrimPrefix(strings.TrimSpace(n.SortBy), "-"); f != "" && !screenFieldPattern.MatchString(f) {
 			return fmt.Errorf("node %s: invalid sort field", n.ID)
 		}
+	case "backtest":
+		if n.Strategy != "all" {
+			if _, ok := findLeaderboardStrategy(n.Strategy); !ok {
+				return fmt.Errorf("node %s: unknown strategy %q", n.ID, n.Strategy)
+			}
+		}
+		if n.Universe != "" && n.Universe != "custom" {
+			if _, ok := findLeaderboardUniverse(n.Universe); !ok {
+				return fmt.Errorf("node %s: unknown universe %q", n.ID, n.Universe)
+			}
+		}
+		if n.Limit > 25 || (n.Years != 0 && n.Years != 3 && n.Years != 5) {
+			return fmt.Errorf("node %s: a backtest holds 1–25 companies over 3 or 5 years", n.ID)
+		}
 	case "corporate_events":
 		if n.Limit > 90 {
 			return fmt.Errorf("node %s: corporate events look at most 90 days ahead (limit)", n.ID)
@@ -879,6 +893,11 @@ func (e *Engine) runInvestorNode(ctx context.Context, f storage.AgentFlow, n flo
 		return output, "", err
 	case "leaderboard":
 		output, err = e.runLeaderboardNode(ctx, n, input)
+		return output, "", err
+	case "wealth_plan":
+		return e.runWealthPlanNode(ctx, f)
+	case "backtest":
+		output, err = e.runBacktestNode(ctx, n, input)
 		return output, "", err
 	case "macro_regime":
 		output, err = e.runMacroNode(ctx, time.Now().UTC())

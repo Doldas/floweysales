@@ -13,7 +13,7 @@ const optionsFixture = fileURLToPath(new URL('../../../../internal/server/testda
 
 function allPlaybooks() {
   const out: Record<string, unknown> = {};
-  for (const p of INVESTOR_PLAYBOOKS) for (const admin of [true, false]) out[`${p.id}/${admin ? 'admin' : 'user'}`] = buildPlaybook(p.id, { admin });
+  for (const p of INVESTOR_PLAYBOOKS) for (const admin of p.adminOnly ? [true] : [true, false]) out[`${p.id}/${admin ? 'admin' : 'user'}`] = buildPlaybook(p.id, { admin });
   return out;
 }
 
@@ -33,6 +33,11 @@ test('every playbook is a connected, bounded v2 graph with one trigger', () => {
 
 test('only administrators get notify nodes and research tools', () => {
   for (const p of INVESTOR_PLAYBOOKS) {
+    if (p.adminOnly) {
+      assert.equal(buildPlaybook(p.id, { admin: false }), null, `${p.id} reads the paper portfolio`);
+      assert.ok(buildPlaybook(p.id, { admin: true })!.graph.nodes.some(n => n.type === 'notify'), p.id);
+      continue;
+    }
     const user = buildPlaybook(p.id, { admin: false })!;
     assert.ok(!user.graph.nodes.some(n => n.type === 'notify' || (n as { tools?: string[] }).tools), p.id);
     assert.ok(user.graph.nodes.some(n => n.type === 'output'), p.id);
@@ -82,4 +87,18 @@ test('insider, macro, portfolio and events nodes are catalogued with screen fiel
   assert.equal(investorNode('portfolio_check')!.admin, true, 'the paper portfolio is administrator only');
   for (const type of ['insider_activity', 'macro_regime', 'corporate_events']) assert.equal(investorNode(type)!.admin, false, type);
   assert.equal(new Set(INVESTOR_NODES.map(n => n.tag)).size, INVESTOR_NODES.length, 'canvas tags are unique');
+});
+
+test('the new playbooks use the new nodes and exist for the wealth plan', () => {
+  const uses = (id: string, type: string) => buildPlaybook(id, { admin: true })!.graph.nodes.some(n => n.type === type);
+  assert.ok(uses('insider-cluster', 'insider_activity') && uses('macro-regime', 'macro_regime') && uses('drawdown-guard', 'portfolio_check'));
+  assert.ok(uses('rebalance-check', 'portfolio_check') && uses('dividend-calendar', 'corporate_events') && uses('phase-checkin', 'wealth_plan'));
+  assert.ok(uses('earnings-week', 'corporate_events') && uses('strategy-scorecard', 'backtest'));
+  assert.deepEqual(INVESTOR_PLAYBOOKS.filter(p => p.adminOnly).map(p => p.id), ['drawdown-guard', 'rebalance-check']);
+  const scorecard = buildPlaybook('strategy-scorecard', { admin: false })!.graph.nodes;
+  assert.equal(scorecard.filter(n => n.type === 'backtest').length, 1, 'one backtest per flow');
+  // Every playbook the phases recommend can be built.
+  for (const id of ['phase-checkin', 'morning-brief', 'top10-buy-now', 'value-bargains', 'rebalance-check', 'watchlist-health', 'drawdown-guard', 'dividend-calendar']) {
+    assert.ok(buildPlaybook(id, { admin: true }), id);
+  }
 });

@@ -30,3 +30,11 @@ func (d *Database) SaveInvestorProfile(ctx context.Context, userID int64, profil
 		userID, profile)
 	return err
 }
+
+// FlowOwnerID is the account that created a flow, or 0 when it has none
+// (flows made while authentication was disabled).
+func (d *Database) FlowOwnerID(ctx context.Context, flowID int64) (int64, error) {
+	var owner sql.NullInt64
+	err := d.db.QueryRowContext(ctx, "SELECT created_by FROM agent_flows WHERE id=?", flowID).Scan(&owner)
+	return owner.Int64, err
+}
