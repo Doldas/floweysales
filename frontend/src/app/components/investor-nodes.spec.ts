@@ -6,9 +6,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes.ts';
+import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes.ts';
 
 const fixture = fileURLToPath(new URL('../../../../internal/server/testdata/investor-playbooks.json', import.meta.url));
+const optionsFixture = fileURLToPath(new URL('../../../../internal/server/testdata/leaderboard-options.json', import.meta.url));
 
 function allPlaybooks() {
   const out: Record<string, unknown> = {};
@@ -43,6 +44,19 @@ test('only administrators get notify nodes and research tools', () => {
 test('a custom watchlist reaches the data nodes', () => {
   const p = buildPlaybook('price-alerts', { admin: false, symbols: 'VOLV-B.ST, SAAB-B.ST' })!;
   assert.equal(p.graph.nodes.find(n => n.type === 'watchlist_quotes')!['symbols'], 'VOLV-B.ST, SAAB-B.ST');
+});
+
+test('a custom watchlist reaches watchlist leaderboards', () => {
+  for (const id of ['watchlist-health', 'earnings-scored']) {
+    const p = buildPlaybook(id, { admin: true, symbols: 'VOLV-B.ST, SAAB-B.ST' })!;
+    assert.equal(p.graph.nodes.find(n => n.type === 'leaderboard')!['symbols'], 'VOLV-B.ST, SAAB-B.ST', id);
+  }
+});
+
+test('the server knows every leaderboard universe and strategy', () => {
+  const current = JSON.stringify({ universes: LEADERBOARD_UNIVERSES.map(u => u.id), strategies: LEADERBOARD_STRATEGIES.map(s => s.id) }, null, 1) + '\n';
+  if (process.env['UPDATE_PLAYBOOKS']) writeFileSync(optionsFixture, current);
+  assert.equal(readFileSync(optionsFixture, 'utf8'), current, 'run with UPDATE_PLAYBOOKS=1 to regenerate internal/server/testdata/leaderboard-options.json');
 });
 
 test('node catalogue and watchlist checks', () => {

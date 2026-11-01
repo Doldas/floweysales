@@ -155,6 +155,10 @@ type Engine struct {
 	financialsMu    sync.Mutex
 	financialsCache map[string]financialsCacheEntry
 
+	leaderboardMu    sync.Mutex
+	leaderboardCache map[string]leaderboardCacheEntry
+	leaderboardCalls map[string]*leaderboardCall
+
 	integrationMu     sync.Mutex
 	webSearchProvider string
 	webSearchAPIKey   string
@@ -208,9 +212,13 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 		mux:             http.NewServeMux(),
 		historyCache:    make(map[string]historyCacheEntry),
 		financialsCache: make(map[string]financialsCacheEntry),
+
+		leaderboardCache: make(map[string]leaderboardCacheEntry),
+		leaderboardCalls: make(map[string]*leaderboardCall),
 	}
 
 	e.registerMarketRoutes()
+	e.registerLeaderboardRoutes()
 	e.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()

@@ -188,6 +188,22 @@ try {
   check('playbook notifies the owner by email', nodeOf('notify')?.channel === 'email', JSON.stringify(nodeOf('notify')));
   check('playbook saves disabled with its suggested hourly schedule', playbookSave?.body?.enabled === false && playbookSave?.body?.interval_minutes === 60 && pg?.version === 2, JSON.stringify(playbookSave?.body));
 
+  // 9. Leaderboard playbook: switch the preset universe to an own watchlist
+  // and another strategy; the node saves the watchlist without a universe.
+  await studio.getByLabel('Starter templates').selectOption('top10-buy-now');
+  await studio.getByText('Playbook copied as a new, disabled flow').waitFor();
+  check('leaderboard playbook passes preflight', (await validation.innerText()) === 'No structural issues', await validation.innerText());
+  await studio.locator('[aria-label="Select Score & rank"]').click();
+  await settings.getByLabel('Rank').selectOption('');
+  await settings.getByLabel('Watchlist (up to 25 symbols)').fill('VOLV-B.ST, SAAB-B.ST');
+  await settings.getByLabel('Strategy').selectOption('value');
+  await settings.getByRole('button', { name: 'Close node settings' }).click();
+  await studio.getByRole('button', { name: 'Save flow' }).click();
+  await studio.getByText('All changes saved').waitFor();
+  const boardSave = state.requests.filter(r => r.method === 'POST' && r.pathname === '/api/admin/flows').at(-1);
+  const board = boardSave?.body?.graph?.nodes.find(n => n.type === 'leaderboard');
+  check('leaderboard saves the watchlist and strategy', board?.symbols === 'VOLV-B.ST, SAAB-B.ST' && board?.strategy === 'value' && !board?.universe && board?.limit === 10, JSON.stringify(board));
+
   check('no uncaught JavaScript errors', errors.length === 0, errors.join(' | '));
 } catch (e) {
   failed.push(e.stack || e.message);

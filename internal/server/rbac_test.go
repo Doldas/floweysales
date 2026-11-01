@@ -12,6 +12,7 @@ func TestAllowedAPI(t *testing.T) {
 		allow              bool
 	}{
 		{identity.RoleUser, http.MethodGet, "/api/financials", true},
+		{identity.RoleUser, http.MethodGet, "/api/market/leaderboard", true},
 		{identity.RoleUser, http.MethodPost, "/api/ai/chat", true},
 		{identity.RoleUser, http.MethodGet, "/api/orders", false},
 		{identity.RoleUser, http.MethodPost, "/api/config", false},

@@ -23,7 +23,7 @@ To start, sign in and open **My Flows → New flow / Edit**. Add nodes with **+ 
 
 ## Investor nodes and playbooks
 
-Watchlist quotes, Technical scan, Fundamentals, SEC filings, News headlines, Screen, Only new since last run, Report table and Notify turn a watchlist into alerting automations; any v2 node can **Skip when the input is empty**. Six ready-made playbooks are under *Starter templates*. See [Investor automations](investor-automations.md).
+Watchlist quotes, Technical scan, Fundamentals, SEC filings, News headlines, Leaderboard, Screen, Only new since last run, Report table and Notify turn a watchlist into alerting automations; any v2 node can **Skip when the input is empty**. Fourteen ready-made playbooks are under *Starter templates*, including a top 10 buy-now leaderboard. See [Investor automations](investor-automations.md).
 
 ## Branch, merge and type rules
 
