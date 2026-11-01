@@ -105,6 +105,13 @@ try {
   await page.getByRole('button', { name: /rebalances/ }).click();
   await audit(page, 'Markets: backtest rebalance table', 'fs-backtest-panel');
 
+  // Portfolio → Risk tab with alerts, correlation and suggestions.
+  await page.goto(new URL('#/portfolio', base).href, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Risk', exact: true }).click();
+  await page.locator('fs-portfolio-risk .tiles').waitFor({ state: 'visible', timeout: 5000 });
+  await page.addScriptTag({ content: axeSource });
+  await audit(page, 'Portfolio: risk tab', 'fs-portfolio-risk');
+
   // Settings → Plugins: installed plugins, an available update and the store.
   await page.goto(new URL('#/settings', base).href, { waitUntil: 'networkidle' });
   await page.getByRole('tab', { name: 'Plugins', exact: true }).click();
