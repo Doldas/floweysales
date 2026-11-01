@@ -302,7 +302,7 @@ export interface LeaderboardRow {
   flags: string;
 }
 
-export interface LeaderboardOption { id: string; label: string; description: string }
+export interface LeaderboardOption { id: string; label: string; description: string; benchmark?: string }
 
 export interface LeaderboardResponse {
   universe: string;
@@ -314,4 +314,46 @@ export interface LeaderboardResponse {
   unranked: { symbol: string; error: string }[];
   universes: LeaderboardOption[];
   strategies: LeaderboardOption[];
+}
+
+/** Return and risk figures of a backtest (see internal/backtest). */
+export interface BacktestMetrics {
+  cagr_pct: number;
+  volatility_pct: number;
+  sharpe: number;
+  sortino: number;
+  max_drawdown_pct: number;
+  calmar: number;
+  hit_rate_pct: number;
+  avg_turnover_pct: number;
+  benchmark_cagr_pct?: number;
+  excess_cagr_pct?: number;
+}
+
+/** One day of the replayed curves; both start at 100. */
+export interface BacktestPoint { date: string; equity: number; benchmark?: number }
+
+export interface BacktestRebalance { date: string; holdings: string[]; turnover_pct: number; fundamentals_coverage_pct: number }
+
+/** The answer of GET /api/market/backtest. */
+export interface BacktestResult {
+  universe: string;
+  strategy: string;
+  benchmark?: string;
+  provider: string;
+  symbols: string[];
+  generated_at: string;
+  metrics: BacktestMetrics;
+  curve: BacktestPoint[];
+  rebalances: BacktestRebalance[];
+  warnings: string[];
+}
+
+export interface BacktestParams {
+  universe: string;
+  strategy: string;
+  symbols?: string[];
+  top: number;
+  rebalance: 'monthly' | 'quarterly';
+  years: 3 | 5;
 }

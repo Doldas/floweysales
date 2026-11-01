@@ -164,6 +164,19 @@ function leaderboard(universe, strategy) {
     unranked: [{ symbol: 'BRK-B', error: 'fewer than four reported quarters' }], universes: boardUniverses, strategies: boardStrategies };
 }
 
+/** Same shape as GET /api/market/backtest: a strategy curve and a flatter benchmark. */
+function backtest(universe, strategy) {
+  const curve = Array.from({ length: 60 }, (_, i) => {
+    const d = new Date(Date.UTC(2023, 0, 2) + i * 18 * DAY * 1000).toISOString().slice(0, 10);
+    return { date: d, equity: Math.round((100 * 1.012 ** i + 4 * Math.sin(i / 3)) * 100) / 100, benchmark: Math.round(100 * 1.007 ** i * 100) / 100 };
+  });
+  return { universe, strategy, benchmark: 'SPY', provider: 'YAHOO', symbols: ['AAPL', 'MSFT', 'NVDA'], generated_at: '2026-10-28T15:30:00Z',
+    metrics: { cagr_pct: 18.4, volatility_pct: 21.2, sharpe: 0.87, sortino: 1.21, max_drawdown_pct: -24.6, calmar: 0.75, hit_rate_pct: 58.3, avg_turnover_pct: 32, benchmark_cagr_pct: 11.1, excess_cagr_pct: 7.3 },
+    curve,
+    rebalances: [{ date: '2023-01-03', holdings: ['AAPL', 'MSFT', 'NVDA'], turnover_pct: 100, fundamentals_coverage_pct: 92 }, { date: '2023-02-01', holdings: ['AAPL', 'GOOGL', 'NVDA'], turnover_pct: 33.33, fundamentals_coverage_pct: 96 }],
+    warnings: ['survivorship_bias', 'price_index_benchmark'] };
+}
+
 export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.read'], email = 'analyst@example.test' } = {}) {
   const u = new URL(url);
   const p = u.pathname;
@@ -181,6 +194,7 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     '/api/history': history(q.get('symbol') ?? 'NVDA', q.get('range') ?? '1M'),
     '/api/financials': financials(q.get('symbol') ?? 'NVDA'),
     '/api/market/leaderboard': leaderboard(q.get('universe') ?? 'custom', q.get('strategy') ?? 'best'),
+    '/api/market/backtest': backtest(q.get('universe') ?? 'custom', q.get('strategy') ?? 'best'),
     '/api/search': [{ symbol: 'NVDA', name: 'NVIDIA Corporation', type: 'EQUITY', exchange: 'NMS' }, { symbol: 'NVDL', name: 'GraniteShares 2x Long NVDA', type: 'ETF', exchange: 'NGM' }],
     '/api/orders': [],
     '/api/positions': { positions: [{ symbol: 'NVDA', quantity: 10, avg_entry: 110, cost_basis: 1100, last_price: 121.4, market_value: 1214, unrealized_pnl: 114, realized_pnl: 0, open_orders: 0, first_fill_at: NOW - 5 * DAY, last_fill_at: NOW - 5 * DAY }],

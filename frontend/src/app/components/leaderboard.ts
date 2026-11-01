@@ -9,6 +9,7 @@ import { MarketState } from '../core/market-state';
 import { MarketService, describeHttpError } from '../services';
 import type { LeaderboardOption, LeaderboardResponse, LeaderboardRow } from '../models';
 import { LEADERBOARD_FACTORS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES } from './investor-nodes';
+import { BacktestPanelComponent } from './backtest-panel';
 import { FACTOR_LABELS, STRATEGY_PLAYBOOK, flagList, leaderboardPrompt, num, pct, reasonList, scoreTone } from './leaderboard-view';
 
 const WATCHLIST = 'watchlist';
@@ -22,7 +23,7 @@ const STORE_KEY = 'fs.leaderboard';
 @Component({
   selector: 'fs-leaderboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, RouterLink],
+  imports: [DecimalPipe, RouterLink, BacktestPanelComponent],
   template: `
 <section class="card board" aria-labelledby="board-title">
   <div class="card-header board-head">
@@ -130,6 +131,9 @@ const STORE_KEY = 'fs.leaderboard';
           </button>
         }
         <button type="button" class="btn btn-sm btn-agent" (click)="askAgent()"><i class="bi bi-stars" aria-hidden="true"></i>Research the top 5</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" (click)="showBacktest.set(!showBacktest())" [attr.aria-expanded]="showBacktest()" aria-controls="board-backtest">
+          <i class="bi bi-clock-history" aria-hidden="true"></i>Backtest this strategy
+        </button>
         @if (access.flowsWrite()) {
           <a class="btn btn-sm btn-outline-secondary" routerLink="/flows" [queryParams]="{ template: playbook() }"><i class="bi bi-diagram-3" aria-hidden="true"></i>Automate as a flow</a>
         }
@@ -137,6 +141,12 @@ const STORE_KEY = 'fs.leaderboard';
           Scores are 0–100 percentiles within this universe from provider data; a missing factor counts as 40. Research, not investment advice.
           @if (d.unranked.length) { Not ranked (no data): {{ unrankedList() }}. }
         </span>
+      </div>
+    }
+    @if (showBacktest()) {
+      <div id="board-backtest">
+        <fs-backtest-panel [universe]="universe() === watchlist ? 'custom' : universe()" [strategy]="strategy()" [strategyLabel]="strategyInfo()?.label ?? strategy()"
+          [symbols]="universe() === watchlist ? watchlistSymbols() : []" />
       </div>
     }
   }
@@ -200,6 +210,7 @@ export class LeaderboardComponent {
   readonly loading = signal(false);
   readonly error = signal('');
   readonly showAll = signal(false);
+  readonly showBacktest = signal(false);
   private request?: Subscription;
 
   // Labels come with the first response; until then the client copy names them.
