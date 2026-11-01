@@ -2,7 +2,7 @@
 //   node --test src/app/ui/format.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { duration, everyLabel, runLabel, runTone, timeAgo } from './format.ts';
+import { duration, everyLabel, formatMoney, runLabel, runTone, timeAgo } from './format.ts';
 
 const NOW = Date.UTC(2026, 9, 30, 12, 0, 0);
 
@@ -30,6 +30,7 @@ test('schedules read as words where possible', () => {
   assert.equal(everyLabel(1440), 'Daily');
   assert.equal(everyLabel(2880), 'Every 2 days');
   assert.equal(everyLabel(10080), 'Weekly');
+  assert.equal(everyLabel(43200), 'Monthly');
 });
 
 test('run statuses map to labels and tones', () => {
@@ -39,4 +40,14 @@ test('run statuses map to labels and tones', () => {
   assert.equal(runTone('QUEUED'), 'is-info');
   assert.equal(runTone('AWAITING_APPROVAL'), 'is-warning');
   assert.equal(runTone('CANCELLED'), '');
+});
+
+test('money is whole units with a currency when the code is usable', () => {
+  assert.equal(formatMoney(1234567.89, 'USD', 'en-US'), '$1,234,568');
+  assert.equal(formatMoney(-50, 'usd', 'en-US'), '-$50');
+  assert.equal(formatMoney(1500, '', 'en-US'), '1,500');
+  assert.equal(formatMoney(1500, 'EURO', 'en-US'), '1,500');
+  assert.equal(formatMoney(1500, 'ZZZ', 'en-US').includes('1,500'), true);
+  assert.equal(formatMoney(NaN, 'USD'), '—');
+  assert.equal(formatMoney(undefined), '—');
 });

@@ -6,14 +6,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes.ts';
+import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES, SCREEN_FIELDS, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes.ts';
 
 const fixture = fileURLToPath(new URL('../../../../internal/server/testdata/investor-playbooks.json', import.meta.url));
 const optionsFixture = fileURLToPath(new URL('../../../../internal/server/testdata/leaderboard-options.json', import.meta.url));
 
 function allPlaybooks() {
   const out: Record<string, unknown> = {};
-  for (const p of INVESTOR_PLAYBOOKS) for (const admin of [true, false]) out[`${p.id}/${admin ? 'admin' : 'user'}`] = buildPlaybook(p.id, { admin });
+  for (const p of INVESTOR_PLAYBOOKS) for (const admin of p.adminOnly ? [true] : [true, false]) out[`${p.id}/${admin ? 'admin' : 'user'}`] = buildPlaybook(p.id, { admin });
   return out;
 }
 
@@ -33,6 +33,11 @@ test('every playbook is a connected, bounded v2 graph with one trigger', () => {
 
 test('only administrators get notify nodes and research tools', () => {
   for (const p of INVESTOR_PLAYBOOKS) {
+    if (p.adminOnly) {
+      assert.equal(buildPlaybook(p.id, { admin: false }), null, `${p.id} reads the paper portfolio`);
+      assert.ok(buildPlaybook(p.id, { admin: true })!.graph.nodes.some(n => n.type === 'notify'), p.id);
+      continue;
+    }
     const user = buildPlaybook(p.id, { admin: false })!;
     assert.ok(!user.graph.nodes.some(n => n.type === 'notify' || (n as { tools?: string[] }).tools), p.id);
     assert.ok(user.graph.nodes.some(n => n.type === 'output'), p.id);
@@ -62,7 +67,7 @@ test('the server knows every leaderboard universe and strategy', () => {
 test('node catalogue and watchlist checks', () => {
   assert.ok(isInvestorNode('screen') && !isInvestorNode('agent'));
   assert.equal(investorNode('notify')!.admin, true);
-  assert.ok(INVESTOR_NODES.filter(n => n.admin).every(n => n.type === 'notify'));
+  assert.ok(INVESTOR_NODES.filter(n => n.admin).every(n => n.type === 'notify' || n.type === 'portfolio_check'));
   assert.equal(watchlistProblem('AAPL, msft BRK.B'), '');
   assert.match(watchlistProblem('AAPL, $$$'), /not a valid ticker/);
   assert.match(watchlistProblem(Array.from({ length: 26 }, (_, i) => 'S' + i).join(',')), /At most 25/);
@@ -72,4 +77,28 @@ test('the server fixture matches the playbooks', () => {
   const current = JSON.stringify(allPlaybooks(), null, 1) + '\n';
   if (process.env['UPDATE_PLAYBOOKS']) writeFileSync(fixture, current);
   assert.equal(readFileSync(fixture, 'utf8'), current, 'run with UPDATE_PLAYBOOKS=1 to regenerate internal/server/testdata/investor-playbooks.json');
+});
+
+test('insider, macro, portfolio and events nodes are catalogued with screen fields', () => {
+  for (const type of ['insider_activity', 'macro_regime', 'portfolio_check', 'corporate_events']) {
+    assert.ok(isInvestorNode(type), type);
+    assert.ok(SCREEN_FIELDS[type].length > 3, `${type} needs field suggestions for the screen rule editor`);
+  }
+  assert.equal(investorNode('portfolio_check')!.admin, true, 'the paper portfolio is administrator only');
+  for (const type of ['insider_activity', 'macro_regime', 'corporate_events']) assert.equal(investorNode(type)!.admin, false, type);
+  assert.equal(new Set(INVESTOR_NODES.map(n => n.tag)).size, INVESTOR_NODES.length, 'canvas tags are unique');
+});
+
+test('the new playbooks use the new nodes and exist for the wealth plan', () => {
+  const uses = (id: string, type: string) => buildPlaybook(id, { admin: true })!.graph.nodes.some(n => n.type === type);
+  assert.ok(uses('insider-cluster', 'insider_activity') && uses('macro-regime', 'macro_regime') && uses('drawdown-guard', 'portfolio_check'));
+  assert.ok(uses('rebalance-check', 'portfolio_check') && uses('dividend-calendar', 'corporate_events') && uses('phase-checkin', 'wealth_plan'));
+  assert.ok(uses('earnings-week', 'corporate_events') && uses('strategy-scorecard', 'backtest'));
+  assert.deepEqual(INVESTOR_PLAYBOOKS.filter(p => p.adminOnly).map(p => p.id), ['drawdown-guard', 'rebalance-check']);
+  const scorecard = buildPlaybook('strategy-scorecard', { admin: false })!.graph.nodes;
+  assert.equal(scorecard.filter(n => n.type === 'backtest').length, 1, 'one backtest per flow');
+  // Every playbook the phases recommend can be built.
+  for (const id of ['phase-checkin', 'morning-brief', 'top10-buy-now', 'value-bargains', 'rebalance-check', 'watchlist-health', 'drawdown-guard', 'dividend-calendar']) {
+    assert.ok(buildPlaybook(id, { admin: true }), id);
+  }
 });

@@ -32,21 +32,22 @@ type leaderboardUniverse struct {
 	ID          string   `json:"id"`
 	Label       string   `json:"label"`
 	Description string   `json:"description"`
+	Benchmark   string   `json:"benchmark"` // index or ETF the backtest compares with
 	Symbols     []string `json:"symbols"`
 }
 
 // Universes use Yahoo-style tickers, the default provider's format.
 var leaderboardUniverses = []leaderboardUniverse{
 	{ID: "us_mega", Label: "US mega caps", Description: "The 25 largest US-listed companies across sectors.",
-		Symbols: []string{"AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "AVGO", "TSLA", "BRK-B", "JPM", "LLY", "V", "MA", "UNH", "XOM", "COST", "WMT", "HD", "PG", "JNJ", "NFLX", "ABBV", "ORCL", "CRM", "AMD"}},
+		Benchmark: "SPY", Symbols: []string{"AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "AVGO", "TSLA", "BRK-B", "JPM", "LLY", "V", "MA", "UNH", "XOM", "COST", "WMT", "HD", "PG", "JNJ", "NFLX", "ABBV", "ORCL", "CRM", "AMD"}},
 	{ID: "us_tech", Label: "US technology", Description: "Large US software, semiconductor and internet companies.",
-		Symbols: []string{"AAPL", "MSFT", "NVDA", "AVGO", "ORCL", "CRM", "AMD", "ADBE", "INTU", "QCOM", "TXN", "NOW", "AMAT", "MU", "PANW", "ANET", "KLAC", "LRCX", "SNPS", "CDNS", "ADI", "CSCO", "IBM", "UBER", "SHOP"}},
+		Benchmark: "SPY", Symbols: []string{"AAPL", "MSFT", "NVDA", "AVGO", "ORCL", "CRM", "AMD", "ADBE", "INTU", "QCOM", "TXN", "NOW", "AMAT", "MU", "PANW", "ANET", "KLAC", "LRCX", "SNPS", "CDNS", "ADI", "CSCO", "IBM", "UBER", "SHOP"}},
 	{ID: "us_dividend", Label: "US dividend & value", Description: "Established US dividend payers in staples, energy, health care, telecom, industrials and banks.",
-		Symbols: []string{"JNJ", "PG", "KO", "PEP", "XOM", "CVX", "ABBV", "MRK", "PFE", "VZ", "T", "MO", "PM", "MMM", "IBM", "CSCO", "HD", "MCD", "LOW", "TXN", "UPS", "CAT", "JPM", "BAC", "WFC"}},
+		Benchmark: "SPY", Symbols: []string{"JNJ", "PG", "KO", "PEP", "XOM", "CVX", "ABBV", "MRK", "PFE", "VZ", "T", "MO", "PM", "MMM", "IBM", "CSCO", "HD", "MCD", "LOW", "TXN", "UPS", "CAT", "JPM", "BAC", "WFC"}},
 	{ID: "se_large", Label: "Sweden large caps", Description: "Stockholm large caps in the style of OMXS30.",
-		Symbols: []string{"ABB.ST", "ALFA.ST", "ASSA-B.ST", "AZN.ST", "ATCO-A.ST", "BOL.ST", "EPI-A.ST", "EQT.ST", "ERIC-B.ST", "ESSITY-B.ST", "EVO.ST", "GETI-B.ST", "HEXA-B.ST", "HM-B.ST", "INVE-B.ST", "NDA-SE.ST", "NIBE-B.ST", "SAAB-B.ST", "SAND.ST", "SCA-B.ST", "SEB-A.ST", "SHB-A.ST", "SKF-B.ST", "SWED-A.ST", "TEL2-B.ST", "TELIA.ST", "VOLV-B.ST", "ELUX-B.ST", "KINV-B.ST", "SINCH.ST"}},
+		Benchmark: "^OMX", Symbols: []string{"ABB.ST", "ALFA.ST", "ASSA-B.ST", "AZN.ST", "ATCO-A.ST", "BOL.ST", "EPI-A.ST", "EQT.ST", "ERIC-B.ST", "ESSITY-B.ST", "EVO.ST", "GETI-B.ST", "HEXA-B.ST", "HM-B.ST", "INVE-B.ST", "NDA-SE.ST", "NIBE-B.ST", "SAAB-B.ST", "SAND.ST", "SCA-B.ST", "SEB-A.ST", "SHB-A.ST", "SKF-B.ST", "SWED-A.ST", "TEL2-B.ST", "TELIA.ST", "VOLV-B.ST", "ELUX-B.ST", "KINV-B.ST", "SINCH.ST"}},
 	{ID: "eu_leaders", Label: "European leaders", Description: "Large companies listed in Amsterdam, Frankfurt, Paris, Zurich, Copenhagen, Madrid and London.",
-		Symbols: []string{"ASML.AS", "SAP.DE", "NOVO-B.CO", "MC.PA", "NESN.SW", "ROG.SW", "NOVN.SW", "AZN.L", "SHEL.L", "OR.PA", "SIE.DE", "TTE.PA", "ALV.DE", "SU.PA", "AIR.PA", "ULVR.L", "HSBA.L", "BNP.PA", "SAN.PA", "IBE.MC", "DTE.DE", "RMS.PA", "ABBN.SW", "ADYEN.AS", "INGA.AS"}},
+		Benchmark: "^STOXX50E", Symbols: []string{"ASML.AS", "SAP.DE", "NOVO-B.CO", "MC.PA", "NESN.SW", "ROG.SW", "NOVN.SW", "AZN.L", "SHEL.L", "OR.PA", "SIE.DE", "TTE.PA", "ALV.DE", "SU.PA", "AIR.PA", "ULVR.L", "HSBA.L", "BNP.PA", "SAN.PA", "IBE.MC", "DTE.DE", "RMS.PA", "ABBN.SW", "ADYEN.AS", "INGA.AS"}},
 }
 
 func findLeaderboardUniverse(id string) (leaderboardUniverse, bool) {

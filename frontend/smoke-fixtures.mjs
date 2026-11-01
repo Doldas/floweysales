@@ -164,6 +164,54 @@ function leaderboard(universe, strategy) {
     unranked: [{ symbol: 'BRK-B', error: 'fewer than four reported quarters' }], universes: boardUniverses, strategies: boardStrategies };
 }
 
+/** Same shape as GET /api/market/backtest: a strategy curve and a flatter benchmark. */
+function backtest(universe, strategy) {
+  const curve = Array.from({ length: 60 }, (_, i) => {
+    const d = new Date(Date.UTC(2023, 0, 2) + i * 18 * DAY * 1000).toISOString().slice(0, 10);
+    return { date: d, equity: Math.round((100 * 1.012 ** i + 4 * Math.sin(i / 3)) * 100) / 100, benchmark: Math.round(100 * 1.007 ** i * 100) / 100 };
+  });
+  return { universe, strategy, benchmark: 'SPY', provider: 'YAHOO', symbols: ['AAPL', 'MSFT', 'NVDA'], generated_at: '2026-10-28T15:30:00Z',
+    metrics: { cagr_pct: 18.4, volatility_pct: 21.2, sharpe: 0.87, sortino: 1.21, max_drawdown_pct: -24.6, calmar: 0.75, hit_rate_pct: 58.3, avg_turnover_pct: 32, benchmark_cagr_pct: 11.1, excess_cagr_pct: 7.3 },
+    curve,
+    rebalances: [{ date: '2023-01-03', holdings: ['AAPL', 'MSFT', 'NVDA'], turnover_pct: 100, fundamentals_coverage_pct: 92 }, { date: '2023-02-01', holdings: ['AAPL', 'GOOGL', 'NVDA'], turnover_pct: 33.33, fundamentals_coverage_pct: 96 }],
+    warnings: ['survivorship_bias', 'price_index_benchmark'] };
+}
+
+/** Same shape as GET /api/plan: a starter-phase plan with a 30-year fan. */
+function wealthPlan() {
+  const bands = Array.from({ length: 31 }, (_, y) => {
+    const mid = Math.round(40000 * 1.06 ** y + 900 * 12 * ((1.06 ** y - 1) / 0.06));
+    return { year: y, age: 34 + y, p10: Math.round(mid * 0.7), p50: mid, p90: Math.round(mid * 1.5), real_p10: Math.round(mid * 0.7 / 1.025 ** y), real_p50: Math.round(mid / 1.025 ** y), real_p90: Math.round(mid * 1.5 / 1.025 ** y) };
+  });
+  const asset = (r, v) => ({ expected_return_pct: r, volatility_pct: v });
+  return {
+    profile: { monthly_expenses: 2500, emergency_fund: 9000, invested: 40000, monthly_contribution: 900, age: 34, retirement_age: 64, risk_profile: 'growth', currency: 'USD' },
+    plan: {
+      phase: { id: 'starter', name: 'Starter', job: 'Build the habit: automate contributions into broad, low-cost index funds.',
+        checklist: ['Automate a fixed monthly contribution the day income arrives.', 'Hold broad index funds; skip single stocks until the habit holds.', 'Review once a month, not every day.'],
+        playbooks: ['phase-checkin', 'morning-brief'] },
+      target_allocation: { core_equity: 85, bonds: 10, cash: 5, satellite: 0 },
+      fi_number: 750000, fi_ratio_pct: 5.33, goal_amount: 750000, horizon_years: 30, bands,
+      probability_goal_pct: 62.4, years_to_goal_p50: 24, required_contribution_75: 1240.5,
+      milestones: [{ label: '100000', amount: 100000, year: 7 }, { label: '250000', amount: 250000, year: 15 }, { label: 'Financial independence', amount: 750000, year: 24 }],
+      assumptions: { core_equity: asset(7, 16), bonds: asset(3.5, 6), cash: asset(2.5, 1), satellite: asset(8, 35), inflation_pct: 2.5, corr_equity_bond: 0.2, corr_equity_satellite: 0.7, paths: 2000,
+        note: 'Long-run estimates, not forecasts. Returns are nominal and before tax.' },
+    },
+  };
+}
+
+/** Same shape as GET /api/portfolio/analytics. */
+function portfolioAnalytics() {
+  return { benchmark: 'SPY', has_plan: true, generated_at: '2026-10-28T15:30:00Z', analytics: {
+    total_value: 100114, weights_pct: { NVDA: 62, BND: 20, VTI: 18 }, top_weight_pct: 62, hhi: 0.46, effective_holdings: 2.2,
+    volatility_pct: 24.1, beta: 1.32, max_drawdown_1y_pct: -18.4,
+    correlation: [[1, 0.31, 0.78], [0.31, 1, 0.12], [0.78, 0.12, 1]], symbols: ['NVDA', 'BND', 'VTI'],
+    risk_contribution_pct: { NVDA: 84.5, BND: 1.5, VTI: 14 }, class_weights_pct: { equity: 80, bond: 20 },
+    drift_pct: { equity: 15, bond: -5, cash: -5, satellite: 0 },
+    suggestions: [{ symbol: 'NVDA', side: 'sell', amount: 15000, reason: 'equity is 15 points above its 65% target' }, { symbol: 'BND', side: 'buy', amount: 5000, reason: 'bond is 5 points below its 25% target' }],
+    alerts: ['concentration', 'low_diversification'] } };
+}
+
 export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.read'], email = 'analyst@example.test' } = {}) {
   const u = new URL(url);
   const p = u.pathname;
@@ -181,6 +229,22 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     '/api/history': history(q.get('symbol') ?? 'NVDA', q.get('range') ?? '1M'),
     '/api/financials': financials(q.get('symbol') ?? 'NVDA'),
     '/api/market/leaderboard': leaderboard(q.get('universe') ?? 'custom', q.get('strategy') ?? 'best'),
+    '/api/trading/size': { symbol: 'NVDA', side: 'buy', entry: 121.4, equity: 100114, risk_pct: 1, atr_mult: 2, atr: 3.2, stop_source: 'atr', result: { quantity: 156, stop: 115, risk_amount: 998.4, position_pct: 18.9 } },
+    '/api/portfolio/analytics': portfolioAnalytics(),
+    '/api/events': { symbol: q.get('symbol') ?? 'NVDA', from: q.get('from'), to: q.get('to'), events: [
+      { symbol: 'NVDA', kind: 'dividend', date: q.get('to') < '2026-10-30' ? '2026-08-14' : '2026-11-14', amount: 0.01, currency: 'USD', confirmed: true, provider: 'YAHOO' },
+      { symbol: 'NVDA', kind: 'earnings', date: '2026-11-20', confirmed: false, provider: 'YAHOO' }] },
+    '/api/today': { generated_at: '2026-10-28T08:00:00Z',
+      phase: { id: 'starter', name: 'Starter', probability_goal_pct: 62.4, probability_label: 'share of simulated paths that reach the goal in today\'s money' },
+      macro: { regime: 'caution', reasons: 'high-yield credit spreads are wide or rising fast', as_of: '2026-10-27' },
+      ...(admin ? { portfolio: { equity: 100114, unrealized_pnl: 114, positions: 1, day_change: -420, day_change_pct: -0.4, drawdown_from_peak_pct: -8.2, top_alert: 'concentration' } } : {}),
+      worth_a_look: { leaderboard: { symbol: 'GOOGL', score: 84, grade: 'A', reasons: 'value: P/E 21.3', universe: 'us_mega', strategy: 'best' },
+        insider: { symbol: 'MSFT', largest_buy_value: 250000, largest_buyer: 'Doe Jane', cluster_buy: true, latest: '2026-10-25' },
+        earnings: { symbol: 'NVDA', date: '2026-11-20', confirmed: false } } },
+    '/api/plan': wealthPlan(),
+    '/api/plan/preview': wealthPlan(),
+    '/api/plan/profile': wealthPlan(),
+    '/api/market/backtest': backtest(q.get('universe') ?? 'custom', q.get('strategy') ?? 'best'),
     '/api/search': [{ symbol: 'NVDA', name: 'NVIDIA Corporation', type: 'EQUITY', exchange: 'NMS' }, { symbol: 'NVDL', name: 'GraniteShares 2x Long NVDA', type: 'ETF', exchange: 'NGM' }],
     '/api/orders': [],
     '/api/positions': { positions: [{ symbol: 'NVDA', quantity: 10, avg_entry: 110, cost_basis: 1100, last_price: 121.4, market_value: 1214, unrealized_pnl: 114, realized_pnl: 0, open_orders: 0, first_fill_at: NOW - 5 * DAY, last_fill_at: NOW - 5 * DAY }],

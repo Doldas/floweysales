@@ -31,7 +31,7 @@ async function audit(page, label, selector = 'fse-flow-studio') {
 }
 
 try {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   const missing = await installMocks(page, { email: 'a11y@example.test' });
@@ -86,7 +86,7 @@ try {
   await audit(page, 'Flow editor: notify settings');
 
   // Every page of the workspace, with the shell, in both themes.
-  const pages = ['', 'agent', 'flows', 'inbox', 'markets', 'financials', 'portfolio', 'workspace', 'community', 'notifications', 'settings'];
+  const pages = ['', 'agent', 'flows', 'inbox', 'markets', 'plan', 'financials', 'portfolio', 'workspace', 'community', 'notifications', 'settings'];
   for (const theme of ['dark', 'light']) {
     await page.evaluate(t => { localStorage.setItem('fs.theme', t); document.documentElement.setAttribute('data-bs-theme', t); }, theme);
     for (const path of pages) {
@@ -96,6 +96,22 @@ try {
       await audit(page, `Page ${path || 'command-center'} (${theme})`, 'body');
     }
   }
+  // Markets → leaderboard → backtest panel with the chart and its warnings.
+  await page.goto(new URL('#/markets', base).href, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Backtest this strategy' }).click();
+  await page.locator('fs-backtest-panel svg[role="img"]').waitFor({ state: 'visible', timeout: 5000 });
+  await page.addScriptTag({ content: axeSource });
+  await audit(page, 'Markets: backtest panel', 'fs-backtest-panel');
+  await page.getByRole('button', { name: /rebalances/ }).click();
+  await audit(page, 'Markets: backtest rebalance table', 'fs-backtest-panel');
+
+  // Portfolio → Risk tab with alerts, correlation and suggestions.
+  await page.goto(new URL('#/portfolio', base).href, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Risk', exact: true }).click();
+  await page.locator('fs-portfolio-risk .tiles').waitFor({ state: 'visible', timeout: 5000 });
+  await page.addScriptTag({ content: axeSource });
+  await audit(page, 'Portfolio: risk tab', 'fs-portfolio-risk');
+
   // Settings → Plugins: installed plugins, an available update and the store.
   await page.goto(new URL('#/settings', base).href, { waitUntil: 'networkidle' });
   await page.getByRole('tab', { name: 'Plugins', exact: true }).click();

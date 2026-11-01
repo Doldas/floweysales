@@ -68,6 +68,8 @@ type flowNode struct {
 	Subject       string `json:"subject,omitempty"`
 	Universe      string `json:"universe,omitempty"`
 	Strategy      string `json:"strategy,omitempty"`
+	Kinds         string `json:"kinds,omitempty"` // corporate_events: dividend, split, earnings
+	Years         int    `json:"years,omitempty"` // backtest: 3 or 5
 	// SkipEmpty skips the node, and so everything that depends on it, when
 	// its input is empty ("", [] or {}), e.g. no new filings or no alerts.
 	SkipEmpty bool    `json:"skip_empty,omitempty"`
@@ -135,8 +137,8 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 	if len(strings.TrimSpace(f.Name)) < 2 || len(f.Name) > 120 {
 		return g, nil, fmt.Errorf("name must be 2–120 characters")
 	}
-	if f.IntervalMinutes != 0 && (f.IntervalMinutes < 5 || f.IntervalMinutes > 10080) {
-		return g, nil, fmt.Errorf("schedule interval must be 0 or 5–10080 minutes")
+	if f.IntervalMinutes != 0 && (f.IntervalMinutes < 5 || f.IntervalMinutes > flowMaxIntervalMinutes) {
+		return g, nil, fmt.Errorf("schedule interval must be 0 or 5–%d minutes", flowMaxIntervalMinutes)
 	}
 	if f.EventKey != "" && !flowEventPattern.MatchString(f.EventKey) {
 		return g, nil, fmt.Errorf("invalid event key")
@@ -161,7 +163,7 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 	calls := 0
 	functions := 0
 	constants := 0
-	utilities := 0
+	utilities, backtests := 0, 0
 	for _, n := range g.Nodes {
 		if len(n.ID) < 1 || len(n.ID) > 48 || len(n.Label) > 100 {
 			return g, nil, fmt.Errorf("invalid node ID or label")
@@ -187,7 +189,13 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 			if err := validateInvestorNode(n, g.Version); err != nil {
 				return g, nil, err
 			}
-		} else if n.Symbols != "" || n.Provider != "" || n.Rule != "" || n.SortBy != "" || n.Limit != 0 || n.Columns != "" || n.Title != "" || n.KeyFields != "" || n.CooldownHours != 0 || n.LookbackDays != 0 || n.Forms != "" || n.Channel != "" || n.Subject != "" || n.Universe != "" || n.Strategy != "" {
+			if n.Type == "backtest" {
+				// A backtest replays years of prices; one per flow keeps a run bounded.
+				if backtests++; backtests > 1 {
+					return g, nil, fmt.Errorf("a flow can have at most one backtest node")
+				}
+			}
+		} else if n.Symbols != "" || n.Provider != "" || n.Rule != "" || n.SortBy != "" || n.Limit != 0 || n.Columns != "" || n.Title != "" || n.KeyFields != "" || n.CooldownHours != 0 || n.LookbackDays != 0 || n.Forms != "" || n.Channel != "" || n.Subject != "" || n.Universe != "" || n.Strategy != "" || n.Kinds != "" || n.Years != 0 {
 			return g, nil, fmt.Errorf("node %s: investor settings are only valid on investor nodes", n.ID)
 		}
 		if g.Version == 2 && (n.Type == "condition" || n.Type == "merge" || n.Type == "json_get") {
@@ -568,11 +576,16 @@ func (e *Engine) configuredFlowModelsAllowed(ctx context.Context, graph flowGrap
 	}
 	return nil
 }
+
+// flowMaxIntervalMinutes is the longest schedule: 30 days, the monthly playbooks.
+const flowMaxIntervalMinutes = 43200
+
 func flowAllowedForNonAdmin(graph flowGraph) bool {
 	for _, node := range graph.Nodes {
 		switch node.Type {
 		case "trigger", "agent", "constant", "condition", "merge", "json_get", "transform", "loop", "output", "http_get", "web_crawl", "web_search",
-			"watchlist_quotes", "technical_scan", "fundamentals", "sec_filings", "news", "leaderboard", "screen", "only_new", "report_table":
+			"watchlist_quotes", "technical_scan", "fundamentals", "sec_filings", "news", "leaderboard", "screen", "only_new", "report_table",
+			"insider_activity", "macro_regime", "corporate_events", "wealth_plan", "backtest":
 		default:
 			return false
 		}

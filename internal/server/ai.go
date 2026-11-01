@@ -412,7 +412,13 @@ func (e *Engine) registerAIRoutes() {
 
 		// Run synchronously against the request context; every event is flushed
 		// as it happens so the client sees token-by-token streaming.
-		_ = ai.Run(r.Context(), client, engineSource{e: e}, req.Messages, opts, send)
+		runCtx := r.Context()
+		if e.authService != nil {
+			if u, ok := e.currentUser(r); ok {
+				runCtx = withAgentUser(runCtx, u)
+			}
+		}
+		_ = ai.Run(runCtx, client, engineSource{e: e}, req.Messages, opts, send)
 	})
 }
 

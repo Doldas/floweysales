@@ -29,7 +29,7 @@ interface Command {
 }
 
 export const FLOW_TEMPLATES = [
-  ...INVESTOR_PLAYBOOKS.map(p => ({ id: p.id, label: p.label, description: p.description, icon: p.icon })),
+  ...INVESTOR_PLAYBOOKS.map(p => ({ id: p.id, label: p.label, description: p.description, icon: p.icon, adminOnly: !!p.adminOnly })),
   { id: 'research', label: 'Market research report', description: 'An agent researches a company and returns a scored JSON report.', icon: 'bi-file-earmark-bar-graph' },
   { id: 'risk', label: 'Risk-score decision', description: 'Score risk, then branch to “review required” or “low risk”.', icon: 'bi-signpost-split' },
   { id: 'event', label: 'Event-driven analysis', description: 'Run research whenever a custom event such as research.requested fires.', icon: 'bi-lightning-charge' },
@@ -128,6 +128,7 @@ export class CommandPaletteComponent {
       ['/flows', 'Flows', 'bi-diagram-3', this.access.flowsRead()],
       ['/inbox', 'Inbox · approvals', 'bi-inbox', this.access.inbox()],
       ['/markets', 'Markets', 'bi-graph-up-arrow', true],
+      ['/plan', 'Wealth plan', 'bi-bullseye', true],
       ['/financials', 'Financials', 'bi-bank', true],
       ['/portfolio', 'Paper portfolio', 'bi-wallet2', this.access.liveMarkets()],
       ['/workspace', 'Workspace files', 'bi-folder2-open', this.access.workspace()],
@@ -148,7 +149,7 @@ export class CommandPaletteComponent {
         }
       }
       if (this.access.flowsWrite()) {
-        for (const t of FLOW_TEMPLATES) {
+        for (const t of FLOW_TEMPLATES.filter(t => !('adminOnly' in t && t.adminOnly) || this.access.isAdmin())) {
           list.push({ id: 'tpl-' + t.id, group: 'Create', label: `New flow: ${t.label}`, icon: t.icon, keywords: 'template automation', run: go('/flows', { template: t.id }) });
         }
       }

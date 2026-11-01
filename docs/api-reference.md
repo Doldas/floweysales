@@ -41,6 +41,20 @@ använder Avanza-pluginens publika read-only ögonblicksbild och finns bara
 när Avanza-pluginet är installerat (installationen kräver att villkoren
 godkänns).
 
+## Investeringsanalys
+
+`GET /api/market/leaderboard?universe=…&strategy=…` rankar ett urval bolag på
+sex faktorer. `GET /api/market/backtest?universe=…&strategy=…&top=10&rebalance=monthly|quarterly&cost_bps=10&years=3|5`
+spelar upp samma strategi över historiska kurser och rapporter (rapporter
+används först 60 dagar efter periodens slut) mot ett index och returnerar
+nyckeltal, kurva, ombalanseringar och varningar. Båda läses med
+`research.read`; se [investor automations](investor-automations.md#backtest).
+
+`GET /api/plan`, `PUT /api/plan/profile` och `POST /api/plan/preview` hanterar
+den inloggade användarens egen förmögenhetsplan (fas, målallokering och
+simulering); se [wealth plan](wealth-plan.md). `GET /api/portfolio/analytics` (SYS_ADMIN)
+mäter pappersportföljens risk och avvikelse från planen.
+
 ## Säkerhet och tillgänglighet
 
 - En **whitelist** ersätter godtycklig extern URL-forwarding.

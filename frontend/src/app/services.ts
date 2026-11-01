@@ -5,11 +5,19 @@ import {
   ForumPost,
   FinancialsResponse,
   HistorySeries,
+  BacktestParams,
+  BacktestResult,
   LeaderboardResponse,
   MarketData,
   Order,
   OrderRequest,
   OrderResponse,
+  EventsResponse,
+  PlanProfile,
+  TodayBriefing,
+  SizeResponse,
+  PortfolioAnalyticsResponse,
+  PlanResponse,
   PortfolioResponse,
   ProviderCapability,
   SymbolInfo,
@@ -76,6 +84,50 @@ export class MarketService {
     if (symbols.length) params['symbols'] = symbols.join(',');
     else params['universe'] = universe;
     return this.http.get<LeaderboardResponse>('/api/market/leaderboard', { params });
+  }
+
+  /** Replays a leaderboard strategy over past prices; slow on a cold cache. */
+  backtest(p: BacktestParams): Observable<BacktestResult> {
+    const params: Record<string, string> = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance, years: String(p.years) };
+    if (p.symbols?.length) params['symbols'] = p.symbols.join(',');
+    else params['universe'] = p.universe;
+    return this.http.get<BacktestResult>('/api/market/backtest', { params });
+  }
+
+  /** The signed-in user's saved wealth plan, or nulls when none is saved. */
+  getPlan(): Observable<PlanResponse> {
+    return this.http.get<PlanResponse>('/api/plan');
+  }
+
+  savePlan(profile: PlanProfile): Observable<PlanResponse> {
+    return this.http.put<PlanResponse>('/api/plan/profile', profile);
+  }
+
+  /** A plan for an unsaved profile; nothing is stored. */
+  previewPlan(profile: PlanProfile): Observable<PlanResponse> {
+    return this.http.post<PlanResponse>('/api/plan/preview', profile);
+  }
+
+  /** Concentration, risk and drift of the paper portfolio. */
+  getPortfolioAnalytics(): Observable<PortfolioAnalyticsResponse> {
+    return this.http.get<PortfolioAnalyticsResponse>('/api/portfolio/analytics');
+  }
+
+  /** How many units to trade so a stop-out loses riskPct of equity. Places nothing. */
+  sizePosition(symbol: string, side: 'buy' | 'sell', riskPct: number): Observable<SizeResponse> {
+    return this.http.post<SizeResponse>('/api/trading/size', { symbol, side, risk_pct: riskPct });
+  }
+
+  /** Dividends, splits and earnings dates between two ISO dates (window up to 400 days). */
+  getEvents(symbol: string, from: string, to: string, provider = ''): Observable<EventsResponse> {
+    const params: Record<string, string> = { symbol, from, to };
+    if (provider) params['provider'] = provider;
+    return this.http.get<EventsResponse>('/api/events', { params });
+  }
+
+  /** Phase, macro regime, paper portfolio and three things worth a look; no model runs. */
+  getToday(): Observable<TodayBriefing> {
+    return this.http.get<TodayBriefing>('/api/today');
   }
 
   getStats(symbol: string): Observable<MarketStatsJSON> {

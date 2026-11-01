@@ -29,8 +29,17 @@ schedule; other users get an Output node and run the flow manually.
 | Quality on a dip (Sweden) | Leaderboard (Sweden large caps, *Quality on a dip*) → Screen 8 %+ below the high, quality ≥ 60 → Only new (3 days) → table → agent (web search for admins) | Daily |
 | Quarterly reports, scored | SEC 10-Q/10-K → Only new → Leaderboard of the watchlist, kept to the filers → table → grounded "what changed" memo | Every 6 h |
 | Watchlist health check | Leaderboard of the watchlist → Screen score < 45 or warning flags → table → review notes | Weekly |
+| Insider buying clusters | Insider activity → Screen `cluster_buy or (officer_buy and net_value > 250000)` → Only new (14 days) → table → Notify | Daily |
+| Macro regime shift | Macro regime → Only new on `regime` (reminds every 14 days) → agent explains what changed, grounded → Notify | Daily |
+| Portfolio drawdown guard | Portfolio check → Screen `drawdown_from_peak_pct <= -10 or kind == "deep_drawdown"` → Only new (72 h) → table → Notify. **Administrators only** | Hourly |
+| Monthly rebalance check | Portfolio check → Screen `kind == "suggestion"` → table → grounded rebalance notes → Notify. **Administrators only** | Monthly |
+| Dividend & earnings calendar | Dividends & earnings (30 days ahead) → Only new → table → Notify | Weekly |
+| Monthly phase check-in | Wealth plan → grounded progress note (phase, probability of the goal, next checklist item) | Monthly |
+| Earnings this week, scored | Dividends & earnings (earnings, 7 days) → Leaderboard of the watchlist, kept to the reporters → table → memo | Weekly |
+| Strategy scorecard | Backtest of all six strategies on US mega caps → table → agent compares them and states the bias warnings | Monthly |
 
-Alert playbooks use **Skip when the input is empty**, so on quiet days nothing
+Monthly means every 30 days (43,200 minutes, the longest schedule). Alert
+playbooks use **Skip when the input is empty**, so on quiet days nothing
 runs past the filter: no model calls, no messages.
 
 ## Nodes
@@ -49,6 +58,12 @@ every symbol fails. Outputs are JSON arrays of rows, at most 16 KB.
 | **Fundamentals** | `revenue_ttm`, `revenue_growth_pct`, `gross/operating/net/fcf_margin_pct`, `eps_ttm`, `eps_growth_pct`, `pe_ttm`, `ttm_through` | TTM from the four latest reported quarters; a figure is absent unless every quarter it needs was reported. P/E only when price and EPS share a currency |
 | **SEC filings** | `id` (accession), `form`, `filed`, `period_end`, `company`, `url` | SEC EDGAR, last 1–90 days (default 7), optional form filter. Needs `SEC_USER_AGENT` |
 | **News headlines** | `id` (URL), `title`, `source`, `published`, `summary`, `url` | From a provider plugin with the `news` capability (Yahoo, Finnhub); only http(s) links are kept |
+| **Insider activity** | `buy_count`, `sell_count`, `buyers`, `net_shares`, `net_value`, `largest_buy_value`, `largest_buyer`, `officer_buy`, `cluster_buy`, `latest`, `url` | SEC Form 4 filings (code `P` open-market buys and `S` sales; grants and exercises are ignored), last 1–90 days (default 30), at most 10 filings per symbol. `cluster_buy` is three or more different buyers. Values are absent when no trade had a price. Needs `SEC_USER_AGENT` |
+| **Macro regime** | one row: `regime` (`risk_on`, `caution`, `risk_off`), `signals`, `reasons`, `curve_spread`, `curve_inverted`, `curve_uninverting`, `unemployment`, `sahm_rule`, `fed_funds`, `hy_spread`, `credit_stress`, `vix`, `vol_regime`, each value with a `_3m_change`, `missing`, `as_of` | FRED series `T10Y2Y`, `UNRATE`, `FEDFUNDS`, `BAMLH0A0HYM2`, `VIXCLS` through the FRED plugin (needs `FRED_API_KEY`). Signals: curve un-inverting within a year, Sahm rule (3-month average unemployment at least 0.5 above its 12-month low), credit stress (spread at least 5 or up 1.0 in 3 months), VIX 25 or more. Two signals is `risk_off`, one is `caution`. A missing series leaves its signals out |
+| **Portfolio check** | a `summary` row (`total_value`, `volatility_pct`, `beta`, `max_drawdown_1y_pct`, `drift_*_pct`, `peak_equity`, `drawdown_from_peak_pct`), one row per alert (`kind` is the alert, e.g. `concentration`, `deep_drawdown`) and one `suggestion` row per rebalancing move | SYS_ADMIN only, like the paper portfolio. Uses [portfolio analytics](wealth-plan.md#portfolio-risk) and the peak in `paper_equity_peak` |
+| **Dividends & earnings** | `id` (`symbol\|kind\|date`), `kind`, `date`, `days_until`, `amount`, `currency`, `ratio`, `confirmed`, `provider` | From a provider plugin with the `events` capability. `limit` is the days ahead (default 30, at most 90), `lookback_days` reaches into the past, `kinds` filters (`dividend`, `split`, `earnings`) |
+| **Wealth plan** | one row: `phase`, `phase_job`, `next_checklist_item`, `core_equity_pct`/`bonds_pct`/`cash_pct`/`satellite_pct`, `fi_number`, `fi_ratio_pct`, `goal_amount`, `probability_goal_pct` (with `probability_label`), `years_to_goal_p50`, `required_contribution_75`, `projection` | The saved plan of the flow's owner, seed 1 so figures are stable between runs. Empty (with a note) when no plan is saved. See [wealth plan](wealth-plan.md) |
+| **Strategy backtest** | one row per strategy: `cagr_pct`, `excess_cagr_pct`, `volatility_pct`, `sharpe`, `sortino`, `max_drawdown_pct`, `calmar`, `hit_rate_pct`, `avg_turnover_pct`, `rebalances`, `warnings`, `warning_text` | Settings: universe or watchlist, strategy (or `all`), holdings (`limit`, default 10) and `years` (3 or 5). Monthly rebalancing, 10 bps per trade. At most one per flow, 120 s budget. See [Backtest](#backtest) |
 | **Leaderboard** | `rank`, `score`, `grade`, the six factor scores, `coverage_pct`, key figures, `reasons`, `flags` | See [Leaderboard](#leaderboard). A preset universe or a watchlist; passes on the top 1–25 |
 | **Screen** | the matching rows | Rule, sort (`-field` for descending) and limit; rows with `error` never pass |
 | **Only new since last run** | rows not passed on before | Remembers up to 2,000 keys per node for 180 days (Liquibase 032, `agent_flow_node_state`). Key: chosen fields, else `id`, `url` or `symbol`. A cooldown lets a row through again after N hours |
@@ -135,6 +150,45 @@ ranked and only those symbols are passed on, each with its rank in the list.
 
 Scores compare companies with each other on reported and price data. They are
 not forecasts or price targets and nothing here trades.
+
+## Backtest
+
+A ranking nobody has tested is a guess, so the leaderboard can replay a
+strategy over the past. On **Markets → Leaderboard** choose *Backtest this
+strategy*, or call
+`GET /api/market/backtest?universe=…&strategy=…&top=10&rebalance=monthly|quarterly&cost_bps=10&years=3|5`
+(or `symbols=` with up to 25 tickers; readable by `research.read`).
+
+**Method.** The first rebalance is the first trading day on or after the start
+date once `top` symbols have a year of prices. Every 21 trading days (63 for
+quarterly) the leaderboard scores the universe exactly as it does today, the
+best `top` companies are held at equal weight, and weights then drift with
+prices until the next rebalance. Each trade costs `cost_bps` per side (default
+10). The benchmark is held in full with no costs: SPY for the US universes,
+`^OMX` for Sweden and `^STOXX50E` for Europe. Metrics are computed from the
+daily curve: yearly return (CAGR), volatility, Sharpe and Sortino (risk-free
+rate taken as 0), worst peak-to-trough fall, the share of rebalance periods
+that beat the benchmark, and average turnover. The first year of prices is
+warm-up, so a five-year test fetches ten years of history.
+
+**Point in time.** At each rebalance the strategy sees only prices up to that
+day and only quarters that would have been published: a quarter counts from its
+period end plus 60 days. Nothing later leaks into an earlier choice.
+
+**Warnings** are returned with every result and shown above it:
+
+| Id | Meaning |
+| --- | --- |
+| `survivorship_bias` | Always. The universe is today's list; companies that fell out of it are missing, which flatters past returns. |
+| `price_index_benchmark` | The benchmark has no dividends. |
+| `thin_fundamentals` | Fewer than 60 % of symbols had four reported quarters on average, so early picks lean on price factors. |
+| `short_history` | Fewer than 24 rebalances fit the history. |
+| `benchmark_unavailable`, `symbols_unavailable` | The benchmark or some symbols could not be fetched. |
+
+With fewer than six rebalances the request fails instead of guessing. Results
+are cached for six hours and identical concurrent requests share one run. Past
+results do not predict future ones; the backtest is a check on a strategy, not
+a forecast.
 
 ## Notifications
 

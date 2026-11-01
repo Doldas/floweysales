@@ -1,0 +1,1 @@
+[{"symbol":"EXMP","kind":"dividend","date":"2026-11-14","amount":0.24,"currency":"USD","confirmed":true,"provider":"YAHOO"},{"symbol":"EXMP","kind":"split","date":"2026-12-01","ratio":"4:1","confirmed":true},{"symbol":"EXMP","kind":"earnings","date":"2026-11-20","confirmed":false,"provider":"FINNHUB"}]

@@ -115,7 +115,9 @@ func allowedAPI(role, method, path string) bool {
 		return false
 	}
 	switch {
-	case method == http.MethodGet && (path == "/api/search" || path == "/api/history" || path == "/api/financials" || path == "/api/providers" || path == "/api/provider/endpoints" || path == "/api/provider/research" || path == "/api/quote" || path == "/api/market/leaderboard" || path == "/api/sec/filings" || path == "/api/sec/section" || path == "/api/sec/facts" || path == "/api/ai/config" || path == "/api/ai/tools"):
+	case isPlanRoute(method, path):
+		return true
+	case method == http.MethodGet && (path == "/api/search" || path == "/api/history" || path == "/api/financials" || path == "/api/providers" || path == "/api/provider/endpoints" || path == "/api/provider/research" || path == "/api/quote" || path == "/api/market/leaderboard" || path == "/api/market/backtest" || path == "/api/events" || path == "/api/sec/filings" || path == "/api/sec/section" || path == "/api/sec/facts" || path == "/api/ai/config" || path == "/api/ai/tools"):
 		return true
 	case method == http.MethodPost && path == "/api/ai/chat" || path == "/api/valuation/dcf":
 		return true
@@ -124,11 +126,23 @@ func allowedAPI(role, method, path string) bool {
 	}
 }
 
+// isPlanRoute matches the wealth plan routes, which every signed-in user
+// may call for their own plan.
+func isPlanRoute(method, path string) bool {
+	return (method == http.MethodGet && path == "/api/plan") ||
+		(method == http.MethodPut && path == "/api/plan/profile") ||
+		(method == http.MethodPost && path == "/api/plan/preview") ||
+		(method == http.MethodGet && path == "/api/today")
+}
+
 func (e *Engine) allowedUserAPI(r *http.Request, u identity.User) bool {
 	if u.Role == identity.RoleSysAdmin {
 		return true
 	}
 	method, path := r.Method, r.URL.Path
+	if isPlanRoute(method, path) {
+		return true
+	}
 	if strings.HasPrefix(path, "/api/me/tracker-emails") && (method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete) {
 		return true
 	}
@@ -149,7 +163,7 @@ func (e *Engine) allowedUserAPI(r *http.Request, u identity.User) bool {
 		}
 		return e.authService.HasPermission(r.Context(), u.Role, permission)
 	}
-	if method == http.MethodGet && (path == "/api/search" || path == "/api/history" || path == "/api/financials" || path == "/api/providers" || path == "/api/provider/endpoints" || path == "/api/provider/research" || path == "/api/quote" || path == "/api/market/leaderboard" || path == "/api/sec/filings" || path == "/api/sec/section" || path == "/api/sec/facts" || path == "/api/ai/config" || path == "/api/ai/tools") {
+	if method == http.MethodGet && (path == "/api/search" || path == "/api/history" || path == "/api/financials" || path == "/api/providers" || path == "/api/provider/endpoints" || path == "/api/provider/research" || path == "/api/quote" || path == "/api/market/leaderboard" || path == "/api/market/backtest" || path == "/api/events" || path == "/api/sec/filings" || path == "/api/sec/section" || path == "/api/sec/facts" || path == "/api/ai/config" || path == "/api/ai/tools") {
 		return e.authService.HasPermission(r.Context(), u.Role, "research.read")
 	}
 	if method == http.MethodPost && path == "/api/ai/chat" {

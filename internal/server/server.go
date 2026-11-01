@@ -159,6 +159,10 @@ type Engine struct {
 	leaderboardCache map[string]leaderboardCacheEntry
 	leaderboardCalls map[string]*leaderboardCall
 
+	backtestMu    sync.Mutex
+	backtestCache map[string]backtestCacheEntry
+	backtestCalls map[string]*backtestCall
+
 	integrationMu     sync.Mutex
 	webSearchProvider string
 	webSearchAPIKey   string
@@ -182,6 +186,14 @@ type Engine struct {
 	// Test seams for investor nodes; nil uses SEC EDGAR and the database.
 	secFilings func(ctx context.Context, ticker string, limit int) (sec.Filings, error)
 	flowState  flowNodeStateStore
+	profiles   investorProfileStore
+	paperState func() ([]trading.Position, trading.Summary)
+	paperPeak  func(equity float64) (float64, error)
+	flowOwner  func(ctx context.Context, flowID int64) (int64, error)
+	// insiderTrades replaces the SEC Form 4 reader in tests.
+	insiderTrades func(ctx context.Context, ticker string, lookbackDays, maxFilings int) ([]sec.InsiderTrade, error)
+	planLimits    adapterLimiter
+	todayCache    todayCache
 }
 
 type historyCacheEntry struct {
@@ -215,10 +227,18 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 
 		leaderboardCache: make(map[string]leaderboardCacheEntry),
 		leaderboardCalls: make(map[string]*leaderboardCall),
+		backtestCache:    make(map[string]backtestCacheEntry),
+		backtestCalls:    make(map[string]*backtestCall),
 	}
 
 	e.registerMarketRoutes()
 	e.registerLeaderboardRoutes()
+	e.registerBacktestRoutes()
+	e.registerPlanRoutes()
+	e.registerPortfolioAnalyticsRoutes()
+	e.registerPositionSizingRoutes()
+	e.registerEventRoutes()
+	e.registerTodayRoutes()
 	e.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()

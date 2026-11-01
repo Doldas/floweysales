@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	_ market.Backend    = (*Manager)(nil)
-	_ market.NewsSource = (*Manager)(nil)
+	_ market.Backend     = (*Manager)(nil)
+	_ market.NewsSource  = (*Manager)(nil)
+	_ market.EventSource = (*Manager)(nil)
 )
 
 // call routes one request to the plugin providing p, checking that it
@@ -196,6 +197,31 @@ func (m *Manager) News(ctx context.Context, p market.Provider, symbol string, li
 		return []market.NewsItem{}, err
 	}
 	return market.CleanNews(out, p, limit), nil
+}
+
+// EventProviders lists the installed providers that offer corporate events.
+func (m *Manager) EventProviders() []market.Provider {
+	out := []market.Provider{}
+	for _, p := range m.Providers() {
+		if p.Enabled && contains(p.Capabilities, CapEvents) {
+			out = append(out, market.Provider(p.ID))
+		}
+	}
+	return out
+}
+
+func (m *Manager) Events(ctx context.Context, p market.Provider, symbol, from, to string) ([]market.CorporateEvent, error) {
+	out := []market.CorporateEvent{}
+	if strings.TrimSpace(symbol) == "" {
+		return out, fmt.Errorf("[Events] empty symbol")
+	}
+	if _, _, err := market.EventWindow(from, to); err != nil {
+		return out, err
+	}
+	if err := m.call(ctx, p, CapEvents, "events", map[string]any{"symbol": strings.TrimSpace(symbol), "from": from, "to": to}, &out); err != nil {
+		return []market.CorporateEvent{}, err
+	}
+	return market.CleanEvents(out, p, symbol), nil
 }
 
 func contains(list []string, want string) bool {

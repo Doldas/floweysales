@@ -2314,5 +2314,1047 @@
    ]
   },
   "note": "Weekly. Silent when every company on the watchlist scores 45 or more with no warning flags."
+ },
+ "insider-cluster/admin": {
+  "name": "Insider buying clusters",
+  "intervalMinutes": 1440,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "insiders",
+     "type": "insider_activity",
+     "label": "Insider activity",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "lookback_days": 30,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "clusters",
+     "type": "screen",
+     "label": "Clusters & big officer buys",
+     "rule": "cluster_buy or (officer_buy and net_value > 250000)",
+     "sort_by": "-largest_buy_value",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "Once per two weeks",
+     "key_fields": "symbol",
+     "cooldown_hours": 336,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Insider buys",
+     "title": "Insider buying",
+     "columns": "symbol,buyers,buy_count,net_value,largest_buy_value,largest_buyer,officer_buy,latest,url",
+     "skip_empty": true,
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Insider buying {{date}}",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "insiders"
+    },
+    {
+     "from": "insiders",
+     "to": "clusters"
+    },
+    {
+     "from": "clusters",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Needs SEC_USER_AGENT. Counts open-market purchases only (Form 4 code P). Insiders buy for many reasons; treat a cluster as a reason to read the filings, not as a signal to buy."
+ },
+ "insider-cluster/user": {
+  "name": "Insider buying clusters",
+  "intervalMinutes": 1440,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "insiders",
+     "type": "insider_activity",
+     "label": "Insider activity",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "lookback_days": 30,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "clusters",
+     "type": "screen",
+     "label": "Clusters & big officer buys",
+     "rule": "cluster_buy or (officer_buy and net_value > 250000)",
+     "sort_by": "-largest_buy_value",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "Once per two weeks",
+     "key_fields": "symbol",
+     "cooldown_hours": 336,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Insider buys",
+     "title": "Insider buying",
+     "columns": "symbol,buyers,buy_count,net_value,largest_buy_value,largest_buyer,officer_buy,latest,url",
+     "skip_empty": true,
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "insiders"
+    },
+    {
+     "from": "insiders",
+     "to": "clusters"
+    },
+    {
+     "from": "clusters",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Needs SEC_USER_AGENT. Counts open-market purchases only (Form 4 code P). Insiders buy for many reasons; treat a cluster as a reason to read the filings, not as a signal to buy."
+ },
+ "macro-regime/admin": {
+  "name": "Macro regime shift",
+  "intervalMinutes": 1440,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "macro",
+     "type": "macro_regime",
+     "label": "Macro regime",
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "Regime changed",
+     "key_fields": "regime",
+     "cooldown_hours": 336,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "why",
+     "type": "agent",
+     "label": "What changed",
+     "skip_empty": true,
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. The input is the current macro regime (risk_on, caution or risk_off) with the signals behind it. Explain in under 150 words what changed and what such a regime has usually meant for a long-term investor: keep contributions going, check the plan, avoid reacting to one reading. Do not predict markets.",
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Macro regime: {{date}}",
+     "x": 740,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "macro"
+    },
+    {
+     "from": "macro",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "why"
+    },
+    {
+     "from": "why",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Needs the FRED plugin and FRED_API_KEY. Reports when the regime changes and reminds you every two weeks while it holds."
+ },
+ "macro-regime/user": {
+  "name": "Macro regime shift",
+  "intervalMinutes": 1440,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "macro",
+     "type": "macro_regime",
+     "label": "Macro regime",
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "Regime changed",
+     "key_fields": "regime",
+     "cooldown_hours": 336,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "why",
+     "type": "agent",
+     "label": "What changed",
+     "skip_empty": true,
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. The input is the current macro regime (risk_on, caution or risk_off) with the signals behind it. Explain in under 150 words what changed and what such a regime has usually meant for a long-term investor: keep contributions going, check the plan, avoid reacting to one reading. Do not predict markets.",
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 740,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "macro"
+    },
+    {
+     "from": "macro",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "why"
+    },
+    {
+     "from": "why",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Needs the FRED plugin and FRED_API_KEY. Reports when the regime changes and reminds you every two weeks while it holds."
+ },
+ "drawdown-guard/admin": {
+  "name": "Portfolio drawdown guard",
+  "intervalMinutes": 60,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "check",
+     "type": "portfolio_check",
+     "label": "Portfolio check",
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "guard",
+     "type": "screen",
+     "label": "Drawdowns",
+     "rule": "drawdown_from_peak_pct <= -10 or kind == \"deep_drawdown\"",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "Once per 3 days",
+     "key_fields": "id",
+     "cooldown_hours": 72,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Drawdown",
+     "title": "Portfolio drawdown",
+     "columns": "kind,total_value,peak_equity,drawdown_from_peak_pct,max_drawdown_1y_pct",
+     "skip_empty": true,
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Portfolio drawdown {{date}}",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "check"
+    },
+    {
+     "from": "check",
+     "to": "guard"
+    },
+    {
+     "from": "guard",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Administrators only, like the paper portfolio. Checks hourly and alerts at most once every 3 days."
+ },
+ "rebalance-check/admin": {
+  "name": "Monthly rebalance check",
+  "intervalMinutes": 43200,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "check",
+     "type": "portfolio_check",
+     "label": "Portfolio check",
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "moves",
+     "type": "screen",
+     "label": "Suggested moves",
+     "rule": "kind == \"suggestion\"",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Moves",
+     "title": "Rebalancing suggestions",
+     "columns": "side,symbol,amount,reason",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "notes",
+     "type": "agent",
+     "label": "Rebalance notes",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Keep the table at the top. Then, in a short paragraph, say which asset classes drifted from the wealth plan and what the moves would do. Mention that selling can trigger tax and costs. These are suggestions to review, not orders.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Rebalance check {{date}}",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "check"
+    },
+    {
+     "from": "check",
+     "to": "moves"
+    },
+    {
+     "from": "moves",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "notes"
+    },
+    {
+     "from": "notes",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Administrators only. Needs a saved wealth plan; without one there are no suggestions. Runs every 30 days."
+ },
+ "dividend-calendar/admin": {
+  "name": "Dividend & earnings calendar",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "events",
+     "type": "corporate_events",
+     "label": "Upcoming events",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "limit": 30,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "New events",
+     "key_fields": "id",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Calendar",
+     "title": "Dividends & earnings, next 30 days",
+     "columns": "date,symbol,kind,amount,currency,ratio,days_until,confirmed",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Dividend & earnings calendar {{date}}",
+     "x": 740,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "events"
+    },
+    {
+     "from": "events",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Needs a provider plugin with the events capability (Yahoo or Finnhub). Each event is reported once."
+ },
+ "dividend-calendar/user": {
+  "name": "Dividend & earnings calendar",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "events",
+     "type": "corporate_events",
+     "label": "Upcoming events",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "limit": 30,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "new",
+     "type": "only_new",
+     "label": "New events",
+     "key_fields": "id",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Calendar",
+     "title": "Dividends & earnings, next 30 days",
+     "columns": "date,symbol,kind,amount,currency,ratio,days_until,confirmed",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 740,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "events"
+    },
+    {
+     "from": "events",
+     "to": "new"
+    },
+    {
+     "from": "new",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Needs a provider plugin with the events capability (Yahoo or Finnhub). Each event is reported once."
+ },
+ "phase-checkin/admin": {
+  "name": "Monthly phase check-in",
+  "intervalMinutes": 43200,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "plan",
+     "type": "wealth_plan",
+     "label": "Wealth plan",
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "note",
+     "type": "agent",
+     "label": "Progress note",
+     "skip_empty": true,
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Write a short progress note (under 120 words) from the wealth plan in the input: the phase and what it is for, the probability of reaching the goal (say what the percentage means using probability_label), and the next checklist item. Be encouraging and plain; no predictions.",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Phase check-in {{date}}",
+     "x": 565,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "plan"
+    },
+    {
+     "from": "plan",
+     "to": "note"
+    },
+    {
+     "from": "note",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Save your plan on the Wealth plan page first; without one this flow stays silent."
+ },
+ "phase-checkin/user": {
+  "name": "Monthly phase check-in",
+  "intervalMinutes": 43200,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "plan",
+     "type": "wealth_plan",
+     "label": "Wealth plan",
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "note",
+     "type": "agent",
+     "label": "Progress note",
+     "skip_empty": true,
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Write a short progress note (under 120 words) from the wealth plan in the input: the phase and what it is for, the probability of reaching the goal (say what the percentage means using probability_label), and the next checklist item. Be encouraging and plain; no predictions.",
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 565,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "plan"
+    },
+    {
+     "from": "plan",
+     "to": "note"
+    },
+    {
+     "from": "note",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Save your plan on the Wealth plan page first; without one this flow stays silent."
+ },
+ "earnings-week/admin": {
+  "name": "Earnings this week, scored",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "events",
+     "type": "corporate_events",
+     "label": "Earnings dates",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "kinds": "earnings",
+     "limit": 7,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Score the reporters",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "strategy": "best",
+     "limit": 25,
+     "skip_empty": true,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Scores",
+     "title": "Reporting this week, scored",
+     "columns": "rank,symbol,score,grade,pe_ttm,revenue_growth_pct,eps_growth_pct,flags,ttm_through",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "What to look for",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. These companies report earnings in the next 7 days. Keep the table at the top. For each: where it ranks in the watchlist and why, and the one figure in the next report that would change that picture. Research, not a recommendation.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Earnings this week {{date}}",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "events"
+    },
+    {
+     "from": "events",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Needs a provider plugin with the events capability. The leaderboard ranks your whole watchlist and keeps only the companies reporting this week."
+ },
+ "earnings-week/user": {
+  "name": "Earnings this week, scored",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "events",
+     "type": "corporate_events",
+     "label": "Earnings dates",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "kinds": "earnings",
+     "limit": 7,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Score the reporters",
+     "symbols": "AAPL, MSFT, NVDA, AMZN, GOOGL",
+     "strategy": "best",
+     "limit": 25,
+     "skip_empty": true,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Scores",
+     "title": "Reporting this week, scored",
+     "columns": "rank,symbol,score,grade,pe_ttm,revenue_growth_pct,eps_growth_pct,flags,ttm_through",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "What to look for",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. These companies report earnings in the next 7 days. Keep the table at the top. For each: where it ranks in the watchlist and why, and the one figure in the next report that would change that picture. Research, not a recommendation.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "events"
+    },
+    {
+     "from": "events",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Needs a provider plugin with the events capability. The leaderboard ranks your whole watchlist and keeps only the companies reporting this week."
+ },
+ "strategy-scorecard/admin": {
+  "name": "Strategy scorecard",
+  "intervalMinutes": 43200,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "backtest",
+     "type": "backtest",
+     "label": "Backtest all strategies",
+     "universe": "us_mega",
+     "strategy": "all",
+     "limit": 10,
+     "years": 3,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Scorecard",
+     "title": "Strategy scorecard (US mega caps, 3 years, monthly)",
+     "columns": "strategy_label,cagr_pct,excess_cagr_pct,max_drawdown_pct,sharpe,hit_rate_pct,avg_turnover_pct,from,to",
+     "skip_empty": true,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "compare",
+     "type": "agent",
+     "label": "Compare strategies",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Keep the table at the top. Compare the strategies: which returned most, which fell least, which turned over most, and how the best one compares with the benchmark. State the caveats from warning_text (survivorship bias, price-index benchmark) in plain words and say that past results do not predict future ones.",
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Strategy scorecard {{date}}",
+     "x": 740,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "backtest"
+    },
+    {
+     "from": "backtest",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "compare"
+    },
+    {
+     "from": "compare",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Replays six strategies, so the first run takes a while; later runs reuse results for six hours. Change the universe or years on the backtest node."
+ },
+ "strategy-scorecard/user": {
+  "name": "Strategy scorecard",
+  "intervalMinutes": 43200,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "backtest",
+     "type": "backtest",
+     "label": "Backtest all strategies",
+     "universe": "us_mega",
+     "strategy": "all",
+     "limit": 10,
+     "years": 3,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Scorecard",
+     "title": "Strategy scorecard (US mega caps, 3 years, monthly)",
+     "columns": "strategy_label,cagr_pct,excess_cagr_pct,max_drawdown_pct,sharpe,hit_rate_pct,avg_turnover_pct,from,to",
+     "skip_empty": true,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "compare",
+     "type": "agent",
+     "label": "Compare strategies",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Keep the table at the top. Compare the strategies: which returned most, which fell least, which turned over most, and how the best one compares with the benchmark. State the caveats from warning_text (survivorship bias, price-index benchmark) in plain words and say that past results do not predict future ones.",
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 740,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "backtest"
+    },
+    {
+     "from": "backtest",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "compare"
+    },
+    {
+     "from": "compare",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Replays six strategies, so the first run takes a while; later runs reuse results for six hours. Change the universe or years on the backtest node."
  }
 }

@@ -302,7 +302,7 @@ export interface LeaderboardRow {
   flags: string;
 }
 
-export interface LeaderboardOption { id: string; label: string; description: string }
+export interface LeaderboardOption { id: string; label: string; description: string; benchmark?: string }
 
 export interface LeaderboardResponse {
   universe: string;
@@ -314,4 +314,163 @@ export interface LeaderboardResponse {
   unranked: { symbol: string; error: string }[];
   universes: LeaderboardOption[];
   strategies: LeaderboardOption[];
+}
+
+/** Return and risk figures of a backtest (see internal/backtest). */
+export interface BacktestMetrics {
+  cagr_pct: number;
+  volatility_pct: number;
+  sharpe: number;
+  sortino: number;
+  max_drawdown_pct: number;
+  calmar: number;
+  hit_rate_pct: number;
+  avg_turnover_pct: number;
+  benchmark_cagr_pct?: number;
+  excess_cagr_pct?: number;
+}
+
+/** One day of the replayed curves; both start at 100. */
+export interface BacktestPoint { date: string; equity: number; benchmark?: number }
+
+export interface BacktestRebalance { date: string; holdings: string[]; turnover_pct: number; fundamentals_coverage_pct: number }
+
+/** The answer of GET /api/market/backtest. */
+export interface BacktestResult {
+  universe: string;
+  strategy: string;
+  benchmark?: string;
+  provider: string;
+  symbols: string[];
+  generated_at: string;
+  metrics: BacktestMetrics;
+  curve: BacktestPoint[];
+  rebalances: BacktestRebalance[];
+  warnings: string[];
+}
+
+export interface BacktestParams {
+  universe: string;
+  strategy: string;
+  symbols?: string[];
+  top: number;
+  rebalance: 'monthly' | 'quarterly';
+  years: 3 | 5;
+}
+
+/** Wealth plan inputs (see internal/planner). */
+export interface PlanProfile {
+  monthly_expenses: number;
+  emergency_fund?: number;
+  high_interest_debt?: number;
+  invested?: number;
+  use_paper_portfolio?: boolean;
+  monthly_contribution?: number;
+  age?: number;
+  retirement_age?: number;
+  goal_amount?: number;
+  risk_profile?: 'conservative' | 'balanced' | 'growth' | 'aggressive';
+  retired?: boolean;
+  currency?: string;
+}
+
+export interface PlanAllocation { core_equity: number; bonds: number; cash: number; satellite: number }
+
+export interface PlanPhase { id: string; name: string; job: string; checklist: string[]; playbooks: string[] }
+
+export interface PlanBand { year: number; age?: number; p10: number; p50: number; p90: number; real_p10: number; real_p50: number; real_p90: number }
+
+export interface PlanMilestone { label: string; amount: number; year?: number }
+
+export interface PlanAssetAssumption { expected_return_pct: number; volatility_pct: number }
+
+export interface PlanAssumptions {
+  core_equity: PlanAssetAssumption; bonds: PlanAssetAssumption; cash: PlanAssetAssumption; satellite: PlanAssetAssumption;
+  inflation_pct: number; corr_equity_bond: number; corr_equity_satellite: number; paths: number; note: string;
+}
+
+export interface WealthPlan {
+  phase: PlanPhase;
+  target_allocation: PlanAllocation;
+  fi_number: number;
+  fi_ratio_pct: number;
+  goal_amount: number;
+  horizon_years: number;
+  bands: PlanBand[];
+  probability_goal_pct: number;
+  years_to_goal_p50?: number;
+  required_contribution_75?: number;
+  milestones: PlanMilestone[];
+  assumptions: PlanAssumptions;
+}
+
+/** GET /api/plan, PUT /api/plan/profile and POST /api/plan/preview. */
+export interface PlanResponse { profile: PlanProfile | null; plan: WealthPlan | null }
+
+export interface PortfolioSuggestion { symbol: string; side: 'buy' | 'sell'; amount: number; reason: string }
+
+/** Risk of the paper portfolio from GET /api/portfolio/analytics (see internal/portfolio). */
+export interface PortfolioAnalytics {
+  total_value: number;
+  weights_pct: Record<string, number>;
+  top_weight_pct: number;
+  hhi: number;
+  effective_holdings: number;
+  volatility_pct?: number;
+  beta?: number;
+  max_drawdown_1y_pct?: number;
+  correlation: number[][];
+  symbols: string[];
+  risk_contribution_pct: Record<string, number>;
+  class_weights_pct: Record<string, number>;
+  drift_pct?: Record<string, number>;
+  suggestions: PortfolioSuggestion[];
+  alerts: string[];
+}
+
+export interface PortfolioAnalyticsResponse {
+  analytics: PortfolioAnalytics;
+  benchmark: string;
+  has_plan: boolean;
+  generated_at: string;
+}
+
+/** POST /api/trading/size: a ticket size from the risk the investor accepts. */
+export interface SizeResponse {
+  symbol: string;
+  side: 'buy' | 'sell';
+  entry: number;
+  equity: number;
+  risk_pct: number;
+  atr_mult: number;
+  atr: number;
+  stop_source: 'atr' | 'given';
+  result: { quantity: number; stop: number; risk_amount: number; position_pct: number; capped_by?: 'max_weight' | 'buying_power' };
+}
+
+/** A dividend, split or earnings date from GET /api/events (see internal/market/events.go). */
+export interface CorporateEvent {
+  symbol: string;
+  kind: 'dividend' | 'split' | 'earnings';
+  date: string;
+  amount?: number;
+  currency?: string;
+  ratio?: string;
+  confirmed: boolean;
+  provider?: string;
+}
+
+export interface EventsResponse { symbol: string; from: string; to: string; events: CorporateEvent[] }
+
+/** GET /api/today: every part is optional (see internal/server/today.go). */
+export interface TodayBriefing {
+  generated_at: string;
+  phase?: { id: string; name: string; probability_goal_pct: number; probability_label?: string; next_checklist_item?: string };
+  macro?: { regime: 'risk_on' | 'caution' | 'risk_off'; reasons?: string; as_of?: string };
+  portfolio?: { equity: number; unrealized_pnl: number; positions: number; day_change?: number; day_change_pct?: number; drawdown_from_peak_pct?: number; top_alert?: string };
+  worth_a_look?: {
+    leaderboard?: { symbol: string; score: number; grade: string; reasons?: string; universe: string; strategy: string; as_of?: string };
+    insider?: { symbol: string; largest_buy_value: number; largest_buyer?: string; cluster_buy?: boolean; latest?: string; url?: string };
+    earnings?: { symbol: string; date: string; days_until?: number; confirmed: boolean };
+  };
 }

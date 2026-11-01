@@ -86,6 +86,13 @@ func runFakePlugin() {
 				"reports": []map[string]any{{"period": "a", "period_end": "2020-03-31"}, {"period": "b", "period_end": "2024-03-31"}}})
 		case "research":
 			reply(map[string]any{"provider": manifest.Provider.ID, "operation": req.Params["operation"], "data": map[string]any{"ok": true}})
+		case "events":
+			reply([]map[string]any{
+				{"kind": "earnings", "date": "2026-11-20", "confirmed": false},
+				{"symbol": symbol, "kind": "dividend", "date": "2026-11-14", "amount": 0.24, "currency": "USD", "confirmed": true},
+				{"kind": "rumour", "date": "2026-11-15"},
+				{"kind": "split", "date": "next week"},
+			})
 		case "forum_posts":
 			reply([]map[string]any{{"id": 1, "title": "hello", "symbol": symbol}})
 		default:
@@ -102,7 +109,7 @@ var (
 func fakeManifest(version string) Manifest {
 	return Manifest{
 		Protocol: 1, ID: "fake", Name: "Fake provider", Version: version, Description: "Test double.", Publisher: "Tests",
-		Provider: ProviderInfo{ID: "FAKE", Label: "Fake", Capabilities: []string{CapQuote, CapHistory, CapFinancials, CapResearch, CapForum},
+		Provider: ProviderInfo{ID: "FAKE", Label: "Fake", Capabilities: []string{CapQuote, CapHistory, CapFinancials, CapResearch, CapForum, CapEvents},
 			QuoteKind: "ohlc_bar_close", MinPollSeconds: 3,
 			Research: []ResearchOperation{{Operation: "profile", Path: "/profile", Description: "Profile", SymbolRequired: true}}},
 		Env: []EnvVar{{Name: "FAKE_API_KEY", Secret: true, Required: true, Description: "Key"}},
@@ -304,6 +311,16 @@ func TestBackendRoutingEnforcesDeclaredCapabilitiesAndRanges(t *testing.T) {
 	}
 	if posts := m.ForumPosts(ctx, "NVDA", 5); len(posts) != 1 || posts[0].Title != "hello" {
 		t.Fatalf("%+v", posts)
+	}
+	events, err := m.Events(ctx, "FAKE", "nvda", "2026-11-01", "2026-12-31")
+	if err != nil || len(events) != 2 || events[0].Kind != "dividend" || events[0].Provider != "FAKE" || events[1].Symbol != "NVDA" || events[1].Confirmed {
+		t.Fatalf("events must be cleaned, labelled and ordered by date: %+v err=%v", events, err)
+	}
+	if got := m.EventProviders(); len(got) != 1 || got[0] != "FAKE" {
+		t.Fatalf("event providers %v", got)
+	}
+	if _, err := m.Events(ctx, "FAKE", "NVDA", "2026-01-01", "2027-12-31"); err == nil {
+		t.Fatal("a window over 400 days must be refused before reaching the plugin")
 	}
 	series, err := m.History(ctx, "FAKE", "NVDA", "bogus")
 	if err != nil || series.Range != market.Range1M || series.Provider != "FAKE" {

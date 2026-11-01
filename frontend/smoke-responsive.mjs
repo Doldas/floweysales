@@ -15,13 +15,15 @@ const widths = [
   ['tablet', 1024, 768],
   ['desktop', 1440, 900],
 ];
-const adminPages = ['', 'agent', 'flows', 'inbox', 'markets', 'financials', 'portfolio', 'workspace', 'community', 'notifications', 'settings'];
+const adminPages = ['', 'agent', 'flows', 'inbox', 'markets', 'plan', 'financials', 'portfolio', 'workspace', 'community', 'notifications', 'settings'];
 const browser = await chromium.launch({ headless: true });
 const failed = [];
 let assertions = 0;
 
 async function testViewport(name, width, height, role = 'SYS_ADMIN') {
+  // The service worker is covered by its own check; blocking it keeps the mocked API in charge.
   const page = await browser.newPage({
+    serviceWorkers: 'block',
     viewport: { width, height },
     deviceScaleFactor: width <= 600 ? 3 : 1,
     isMobile: width <= 600,
@@ -61,6 +63,17 @@ async function testViewport(name, width, height, role = 'SYS_ADMIN') {
         await go(path);
         await noOverflow(`#/${path}`);
       }
+
+      // Installable app: the manifest is linked, served and names its icons.
+      await go('');
+      const manifest = await page.evaluate(async () => {
+        const link = document.querySelector('link[rel="manifest"]');
+        if (!link) return null;
+        const res = await fetch(link.href);
+        return res.ok ? res.json() : null;
+      });
+      check('web app manifest is linked and describes an installable app', !!manifest && manifest.display === 'standalone' && manifest.start_url === '/' &&
+        manifest.icons.some(i => i.sizes === '512x512' && i.purpose === 'maskable') && manifest.icons.some(i => i.sizes === '192x192'), JSON.stringify(manifest)?.slice(0, 120));
 
       // Shell: the topbar always fits; the sidebar is a drawer below 992px.
       await go('');
