@@ -193,6 +193,7 @@ type Engine struct {
 	// insiderTrades replaces the SEC Form 4 reader in tests.
 	insiderTrades func(ctx context.Context, ticker string, lookbackDays, maxFilings int) ([]sec.InsiderTrade, error)
 	planLimits    adapterLimiter
+	todayCache    todayCache
 }
 
 type historyCacheEntry struct {
@@ -237,6 +238,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerPortfolioAnalyticsRoutes()
 	e.registerPositionSizingRoutes()
 	e.registerEventRoutes()
+	e.registerTodayRoutes()
 	e.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()

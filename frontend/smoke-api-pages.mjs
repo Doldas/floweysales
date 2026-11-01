@@ -4,7 +4,7 @@ const base = process.env.API_PAGES_URL || 'http://127.0.0.1:4174/api.html';
 const browser = await chromium.launch({headless:true});
 try{
  for(const width of [360,768,1440]){
-  const page=await browser.newPage({viewport:{width,height:850}});
+  const page=await browser.newPage({viewport:{width,height:850},serviceWorkers:'block'});
   const errors=[];
   page.on('pageerror',err=>errors.push(err.message));
   await page.goto(base,{waitUntil:'networkidle'});

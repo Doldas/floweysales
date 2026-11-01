@@ -136,3 +136,15 @@
   .hero-form .btn span { display: none; }
   .automations td:nth-child(2), .automations th:nth-child(2) { display: none; }
 }
+
+.today { margin-bottom: 1rem; }
+.today-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.today-chip { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.35rem 0.8rem; border: 1px solid var(--fs-border); border-radius: 999px;
+  background: var(--fs-surface-2, transparent); color: var(--fs-text); text-decoration: none; font-size: 0.85rem;
+  &:is(a):hover { border-color: var(--fs-accent); } }
+.today-chip[data-regime='risk_off'] { border-color: var(--fs-neg); }
+.today-chip[data-regime='caution'] { border-color: var(--fs-warn); }
+.today-sub { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fs-muted); margin: 1rem 0 0.4rem; }
+.today-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.35rem;
+  li { display: flex; gap: 0.6rem; align-items: baseline; font-size: 0.9rem; .bi { color: var(--fs-accent); } } }
+.today-note { font-size: 0.75rem; color: var(--fs-muted); margin: 0.9rem 0 0; }
