@@ -65,6 +65,22 @@
               </div>
             </div>
 
+            <div class="sizer">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="ticket-size-on" [(ngModel)]="sizeByRisk" name="sizeByRisk">
+                <label class="form-check-label" for="ticket-size-on">Size by risk</label>
+              </div>
+              @if (sizeByRisk) {
+                <div class="input-group input-group-sm">
+                  <label class="input-group-text" for="ticket-risk">Risk</label>
+                  <input class="form-control" id="ticket-risk" type="number" min="0.1" max="5" step="0.1" inputmode="decimal" [(ngModel)]="riskPct" name="riskPct">
+                  <span class="input-group-text">% of equity</span>
+                  <button type="button" class="btn btn-outline-secondary" (click)="sizeIt()" [disabled]="sizing || !trackedSymbol()">{{ sizing ? 'Sizing…' : 'Size it' }}</button>
+                </div>
+                <div class="form-text" role="status">{{ sizeText }}</div>
+              }
+            </div>
+
             <div class="presets">
               @for (p of presets; track p) {
                 <button type="button" class="chip" (click)="applyPreset(p)">{{ p }}%</button>

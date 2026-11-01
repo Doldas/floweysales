@@ -13,6 +13,7 @@ import {
   OrderRequest,
   OrderResponse,
   PlanProfile,
+  SizeResponse,
   PortfolioAnalyticsResponse,
   PlanResponse,
   PortfolioResponse,
@@ -108,6 +109,11 @@ export class MarketService {
   /** Concentration, risk and drift of the paper portfolio. */
   getPortfolioAnalytics(): Observable<PortfolioAnalyticsResponse> {
     return this.http.get<PortfolioAnalyticsResponse>('/api/portfolio/analytics');
+  }
+
+  /** How many units to trade so a stop-out loses riskPct of equity. Places nothing. */
+  sizePosition(symbol: string, side: 'buy' | 'sell', riskPct: number): Observable<SizeResponse> {
+    return this.http.post<SizeResponse>('/api/trading/size', { symbol, side, risk_pct: riskPct });
   }
 
   getStats(symbol: string): Observable<MarketStatsJSON> {
