@@ -15,7 +15,7 @@ const widths = [
   ['tablet', 1024, 768],
   ['desktop', 1440, 900],
 ];
-const adminPages = ['', 'agent', 'flows', 'inbox', 'markets', 'financials', 'portfolio', 'workspace', 'community', 'notifications', 'settings'];
+const adminPages = ['', 'agent', 'flows', 'inbox', 'markets', 'plan', 'financials', 'portfolio', 'workspace', 'community', 'notifications', 'settings'];
 const browser = await chromium.launch({ headless: true });
 const failed = [];
 let assertions = 0;

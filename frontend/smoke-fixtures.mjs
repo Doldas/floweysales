@@ -177,6 +177,29 @@ function backtest(universe, strategy) {
     warnings: ['survivorship_bias', 'price_index_benchmark'] };
 }
 
+/** Same shape as GET /api/plan: a starter-phase plan with a 30-year fan. */
+function wealthPlan() {
+  const bands = Array.from({ length: 31 }, (_, y) => {
+    const mid = Math.round(40000 * 1.06 ** y + 900 * 12 * ((1.06 ** y - 1) / 0.06));
+    return { year: y, age: 34 + y, p10: Math.round(mid * 0.7), p50: mid, p90: Math.round(mid * 1.5), real_p10: Math.round(mid * 0.7 / 1.025 ** y), real_p50: Math.round(mid / 1.025 ** y), real_p90: Math.round(mid * 1.5 / 1.025 ** y) };
+  });
+  const asset = (r, v) => ({ expected_return_pct: r, volatility_pct: v });
+  return {
+    profile: { monthly_expenses: 2500, emergency_fund: 9000, invested: 40000, monthly_contribution: 900, age: 34, retirement_age: 64, risk_profile: 'growth', currency: 'USD' },
+    plan: {
+      phase: { id: 'starter', name: 'Starter', job: 'Build the habit: automate contributions into broad, low-cost index funds.',
+        checklist: ['Automate a fixed monthly contribution the day income arrives.', 'Hold broad index funds; skip single stocks until the habit holds.', 'Review once a month, not every day.'],
+        playbooks: ['phase-checkin', 'morning-brief'] },
+      target_allocation: { core_equity: 85, bonds: 10, cash: 5, satellite: 0 },
+      fi_number: 750000, fi_ratio_pct: 5.33, goal_amount: 750000, horizon_years: 30, bands,
+      probability_goal_pct: 62.4, years_to_goal_p50: 24, required_contribution_75: 1240.5,
+      milestones: [{ label: '100000', amount: 100000, year: 7 }, { label: '250000', amount: 250000, year: 15 }, { label: 'Financial independence', amount: 750000, year: 24 }],
+      assumptions: { core_equity: asset(7, 16), bonds: asset(3.5, 6), cash: asset(2.5, 1), satellite: asset(8, 35), inflation_pct: 2.5, corr_equity_bond: 0.2, corr_equity_satellite: 0.7, paths: 2000,
+        note: 'Long-run estimates, not forecasts. Returns are nominal and before tax.' },
+    },
+  };
+}
+
 export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.read'], email = 'analyst@example.test' } = {}) {
   const u = new URL(url);
   const p = u.pathname;
@@ -194,6 +217,9 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     '/api/history': history(q.get('symbol') ?? 'NVDA', q.get('range') ?? '1M'),
     '/api/financials': financials(q.get('symbol') ?? 'NVDA'),
     '/api/market/leaderboard': leaderboard(q.get('universe') ?? 'custom', q.get('strategy') ?? 'best'),
+    '/api/plan': wealthPlan(),
+    '/api/plan/preview': wealthPlan(),
+    '/api/plan/profile': wealthPlan(),
     '/api/market/backtest': backtest(q.get('universe') ?? 'custom', q.get('strategy') ?? 'best'),
     '/api/search': [{ symbol: 'NVDA', name: 'NVIDIA Corporation', type: 'EQUITY', exchange: 'NMS' }, { symbol: 'NVDL', name: 'GraniteShares 2x Long NVDA', type: 'ETF', exchange: 'NGM' }],
     '/api/orders': [],

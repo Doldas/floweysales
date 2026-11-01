@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="033-investor-profile" author="floweysales" dbms="mysql">
+  <!-- No foreign key to auth_users: with authentication disabled the single user is id 0.
+       Deleting an account removes its row in Service.DeleteUser. -->
+  <createTable tableName="investor_profile" remarks="The wealth plan inputs one user saved on the Plan page, as JSON">
+   <column name="user_id" type="BIGINT"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_investor_profile"/></column>
+   <column name="profile" type="MEDIUMTEXT"><constraints nullable="false"/></column>
+   <column name="updated_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <rollback><dropTable tableName="investor_profile"/></rollback>
+ </changeSet>
+</databaseChangeLog>

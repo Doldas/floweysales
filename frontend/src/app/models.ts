@@ -357,3 +357,52 @@ export interface BacktestParams {
   rebalance: 'monthly' | 'quarterly';
   years: 3 | 5;
 }
+
+/** Wealth plan inputs (see internal/planner). */
+export interface PlanProfile {
+  monthly_expenses: number;
+  emergency_fund?: number;
+  high_interest_debt?: number;
+  invested?: number;
+  use_paper_portfolio?: boolean;
+  monthly_contribution?: number;
+  age?: number;
+  retirement_age?: number;
+  goal_amount?: number;
+  risk_profile?: 'conservative' | 'balanced' | 'growth' | 'aggressive';
+  retired?: boolean;
+  currency?: string;
+}
+
+export interface PlanAllocation { core_equity: number; bonds: number; cash: number; satellite: number }
+
+export interface PlanPhase { id: string; name: string; job: string; checklist: string[]; playbooks: string[] }
+
+export interface PlanBand { year: number; age?: number; p10: number; p50: number; p90: number; real_p10: number; real_p50: number; real_p90: number }
+
+export interface PlanMilestone { label: string; amount: number; year?: number }
+
+export interface PlanAssetAssumption { expected_return_pct: number; volatility_pct: number }
+
+export interface PlanAssumptions {
+  core_equity: PlanAssetAssumption; bonds: PlanAssetAssumption; cash: PlanAssetAssumption; satellite: PlanAssetAssumption;
+  inflation_pct: number; corr_equity_bond: number; corr_equity_satellite: number; paths: number; note: string;
+}
+
+export interface WealthPlan {
+  phase: PlanPhase;
+  target_allocation: PlanAllocation;
+  fi_number: number;
+  fi_ratio_pct: number;
+  goal_amount: number;
+  horizon_years: number;
+  bands: PlanBand[];
+  probability_goal_pct: number;
+  years_to_goal_p50?: number;
+  required_contribution_75?: number;
+  milestones: PlanMilestone[];
+  assumptions: PlanAssumptions;
+}
+
+/** GET /api/plan, PUT /api/plan/profile and POST /api/plan/preview. */
+export interface PlanResponse { profile: PlanProfile | null; plan: WealthPlan | null }
