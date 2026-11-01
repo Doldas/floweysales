@@ -434,3 +434,16 @@ export interface PortfolioAnalyticsResponse {
   has_plan: boolean;
   generated_at: string;
 }
+
+/** POST /api/trading/size: a ticket size from the risk the investor accepts. */
+export interface SizeResponse {
+  symbol: string;
+  side: 'buy' | 'sell';
+  entry: number;
+  equity: number;
+  risk_pct: number;
+  atr_mult: number;
+  atr: number;
+  stop_source: 'atr' | 'given';
+  result: { quantity: number; stop: number; risk_amount: number; position_pct: number; capped_by?: 'max_weight' | 'buying_power' };
+}

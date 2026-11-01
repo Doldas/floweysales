@@ -75,3 +75,14 @@ Alerts: `concentration` (a holding above 25 %), `low_diversification`,
 `highly_correlated:A/B` (above 0.85), `deep_drawdown` (below −20 %),
 `satellite_over_cap`, `short_history`. Suggestions are text: *Prefill ticket*
 fills the order ticket with whole shares but never submits it.
+
+## Position sizing
+
+The paper order ticket has a **Size by risk** switch. `POST /api/trading/size`
+(`symbol`, `side`, `risk_pct` 0.1–5, optional `entry`, `stop`, `atr_mult`,
+`max_weight_pct`) returns the quantity whose stop-out loses `risk_pct` of
+equity: `floor(equity × risk % ÷ |entry − stop|)`. Without a stop it uses
+entry ∓ 2 × ATR(14) on three months of daily bars. The quantity is then capped
+by the maximum position weight (default 20 % of equity) and, for buys, by
+buying power. Crypto pairs allow 8 decimals. The ticket is filled in, never
+submitted.

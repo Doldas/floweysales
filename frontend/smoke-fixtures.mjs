@@ -229,6 +229,7 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     '/api/history': history(q.get('symbol') ?? 'NVDA', q.get('range') ?? '1M'),
     '/api/financials': financials(q.get('symbol') ?? 'NVDA'),
     '/api/market/leaderboard': leaderboard(q.get('universe') ?? 'custom', q.get('strategy') ?? 'best'),
+    '/api/trading/size': { symbol: 'NVDA', side: 'buy', entry: 121.4, equity: 100114, risk_pct: 1, atr_mult: 2, atr: 3.2, stop_source: 'atr', result: { quantity: 156, stop: 115, risk_amount: 998.4, position_pct: 18.9 } },
     '/api/portfolio/analytics': portfolioAnalytics(),
     '/api/plan': wealthPlan(),
     '/api/plan/preview': wealthPlan(),
