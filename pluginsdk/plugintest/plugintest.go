@@ -165,6 +165,21 @@ func conformance(t TB, p sdk.Plugin) {
 			}
 		}
 	}
+	hasTools := p.Manifest.Tools != nil
+	switch {
+	case hasTools && p.Tool == nil:
+		t.Errorf("tools are declared but %s has no handler", sdk.MethodTool)
+	case !hasTools && p.Tool != nil:
+		t.Errorf("%s has a handler but no tools are declared, so FloweySales never calls it", sdk.MethodTool)
+	case !hasTools:
+		if code := errorCode(c.Call(sdk.MethodTool, map[string]any{}, nil)); code != sdk.CodeUnsupported {
+			t.Errorf("undeclared %s answered %q, want %q", sdk.MethodTool, code, sdk.CodeUnsupported)
+		}
+	default:
+		if code := errorCode(c.Call(sdk.MethodTool, sdk.ToolParams{Tool: "not_declared_by_this_plugin"}, nil)); code != sdk.CodeInvalidArgument {
+			t.Errorf("an undeclared tool answered %q, want %q", code, sdk.CodeInvalidArgument)
+		}
+	}
 	if p.Manifest.Provider.HasCapability(sdk.CapResearch) && p.Research != nil {
 		err := c.Call(sdk.MethodResearch, sdk.ResearchParams{Operation: "not_declared_by_this_plugin", Symbol: "TEST"}, nil)
 		if code := errorCode(err); code != sdk.CodeUnsupported {

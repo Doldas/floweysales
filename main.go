@@ -144,7 +144,12 @@ func main() {
 		log.Printf("[Plugins] No market-data provider plugins installed in %s; install them from Settings → Plugins or with `floweysales_backend plugins install yahoo`", pluginManager.Dir())
 	} else {
 		for _, p := range installed {
-			log.Printf("[Plugins] %s %s provides %s", p.Manifest.ID, p.Manifest.Version, p.Manifest.Provider.ID)
+			if p.Manifest.ProvidesMarketData() {
+				log.Printf("[Plugins] %s %s provides %s", p.Manifest.ID, p.Manifest.Version, p.Manifest.Provider.ID)
+			}
+			if p.Manifest.Tools != nil {
+				log.Printf("[Plugins] %s %s adds the %s tab", p.Manifest.ID, p.Manifest.Version, p.Manifest.Tools.Tab.Label)
+			}
 		}
 	}
 	pluginCheckHours := parseInt(app.ResolveConfig("PLUGIN_CHECK_INTERVAL_HOURS", "0", defaults), 0)

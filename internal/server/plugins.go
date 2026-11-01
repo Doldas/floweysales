@@ -81,7 +81,10 @@ type pluginOverview struct {
 func (e *Engine) pluginOverview() pluginOverview {
 	out := pluginOverview{Overview: e.plugins.Overview(), Trackers: map[string][]string{}}
 	for _, p := range out.Installed {
-		out.Trackers[p.Manifest.ID] = e.trackersFor(market.Provider(p.Manifest.Provider.ID))
+		out.Trackers[p.Manifest.ID] = []string{}
+		if p.Manifest.ProvidesMarketData() {
+			out.Trackers[p.Manifest.ID] = e.trackersFor(market.Provider(p.Manifest.Provider.ID))
+		}
 	}
 	return out
 }
@@ -156,18 +159,19 @@ func (e *Engine) registerPluginRoutes() {
 		}
 		id := r.PathValue("id")
 		var provider market.Provider
+		found := false
 		for _, p := range e.plugins.Installed() {
 			if p.Manifest.ID == id {
-				provider = market.Provider(p.Manifest.Provider.ID)
+				found, provider = true, market.Provider(p.Manifest.Provider.ID)
 			}
 		}
-		if provider == "" {
+		if !found {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": plugins.ErrNotInstalled.Error()})
 			return
 		}
 		// Trackers keep their history and resume when the plugin returns, but
 		// stop ticking meanwhile, so removing a provider in use is explicit.
-		if symbols := e.trackersFor(provider); len(symbols) > 0 && !strings.EqualFold(r.URL.Query().Get("force"), "true") {
+		if symbols := e.trackersFor(provider); provider != "" && len(symbols) > 0 && !strings.EqualFold(r.URL.Query().Get("force"), "true") {
 			writeJSON(w, http.StatusConflict, map[string]any{"error": "active trackers use this provider", "trackers": symbols})
 			return
 		}

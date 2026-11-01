@@ -289,6 +289,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerRevisionRoutes()
 	e.registerUpdateRoutes()
 	e.registerPluginRoutes()
+	e.registerPluginToolRoutes()
 	e.registerUserspaceRoutes()
 	e.registerMCPTrackerRoutes()
 	e.registerStaticRoutes()
