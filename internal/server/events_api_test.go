@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,12 +16,12 @@ import (
 // eventBackend serves a dividend and an earnings date for any symbol.
 type eventBackend struct {
 	investorBackend
-	calls int
+	calls atomic.Int32
 }
 
 func (b *eventBackend) EventProviders() []market.Provider { return []market.Provider{"YAHOO"} }
 func (b *eventBackend) Events(_ context.Context, p market.Provider, symbol, from, to string) ([]market.CorporateEvent, error) {
-	b.calls++
+	b.calls.Add(1)
 	amount := 0.25
 	return market.CleanEvents([]market.CorporateEvent{
 		{Kind: "earnings", Date: "2026-11-20"}, {Kind: "dividend", Date: "2026-11-14", Amount: &amount, Currency: "USD", Confirmed: true},
