@@ -188,7 +188,10 @@ type Engine struct {
 	flowState  flowNodeStateStore
 	profiles   investorProfileStore
 	paperState func() ([]trading.Position, trading.Summary)
-	planLimits adapterLimiter
+	paperPeak  func(equity float64) (float64, error)
+	// insiderTrades replaces the SEC Form 4 reader in tests.
+	insiderTrades func(ctx context.Context, ticker string, lookbackDays, maxFilings int) ([]sec.InsiderTrade, error)
+	planLimits    adapterLimiter
 }
 
 type historyCacheEntry struct {

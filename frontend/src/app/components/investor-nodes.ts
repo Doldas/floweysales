@@ -6,7 +6,7 @@
 
 export type InvestorNodeType =
   'watchlist_quotes' | 'technical_scan' | 'fundamentals' | 'sec_filings' | 'news' | 'leaderboard' |
-  'screen' | 'only_new' | 'report_table' | 'notify';
+  'screen' | 'only_new' | 'report_table' | 'notify' | 'insider_activity' | 'macro_regime' | 'portfolio_check' | 'corporate_events';
 
 export interface InvestorNodeSpec {
   type: InvestorNodeType;
@@ -32,6 +32,14 @@ export const INVESTOR_NODES: readonly InvestorNodeSpec[] = [
     description: 'Recent headlines per symbol from an installed provider plugin with the news capability.' },
   { type: 'leaderboard', label: 'Leaderboard (score & rank)', tag: '★ LEADERBOARD', admin: false, defaults: { universe: 'us_mega', strategy: 'best', limit: 10 },
     description: 'Scores a universe on value, quality, growth, momentum, entry timing and risk from quarterly reports and prices, then ranks it for a strategy.' },
+  { type: 'insider_activity', label: 'Insider activity', tag: '⚑ INSIDERS', admin: false, defaults: { symbols: DEFAULT_WATCHLIST, lookback_days: 30 },
+    description: 'Open-market insider purchases and sales from SEC Form 4 filings: counts, buyers, net value, officer buys and clusters of three or more buyers.' },
+  { type: 'macro_regime', label: 'Macro regime', tag: '◎ MACRO', admin: false, defaults: {},
+    description: 'Yield curve, unemployment, credit spreads and volatility from FRED read as risk-on, caution or risk-off. Needs the FRED plugin.' },
+  { type: 'portfolio_check', label: 'Portfolio check', tag: '◔ PORTFOLIO', admin: true, defaults: {},
+    description: 'Concentration, correlation, drawdown from peak and drift from your wealth plan for the paper portfolio, with rebalancing suggestions as rows.' },
+  { type: 'corporate_events', label: 'Dividends & earnings', tag: '☷ EVENTS', admin: false, defaults: { symbols: DEFAULT_WATCHLIST, limit: 30 },
+    description: 'Upcoming dividends, splits and earnings dates from an installed provider plugin with the events capability.' },
   { type: 'screen', label: 'Screen (filter rows)', tag: '⧩ SCREEN', admin: false, defaults: { rule: 'change_1d_pct <= -3' },
     description: 'Keeps the rows that match a rule such as rsi14 < 30 and above_sma200, then sorts and limits them.' },
   { type: 'only_new', label: 'Only new since last run', tag: '✓ ONLY NEW', admin: false, defaults: {},
@@ -79,6 +87,10 @@ export const SCREEN_FIELDS: Record<string, string[]> = {
   fundamentals: ['revenue_ttm', 'revenue_growth_pct', 'gross_margin_pct', 'operating_margin_pct', 'net_margin_pct', 'fcf_margin_pct', 'eps_ttm', 'eps_growth_pct', 'pe_ttm'],
   sec_filings: ['form', 'filed', 'company', 'period_end'],
   news: ['title', 'source', 'published', 'summary'],
+  insider_activity: ['buy_count', 'sell_count', 'buyers', 'net_shares', 'net_value', 'largest_buy_value', 'largest_buyer', 'officer_buy', 'cluster_buy', 'latest'],
+  macro_regime: ['regime', 'signals', 'reasons', 'curve_spread', 'curve_inverted', 'curve_uninverting', 'unemployment', 'sahm_rule', 'fed_funds', 'hy_spread', 'credit_stress', 'vix', 'vol_regime'],
+  portfolio_check: ['kind', 'drawdown_from_peak_pct', 'total_value', 'top_weight_pct', 'volatility_pct', 'beta', 'max_drawdown_1y_pct', 'effective_holdings', 'side', 'amount', 'symbol', 'reason'],
+  corporate_events: ['kind', 'date', 'days_until', 'amount', 'currency', 'ratio', 'confirmed'],
   leaderboard: ['rank', 'score', 'grade', ...LEADERBOARD_FACTORS, 'coverage_pct', 'flags', 'pe_ttm', 'peg', 'earnings_yield_pct', 'revenue_growth_pct', 'eps_growth_pct',
     'net_margin_pct', 'fcf_margin_pct', 'change_3m_pct', 'momentum_12_1_pct', 'from_high_pct', 'rsi14', 'above_sma200', 'volatility_pct', 'max_drawdown_pct'],
 };

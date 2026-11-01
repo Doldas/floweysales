@@ -20,7 +20,7 @@ import { FlowNotifyChannelsComponent } from './flow-notify-channels';
 import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES, SCREEN_FIELDS, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'|'watchlist_quotes'|'technical_scan'|'fundamentals'|'sec_filings'|'news'|'leaderboard'|'screen'|'only_new'|'report_table'|'notify'; label:string; symbols?:string; universe?:string; strategy?:string; provider?:string; rule?:string; sort_by?:string; limit?:number; columns?:string; title?:string; key_fields?:string; cooldown_hours?:number; lookback_days?:number; forms?:string; channel?:'email'|'webhook'; subject?:string; skip_empty?:boolean; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number;require_grounding?:boolean; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'|'watchlist_quotes'|'technical_scan'|'fundamentals'|'sec_filings'|'news'|'leaderboard'|'screen'|'only_new'|'report_table'|'notify'|'insider_activity'|'macro_regime'|'portfolio_check'|'corporate_events'; label:string; symbols?:string; universe?:string; strategy?:string; provider?:string; rule?:string; sort_by?:string; limit?:number; columns?:string; title?:string; key_fields?:string; cooldown_hours?:number; lookback_days?:number; forms?:string; kinds?:string; years?:number; channel?:'email'|'webhook'; subject?:string; skip_empty?:boolean; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number;require_grounding?:boolean; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FunctionDef { id:number; name:string; graph?:unknown }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
@@ -234,10 +234,10 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
        }
        @if(isInvestorNode(n.type)){
         <p class="muted investor-help">{{investorNode(n.type)?.description}}</p>
-        @if(n.type==='watchlist_quotes'||n.type==='technical_scan'||n.type==='fundamentals'||n.type==='sec_filings'||n.type==='news'){
+        @if(n.type==='watchlist_quotes'||n.type==='technical_scan'||n.type==='fundamentals'||n.type==='sec_filings'||n.type==='news'||n.type==='insider_activity'||n.type==='corporate_events'){
          <label>Watchlist (up to 25 symbols) <textarea rows="2" spellcheck="false" [ngModel]="n.symbols||''" (ngModelChange)="updateInvestor(n.id,'symbols',$event)" maxlength="600" placeholder="AAPL, MSFT, VOLV-B.ST"></textarea></label>
          <p class="muted">Leave empty to use the symbols in this node's input, for example the rows of a screen or another watchlist node.</p>
-         @if(n.type!=='sec_filings'){<label>Provider <select [ngModel]="n.provider||''" (ngModelChange)="updateInvestor(n.id,'provider',$event)"><option value="">{{n.type==='news'?'First provider with news':'Server default'}}</option>@for(p of providers();track p.id){<option [value]="p.id">{{p.label||p.id}}</option>}</select></label>}
+         @if(n.type!=='sec_filings'&&n.type!=='insider_activity'){<label>Provider <select [ngModel]="n.provider||''" (ngModelChange)="updateInvestor(n.id,'provider',$event)"><option value="">{{n.type==='news'?'First provider with news':n.type==='corporate_events'?'First provider with events':'Server default'}}</option>@for(p of providers();track p.id){<option [value]="p.id">{{p.label||p.id}}</option>}</select></label>}
         }
         @if(n.type==='leaderboard'){
          <label>Rank <select [ngModel]="n.universe||''" (ngModelChange)="setLeaderboardUniverse(n.id,$event)">@for(u of leaderboardUniverses;track u.id){<option [value]="u.id">{{u.label}}</option>}<option value="">My watchlist, or the symbols in the input</option></select></label>
@@ -253,9 +253,17 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
         @if(n.type==='sec_filings'){
          <label>Forms <input [ngModel]="n.forms||''" (ngModelChange)="updateInvestor(n.id,'forms',$event)" maxlength="80" placeholder="8-K, 10-Q, 10-K (empty: all)"></label>
         }
-        @if(n.type==='sec_filings'||n.type==='news'){
-         <label>Look back (days, 1–90) <input type="number" min="1" max="90" [ngModel]="n.lookback_days||(n.type==='news'?3:7)" (ngModelChange)="updateInvestorNumber(n.id,'lookback_days',+$event,1,90)"></label>
+        @if(n.type==='sec_filings'||n.type==='news'||n.type==='insider_activity'){
+         <label>Look back (days, 1–90) <input type="number" min="1" max="90" [ngModel]="n.lookback_days||(n.type==='news'?3:n.type==='insider_activity'?30:7)" (ngModelChange)="updateInvestorNumber(n.id,'lookback_days',+$event,1,90)"></label>
         }
+        @if(n.type==='insider_activity'){<p class="muted">Needs SEC_USER_AGENT on the server. Counts only open-market purchases (code P) and sales (code S); grants, exercises and gifts are ignored. A cluster is three or more different buyers in the window.</p>}
+        @if(n.type==='corporate_events'){
+         <label>Days ahead (1–90) <input type="number" min="1" max="90" [ngModel]="n.limit||30" (ngModelChange)="updateInvestorNumber(n.id,'limit',+$event,1,90)"></label>
+         <label>Also look back (days, 0–90) <input type="number" min="0" max="90" [ngModel]="n.lookback_days||0" (ngModelChange)="updateInvestorNumber(n.id,'lookback_days',+$event,0,90)"></label>
+         <label>Kinds <input [ngModel]="n.kinds||''" (ngModelChange)="updateInvestor(n.id,'kinds',$event)" maxlength="40" placeholder="dividend, split, earnings (empty: all)"></label>
+        }
+        @if(n.type==='macro_regime'){<p class="muted">Reads FRED series T10Y2Y, UNRATE, FEDFUNDS, BAMLH0A0HYM2 and VIXCLS. Install the FRED plugin (Settings → Plugins) and set FRED_API_KEY. A missing series leaves its signals out and is listed in missing.</p>}
+        @if(n.type==='portfolio_check'){<p class="muted">Measures the paper portfolio against your saved wealth plan. Rows: one summary, one per alert (kind is the alert, such as concentration or deep_drawdown) and one per rebalancing suggestion (kind suggestion). Administrators only.</p>}
         @if(n.type==='news'){<label>Headlines per symbol (1–20) <input type="number" min="1" max="20" [ngModel]="n.limit||5" (ngModelChange)="updateInvestorNumber(n.id,'limit',+$event,1,20)"></label>}
         @if(n.type==='screen'){
          <label>Rule <textarea rows="2" spellcheck="false" [ngModel]="n.rule||''" (ngModelChange)="updateInvestor(n.id,'rule',$event)" maxlength="500" placeholder="rsi14 < 30 and above_sma200"></textarea></label>
@@ -671,7 +679,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
  .flow-node-accent{fill:var(--fs-accent)}
  .flow-node-accent[data-type=trigger]{fill:#0ea5e9}.flow-node-accent[data-type=output]{fill:#10b981}.flow-node-accent[data-type=condition],.flow-node-accent[data-type=loop]{fill:#f59e0b}
  .flow-node-accent[data-type=workspace_write],.flow-node-accent[data-type=emit_event]{fill:#ef4444}.flow-node-accent[data-type=http_get],.flow-node-accent[data-type=web_search],.flow-node-accent[data-type=web_crawl]{fill:#14b8a6}
- .flow-node-accent[data-type=watchlist_quotes],.flow-node-accent[data-type=technical_scan],.flow-node-accent[data-type=fundamentals],.flow-node-accent[data-type=sec_filings],.flow-node-accent[data-type=news],.flow-node-accent[data-type=leaderboard]{fill:#f59e0b}.flow-node-accent[data-type=screen],.flow-node-accent[data-type=only_new],.flow-node-accent[data-type=report_table]{fill:#8b5cf6}.flow-node-accent[data-type=notify]{fill:#ef4444}
+ .flow-node-accent[data-type=watchlist_quotes],.flow-node-accent[data-type=technical_scan],.flow-node-accent[data-type=fundamentals],.flow-node-accent[data-type=sec_filings],.flow-node-accent[data-type=news],.flow-node-accent[data-type=leaderboard],.flow-node-accent[data-type=insider_activity],.flow-node-accent[data-type=macro_regime],.flow-node-accent[data-type=portfolio_check],.flow-node-accent[data-type=corporate_events]{fill:#f59e0b}.flow-node-accent[data-type=screen],.flow-node-accent[data-type=only_new],.flow-node-accent[data-type=report_table]{fill:#8b5cf6}.flow-node-accent[data-type=notify]{fill:#ef4444}
  .field-hints{display:flex;flex-wrap:wrap;gap:4px;align-items:center}.field-chip{border:1px solid var(--fs-border);background:var(--fs-surface-2);color:var(--fs-text);border-radius:999px;padding:1px 8px;font:inherit;font-size:.75rem}.field-chip:hover{border-color:var(--fs-accent)}
  .node-type{fill:var(--fs-node-sub);font-weight:600;letter-spacing:.04em}
  .node-label{fill:var(--fs-node-text);font-weight:600}
@@ -1185,7 +1193,7 @@ export class FlowStudioComponent {
    this.graph.update(g=>({...g,version:2,nodes:[...g.nodes,{id,type:spec.type,label:spec.label,...spec.defaults,x:260+(count%4)*140,y:40+Math.floor(count/4)*100} as FlowNode]}));
    this.chosen.set(id);
  }
- updateInvestor(id:string,field:'symbols'|'universe'|'strategy'|'provider'|'rule'|'sort_by'|'columns'|'title'|'key_fields'|'forms'|'channel'|'subject'|'skip_empty',value:string|boolean):void{
+ updateInvestor(id:string,field:'symbols'|'universe'|'strategy'|'provider'|'rule'|'sort_by'|'columns'|'title'|'key_fields'|'forms'|'kinds'|'channel'|'subject'|'skip_empty',value:string|boolean):void{
    this.graph.update(g=>({...g,nodes:g.nodes.map(n=>{if(n.id!==id)return n;const next:FlowNode={...n};if(value===''||value===false)delete (next as unknown as Record<string,unknown>)[field];else (next as unknown as Record<string,unknown>)[field]=value;return next})}));
  }
  updateInvestorNumber(id:string,field:'limit'|'lookback_days'|'cooldown_hours',value:number,min:number,max:number):void{
