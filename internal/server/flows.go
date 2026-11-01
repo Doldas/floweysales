@@ -68,6 +68,8 @@ type flowNode struct {
 	Subject       string `json:"subject,omitempty"`
 	Universe      string `json:"universe,omitempty"`
 	Strategy      string `json:"strategy,omitempty"`
+	Kinds         string `json:"kinds,omitempty"` // corporate_events: dividend, split, earnings
+	Years         int    `json:"years,omitempty"` // backtest: 3 or 5
 	// SkipEmpty skips the node, and so everything that depends on it, when
 	// its input is empty ("", [] or {}), e.g. no new filings or no alerts.
 	SkipEmpty bool    `json:"skip_empty,omitempty"`
@@ -187,7 +189,7 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 			if err := validateInvestorNode(n, g.Version); err != nil {
 				return g, nil, err
 			}
-		} else if n.Symbols != "" || n.Provider != "" || n.Rule != "" || n.SortBy != "" || n.Limit != 0 || n.Columns != "" || n.Title != "" || n.KeyFields != "" || n.CooldownHours != 0 || n.LookbackDays != 0 || n.Forms != "" || n.Channel != "" || n.Subject != "" || n.Universe != "" || n.Strategy != "" {
+		} else if n.Symbols != "" || n.Provider != "" || n.Rule != "" || n.SortBy != "" || n.Limit != 0 || n.Columns != "" || n.Title != "" || n.KeyFields != "" || n.CooldownHours != 0 || n.LookbackDays != 0 || n.Forms != "" || n.Channel != "" || n.Subject != "" || n.Universe != "" || n.Strategy != "" || n.Kinds != "" || n.Years != 0 {
 			return g, nil, fmt.Errorf("node %s: investor settings are only valid on investor nodes", n.ID)
 		}
 		if g.Version == 2 && (n.Type == "condition" || n.Type == "merge" || n.Type == "json_get") {
@@ -572,7 +574,8 @@ func flowAllowedForNonAdmin(graph flowGraph) bool {
 	for _, node := range graph.Nodes {
 		switch node.Type {
 		case "trigger", "agent", "constant", "condition", "merge", "json_get", "transform", "loop", "output", "http_get", "web_crawl", "web_search",
-			"watchlist_quotes", "technical_scan", "fundamentals", "sec_filings", "news", "leaderboard", "screen", "only_new", "report_table":
+			"watchlist_quotes", "technical_scan", "fundamentals", "sec_filings", "news", "leaderboard", "screen", "only_new", "report_table",
+			"insider_activity", "macro_regime", "corporate_events":
 		default:
 			return false
 		}
