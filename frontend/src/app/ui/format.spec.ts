@@ -30,6 +30,7 @@ test('schedules read as words where possible', () => {
   assert.equal(everyLabel(1440), 'Daily');
   assert.equal(everyLabel(2880), 'Every 2 days');
   assert.equal(everyLabel(10080), 'Weekly');
+  assert.equal(everyLabel(43200), 'Monthly');
 });
 
 test('run statuses map to labels and tones', () => {
