@@ -54,3 +54,24 @@ administrators get the paper account's equity as the invested amount. Without
 authentication the single user is stored as user 0. The profile lives in the
 `investor_profile` table (Liquibase `033`) with no foreign key, because user 0
 has no account row; deleting an account removes its profile.
+
+## Portfolio risk
+
+**Paper portfolio → Risk** (`GET /api/portfolio/analytics`, administrators like
+the positions route) measures the paper portfolio with `internal/portfolio`
+from a year of daily closes at today's weights, against SPY:
+
+- weights, largest holding, concentration (HHI and effective holdings);
+- annualized volatility, beta, worst 1-year fall, correlation matrix and each
+  holding's share of risk. With under 60 shared trading days these are left
+  out and the `short_history` alert is raised, never shown as zero;
+- drift of asset-class weights (equity, bond, cash, satellite) from the plan's
+  target, and, only with a saved plan, suggestions that move a class outside a
+  ±5 point band back to target. Sells come from the largest positions of an
+  overweight class; buys go pro rata to the class's existing holdings or to a
+  placeholder such as `<bond fund>`.
+
+Alerts: `concentration` (a holding above 25 %), `low_diversification`,
+`highly_correlated:A/B` (above 0.85), `deep_drawdown` (below −20 %),
+`satellite_over_cap`, `short_history`. Suggestions are text: *Prefill ticket*
+fills the order ticket with whole shares but never submits it.

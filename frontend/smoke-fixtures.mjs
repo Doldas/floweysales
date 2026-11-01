@@ -200,6 +200,18 @@ function wealthPlan() {
   };
 }
 
+/** Same shape as GET /api/portfolio/analytics. */
+function portfolioAnalytics() {
+  return { benchmark: 'SPY', has_plan: true, generated_at: '2026-10-28T15:30:00Z', analytics: {
+    total_value: 100114, weights_pct: { NVDA: 62, BND: 20, VTI: 18 }, top_weight_pct: 62, hhi: 0.46, effective_holdings: 2.2,
+    volatility_pct: 24.1, beta: 1.32, max_drawdown_1y_pct: -18.4,
+    correlation: [[1, 0.31, 0.78], [0.31, 1, 0.12], [0.78, 0.12, 1]], symbols: ['NVDA', 'BND', 'VTI'],
+    risk_contribution_pct: { NVDA: 84.5, BND: 1.5, VTI: 14 }, class_weights_pct: { equity: 80, bond: 20 },
+    drift_pct: { equity: 15, bond: -5, cash: -5, satellite: 0 },
+    suggestions: [{ symbol: 'NVDA', side: 'sell', amount: 15000, reason: 'equity is 15 points above its 65% target' }, { symbol: 'BND', side: 'buy', amount: 5000, reason: 'bond is 5 points below its 25% target' }],
+    alerts: ['concentration', 'low_diversification'] } };
+}
+
 export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.read'], email = 'analyst@example.test' } = {}) {
   const u = new URL(url);
   const p = u.pathname;
@@ -217,6 +229,7 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     '/api/history': history(q.get('symbol') ?? 'NVDA', q.get('range') ?? '1M'),
     '/api/financials': financials(q.get('symbol') ?? 'NVDA'),
     '/api/market/leaderboard': leaderboard(q.get('universe') ?? 'custom', q.get('strategy') ?? 'best'),
+    '/api/portfolio/analytics': portfolioAnalytics(),
     '/api/plan': wealthPlan(),
     '/api/plan/preview': wealthPlan(),
     '/api/plan/profile': wealthPlan(),

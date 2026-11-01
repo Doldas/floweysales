@@ -187,6 +187,7 @@ type Engine struct {
 	secFilings func(ctx context.Context, ticker string, limit int) (sec.Filings, error)
 	flowState  flowNodeStateStore
 	profiles   investorProfileStore
+	paperState func() ([]trading.Position, trading.Summary)
 	planLimits adapterLimiter
 }
 
@@ -229,6 +230,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerLeaderboardRoutes()
 	e.registerBacktestRoutes()
 	e.registerPlanRoutes()
+	e.registerPortfolioAnalyticsRoutes()
 	e.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()

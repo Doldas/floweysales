@@ -108,8 +108,30 @@ export class LedgerComponent {
     effect(() => {
       const symbol = this.trackedSymbol();
       this.resetTicket();
+      this.applyPrefill();
       if (symbol) this.state.loadFor(symbol);
     });
+  }
+
+  private pending: { symbol: string; side: OrderSide; qty: number } | null = null;
+
+  /**
+   * Aims the ticket at a symbol with a side and whole-share quantity without
+   * submitting it. The caller makes the symbol the tracked one first; the
+   * ticket resets on that change, so the values are applied after the reset.
+   */
+  prefill(symbol: string, side: OrderSide, qty: number): void {
+    this.pending = { symbol, side, qty };
+    this.applyPrefill();
+  }
+
+  private applyPrefill(): void {
+    if (!this.pending || this.pending.symbol !== this.trackedSymbol()) return;
+    this.side = this.pending.side;
+    this.qty = String(this.pending.qty);
+    this.orderType = 'MARKET';
+    this.step = 'compose';
+    this.pending = null;
   }
 
   // ---------------------------------------------------------------- views

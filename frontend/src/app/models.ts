@@ -406,3 +406,31 @@ export interface WealthPlan {
 
 /** GET /api/plan, PUT /api/plan/profile and POST /api/plan/preview. */
 export interface PlanResponse { profile: PlanProfile | null; plan: WealthPlan | null }
+
+export interface PortfolioSuggestion { symbol: string; side: 'buy' | 'sell'; amount: number; reason: string }
+
+/** Risk of the paper portfolio from GET /api/portfolio/analytics (see internal/portfolio). */
+export interface PortfolioAnalytics {
+  total_value: number;
+  weights_pct: Record<string, number>;
+  top_weight_pct: number;
+  hhi: number;
+  effective_holdings: number;
+  volatility_pct?: number;
+  beta?: number;
+  max_drawdown_1y_pct?: number;
+  correlation: number[][];
+  symbols: string[];
+  risk_contribution_pct: Record<string, number>;
+  class_weights_pct: Record<string, number>;
+  drift_pct?: Record<string, number>;
+  suggestions: PortfolioSuggestion[];
+  alerts: string[];
+}
+
+export interface PortfolioAnalyticsResponse {
+  analytics: PortfolioAnalytics;
+  benchmark: string;
+  has_plan: boolean;
+  generated_at: string;
+}
