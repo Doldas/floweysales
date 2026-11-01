@@ -12,6 +12,8 @@ import {
   Order,
   OrderRequest,
   OrderResponse,
+  PlanProfile,
+  PlanResponse,
   PortfolioResponse,
   ProviderCapability,
   SymbolInfo,
@@ -86,6 +88,20 @@ export class MarketService {
     if (p.symbols?.length) params['symbols'] = p.symbols.join(',');
     else params['universe'] = p.universe;
     return this.http.get<BacktestResult>('/api/market/backtest', { params });
+  }
+
+  /** The signed-in user's saved wealth plan, or nulls when none is saved. */
+  getPlan(): Observable<PlanResponse> {
+    return this.http.get<PlanResponse>('/api/plan');
+  }
+
+  savePlan(profile: PlanProfile): Observable<PlanResponse> {
+    return this.http.put<PlanResponse>('/api/plan/profile', profile);
+  }
+
+  /** A plan for an unsaved profile; nothing is stored. */
+  previewPlan(profile: PlanProfile): Observable<PlanResponse> {
+    return this.http.post<PlanResponse>('/api/plan/preview', profile);
   }
 
   getStats(symbol: string): Observable<MarketStatsJSON> {

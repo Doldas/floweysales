@@ -58,3 +58,17 @@ export function everyLabel(minutes: number): string {
   if (minutes % 60 === 0) return minutes === 60 ? 'Hourly' : `Every ${minutes / 60} h`;
   return `Every ${minutes} min`;
 }
+
+/**
+ * Whole-unit money: 1234567 and "USD" → "$1,234,567". Without a usable
+ * currency code it is the plain number, so a bad code never throws.
+ */
+export function formatMoney(value: number | null | undefined, currency = '', locale?: string): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  try {
+    if (/^[A-Za-z]{3}$/.test(currency)) {
+      return new Intl.NumberFormat(locale, { style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: 0 }).format(value);
+    }
+  } catch { /* unknown code: fall through */ }
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
+}

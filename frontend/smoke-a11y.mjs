@@ -86,7 +86,7 @@ try {
   await audit(page, 'Flow editor: notify settings');
 
   // Every page of the workspace, with the shell, in both themes.
-  const pages = ['', 'agent', 'flows', 'inbox', 'markets', 'financials', 'portfolio', 'workspace', 'community', 'notifications', 'settings'];
+  const pages = ['', 'agent', 'flows', 'inbox', 'markets', 'plan', 'financials', 'portfolio', 'workspace', 'community', 'notifications', 'settings'];
   for (const theme of ['dark', 'light']) {
     await page.evaluate(t => { localStorage.setItem('fs.theme', t); document.documentElement.setAttribute('data-bs-theme', t); }, theme);
     for (const path of pages) {

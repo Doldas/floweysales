@@ -54,6 +54,16 @@
       </span>
       <fs-sparkline class="kpi-spark" [values]="market.sparkline()" [label]="market.trackedSymbol() + ' trend'" />
     </a>
+    <a class="card fs-kpi kpi-link" routerLink="/plan">
+      <span class="fs-kpi-label"><i class="bi bi-bullseye" aria-hidden="true"></i>Your phase</span>
+      @if (plan(); as p) {
+        <span class="fs-kpi-value">{{ p.phase.name }}</span>
+        <span class="fs-kpi-sub">{{ p.probability_goal_pct.toFixed(0) }}% {{ p.phase.id === 'income' ? 'money lasts' : 'chance of your goal' }}</span>
+      } @else {
+        <span class="fs-kpi-value">Set up your plan</span>
+        <span class="fs-kpi-sub">Phase, allocation and goal</span>
+      }
+    </a>
     @if (access.flowsRead()) {
       <a class="card fs-kpi kpi-link" routerLink="/flows">
         <span class="fs-kpi-label"><i class="bi bi-diagram-3" aria-hidden="true"></i>Agent flows</span>
