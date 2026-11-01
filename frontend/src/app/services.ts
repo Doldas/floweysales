@@ -12,6 +12,7 @@ import {
   Order,
   OrderRequest,
   OrderResponse,
+  EventsResponse,
   PlanProfile,
   SizeResponse,
   PortfolioAnalyticsResponse,
@@ -114,6 +115,13 @@ export class MarketService {
   /** How many units to trade so a stop-out loses riskPct of equity. Places nothing. */
   sizePosition(symbol: string, side: 'buy' | 'sell', riskPct: number): Observable<SizeResponse> {
     return this.http.post<SizeResponse>('/api/trading/size', { symbol, side, risk_pct: riskPct });
+  }
+
+  /** Dividends, splits and earnings dates between two ISO dates (window up to 400 days). */
+  getEvents(symbol: string, from: string, to: string, provider = ''): Observable<EventsResponse> {
+    const params: Record<string, string> = { symbol, from, to };
+    if (provider) params['provider'] = provider;
+    return this.http.get<EventsResponse>('/api/events', { params });
   }
 
   getStats(symbol: string): Observable<MarketStatsJSON> {

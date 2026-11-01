@@ -232,6 +232,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerPlanRoutes()
 	e.registerPortfolioAnalyticsRoutes()
 	e.registerPositionSizingRoutes()
+	e.registerEventRoutes()
 	e.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()

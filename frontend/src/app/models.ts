@@ -447,3 +447,17 @@ export interface SizeResponse {
   stop_source: 'atr' | 'given';
   result: { quantity: number; stop: number; risk_amount: number; position_pct: number; capped_by?: 'max_weight' | 'buying_power' };
 }
+
+/** A dividend, split or earnings date from GET /api/events (see internal/market/events.go). */
+export interface CorporateEvent {
+  symbol: string;
+  kind: 'dividend' | 'split' | 'earnings';
+  date: string;
+  amount?: number;
+  currency?: string;
+  ratio?: string;
+  confirmed: boolean;
+  provider?: string;
+}
+
+export interface EventsResponse { symbol: string; from: string; to: string; events: CorporateEvent[] }
