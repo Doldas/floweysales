@@ -41,6 +41,15 @@ använder Avanza-pluginens publika read-only ögonblicksbild och finns bara
 när Avanza-pluginet är installerat (installationen kräver att villkoren
 godkänns).
 
+## Investeringsanalys
+
+`GET /api/market/leaderboard?universe=…&strategy=…` rankar ett urval bolag på
+sex faktorer. `GET /api/market/backtest?universe=…&strategy=…&top=10&rebalance=monthly|quarterly&cost_bps=10&years=3|5`
+spelar upp samma strategi över historiska kurser och rapporter (rapporter
+används först 60 dagar efter periodens slut) mot ett index och returnerar
+nyckeltal, kurva, ombalanseringar och varningar. Båda läses med
+`research.read`; se [investor automations](investor-automations.md#backtest).
+
 ## Säkerhet och tillgänglighet
 
 - En **whitelist** ersätter godtycklig extern URL-forwarding.

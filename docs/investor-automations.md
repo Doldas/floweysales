@@ -136,6 +136,45 @@ ranked and only those symbols are passed on, each with its rank in the list.
 Scores compare companies with each other on reported and price data. They are
 not forecasts or price targets and nothing here trades.
 
+## Backtest
+
+A ranking nobody has tested is a guess, so the leaderboard can replay a
+strategy over the past. On **Markets → Leaderboard** choose *Backtest this
+strategy*, or call
+`GET /api/market/backtest?universe=…&strategy=…&top=10&rebalance=monthly|quarterly&cost_bps=10&years=3|5`
+(or `symbols=` with up to 25 tickers; readable by `research.read`).
+
+**Method.** The first rebalance is the first trading day on or after the start
+date once `top` symbols have a year of prices. Every 21 trading days (63 for
+quarterly) the leaderboard scores the universe exactly as it does today, the
+best `top` companies are held at equal weight, and weights then drift with
+prices until the next rebalance. Each trade costs `cost_bps` per side (default
+10). The benchmark is held in full with no costs: SPY for the US universes,
+`^OMX` for Sweden and `^STOXX50E` for Europe. Metrics are computed from the
+daily curve: yearly return (CAGR), volatility, Sharpe and Sortino (risk-free
+rate taken as 0), worst peak-to-trough fall, the share of rebalance periods
+that beat the benchmark, and average turnover. The first year of prices is
+warm-up, so a five-year test fetches ten years of history.
+
+**Point in time.** At each rebalance the strategy sees only prices up to that
+day and only quarters that would have been published: a quarter counts from its
+period end plus 60 days. Nothing later leaks into an earlier choice.
+
+**Warnings** are returned with every result and shown above it:
+
+| Id | Meaning |
+| --- | --- |
+| `survivorship_bias` | Always. The universe is today's list; companies that fell out of it are missing, which flatters past returns. |
+| `price_index_benchmark` | The benchmark has no dividends. |
+| `thin_fundamentals` | Fewer than 60 % of symbols had four reported quarters on average, so early picks lean on price factors. |
+| `short_history` | Fewer than 24 rebalances fit the history. |
+| `benchmark_unavailable`, `symbols_unavailable` | The benchmark or some symbols could not be fetched. |
+
+With fewer than six rebalances the request fails instead of guessing. Results
+are cached for six hours and identical concurrent requests share one run. Past
+results do not predict future ones; the backtest is a check on a strategy, not
+a forecast.
+
 ## Notifications
 
 A **Notify** node sends its input, with JSON rows rendered as a table and a
