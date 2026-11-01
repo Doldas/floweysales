@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes.ts';
+import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES, SCREEN_FIELDS, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes.ts';
 
 const fixture = fileURLToPath(new URL('../../../../internal/server/testdata/investor-playbooks.json', import.meta.url));
 const optionsFixture = fileURLToPath(new URL('../../../../internal/server/testdata/leaderboard-options.json', import.meta.url));
@@ -62,7 +62,7 @@ test('the server knows every leaderboard universe and strategy', () => {
 test('node catalogue and watchlist checks', () => {
   assert.ok(isInvestorNode('screen') && !isInvestorNode('agent'));
   assert.equal(investorNode('notify')!.admin, true);
-  assert.ok(INVESTOR_NODES.filter(n => n.admin).every(n => n.type === 'notify'));
+  assert.ok(INVESTOR_NODES.filter(n => n.admin).every(n => n.type === 'notify' || n.type === 'portfolio_check'));
   assert.equal(watchlistProblem('AAPL, msft BRK.B'), '');
   assert.match(watchlistProblem('AAPL, $$$'), /not a valid ticker/);
   assert.match(watchlistProblem(Array.from({ length: 26 }, (_, i) => 'S' + i).join(',')), /At most 25/);
@@ -72,4 +72,14 @@ test('the server fixture matches the playbooks', () => {
   const current = JSON.stringify(allPlaybooks(), null, 1) + '\n';
   if (process.env['UPDATE_PLAYBOOKS']) writeFileSync(fixture, current);
   assert.equal(readFileSync(fixture, 'utf8'), current, 'run with UPDATE_PLAYBOOKS=1 to regenerate internal/server/testdata/investor-playbooks.json');
+});
+
+test('insider, macro, portfolio and events nodes are catalogued with screen fields', () => {
+  for (const type of ['insider_activity', 'macro_regime', 'portfolio_check', 'corporate_events']) {
+    assert.ok(isInvestorNode(type), type);
+    assert.ok(SCREEN_FIELDS[type].length > 3, `${type} needs field suggestions for the screen rule editor`);
+  }
+  assert.equal(investorNode('portfolio_check')!.admin, true, 'the paper portfolio is administrator only');
+  for (const type of ['insider_activity', 'macro_regime', 'corporate_events']) assert.equal(investorNode(type)!.admin, false, type);
+  assert.equal(new Set(INVESTOR_NODES.map(n => n.tag)).size, INVESTOR_NODES.length, 'canvas tags are unique');
 });

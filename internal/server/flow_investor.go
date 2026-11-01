@@ -30,6 +30,7 @@ const (
 var investorNodeTypes = map[string]bool{
 	"watchlist_quotes": true, "technical_scan": true, "fundamentals": true, "sec_filings": true,
 	"news": true, "leaderboard": true, "screen": true, "only_new": true, "report_table": true, "notify": true,
+	"insider_activity": true, "macro_regime": true, "portfolio_check": true, "corporate_events": true,
 }
 
 // flowSymbols reads the node's watchlist, or, when it has none, the symbols
@@ -477,6 +478,10 @@ func (e *Engine) runInvestorDataNode(ctx context.Context, n flowNode, input stri
 		return flowRowsJSON(filings)
 	case "news":
 		return e.runNewsNode(ctx, n, symbols, provider, now)
+	case "insider_activity":
+		return e.runInsiderNode(ctx, n, symbols, now)
+	case "corporate_events":
+		return e.runEventsNode(ctx, n, symbols, now)
 	default:
 		return "", fmt.Errorf("unknown investor node %s", n.Type)
 	}
@@ -781,7 +786,7 @@ func validateInvestorNode(n flowNode, version int) error {
 	if version != 2 {
 		return fmt.Errorf("node %s: investor nodes require graph version 2", n.ID)
 	}
-	if len(n.Symbols) > 600 || len(n.Provider) > 32 || len(n.Rule) > 500 || len(n.SortBy) > 64 || len(n.Columns) > 300 || len(n.KeyFields) > 120 || len(n.Subject) > 150 || len(n.Forms) > 80 || len(n.Universe) > 32 || len(n.Strategy) > 32 {
+	if len(n.Symbols) > 600 || len(n.Provider) > 32 || len(n.Rule) > 500 || len(n.SortBy) > 64 || len(n.Columns) > 300 || len(n.KeyFields) > 120 || len(n.Subject) > 150 || len(n.Forms) > 80 || len(n.Universe) > 32 || len(n.Strategy) > 32 || len(n.Kinds) > 40 {
 		return fmt.Errorf("node %s: setting is too long", n.ID)
 	}
 	if n.Provider != "" && !market.ParseProvider(n.Provider).Valid() {
@@ -795,7 +800,13 @@ func validateInvestorNode(n flowNode, version int) error {
 	if n.Limit < 0 || n.Limit > 100 || n.LookbackDays < 0 || n.LookbackDays > 90 || n.CooldownHours < 0 || n.CooldownHours > 24*90 {
 		return fmt.Errorf("node %s: limit must be 0–100, lookback 0–90 days and cooldown 0–2160 hours", n.ID)
 	}
-	if (n.Universe != "" || n.Strategy != "") && n.Type != "leaderboard" {
+	if n.Kinds != "" && n.Type != "corporate_events" {
+		return fmt.Errorf("node %s: kinds is a corporate events setting", n.ID)
+	}
+	if n.Years != 0 && n.Type != "backtest" {
+		return fmt.Errorf("node %s: years is a backtest setting", n.ID)
+	}
+	if (n.Universe != "" || n.Strategy != "") && n.Type != "leaderboard" && n.Type != "backtest" {
 		return fmt.Errorf("node %s: universe and strategy are leaderboard settings", n.ID)
 	}
 	switch n.Type {
@@ -809,6 +820,13 @@ func validateInvestorNode(n flowNode, version int) error {
 		}
 		if f := strings.TrimPrefix(strings.TrimSpace(n.SortBy), "-"); f != "" && !screenFieldPattern.MatchString(f) {
 			return fmt.Errorf("node %s: invalid sort field", n.ID)
+		}
+	case "corporate_events":
+		if n.Limit > 90 {
+			return fmt.Errorf("node %s: corporate events look at most 90 days ahead (limit)", n.ID)
+		}
+		if !validEventKinds(n.Kinds) {
+			return fmt.Errorf("node %s: kinds must be dividend, split or earnings", n.ID)
 		}
 	case "sec_filings":
 		for f := range parseForms(n.Forms) {
@@ -861,6 +879,12 @@ func (e *Engine) runInvestorNode(ctx context.Context, f storage.AgentFlow, n flo
 		return output, "", err
 	case "leaderboard":
 		output, err = e.runLeaderboardNode(ctx, n, input)
+		return output, "", err
+	case "macro_regime":
+		output, err = e.runMacroNode(ctx, time.Now().UTC())
+		return output, "", err
+	case "portfolio_check":
+		output, err = e.runPortfolioCheck(ctx)
 		return output, "", err
 	case "notify":
 		if flowEmpty(input) {

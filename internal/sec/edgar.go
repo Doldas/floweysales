@@ -19,15 +19,18 @@ import (
 )
 
 const officialDataURL = "https://data.sec.gov"
+const officialArchiveURL = "https://www.sec.gov"
 const officialTickerURL = "https://www.sec.gov/files/company_tickers_exchange.json"
 
 // Client has a configurable transport for hermetic tests, but production URLs
 // are fixed to SEC hosts. SEC_USER_AGENT must identify an actual contact.
 type Client struct {
-	HTTP          *http.Client
-	UserAgent     string
-	DataURL       string
-	TickerURL     string
+	HTTP      *http.Client
+	UserAgent string
+	DataURL   string
+	TickerURL string
+	// ArchiveURL is the host of filing folders and their documents.
+	ArchiveURL    string
 	mu            sync.Mutex
 	last          time.Time
 	tickers       map[string]Company
@@ -82,7 +85,7 @@ type Facts struct {
 func NewClient(userAgent string) *Client {
 	return &Client{
 		HTTP:      &http.Client{Timeout: 14 * time.Second},
-		UserAgent: strings.TrimSpace(userAgent), DataURL: officialDataURL, TickerURL: officialTickerURL,
+		UserAgent: strings.TrimSpace(userAgent), DataURL: officialDataURL, TickerURL: officialTickerURL, ArchiveURL: officialArchiveURL,
 	}
 }
 
@@ -90,8 +93,20 @@ var production = NewClient(os.Getenv("SEC_USER_AGENT"))
 
 func Production() *Client { return production }
 func (c *Client) get(ctx context.Context, endpoint string, limit int, into any) error {
+	raw, err := c.getRaw(ctx, endpoint, limit, "application/json")
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(raw, into); err != nil {
+		return fmt.Errorf("decode SEC response: %w", err)
+	}
+	return nil
+}
+
+// getRaw fetches one SEC document within the rate limit and size bound.
+func (c *Client) getRaw(ctx context.Context, endpoint string, limit int, accept string) ([]byte, error) {
 	if c.UserAgent == "" || !strings.Contains(c.UserAgent, "@") {
-		return errors.New("SEC_USER_AGENT must identify a real contact email for SEC fair access")
+		return nil, errors.New("SEC_USER_AGENT must identify a real contact email for SEC fair access")
 	}
 	// Global per-client 2 requests/s maximum, safely under SEC's 10 req/s guidance.
 	c.mu.Lock()
@@ -102,7 +117,7 @@ func (c *Client) get(ctx context.Context, endpoint string, limit int, into any) 
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return ctx.Err()
+			return nil, ctx.Err()
 		case <-timer.C:
 		}
 		c.mu.Lock()
@@ -111,32 +126,29 @@ func (c *Client) get(ctx context.Context, endpoint string, limit int, into any) 
 	c.mu.Unlock()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("User-Agent", c.UserAgent)
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", accept)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("SEC EDGAR status %d (retry later or check User-Agent)", resp.StatusCode)
+		return nil, fmt.Errorf("SEC EDGAR status %d (retry later or check User-Agent)", resp.StatusCode)
 	}
 	if resp.ContentLength > int64(limit) {
-		return errors.New("SEC response exceeds allowed size")
+		return nil, errors.New("SEC response exceeds allowed size")
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, int64(limit)+1))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(raw) > limit {
-		return errors.New("SEC response exceeds allowed size")
+		return nil, errors.New("SEC response exceeds allowed size")
 	}
-	if err := json.Unmarshal(raw, into); err != nil {
-		return fmt.Errorf("decode SEC response: %w", err)
-	}
-	return nil
+	return raw, nil
 }
 func (c *Client) Resolve(ctx context.Context, ticker string) (Company, error) {
 	key := strings.ToUpper(strings.TrimSpace(ticker))
