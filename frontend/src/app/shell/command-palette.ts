@@ -128,6 +128,7 @@ export class CommandPaletteComponent {
       ['/flows', 'Flows', 'bi-diagram-3', this.access.flowsRead()],
       ['/inbox', 'Inbox · approvals', 'bi-inbox', this.access.inbox()],
       ['/markets', 'Markets', 'bi-graph-up-arrow', true],
+      ['/plan', 'Wealth plan', 'bi-bullseye', true],
       ['/financials', 'Financials', 'bi-bank', true],
       ['/portfolio', 'Paper portfolio', 'bi-wallet2', this.access.liveMarkets()],
       ['/workspace', 'Workspace files', 'bi-folder2-open', this.access.workspace()],

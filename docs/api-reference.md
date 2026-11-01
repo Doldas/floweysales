@@ -50,6 +50,10 @@ används först 60 dagar efter periodens slut) mot ett index och returnerar
 nyckeltal, kurva, ombalanseringar och varningar. Båda läses med
 `research.read`; se [investor automations](investor-automations.md#backtest).
 
+`GET /api/plan`, `PUT /api/plan/profile` och `POST /api/plan/preview` hanterar
+den inloggade användarens egen förmögenhetsplan (fas, målallokering och
+simulering); se [wealth plan](wealth-plan.md).
+
 ## Säkerhet och tillgänglighet
 
 - En **whitelist** ersätter godtycklig extern URL-forwarding.

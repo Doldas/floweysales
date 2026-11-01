@@ -69,6 +69,7 @@ export class ShellComponent {
       label: 'Markets',
       items: [
         { path: '/markets', label: 'Markets', icon: 'bi-graph-up-arrow', visible: () => true },
+        { path: '/plan', label: 'Wealth plan', icon: 'bi-bullseye', visible: () => true },
         { path: '/financials', label: 'Financials', icon: 'bi-bank', visible: () => true },
         { path: '/portfolio', label: 'Paper portfolio', icon: 'bi-wallet2', visible: () => this.access.liveMarkets() },
       ],

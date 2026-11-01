@@ -11,7 +11,8 @@ import { NotifyService } from '../core/notify.service';
 import { FLOW_TEMPLATES, CommandPaletteService } from '../shell/command-palette';
 import { SparklineComponent } from '../ui/sparkline';
 import { duration, everyLabel, greeting, runLabel, runTone, timeAgo } from '../ui/format';
-import type { TrackedAsset } from '../services';
+import { MarketService, type TrackedAsset } from '../services';
+import type { WealthPlan } from '../models';
 
 interface TrackerStatus { symbol: string; provider: string; has_tick: boolean; age_seconds: number | null }
 interface WorkspaceFile { path: string; content_type: string; size: number }
@@ -36,6 +37,7 @@ export class CommandCenterPage {
   readonly palette = inject(CommandPaletteService);
   private readonly router = inject(Router);
   private readonly notify = inject(NotifyService);
+  private readonly marketApi = inject(MarketService);
 
   readonly templates = FLOW_TEMPLATES;
   readonly greeting = greeting();
@@ -49,6 +51,8 @@ export class CommandCenterPage {
   readonly trackerStatus = signal<Record<string, TrackerStatus>>({});
   readonly files = signal<WorkspaceFile[]>([]);
   readonly runningFlow = signal(0);
+  /** The saved wealth plan, or null when none is saved (or it could not load). */
+  readonly plan = signal<WealthPlan | null>(null);
 
   readonly timeAgo = timeAgo;
   readonly duration = duration;
@@ -81,6 +85,7 @@ export class CommandCenterPage {
 
   constructor() {
     void this.activity.refresh();
+    this.marketApi.getPlan().subscribe({ next: res => this.plan.set(res.plan), error: () => this.plan.set(null) });
     if (this.access.liveMarkets()) void this.loadTrackerStatus();
     if (this.access.workspace()) void this.loadFiles();
     const timer = setInterval(() => {

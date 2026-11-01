@@ -181,6 +181,10 @@ func (s *Service) DeleteUser(ctx context.Context, id int64) error {
 	if _, err = tx.ExecContext(ctx, "DELETE FROM auth_invitations WHERE user_id=?", id); err != nil {
 		return err
 	}
+	// The profile table has no foreign key (id 0 is the single user without auth).
+	if _, err = tx.ExecContext(ctx, "DELETE FROM investor_profile WHERE user_id=?", id); err != nil {
+		return err
+	}
 	if _, err = tx.ExecContext(ctx, "DELETE FROM auth_users WHERE id=?", id); err != nil {
 		return err
 	}
