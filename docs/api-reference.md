@@ -52,7 +52,8 @@ nyckeltal, kurva, ombalanseringar och varningar. Båda läses med
 
 `GET /api/plan`, `PUT /api/plan/profile` och `POST /api/plan/preview` hanterar
 den inloggade användarens egen förmögenhetsplan (fas, målallokering och
-simulering); se [wealth plan](wealth-plan.md).
+simulering); se [wealth plan](wealth-plan.md). `GET /api/portfolio/analytics` (SYS_ADMIN)
+mäter pappersportföljens risk och avvikelse från planen.
 
 ## Säkerhet och tillgänglighet
 

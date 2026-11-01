@@ -13,6 +13,7 @@ import {
   OrderRequest,
   OrderResponse,
   PlanProfile,
+  PortfolioAnalyticsResponse,
   PlanResponse,
   PortfolioResponse,
   ProviderCapability,
@@ -102,6 +103,11 @@ export class MarketService {
   /** A plan for an unsaved profile; nothing is stored. */
   previewPlan(profile: PlanProfile): Observable<PlanResponse> {
     return this.http.post<PlanResponse>('/api/plan/preview', profile);
+  }
+
+  /** Concentration, risk and drift of the paper portfolio. */
+  getPortfolioAnalytics(): Observable<PortfolioAnalyticsResponse> {
+    return this.http.get<PortfolioAnalyticsResponse>('/api/portfolio/analytics');
   }
 
   getStats(symbol: string): Observable<MarketStatsJSON> {
