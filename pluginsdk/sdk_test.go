@@ -42,6 +42,7 @@ func TestContractFixturesRoundTrip(t *testing.T) {
 	roundTrip[ResearchResult](t, "research.json")
 	roundTrip[Manifest](t, "manifest.json")
 	roundTrip[[]NewsItem](t, "news.json")
+	roundTrip[[]CorporateEvent](t, "events.json")
 }
 
 func TestManifestValidation(t *testing.T) {

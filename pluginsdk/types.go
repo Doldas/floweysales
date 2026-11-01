@@ -133,6 +133,20 @@ type NewsItem struct {
 	Provider  string `json:"provider,omitempty"`
 }
 
+// CorporateEvent is a dividend, split or earnings date. Date is "2026-11-14".
+// Amount is the dividend per share or nil; Ratio is "4:1" for splits.
+// Confirmed is false for estimated earnings dates.
+type CorporateEvent struct {
+	Symbol    string   `json:"symbol"`
+	Kind      string   `json:"kind"` // dividend | split | earnings
+	Date      string   `json:"date"`
+	Amount    *float64 `json:"amount,omitempty"`
+	Currency  string   `json:"currency,omitempty"`
+	Ratio     string   `json:"ratio,omitempty"`
+	Confirmed bool     `json:"confirmed"`
+	Provider  string   `json:"provider,omitempty"`
+}
+
 // Supported history ranges.
 const (
 	Range1D  = "1D"

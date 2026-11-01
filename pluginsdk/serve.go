@@ -23,6 +23,7 @@ type Plugin struct {
 	Research   func(context.Context, ResearchParams) (ResearchResult, error)
 	ForumPosts func(context.Context, ForumParams) ([]ForumPost, error)
 	News       func(context.Context, NewsParams) ([]NewsItem, error)
+	Events     func(context.Context, EventsParams) ([]CorporateEvent, error)
 }
 
 // maxRequestBytes bounds one request line; requests are tiny.
@@ -161,6 +162,8 @@ func (p Plugin) dispatch(ctx context.Context, req Request) (any, error) {
 		return call(ctx, req.Params, p.ForumPosts)
 	case MethodNews:
 		return call(ctx, req.Params, p.News)
+	case MethodEvents:
+		return call(ctx, req.Params, p.Events)
 	default:
 		return nil, Errorf(CodeUnsupported, "unknown method %q", req.Method)
 	}
