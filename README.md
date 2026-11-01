@@ -7,14 +7,17 @@ web app. One binary serves the API, the SSE price stream and the web UI.
 
 | Area | What it does |
 | --- | --- |
-| **Command Center** | Home: ask the agent, KPIs, agent run activity across flows, automations, live trackers, flow templates and recent files |
+| **Command Center** | Home: a **Today** briefing (your phase and chance of your goal, the macro regime, the paper portfolio's day change and drawdown, and three things worth a look, built from figures only with a "Brief me" hand-off to the agent), ask the agent, KPIs, agent run activity across flows, automations, live trackers, flow templates and recent files |
 | **Research Agent** | Conversational research with read-only market, SEC and valuation tools. Every tool call is shown as a step with its arguments and result. Available as a dock on every page (Ctrl/⌘ J) and as a full page |
 | **Flows** | Flow Studio: build, version, run and audit multi-step agent automations |
-| **Investor playbooks** | Ready-made automations: morning watchlist brief, price-move alerts, technical setups, SEC filing monitor, news digest, quality & value screen, a top 10 buy-now leaderboard, leaderboard entrants, value bargains, growth at a reasonable price, momentum leaders, quality on a dip, scored quarterly reports and a watchlist health check, built from deterministic watchlist, technical, fundamentals, filings, news, leaderboard, screen, "only new" and notify nodes. The Markets page shows the same leaderboard. See [Investor automations](docs/investor-automations.md) |
+| **Wealth plan** | Which phase of building wealth you are in (foundation to income), a target allocation with a capped high-risk sleeve, a seeded Monte Carlo projection with the probability of your goal, a checklist and recommended automations. See [Wealth plan](docs/wealth-plan.md) |
+| **Investor playbooks** | Ready-made automations: morning watchlist brief, price-move alerts, technical setups, SEC filing monitor, news digest, quality & value screen, a top 10 buy-now leaderboard, leaderboard entrants, value bargains, growth at a reasonable price, momentum leaders, quality on a dip, scored quarterly reports, a watchlist health check, insider buying clusters, macro regime shifts, a portfolio drawdown guard, a monthly rebalance check, a dividend and earnings calendar, a monthly phase check-in, earnings week and a strategy scorecard, built from deterministic watchlist, technical, fundamentals, filings, news, insider activity, macro regime, portfolio check, events, wealth plan, backtest, leaderboard, screen, "only new" and notify nodes. The Markets page shows the same leaderboard, and can **backtest** a strategy over past prices and published quarters, with survivorship and benchmark caveats stated. See [Investor automations](docs/investor-automations.md) |
 | **Inbox** | Decisions agents are waiting on: flow side effects that need approval, and paper-trade proposals that need a second SYS_ADMIN |
 | **Markets / Financials** | Trackers, live chart with indicators and insights, fundamentals and quarterly statements, each with an "Analyze with agent" hand-off |
-| **Paper portfolio** | Simulated order ticket, positions and blotter (SYS_ADMIN) |
+| **Paper portfolio** | Simulated order ticket with position sizing by risk, positions and blotter, and a **Risk** tab: concentration, volatility, beta, correlation, drift from your plan and rebalancing suggestions that prefill the ticket without submitting it (SYS_ADMIN) |
 | **Files** | Private research workspace that flows read and write |
+
+FloweySales is installable as an app (a web app manifest and a service worker that caches the app shell and fonts, never `/api/*`). New market-data plugins add crypto (CoinGecko), a free daily-bar fallback (Stooq) and dividend, split and earnings dates (`events` in Yahoo and Finnhub).
 
 Press **Ctrl/⌘ K** anywhere for the command palette. Light and dark themes follow
 the system setting and can be toggled in the top bar. See

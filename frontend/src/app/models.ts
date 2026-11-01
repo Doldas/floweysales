@@ -461,3 +461,16 @@ export interface CorporateEvent {
 }
 
 export interface EventsResponse { symbol: string; from: string; to: string; events: CorporateEvent[] }
+
+/** GET /api/today: every part is optional (see internal/server/today.go). */
+export interface TodayBriefing {
+  generated_at: string;
+  phase?: { id: string; name: string; probability_goal_pct: number; probability_label?: string; next_checklist_item?: string };
+  macro?: { regime: 'risk_on' | 'caution' | 'risk_off'; reasons?: string; as_of?: string };
+  portfolio?: { equity: number; unrealized_pnl: number; positions: number; day_change?: number; day_change_pct?: number; drawdown_from_peak_pct?: number; top_alert?: string };
+  worth_a_look?: {
+    leaderboard?: { symbol: string; score: number; grade: string; reasons?: string; universe: string; strategy: string; as_of?: string };
+    insider?: { symbol: string; largest_buy_value: number; largest_buyer?: string; cluster_buy?: boolean; latest?: string; url?: string };
+    earnings?: { symbol: string; date: string; days_until?: number; confirmed: boolean };
+  };
+}

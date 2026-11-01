@@ -21,7 +21,8 @@ The dataset covers:
 - WACC, ROIC and a three-scenario DCF;
 - the latest close;
 - injected instructions in a filing section;
-- a missing future period.
+- a missing future period;
+- the investor tools (leaderboard, strategy backtest with its caveat, wealth plan, portfolio concentration, insider activity, macro regime and corporate events), answered from synthetic fixtures.
 
 A test pins each calculator case's expected figure to the calculator's own output, so the dataset cannot drift from the code.
 

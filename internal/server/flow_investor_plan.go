@@ -63,27 +63,36 @@ func wealthPlanRow(p planner.Profile, plan planner.Plan) map[string]any {
 	return row
 }
 
-// runWealthPlanNode outputs the flow owner's saved plan. note explains an
+// wealthPlanOf is the plan row of a user's saved profile. note explains an
 // empty result.
-func (e *Engine) runWealthPlanNode(ctx context.Context, f storage.AgentFlow) (output, note string, err error) {
+func (e *Engine) wealthPlanOf(ctx context.Context, owner int64) (row map[string]any, note string, err error) {
 	store := e.profileStore()
 	if store == nil {
-		return "[]", "No wealth plan storage is available.", nil
+		return nil, "No wealth plan storage is available.", nil
 	}
+	raw, err := store.LoadInvestorProfile(ctx, owner)
+	if err != nil {
+		return nil, "", err
+	}
+	var p planner.Profile
+	if raw == "" || json.Unmarshal([]byte(raw), &p) != nil || p.Validate() != nil {
+		return nil, "No wealth plan is saved yet. Set one up on the Wealth plan page.", nil
+	}
+	plan := e.planFor(identity.User{ID: owner}, p, 1)
+	return wealthPlanRow(p, plan), "", nil
+}
+
+// runWealthPlanNode outputs the flow owner's saved plan.
+func (e *Engine) runWealthPlanNode(ctx context.Context, f storage.AgentFlow) (output, note string, err error) {
 	owner, err := e.flowOwnerID(ctx, f.ID)
 	if err != nil {
 		return "", "", fmt.Errorf("find the flow owner: %w", err)
 	}
-	raw, err := store.LoadInvestorProfile(ctx, owner)
-	if err != nil {
-		return "", "", err
+	row, note, err := e.wealthPlanOf(ctx, owner)
+	if err != nil || row == nil {
+		return "[]", strings.Replace(note, "No wealth plan is saved yet.", "The flow owner has no saved wealth plan yet.", 1), err
 	}
-	var p planner.Profile
-	if raw == "" || json.Unmarshal([]byte(raw), &p) != nil || p.Validate() != nil {
-		return "[]", "The flow owner has no saved wealth plan yet. Set one up on the Wealth plan page.", nil
-	}
-	plan := e.planFor(identity.User{ID: owner}, p, 1)
-	output, err = flowRowsJSON([]map[string]any{wealthPlanRow(p, plan)})
+	output, err = flowRowsJSON([]map[string]any{row})
 	return output, "", err
 }
 

@@ -53,8 +53,27 @@ func (e *Engine) registerStaticRoutes() {
 			http.NotFound(w, r)
 			return
 		}
+		applyStaticHeaders(w, r.URL.Path)
 		handler.ServeHTTP(w, r)
 	})
+}
+
+// staticNoCache are the files that must be revalidated on every load: the
+// service worker and its manifest decide when the app updates, and a stale
+// copy would pin users to an old version. Hashed bundles stay cacheable.
+var staticNoCache = map[string]bool{
+	"/": true, "/index.html": true, "/ngsw-worker.js": true, "/ngsw.json": true,
+	"/safety-worker.js": true, "/worker-basic.min.js": true, "/manifest.webmanifest": true,
+}
+
+// applyStaticHeaders sets the cache policy and the manifest's media type.
+func applyStaticHeaders(w http.ResponseWriter, path string) {
+	if staticNoCache[path] {
+		w.Header().Set("Cache-Control", "no-cache")
+	}
+	if path == "/manifest.webmanifest" {
+		w.Header().Set("Content-Type", "application/manifest+json")
+	}
 }
 
 // jsonUnmarshal is shared by the JSON body route handlers.

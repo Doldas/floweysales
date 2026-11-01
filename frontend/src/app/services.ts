@@ -14,6 +14,7 @@ import {
   OrderResponse,
   EventsResponse,
   PlanProfile,
+  TodayBriefing,
   SizeResponse,
   PortfolioAnalyticsResponse,
   PlanResponse,
@@ -122,6 +123,11 @@ export class MarketService {
     const params: Record<string, string> = { symbol, from, to };
     if (provider) params['provider'] = provider;
     return this.http.get<EventsResponse>('/api/events', { params });
+  }
+
+  /** Phase, macro regime, paper portfolio and three things worth a look; no model runs. */
+  getToday(): Observable<TodayBriefing> {
+    return this.http.get<TodayBriefing>('/api/today');
   }
 
   getStats(symbol: string): Observable<MarketStatsJSON> {

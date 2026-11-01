@@ -35,6 +35,26 @@ type ProviderCatalog interface {
 	ProviderQuote(symbol, provider string) (market.QuoteSnapshot, error)
 }
 
+// InvestorSource is the optional part of a DataSource behind the investor
+// tools: the leaderboard and its backtest, the signed-in user's wealth plan,
+// the paper portfolio's risk, insider activity, the macro regime and
+// corporate events. A data source without it, such as the MCP server's HTTP
+// client, answers those tools with a clear error. Each method returns the
+// JSON-ready answer.
+type InvestorSource interface {
+	Leaderboard(ctx context.Context, universe, strategy, symbols string, limit int) (any, error)
+	StrategyBacktest(ctx context.Context, universe, strategy string, top, years int) (any, error)
+	WealthPlan(ctx context.Context) (any, error)
+	PortfolioAnalytics(ctx context.Context) (any, error)
+	InsiderActivity(ctx context.Context, symbol string, lookbackDays int) (any, error)
+	MacroRegime(ctx context.Context) (any, error)
+	CorporateEvents(ctx context.Context, symbol string, daysAhead int) (any, error)
+}
+
+// ErrInvestorToolsUnavailable is returned when the data source has no
+// investor tools.
+var ErrInvestorToolsUnavailable = fmt.Errorf("investor tools are unavailable for this data source")
+
 // ToolDefs returns the tool catalogue advertised to models and MCP clients.
 func ToolDefs() []Tool {
 	str := func(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
@@ -56,7 +76,45 @@ func ToolDefs() []Tool {
 		return m
 	}
 
+	universeProp := str("Leaderboard universe: us_mega, us_tech, us_dividend, se_large or eu_leaders. Omit when passing symbols.")
+	strategyProp := str("Strategy: best, value, growth, momentum, quality or dip. Defaults to best.")
+
 	return []Tool{
+		{Type: "function", Function: ToolFunction{
+			Name:        "get_leaderboard",
+			Description: "Rank companies on value, quality, growth, momentum, entry timing and risk (0-100 percentiles within the list, not predictions). Returns scored rows with reasons and flags.",
+			Parameters:  obj(map[string]any{"universe": universeProp, "strategy": strategyProp, "symbols": str("Comma-separated tickers, up to 25, instead of a universe"), "limit": map[string]any{"type": "integer", "description": "Rows to return, 1-25 (default 10)"}}),
+		}},
+		{Type: "function", Function: ToolFunction{
+			Name:        "run_strategy_backtest",
+			Description: "Replay a leaderboard strategy with monthly rebalancing over past prices and published quarters, against an index. Returns return, risk and turnover figures, the rebalance count and the bias warnings. Slow on a cold cache; results are not forecasts.",
+			Parameters:  obj(map[string]any{"universe": universeProp, "strategy": strategyProp, "top": map[string]any{"type": "integer", "description": "Holdings, 1-25 (default 10)"}, "years": map[string]any{"type": "integer", "description": "3 or 5 (default 3)"}}),
+		}},
+		{Type: "function", Function: ToolFunction{
+			Name:        "get_wealth_plan",
+			Description: "The signed-in user's saved wealth plan: phase, target allocation, probability of reaching the goal, years to goal and the next checklist item, or a note that no plan is saved.",
+			Parameters:  obj(map[string]any{}),
+		}},
+		{Type: "function", Function: ToolFunction{
+			Name:        "get_portfolio_analytics",
+			Description: "Risk of the paper portfolio: weights, concentration, volatility, beta, correlation, drift from the wealth plan and rebalancing suggestions. Administrators only.",
+			Parameters:  obj(map[string]any{}),
+		}},
+		{Type: "function", Function: ToolFunction{
+			Name:        "get_insider_activity",
+			Description: "Open-market insider purchases and sales for a US company from SEC Form 4 filings: counts, buyers, net value, officer buys and whether three or more insiders bought. Requires SEC_USER_AGENT.",
+			Parameters:  obj(map[string]any{"symbol": str("Issuer ticker, e.g. NVDA"), "lookback_days": map[string]any{"type": "integer", "description": "1-90 (default 30)"}}, "symbol"),
+		}},
+		{Type: "function", Function: ToolFunction{
+			Name:        "get_macro_regime",
+			Description: "The macro regime (risk_on, caution or risk_off) read from FRED series: yield curve, unemployment, credit spreads and volatility, with the signals behind it. Needs the FRED plugin.",
+			Parameters:  obj(map[string]any{}),
+		}},
+		{Type: "function", Function: ToolFunction{
+			Name:        "get_corporate_events",
+			Description: "Upcoming dividends, splits and earnings dates for a company from an installed provider plugin with the events capability.",
+			Parameters:  obj(map[string]any{"symbol": str("Ticker, e.g. KO"), "days_ahead": map[string]any{"type": "integer", "description": "1-90 (default 30)"}}, "symbol"),
+		}},
 		{Type: "function", Function: ToolFunction{
 			Name: "get_provider_endpoints", Description: "List the allowlisted read-only research operations declared by the installed provider plugins, with their upstream paths.",
 			Parameters: obj(map[string]any{}),
@@ -279,6 +337,41 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 	}
 
 	switch name {
+	case "get_leaderboard", "run_strategy_backtest", "get_wealth_plan", "get_portfolio_analytics", "get_insider_activity", "get_macro_regime", "get_corporate_events":
+		inv, ok := src.(InvestorSource)
+		if !ok {
+			return "", ErrInvestorToolsUnavailable
+		}
+		var out any
+		var err error
+		switch name {
+		case "get_leaderboard":
+			out, err = inv.Leaderboard(ctx, strArg(args, "universe"), strArg(args, "strategy"), strArg(args, "symbols"), intArg(args, "limit", 10))
+		case "run_strategy_backtest":
+			out, err = inv.StrategyBacktest(ctx, strArg(args, "universe"), strArg(args, "strategy"), intArg(args, "top", 10), intArg(args, "years", 3))
+		case "get_wealth_plan":
+			out, err = inv.WealthPlan(ctx)
+		case "get_portfolio_analytics":
+			out, err = inv.PortfolioAnalytics(ctx)
+		case "get_insider_activity":
+			symbol := strArg(args, "symbol")
+			if symbol == "" {
+				return "", fmt.Errorf("symbol required")
+			}
+			out, err = inv.InsiderActivity(ctx, symbol, intArg(args, "lookback_days", 30))
+		case "get_macro_regime":
+			out, err = inv.MacroRegime(ctx)
+		case "get_corporate_events":
+			symbol := strArg(args, "symbol")
+			if symbol == "" {
+				return "", fmt.Errorf("symbol required")
+			}
+			out, err = inv.CorporateEvents(ctx, symbol, intArg(args, "days_ahead", 30))
+		}
+		if err != nil {
+			return "", err
+		}
+		return toJSON(out)
 	case "get_provider_endpoints":
 		catalog, ok := src.(ProviderCatalog)
 		if !ok {

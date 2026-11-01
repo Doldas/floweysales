@@ -69,7 +69,7 @@ function check(label, ok, details = '') {
 }
 
 try {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.route('**/api/**', async route => {

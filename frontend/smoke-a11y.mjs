@@ -31,7 +31,7 @@ async function audit(page, label, selector = 'fse-flow-studio') {
 }
 
 try {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   const missing = await installMocks(page, { email: 'a11y@example.test' });
