@@ -16,6 +16,7 @@ func TestAllowedAPI(t *testing.T) {
 		{identity.RoleUser, http.MethodGet, "/api/market/backtest", true},
 		{identity.RoleUser, http.MethodGet, "/api/events", true},
 		{identity.RoleUser, http.MethodGet, "/api/plan", true},
+		{identity.RoleUser, http.MethodGet, "/api/today", true},
 		{identity.RoleUser, http.MethodGet, "/api/portfolio/analytics", false},
 		{identity.RoleUser, http.MethodPost, "/api/trading/size", false},
 		{identity.RoleSysAdmin, http.MethodGet, "/api/portfolio/analytics", true},

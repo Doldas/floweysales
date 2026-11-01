@@ -86,3 +86,30 @@ entry ∓ 2 × ATR(14) on three months of daily bars. The quantity is then cappe
 by the maximum position weight (default 20 % of equity) and, for buys, by
 buying power. Crypto pairs allow 8 decimals. The ticket is filled in, never
 submitted.
+
+## Today briefing and agent tools
+
+`GET /api/today` (any signed-in user, cached ten minutes per user) builds the
+Command Center's **Today** card from figures only; no model runs when the page
+loads. Each part is optional and left out when it cannot be built: the phase
+and probability of the goal, the macro regime chip (needs the FRED plugin),
+the paper portfolio's equity, day change since the previous close, drawdown
+from its peak and top alert (administrators), and up to three things worth a
+look: the top of the default leaderboard, the largest insider buy on the
+tracked symbols and their next earnings date. **Brief me** sends exactly these
+figures to the agent with a prompt that forbids adding numbers.
+
+The agent has read-only tools for the same data: `get_leaderboard`,
+`run_strategy_backtest`, `get_wealth_plan`, `get_portfolio_analytics`
+(administrators only), `get_insider_activity`, `get_macro_regime` and
+`get_corporate_events`. They answer from the engine and are listed in the MCP
+catalogue; the standalone MCP server, which talks to the engine over HTTP,
+answers them with a clear "unavailable" error. A flow's agent node can be
+granted the public-data tools but not the personal ones (plan and portfolio).
+
+## Installable app
+
+The app ships a web app manifest and an Angular service worker
+(`ngsw-config.json`) that caches the app shell and fonts. `/api/*` is never
+cached. The server sends `Cache-Control: no-cache` for the service worker, its
+manifest and `index.html` so updates are picked up on the next load.

@@ -131,7 +131,8 @@ func allowedAPI(role, method, path string) bool {
 func isPlanRoute(method, path string) bool {
 	return (method == http.MethodGet && path == "/api/plan") ||
 		(method == http.MethodPut && path == "/api/plan/profile") ||
-		(method == http.MethodPost && path == "/api/plan/preview")
+		(method == http.MethodPost && path == "/api/plan/preview") ||
+		(method == http.MethodGet && path == "/api/today")
 }
 
 func (e *Engine) allowedUserAPI(r *http.Request, u identity.User) bool {

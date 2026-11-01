@@ -13,6 +13,46 @@
     </div>
   </header>
 
+  <!-- Today: deterministic figures only, no model runs on load -->
+  <section class="card today" aria-labelledby="today-title">
+    <div class="card-header">
+      <h2 class="card-title me-auto" id="today-title"><i class="bi bi-sun me-2 text-primary" aria-hidden="true"></i>Today</h2>
+      @if (hasToday()) { <button type="button" class="btn btn-sm btn-agent" (click)="briefMe()"><i class="bi bi-stars" aria-hidden="true"></i>Brief me</button> }
+    </div>
+    <div class="card-body">
+      @if (todayLoading()) {
+        <div class="placeholder-glow" aria-hidden="true"><span class="placeholder col-4 me-2"></span><span class="placeholder col-3 me-2"></span><span class="placeholder col-3"></span></div>
+      } @else {
+        <div class="today-chips">
+          @if (briefing()?.phase; as p) {
+            <a class="today-chip" routerLink="/plan"><i class="bi bi-bullseye" aria-hidden="true"></i><span><strong>{{ p.name }}</strong> phase · {{ p.probability_goal_pct.toFixed(0) }}% {{ p.id === 'income' ? 'money lasts' : 'chance of your goal' }}</span></a>
+          } @else {
+            <a class="today-chip" routerLink="/plan"><i class="bi bi-bullseye" aria-hidden="true"></i><span><strong>Set up your plan</strong> · phase, allocation and goal</span></a>
+          }
+          @if (briefing()?.macro; as m) {
+            <span class="today-chip" [attr.data-regime]="m.regime" [title]="m.reasons || ''"><i class="bi" [class]="regimeIcon(m.regime)" aria-hidden="true"></i><span>Macro: <strong>{{ regimeLabels[m.regime] || m.regime }}</strong></span></span>
+          }
+          @if (briefing()?.portfolio; as pf) {
+            <a class="today-chip" routerLink="/portfolio"><i class="bi bi-wallet2" aria-hidden="true"></i><span>Portfolio {{ pf.equity | number: '1.0-0' }}@if (pf.day_change !== undefined) { · today {{ signedChange(pf.day_change, pf.day_change_pct) }} }@if (pf.drawdown_from_peak_pct !== undefined) { · {{ pf.drawdown_from_peak_pct }}% from peak }</span></a>
+            @if (pf.top_alert) { <a class="today-chip" routerLink="/portfolio"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><span>Alert: {{ alertName(pf.top_alert) }}</span></a> }
+          }
+        </div>
+        @if (briefing()?.worth_a_look; as w) {
+          @if (w.leaderboard || w.insider || w.earnings) {
+            <h3 class="today-sub">Worth a look</h3>
+            <ul class="today-list">
+              @if (w.leaderboard; as l) { <li><i class="bi bi-trophy" aria-hidden="true"></i><span><strong>{{ l.symbol }}</strong> tops the leaderboard (score {{ l.score }}, grade {{ l.grade }})@if (l.reasons) { <span class="text-muted"> · {{ l.reasons }}</span> }</span></li> }
+              @if (w.insider; as i) { <li><i class="bi bi-person-check" aria-hidden="true"></i><span><strong>{{ i.symbol }}</strong> insider buy of {{ i.largest_buy_value | number: '1.0-0' }}@if (i.largest_buyer) { by {{ i.largest_buyer }} }@if (i.cluster_buy) { , several buyers }@if (i.latest) { <span class="text-muted"> · {{ i.latest }}</span> }</span></li> }
+              @if (w.earnings; as e) { <li><i class="bi bi-calendar-event" aria-hidden="true"></i><span><strong>{{ e.symbol }}</strong> reports earnings on {{ e.date }}@if (!e.confirmed) { <span class="text-muted"> (estimated)</span> }</span></li> }
+            </ul>
+          }
+        }
+        @if (!hasToday()) { <p class="text-muted mb-0">Nothing to show yet. Set up your plan, track a few symbols, or install a provider plugin with events to see more here.</p> }
+        <p class="today-note">Figures only, from your data and public sources. Research, not investment advice.</p>
+      }
+    </div>
+  </section>
+
   <!-- Ask the agent -->
   <section class="hero" aria-labelledby="hero-title">
     <div class="hero-inner">
@@ -53,16 +93,6 @@
         } @else { {{ market.statusLabel() }} }
       </span>
       <fs-sparkline class="kpi-spark" [values]="market.sparkline()" [label]="market.trackedSymbol() + ' trend'" />
-    </a>
-    <a class="card fs-kpi kpi-link" routerLink="/plan">
-      <span class="fs-kpi-label"><i class="bi bi-bullseye" aria-hidden="true"></i>Your phase</span>
-      @if (plan(); as p) {
-        <span class="fs-kpi-value">{{ p.phase.name }}</span>
-        <span class="fs-kpi-sub">{{ p.probability_goal_pct.toFixed(0) }}% {{ p.phase.id === 'income' ? 'money lasts' : 'chance of your goal' }}</span>
-      } @else {
-        <span class="fs-kpi-value">Set up your plan</span>
-        <span class="fs-kpi-sub">Phase, allocation and goal</span>
-      }
     </a>
     @if (access.flowsRead()) {
       <a class="card fs-kpi kpi-link" routerLink="/flows">

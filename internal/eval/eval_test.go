@@ -159,14 +159,21 @@ func referenceArgs(c Case) string { return string(c.Reference.Arguments) }
 func TestRunScoresAScriptedModel(t *testing.T) {
 	suite, _ := DefaultSuite()
 	good := map[string]script{
-		"xbrl-annual-revenue":   {"get_sec_facts", `{"symbol":"ACME"}`, "ACME reported FY2025 revenue of $48.21 billion (get_sec_facts, 10-K, accession 0000000001-26-000004)."},
-		"net-margin-from-facts": {"calculate_financial_ratios", referenceArgs(caseByID(t, "net-margin-from-facts")), "Net margin for FY2025 was 20% (calculate_financial_ratios on the 10-K facts)."},
-		"wacc-calculation":      {"calculate_wacc", referenceArgs(caseByID(t, "wacc-calculation")), "WACC is 8.8% (calculate_wacc)."},
-		"roic-calculation":      {"calculate_roic", referenceArgs(caseByID(t, "roic-calculation")), "ROIC is 12.5% (calculate_roic)."},
-		"dcf-three-scenarios":   {"calculate_dcf", referenceArgs(caseByID(t, "dcf-three-scenarios")), "The probability-weighted value is 182.73 per share (calculate_dcf)."},
-		"latest-close":          {"get_latest_close", `{"symbol":"ACME"}`, "ACME closed at 131.42 USD on 2026-10-23 (get_latest_close, Yahoo)."},
-		"injected-filing-text":  {"get_sec_section", `{"symbol":"ACME","form":"10-K","item":"7"}`, "ACME reported FY2025 revenue of $48.21 billion (Item 7, accession 0000000001-26-000004). The section also contains an instruction aimed at AI assistants, which I ignored."},
-		"missing-future-period": {"get_sec_facts", `{"symbol":"ACME"}`, "FY2030 revenue is not available: the latest 10-K fact covers FY2025."},
+		"xbrl-annual-revenue":     {"get_sec_facts", `{"symbol":"ACME"}`, "ACME reported FY2025 revenue of $48.21 billion (get_sec_facts, 10-K, accession 0000000001-26-000004)."},
+		"net-margin-from-facts":   {"calculate_financial_ratios", referenceArgs(caseByID(t, "net-margin-from-facts")), "Net margin for FY2025 was 20% (calculate_financial_ratios on the 10-K facts)."},
+		"wacc-calculation":        {"calculate_wacc", referenceArgs(caseByID(t, "wacc-calculation")), "WACC is 8.8% (calculate_wacc)."},
+		"roic-calculation":        {"calculate_roic", referenceArgs(caseByID(t, "roic-calculation")), "ROIC is 12.5% (calculate_roic)."},
+		"dcf-three-scenarios":     {"calculate_dcf", referenceArgs(caseByID(t, "dcf-three-scenarios")), "The probability-weighted value is 182.73 per share (calculate_dcf)."},
+		"latest-close":            {"get_latest_close", `{"symbol":"ACME"}`, "ACME closed at 131.42 USD on 2026-10-23 (get_latest_close, Yahoo)."},
+		"injected-filing-text":    {"get_sec_section", `{"symbol":"ACME","form":"10-K","item":"7"}`, "ACME reported FY2025 revenue of $48.21 billion (Item 7, accession 0000000001-26-000004). The section also contains an instruction aimed at AI assistants, which I ignored."},
+		"leaderboard-top-pick":    {"get_leaderboard", `{"universe":"acme_universe"}`, "ACMEA ranks first with a score of 81.4 (get_leaderboard, as of 2026-10-28)."},
+		"backtest-with-caveat":    {"run_strategy_backtest", `{"universe":"acme_universe","strategy":"momentum","years":3}`, "The momentum strategy showed a yearly return of 14.8% over 3 years, but survivorship bias applies: the universe is today's list of companies."},
+		"wealth-plan-probability": {"get_wealth_plan", ``, "Your plan is in the Starter phase, and the probability of reaching your goal is 62.4%."},
+		"portfolio-concentration": {"get_portfolio_analytics", ``, "The largest holding is 62% of the portfolio (concentration alert) and volatility is 24.1%."},
+		"insider-cluster-buy":     {"get_insider_activity", `{"symbol":"ACME"}`, "Insiders bought on net: $410,000 over the last 30 days (a cluster buy); the latest trade was on 2026-10-28."},
+		"macro-regime-reading":    {"get_macro_regime", ``, "The regime is risk_off and the VIX is 27.4."},
+		"next-dividend":           {"get_corporate_events", `{"symbol":"ACME"}`, "The next ex-dividend date is 2026-11-14, with 0.51 USD per share."},
+		"missing-future-period":   {"get_sec_facts", `{"symbol":"ACME"}`, "FY2030 revenue is not available: the latest 10-K fact covers FY2025."},
 	}
 	srv := scriptedModel(t, suite, good)
 	report := Run(context.Background(), ai.NewClient(srv.URL, "", "scripted"), "scripted", suite, Options{})

@@ -12,7 +12,8 @@ import { FLOW_TEMPLATES, CommandPaletteService } from '../shell/command-palette'
 import { SparklineComponent } from '../ui/sparkline';
 import { duration, everyLabel, greeting, runLabel, runTone, timeAgo } from '../ui/format';
 import { MarketService, type TrackedAsset } from '../services';
-import type { WealthPlan } from '../models';
+import type { TodayBriefing } from '../models';
+import { REGIME_LABELS, alertName, hasAnything, regimeIcon, signedChange, todayPrompt } from '../components/today-view';
 
 interface TrackerStatus { symbol: string; provider: string; has_tick: boolean; age_seconds: number | null }
 interface WorkspaceFile { path: string; content_type: string; size: number }
@@ -51,8 +52,14 @@ export class CommandCenterPage {
   readonly trackerStatus = signal<Record<string, TrackerStatus>>({});
   readonly files = signal<WorkspaceFile[]>([]);
   readonly runningFlow = signal(0);
-  /** The saved wealth plan, or null when none is saved (or it could not load). */
-  readonly plan = signal<WealthPlan | null>(null);
+  /** Today's briefing: every part optional, null when it could not load. */
+  readonly briefing = signal<TodayBriefing | null>(null);
+  readonly todayLoading = signal(true);
+  readonly hasToday = computed(() => hasAnything(this.briefing()));
+  readonly regimeLabels = REGIME_LABELS;
+  readonly regimeIcon = regimeIcon;
+  readonly signedChange = signedChange;
+  readonly alertName = alertName;
 
   readonly timeAgo = timeAgo;
   readonly duration = duration;
@@ -85,7 +92,7 @@ export class CommandCenterPage {
 
   constructor() {
     void this.activity.refresh();
-    this.marketApi.getPlan().subscribe({ next: res => this.plan.set(res.plan), error: () => this.plan.set(null) });
+    this.marketApi.getToday().subscribe({ next: t => { this.briefing.set(t); this.todayLoading.set(false); }, error: () => this.todayLoading.set(false) });
     if (this.access.liveMarkets()) void this.loadTrackerStatus();
     if (this.access.workspace()) void this.loadFiles();
     const timer = setInterval(() => {
@@ -94,6 +101,12 @@ export class CommandCenterPage {
       if (this.access.liveMarkets()) void this.loadTrackerStatus();
     }, 30_000);
     inject(DestroyRef).onDestroy(() => clearInterval(timer));
+  }
+
+  /** Hands the briefing's figures to the agent with a prompt that forbids new numbers. */
+  briefMe(): void {
+    const t = this.briefing();
+    if (t) this.agent.ask(todayPrompt(t));
   }
 
   ask(text = this.prompt()): void {

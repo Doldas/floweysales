@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-31",
+  "updated_at": "2026-11-01",
   "scope": "Read-only research inventory: implemented FloweySales HTTP/MCP surfaces plus known external provider endpoints (not an exhaustive list of vendor-specific, private or trading APIs).",
   "status_legend": {
     "implemented": "Implementerad i FloweySales och exponerad via angiven yta (kräver normalt inloggning).",
@@ -383,6 +383,70 @@
       "access": "Publik, begränsad status",
       "status": "implemented",
       "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/market/leaderboard",
+      "description": "Rankning av bolag på sex faktorer och en strategi",
+      "access": "research.read",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/market/backtest",
+      "description": "Backtest av en rankningsstrategi mot ett index, utan framåtblickande data",
+      "access": "research.read",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/events",
+      "description": "Utdelningar, splittar och rapportdatum från provider-plugin med events",
+      "access": "research.read",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/plan",
+      "description": "Användarens förmögenhetsplan: fas, målallokering och simulering",
+      "access": "Inloggad användare",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/plan/profile",
+      "description": "Sparar förmögenhetsplanens indata och returnerar planen",
+      "access": "Inloggad användare",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "POST",
+      "path": "/api/plan/preview",
+      "description": "Plan för osparad indata (what-if), 30 per minut",
+      "access": "Inloggad användare",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "GET",
+      "path": "/api/portfolio/analytics",
+      "description": "Pappersportföljens risk, korrelation och ombalanseringsförslag",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
+    },
+    {
+      "method": "POST",
+      "path": "/api/trading/size",
+      "description": "Storlek på en order utifrån vald risk och stopp; lägger ingen order",
+      "access": "SYS_ADMIN",
+      "status": "implemented",
+      "surface": "APP REST"
     }
   ],
   "mcp": [
@@ -511,6 +575,48 @@
       "status": "implemented",
       "surface": "MCP tools/list",
       "note": ""
+    },
+    {
+      "name": "get_leaderboard",
+      "status": "implemented",
+      "surface": "MCP tools/list",
+      "note": "Rankar bolag på sex faktorer (research.read-data)"
+    },
+    {
+      "name": "run_strategy_backtest",
+      "status": "implemented",
+      "surface": "MCP tools/list",
+      "note": "Backtest av en rankningsstrategi med månatlig ombalansering och varningar"
+    },
+    {
+      "name": "get_wealth_plan",
+      "status": "implemented",
+      "surface": "MCP tools/list",
+      "note": "Den inloggade användarens sparade förmögenhetsplan"
+    },
+    {
+      "name": "get_portfolio_analytics",
+      "status": "implemented",
+      "surface": "MCP tools/list",
+      "note": "Pappersportföljens risk och avvikelse från planen (endast SYS_ADMIN). Otillgängligt via den fristående MCP-servern"
+    },
+    {
+      "name": "get_insider_activity",
+      "status": "implemented",
+      "surface": "MCP tools/list",
+      "note": "Insynshandel ur SEC Form 4. Otillgängligt via den fristående MCP-servern"
+    },
+    {
+      "name": "get_macro_regime",
+      "status": "implemented",
+      "surface": "MCP tools/list",
+      "note": "Makroregim ur FRED-serier. Otillgängligt via den fristående MCP-servern"
+    },
+    {
+      "name": "get_corporate_events",
+      "status": "implemented",
+      "surface": "MCP tools/list",
+      "note": "Utdelningar, splittar och rapportdatum från provider-plugin"
     }
   ],
   "providers": [

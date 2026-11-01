@@ -234,6 +234,13 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     '/api/events': { symbol: q.get('symbol') ?? 'NVDA', from: q.get('from'), to: q.get('to'), events: [
       { symbol: 'NVDA', kind: 'dividend', date: q.get('to') < '2026-10-30' ? '2026-08-14' : '2026-11-14', amount: 0.01, currency: 'USD', confirmed: true, provider: 'YAHOO' },
       { symbol: 'NVDA', kind: 'earnings', date: '2026-11-20', confirmed: false, provider: 'YAHOO' }] },
+    '/api/today': { generated_at: '2026-10-28T08:00:00Z',
+      phase: { id: 'starter', name: 'Starter', probability_goal_pct: 62.4, probability_label: 'share of simulated paths that reach the goal in today\'s money' },
+      macro: { regime: 'caution', reasons: 'high-yield credit spreads are wide or rising fast', as_of: '2026-10-27' },
+      ...(admin ? { portfolio: { equity: 100114, unrealized_pnl: 114, positions: 1, day_change: -420, day_change_pct: -0.4, drawdown_from_peak_pct: -8.2, top_alert: 'concentration' } } : {}),
+      worth_a_look: { leaderboard: { symbol: 'GOOGL', score: 84, grade: 'A', reasons: 'value: P/E 21.3', universe: 'us_mega', strategy: 'best' },
+        insider: { symbol: 'MSFT', largest_buy_value: 250000, largest_buyer: 'Doe Jane', cluster_buy: true, latest: '2026-10-25' },
+        earnings: { symbol: 'NVDA', date: '2026-11-20', confirmed: false } } },
     '/api/plan': wealthPlan(),
     '/api/plan/preview': wealthPlan(),
     '/api/plan/profile': wealthPlan(),
