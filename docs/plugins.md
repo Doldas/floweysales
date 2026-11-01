@@ -116,6 +116,7 @@ Responses may arrive in any order. Lines are limited to 1 MiB (requests) and
 | `research` | `operation`, `symbol`, `from`, `to` | research envelope | `research` |
 | `forum_posts` | `symbol`, `limit` | `[{id,title,content,symbol,upvotes,author,timestamp}]` | `forum` |
 | `news` | `symbol`, `limit` (1–20) | `[{title,url,source,published,summary,symbol,provider}]` (`published` unix seconds, optional) | `news` |
+| `events` | `symbol`, `from`, `to` (ISO dates, window at most 400 days) | `[{symbol,kind,date,amount,currency,ratio,confirmed,provider}]` | `events` |
 
 Error codes: `unsupported`, `invalid_argument` (HTTP 400), `not_configured`
 (503), `upstream` and `internal` (502). An uninstalled provider is HTTP 404.
@@ -125,6 +126,14 @@ The exact JSON shapes are pinned by golden files in
 
 The backend keeps news items with a title and a public http(s) URL only and
 labels the provider; the Flow Studio **News headlines** node reads them.
+
+`events` returns dividends (`kind: "dividend"`, `amount` per share), splits
+(`ratio` like `"4:1"`) and earnings dates (`confirmed: false` for estimated
+ones). The backend keeps events with a known kind and a valid date, drops
+negative or non-finite amounts (an unknown amount is absent, never `0`),
+labels the provider and orders by date. `GET /api/events?symbol=&from=&to=&provider=`
+serves them (default window: today and 90 days ahead) and the Financials page
+shows an **Upcoming** strip.
 
 Provider rules from [CONTRIBUTING](../CONTRIBUTING.md) apply to plugins too:
 a missing figure stays absent rather than `0`; currency is never guessed; a

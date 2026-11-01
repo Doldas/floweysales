@@ -41,6 +41,13 @@ Further hardening/backoff/retry policy is future work; provider capability
 declarations are deliberately conservative rather than claiming
 real-time access we cannot substantiate.
 
+## Corporate events
+
+A provider plugin that declares the `events` capability serves dividends,
+splits and earnings dates through `GET /api/events` (see [plugins](plugins.md)).
+Earnings dates from a provider that only estimates them carry
+`confirmed: false`; an unknown dividend amount is left out, never `0`.
+
 ## Bounded retries
 
 The bundled plugins' idempotent HTTP GET calls retry HTTP 429, 502, 503 and 504

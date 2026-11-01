@@ -124,6 +124,7 @@ func methods(p sdk.Plugin) map[string]struct {
 		sdk.CapResearch:   {sdk.MethodResearch, p.Research != nil},
 		sdk.CapForum:      {sdk.MethodForumPosts, p.ForumPosts != nil},
 		sdk.CapNews:       {sdk.MethodNews, p.News != nil},
+		sdk.CapEvents:     {sdk.MethodEvents, p.Events != nil},
 	}
 }
 
