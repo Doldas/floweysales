@@ -315,7 +315,7 @@ export class PlanPage {
     this.dots().map(d => `${/^\d+$/.test(d.label) ? formatMoney(Number(d.label), this.currency()) : d.label} (year ${d.year})`).join(', '));
   readonly playbooks = computed(() => {
     const ids = this.plan()?.phase.playbooks ?? [];
-    return INVESTOR_PLAYBOOKS.filter(p => ids.includes(p.id));
+    return INVESTOR_PLAYBOOKS.filter(p => ids.includes(p.id) && (!p.adminOnly || this.access.isAdmin()));
   });
   readonly assumptionRows = computed(() => {
     const a = this.plan()?.assumptions;

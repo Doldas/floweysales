@@ -122,11 +122,16 @@ func (e *Engine) parseBacktestRequest(r *http.Request) (backtestRequest, error) 
 		return req, badRequest{errors.New("years must be 3 or 5")}
 	}
 	req.provider = e.parseProvider(q.Get("provider"))
-	// Symbol order does not change the result, so it does not change the key.
+	req.cacheKey = backtestKey(req)
+	return req, nil
+}
+
+// backtestKey identifies a request for the cache. Symbol order does not
+// change the result, so it does not change the key.
+func backtestKey(req backtestRequest) string {
 	sorted := append([]string(nil), req.symbols...)
 	sort.Strings(sorted)
-	req.cacheKey = fmt.Sprintf("%s|%s|%s|%s|%d|%s|%g|%d", req.provider, strings.Join(sorted, ","), req.strategy.ID, req.benchmark, req.top, req.rebalLabel, req.costBps, req.years)
-	return req, nil
+	return fmt.Sprintf("%s|%s|%s|%s|%d|%s|%g|%d", req.provider, strings.Join(sorted, ","), req.strategy.ID, req.benchmark, req.top, req.rebalLabel, req.costBps, req.years)
 }
 
 // leaderboardScorer ranks the symbols exactly as the leaderboard does, from

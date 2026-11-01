@@ -53,6 +53,7 @@ export function greeting(date = new Date()): string {
 
 /** Readable schedule: 15 → "Every 15 min", 60 → "Hourly", 1440 → "Daily". */
 export function everyLabel(minutes: number): string {
+  if (minutes === 43200) return 'Monthly';
   if (minutes % 10080 === 0) return minutes === 10080 ? 'Weekly' : `Every ${minutes / 10080} weeks`;
   if (minutes % 1440 === 0) return minutes === 1440 ? 'Daily' : `Every ${minutes / 1440} days`;
   if (minutes % 60 === 0) return minutes === 60 ? 'Hourly' : `Every ${minutes / 60} h`;

@@ -189,6 +189,7 @@ type Engine struct {
 	profiles   investorProfileStore
 	paperState func() ([]trading.Position, trading.Summary)
 	paperPeak  func(equity float64) (float64, error)
+	flowOwner  func(ctx context.Context, flowID int64) (int64, error)
 	// insiderTrades replaces the SEC Form 4 reader in tests.
 	insiderTrades func(ctx context.Context, ticker string, lookbackDays, maxFilings int) ([]sec.InsiderTrade, error)
 	planLimits    adapterLimiter
