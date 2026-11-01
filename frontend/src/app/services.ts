@@ -5,6 +5,8 @@ import {
   ForumPost,
   FinancialsResponse,
   HistorySeries,
+  BacktestParams,
+  BacktestResult,
   LeaderboardResponse,
   MarketData,
   Order,
@@ -76,6 +78,14 @@ export class MarketService {
     if (symbols.length) params['symbols'] = symbols.join(',');
     else params['universe'] = universe;
     return this.http.get<LeaderboardResponse>('/api/market/leaderboard', { params });
+  }
+
+  /** Replays a leaderboard strategy over past prices; slow on a cold cache. */
+  backtest(p: BacktestParams): Observable<BacktestResult> {
+    const params: Record<string, string> = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance, years: String(p.years) };
+    if (p.symbols?.length) params['symbols'] = p.symbols.join(',');
+    else params['universe'] = p.universe;
+    return this.http.get<BacktestResult>('/api/market/backtest', { params });
   }
 
   getStats(symbol: string): Observable<MarketStatsJSON> {

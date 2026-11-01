@@ -96,6 +96,15 @@ try {
       await audit(page, `Page ${path || 'command-center'} (${theme})`, 'body');
     }
   }
+  // Markets → leaderboard → backtest panel with the chart and its warnings.
+  await page.goto(new URL('#/markets', base).href, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Backtest this strategy' }).click();
+  await page.locator('fs-backtest-panel svg[role="img"]').waitFor({ state: 'visible', timeout: 5000 });
+  await page.addScriptTag({ content: axeSource });
+  await audit(page, 'Markets: backtest panel', 'fs-backtest-panel');
+  await page.getByRole('button', { name: /rebalances/ }).click();
+  await audit(page, 'Markets: backtest rebalance table', 'fs-backtest-panel');
+
   // Settings → Plugins: installed plugins, an available update and the store.
   await page.goto(new URL('#/settings', base).href, { waitUntil: 'networkidle' });
   await page.getByRole('tab', { name: 'Plugins', exact: true }).click();

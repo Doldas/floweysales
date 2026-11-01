@@ -115,7 +115,7 @@ func allowedAPI(role, method, path string) bool {
 		return false
 	}
 	switch {
-	case method == http.MethodGet && (path == "/api/search" || path == "/api/history" || path == "/api/financials" || path == "/api/providers" || path == "/api/provider/endpoints" || path == "/api/provider/research" || path == "/api/quote" || path == "/api/market/leaderboard" || path == "/api/sec/filings" || path == "/api/sec/section" || path == "/api/sec/facts" || path == "/api/ai/config" || path == "/api/ai/tools"):
+	case method == http.MethodGet && (path == "/api/search" || path == "/api/history" || path == "/api/financials" || path == "/api/providers" || path == "/api/provider/endpoints" || path == "/api/provider/research" || path == "/api/quote" || path == "/api/market/leaderboard" || path == "/api/market/backtest" || path == "/api/sec/filings" || path == "/api/sec/section" || path == "/api/sec/facts" || path == "/api/ai/config" || path == "/api/ai/tools"):
 		return true
 	case method == http.MethodPost && path == "/api/ai/chat" || path == "/api/valuation/dcf":
 		return true
@@ -149,7 +149,7 @@ func (e *Engine) allowedUserAPI(r *http.Request, u identity.User) bool {
 		}
 		return e.authService.HasPermission(r.Context(), u.Role, permission)
 	}
-	if method == http.MethodGet && (path == "/api/search" || path == "/api/history" || path == "/api/financials" || path == "/api/providers" || path == "/api/provider/endpoints" || path == "/api/provider/research" || path == "/api/quote" || path == "/api/market/leaderboard" || path == "/api/sec/filings" || path == "/api/sec/section" || path == "/api/sec/facts" || path == "/api/ai/config" || path == "/api/ai/tools") {
+	if method == http.MethodGet && (path == "/api/search" || path == "/api/history" || path == "/api/financials" || path == "/api/providers" || path == "/api/provider/endpoints" || path == "/api/provider/research" || path == "/api/quote" || path == "/api/market/leaderboard" || path == "/api/market/backtest" || path == "/api/sec/filings" || path == "/api/sec/section" || path == "/api/sec/facts" || path == "/api/ai/config" || path == "/api/ai/tools") {
 		return e.authService.HasPermission(r.Context(), u.Role, "research.read")
 	}
 	if method == http.MethodPost && path == "/api/ai/chat" {
