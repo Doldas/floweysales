@@ -229,11 +229,12 @@ func macdSeries(values []float64, fast, slow, signalPeriod int) (line, signal, h
 	return line, signal, hist
 }
 
-// atrPct returns the last ATR(period) as a percentage of the last close.
-func atrPct(points []HistoryPoint, period int) float64 {
+// ATR returns the last Wilder ATR(period) in price units; ok is false with
+// fewer than period+1 bars.
+func ATR(points []HistoryPoint, period int) (float64, bool) {
 	n := len(points)
-	if n < period+1 {
-		return 0
+	if period < 1 || n < period+1 {
+		return 0, false
 	}
 	trs := make([]float64, 0, n-1)
 	for i := 1; i < n; i++ {
@@ -249,7 +250,16 @@ func atrPct(points []HistoryPoint, period int) float64 {
 	for i := period; i < len(trs); i++ {
 		atr = (atr*float64(period-1) + trs[i]) / float64(period)
 	}
-	last := points[n-1].Close
+	return atr, true
+}
+
+// atrPct returns the last ATR(period) as a percentage of the last close.
+func atrPct(points []HistoryPoint, period int) float64 {
+	atr, ok := ATR(points, period)
+	if !ok {
+		return 0
+	}
+	last := points[len(points)-1].Close
 	if last <= 0 {
 		return 0
 	}

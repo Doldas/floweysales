@@ -14,6 +14,7 @@ import { FormsModule } from '@angular/forms';
 import { MarketService, describeHttpError } from '../services';
 import { OrdersState } from '../orders-state';
 import { NotifyService } from '../core/notify.service';
+import { sizeSummary } from './position-size';
 import { Order, OrderSide, OrderTif, OrderType, Position } from '../models';
 
 type BlotterTab = 'positions' | 'open' | 'history';
@@ -63,6 +64,11 @@ export class LedgerComponent {
   orderType: OrderType = 'MARKET';
   tif: OrderTif = 'GTC';
   qty = '';
+  // Size by risk: the server turns a risk share and an ATR stop into a quantity.
+  sizeByRisk = false;
+  riskPct = '1';
+  sizing = false;
+  sizeText = 'Sets the quantity so that hitting a 2× ATR stop loses this share of equity.';
   limitPrice = '';
   stopPrice = '';
 
@@ -445,6 +451,24 @@ export class LedgerComponent {
           if (done + failed === working.length) finish();
         },
       });
+    });
+  }
+
+  sizeIt(): void {
+    const symbol = this.trackedSymbol();
+    const risk = Number(this.riskPct);
+    if (!symbol || !(risk >= 0.1 && risk <= 5)) {
+      this.sizeText = 'Enter a risk between 0.1 and 5 percent.';
+      return;
+    }
+    this.sizing = true;
+    this.api.sizePosition(symbol, this.side === 'BUY' ? 'buy' : 'sell', risk).subscribe({
+      next: res => {
+        this.sizing = false;
+        this.sizeText = sizeSummary(res, v => this.money(v));
+        if (res.result.quantity > 0) this.qty = String(res.result.quantity);
+      },
+      error: err => { this.sizing = false; this.sizeText = describeHttpError(err); },
     });
   }
 
