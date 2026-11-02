@@ -195,6 +195,7 @@ type Engine struct {
 	insiderTrades func(ctx context.Context, ticker string, lookbackDays, maxFilings int) ([]sec.InsiderTrade, error)
 	planLimits    adapterLimiter
 	todayCache    todayCache
+	worldCache    worldCache
 }
 
 type historyCacheEntry struct {
@@ -241,6 +242,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerEventRoutes()
 	e.registerTodayRoutes()
 	e.registerTeamRoutes()
+	e.registerWorldRoutes()
 	e.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()

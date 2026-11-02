@@ -41,6 +41,13 @@ använder Avanza-pluginens publika read-only ögonblicksbild och finns bara
 när Avanza-pluginet är installerat (installationen kräver att villkoren
 godkänns).
 
+## Omvärld (World)
+
+- `GET /api/world[?refresh=1]` – rubriker sorterade i teman (olja, räntor, geopolitik, tullar, AI/halvledare, Kina, kredit, tillväxt, valuta, metaller, mat/väder, hälsopolitik, reglering) med vilka sektorer och råvaror varje tema berör. Källor: en nyhets-plugin (`news`-capability) och den sparade webbsökningsnyckeln. Cachas i 15 minuter.
+- `GET /api/world/company?symbol=XOM[&sector=Energy]` – hur temana når ett bolag, utifrån dess sektor (vald, `PAPER_SYMBOL_SECTORS` eller inbyggd lista) och dess egna rubriker.
+
+Kopplingen tema → sektor/råvara är en fast tabell i `internal/market/world.go`, inte modellutdata: den säger vem som är exponerad och åt vilket håll om temats drivkraft stiger, inte vad som kommer att hända. Inga rubrikers tonalitet tolkas.
+
 ## Investeringsanalys
 
 `GET /api/market/leaderboard?universe=…&strategy=…` rankar ett urval bolag på
