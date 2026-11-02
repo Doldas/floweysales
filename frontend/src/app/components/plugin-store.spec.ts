@@ -65,3 +65,15 @@ test('capabilities and filtering', () => {
   assert.equal(matchesFilter(row, '  '), true);
   assert.equal(matchesFilter(row, 'crypto'), false);
 });
+
+test('a tools-only plugin has no provider and null capabilities', () => {
+  // The server sends capabilities: null for a plugin without a provider.
+  assert.deepEqual(capabilityLabels(null), []);
+  const row = {
+    id: 'se-tax', manifest: { id: 'se-tax', name: 'Swedish tax', publisher: 'FloweySales', description: 'K4', version: '1.0.0', protocol: 1,
+      provider: { id: '', label: '', capabilities: null }, tools: { tab: { label: 'Tax' } } },
+    trackers: [],
+  } as unknown as Parameters<typeof uninstallPrompt>[0];
+  assert.equal(matchesFilter(row, 'tax'), true);
+  assert.match(uninstallPrompt(row), /tools tab stops being available/);
+});
