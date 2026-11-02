@@ -9,7 +9,7 @@ import (
 
 // Event is one step of an agent run, streamed to the UI or logged by tests.
 type Event struct {
-	Type      string   `json:"type"` // delta | tool_start | tool_result | transcript_message | notice | error | done
+	Type      string   `json:"type"` // delta | tool_start | tool_result | transcript_message | notice | error | done | member_start | member_done
 	Message   *Message `json:"message,omitempty"`
 	Content   string   `json:"content,omitempty"`
 	Name      string   `json:"name,omitempty"`
@@ -18,6 +18,10 @@ type Event struct {
 	ToolError string   `json:"tool_error,omitempty"`
 	Steps     int      `json:"steps,omitempty"`
 	Error     string   `json:"error,omitempty"`
+	// Agent names the team member (or "chair") an event of a team run belongs to.
+	Agent string `json:"agent,omitempty"`
+	// Stance is set on member_done: the persona's closing STANCE value, if it gave one.
+	Stance string `json:"stance,omitempty"`
 }
 
 // AgentOptions tunes a run.

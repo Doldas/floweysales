@@ -14,6 +14,7 @@ import {
   OrderResponse,
   CompanyWorld,
   EventsResponse,
+  PersonaCatalog,
   SavedStrategy,
   StrategyCatalog,
   StrategyDef,
@@ -101,6 +102,8 @@ export class MarketService {
     return this.http.get<BacktestResult>('/api/market/backtest', { params });
   }
 
+  /** The investor characters an agent can answer as. */
+  getPersonas(): Observable<PersonaCatalog> { return this.http.get<PersonaCatalog>('/api/ai/personas'); }
   /** Built-in Fibonacci strategies and the user's saved ones. */
   getStrategies(): Observable<StrategyCatalog> { return this.http.get<StrategyCatalog>('/api/strategies'); }
   createStrategy(def: StrategyDef): Observable<SavedStrategy> { return this.http.post<SavedStrategy>('/api/strategies', def); }

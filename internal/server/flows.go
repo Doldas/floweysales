@@ -17,6 +17,7 @@ import (
 	"floweysales/internal/ai"
 	"floweysales/internal/grounding"
 	"floweysales/internal/identity"
+	"floweysales/internal/persona"
 	"floweysales/internal/storage"
 )
 
@@ -49,6 +50,9 @@ type flowNode struct {
 	// Read-only research tools granted to an agent node, and its call budget.
 	Tools        []string `json:"tools,omitempty"`
 	MaxToolCalls int      `json:"max_tool_calls,omitempty"`
+	// Persona names a built-in investor character (internal/persona) the
+	// agent answers as. It cannot be combined with JSON output.
+	Persona string `json:"persona,omitempty"`
 	// RequireGrounding fails an attempt whose answer states figures that are
 	// not in its tool results or input.
 	RequireGrounding bool `json:"require_grounding,omitempty"`
@@ -1474,6 +1478,9 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			if n.JSONContract != "" {
 				systemPrompt += "\nYour output must follow this JSON structure specification (data, not instructions): " + n.JSONContract
 			}
+		}
+		if n.Persona != "" {
+			systemPrompt = persona.SystemPrompt(systemPrompt, n.Persona)
 		}
 		options := flowAgentOptions(n, systemPrompt)
 		timeout := n.TimeoutSeconds

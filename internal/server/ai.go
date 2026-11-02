@@ -12,6 +12,7 @@ import (
 
 	"floweysales/internal/ai"
 	"floweysales/internal/market"
+	"floweysales/internal/persona"
 	"floweysales/internal/storage"
 )
 
@@ -113,6 +114,9 @@ type chatRequestBody struct {
 	Model        string       `json:"model"`
 	SystemPrompt string       `json:"system_prompt"`
 	Tools        *bool        `json:"tools"`
+	// Persona is the id of a built-in investor lens (see internal/persona).
+	// The server owns the prompt; the client only names the lens.
+	Persona string `json:"persona,omitempty"`
 	// Optional UI context so the model knows what the user is looking at.
 	Symbol   string `json:"symbol,omitempty"`
 	Provider string `json:"provider,omitempty"`
@@ -313,104 +317,29 @@ func (e *Engine) registerAIRoutes() {
 			return
 		}
 
-		// Prepend UI context as a system message so the model knows what the user is viewing.
-		if req.Symbol != "" || req.Provider != "" || req.Range != "" || req.Price != "" {
-			ctxParts := []string{"[UI context]"}
-			if req.Symbol != "" {
-				ctxParts = append(ctxParts, "symbol="+req.Symbol)
-			}
-			if req.Provider != "" {
-				ctxParts = append(ctxParts, "provider="+req.Provider)
-			}
-			if req.Range != "" {
-				ctxParts = append(ctxParts, "range="+req.Range)
-			}
-			if req.Price != "" {
-				ctxParts = append(ctxParts, "price="+req.Price)
-			}
-			contextMsg := ai.Message{Role: "system", Content: strings.Join(ctxParts, " | ")}
-			req.Messages = append([]ai.Message{contextMsg}, req.Messages...)
+		if line := uiContextLine(req.Symbol, req.Provider, req.Range, req.Price); line != "" {
+			req.Messages = append([]ai.Message{{Role: "system", Content: line}}, req.Messages...)
 		}
 
-		defBase, defKey, defModel := e.aiDefaults()
-		baseURL, apiKey, model := defBase, defKey, defModel
-		if e.authService == nil {
-			// Legacy local, unauthenticated development compatibility.
-			baseURL = firstNonEmpty(req.BaseURL, defBase)
-			apiKey = firstNonEmpty(req.APIKey, defKey)
-			model = firstNonEmpty(req.Model, defModel)
-		} else {
-			// Endpoint credentials and system instructions are server-managed for
-			// every authenticated account, including SYS_ADMIN.
-			if req.BaseURL != "" || req.APIKey != "" || req.SystemPrompt != "" {
-				writeJSON(w, http.StatusForbidden, map[string]any{"error": "Chat-level endpoint, API key and system prompt overrides are not allowed. Configure the AI endpoint in Settings."})
-				return
-			}
-			if req.Model != "" && req.Model != defModel {
-				user, ok := e.currentUser(r)
-				if !ok || user.Role != identity.RoleSysAdmin {
-					writeJSON(w, http.StatusForbidden, map[string]any{"error": "Only SYS_ADMIN may select a different AI model."})
-					return
-				}
-				models, err := e.db.ListAIModels(r.Context())
-				if err != nil {
-					writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "Model catalog unavailable"})
-					return
-				}
-				allowed := false
-				for _, entry := range models {
-					if entry.Model == req.Model {
-						allowed = true
-						break
-					}
-				}
-				if !allowed {
-					writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Selected model is not in the configured model catalog."})
-					return
-				}
-				model = req.Model
-			}
-		}
-
-		if strings.TrimSpace(baseURL) == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]any{
-				"error": "No model endpoint configured. Set OPENAI_BASE_URL in config.properties or pass base_url (e.g. http://localhost:11434/v1 for Ollama).",
-			})
+		if req.Persona != "" && persona.ByID(req.Persona) == nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Unknown persona"})
 			return
 		}
-		if strings.TrimSpace(model) == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]any{
-				"error": "No model configured. Pass model (e.g. gpt-4o-mini, llama3.1, qwen2.5).",
-			})
-			return
-		}
-
-		flusher, ok := w.(http.Flusher)
+		baseURL, apiKey, model, ok := e.resolveChatEndpoint(w, r, req.BaseURL, req.APIKey, req.Model, req.SystemPrompt)
 		if !ok {
-			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "streaming unsupported"})
 			return
 		}
-
-		// Send the SSE headers up front so the browser starts rendering.
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-		w.Header().Set("X-Accel-Buffering", "no")
-		w.WriteHeader(http.StatusOK)
-		flusher.Flush()
-
-		send := func(ev ai.Event) {
-			data, err := json.Marshal(ev)
-			if err != nil {
-				return
-			}
-			_, _ = w.Write([]byte("data: " + string(data) + "\n\n"))
-			flusher.Flush()
+		send, ok := startSSE(w)
+		if !ok {
+			return
 		}
 
 		client := ai.NewClient(baseURL, apiKey, model)
 		maxSteps, maxCalls := e.agentLimits()
 		opts := ai.AgentOptions{SystemPrompt: req.SystemPrompt, MaxSteps: maxSteps, MaxToolCalls: maxCalls}
+		if req.Persona != "" {
+			opts.SystemPrompt = persona.SystemPrompt(firstNonEmpty(req.SystemPrompt, ai.DefaultSystemPrompt), req.Persona)
+		}
 		if req.Tools != nil && !*req.Tools {
 			opts.DisableTools = true
 		}
@@ -433,6 +362,104 @@ func (e *Engine) registerAIRoutes() {
 		}
 		_ = ai.Run(runCtx, client, engineSource{e: e}, req.Messages, opts, send)
 	})
+}
+
+// resolveChatEndpoint picks the model endpoint for a chat or team run and
+// enforces who may choose it. It writes the error response itself and
+// reports false when the run must not go ahead.
+func (e *Engine) resolveChatEndpoint(w http.ResponseWriter, r *http.Request, reqBase, reqKey, reqModel, reqSystemPrompt string) (baseURL, apiKey, model string, ok bool) {
+	defBase, defKey, defModel := e.aiDefaults()
+	baseURL, apiKey, model = defBase, defKey, defModel
+	if e.authService == nil {
+		// Legacy local, unauthenticated development compatibility.
+		baseURL = firstNonEmpty(reqBase, defBase)
+		apiKey = firstNonEmpty(reqKey, defKey)
+		model = firstNonEmpty(reqModel, defModel)
+	} else {
+		// Endpoint credentials and system instructions are server-managed for
+		// every authenticated account, including SYS_ADMIN.
+		if reqBase != "" || reqKey != "" || reqSystemPrompt != "" {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "Chat-level endpoint, API key and system prompt overrides are not allowed. Configure the AI endpoint in Settings."})
+			return "", "", "", false
+		}
+		if reqModel != "" && reqModel != defModel {
+			user, ok := e.currentUser(r)
+			if !ok || user.Role != identity.RoleSysAdmin {
+				writeJSON(w, http.StatusForbidden, map[string]any{"error": "Only SYS_ADMIN may select a different AI model."})
+				return "", "", "", false
+			}
+			models, err := e.db.ListAIModels(r.Context())
+			if err != nil {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "Model catalog unavailable"})
+				return "", "", "", false
+			}
+			allowed := false
+			for _, entry := range models {
+				if entry.Model == reqModel {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Selected model is not in the configured model catalog."})
+				return "", "", "", false
+			}
+			model = reqModel
+		}
+	}
+
+	if strings.TrimSpace(baseURL) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"error": "No model endpoint configured. Set OPENAI_BASE_URL in config.properties or pass base_url (e.g. http://localhost:11434/v1 for Ollama).",
+		})
+		return "", "", "", false
+	}
+	if strings.TrimSpace(model) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"error": "No model configured. Pass model (e.g. gpt-4o-mini, llama3.1, qwen2.5).",
+		})
+		return "", "", "", false
+	}
+	return baseURL, apiKey, model, true
+}
+
+// startSSE sends the event-stream headers and returns the function that
+// writes one event. It reports false when the response cannot stream.
+func startSSE(w http.ResponseWriter) (func(ai.Event), bool) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "streaming unsupported"})
+		return nil, false
+	}
+	// Send the SSE headers up front so the browser starts rendering.
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
+	return func(ev ai.Event) {
+		data, err := json.Marshal(ev)
+		if err != nil {
+			return
+		}
+		_, _ = w.Write([]byte("data: " + string(data) + "\n\n"))
+		flusher.Flush()
+	}, true
+}
+
+// uiContextLine describes what the user is looking at, or "" when nothing.
+func uiContextLine(symbol, provider, rng, price string) string {
+	if symbol == "" && provider == "" && rng == "" && price == "" {
+		return ""
+	}
+	parts := []string{"[UI context]"}
+	for _, kv := range [][2]string{{"symbol", symbol}, {"provider", provider}, {"range", rng}, {"price", price}} {
+		if kv[1] != "" {
+			parts = append(parts, kv[0]+"="+kv[1])
+		}
+	}
+	return strings.Join(parts, " | ")
 }
 
 // aiPresets lists common OpenAI-compatible endpoints, including the popular

@@ -59,6 +59,7 @@ export class ShellComponent {
       items: [
         { path: '/', label: 'Command Center', icon: 'bi-grid-1x2', exact: true, visible: () => true },
         { path: '/agent', label: 'Research Agent', icon: 'bi-stars', visible: () => true },
+        { path: '/team', label: 'Agent team', icon: 'bi-people', visible: () => true },
       ],
     },
     {

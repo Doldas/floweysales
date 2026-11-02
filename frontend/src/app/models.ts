@@ -475,6 +475,18 @@ export interface TodayBriefing {
   };
 }
 
+export type Stance = 'fits' | 'partly' | 'does_not_fit' | 'insufficient_data';
+export interface Persona {
+  id: string; name: string; tagline: string; archetype: string; horizon: string;
+  principles: string[]; checks: string[]; avoids: string[]; voice: string; tools: string[]; caveat?: string;
+}
+export interface PersonaCatalog { personas: Persona[]; stances: Stance[]; max_team: number }
+/** One event of a team run, as streamed by POST /api/ai/team. */
+export interface TeamEvent {
+  type: 'member_start' | 'member_done' | 'delta' | 'tool_start' | 'tool_result' | 'notice' | 'error' | 'done' | string;
+  agent?: string; name?: string; content?: string; result?: string; tool_error?: string; error?: string; stance?: string;
+}
+
 export type StrategyOperandType = 'price' | 'const' | 'ema' | 'sma' | 'rsi' | 'atr' | 'highest' | 'lowest' | 'fib_retr' | 'fib_ext' | 'swing_high' | 'swing_low';
 export interface StrategyOperand { type: StrategyOperandType; field?: string; period?: number; ratio?: number; value?: number }
 export type StrategyComparison = '>' | '>=' | '<' | '<=' | 'crosses_above' | 'crosses_below';

@@ -58,7 +58,10 @@
       } @else {
           <div class="msg msg-agent">
             <span class="fs-agent-orb sm" aria-hidden="true"><i class="bi bi-stars"></i></span>
-            <div class="bubble chat-markdown" [innerHTML]="md(block.entry.content)"></div>
+            <div class="bubble chat-markdown">
+              @if (block.entry.persona) { <div class="persona-tag"><i class="bi bi-person-badge" aria-hidden="true"></i> {{ block.entry.persona }} <span>fictional character</span></div> }
+              <div [innerHTML]="md(block.entry.content)"></div>
+            </div>
           </div>
       }
     }
@@ -86,6 +89,15 @@
         <span class="ctx-chip">{{ session.context().provider }}</span>
         <span class="ctx-chip">{{ session.context().range }}</span>
         @if (session.context().price) { <span class="ctx-chip tabular">{{ session.context().price }}</span> }
+      </div>
+    }
+    @if (session.personas().length) {
+      <div class="persona-row">
+        <label for="persona-pick">Answer as</label>
+        <select id="persona-pick" class="form-select form-select-sm" [value]="session.persona()" (change)="session.persona.set($any($event.target).value)" [disabled]="session.streaming()">
+          <option value="" [selected]="!session.persona()">Research analyst (default)</option>
+          @for (p of session.personas(); track p.id) { <option [value]="p.id" [selected]="p.id === session.persona()">{{ p.name }} · {{ p.tagline }}</option> }
+        </select>
       </div>
     }
     <div class="composer-box">
