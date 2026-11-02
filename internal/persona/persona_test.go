@@ -6,6 +6,7 @@ import (
 
 	"floweysales/internal/ai"
 	"floweysales/internal/persona"
+	"floweysales/internal/strategy"
 )
 
 func TestTheSixCharactersExist(t *testing.T) {
@@ -87,6 +88,69 @@ func TestNoRealInvestorNamesAppear(t *testing.T) {
 			if strings.Contains(text, name) {
 				t.Errorf("%s mentions %q", p.ID, name)
 			}
+		}
+	}
+}
+
+func TestEveryCharacterRunsStrategiesItsToolsCanRun(t *testing.T) {
+	rules := map[string]strategy.Strategy{}
+	for _, st := range strategy.Presets() {
+		rules[st.ID] = st
+	}
+	for _, p := range persona.Personas {
+		if len(p.Strategies) == 0 {
+			t.Errorf("%s has no strategy", p.ID)
+		}
+		tools := map[string]bool{}
+		for _, name := range p.Tools {
+			tools[name] = true
+		}
+		prompt := p.Prompt()
+		own := 0
+		for _, st := range p.Strategies {
+			if st.Why == "" || !strings.Contains(prompt, st.ID) {
+				t.Errorf("%s: strategy %s has no reason or is missing from the prompt", p.ID, st.ID)
+			}
+			switch st.Kind {
+			case persona.KindRules:
+				def, ok := rules[st.ID]
+				if !ok {
+					t.Errorf("%s: unknown rule strategy %s", p.ID, st.ID)
+				}
+				if def.Persona == p.ID {
+					own++
+				}
+				if !tools["run_rule_strategy"] {
+					t.Errorf("%s runs %s but lacks the run_rule_strategy tool", p.ID, st.ID)
+				}
+			case persona.KindLeaderboard:
+				if !tools["get_leaderboard"] && !tools["run_strategy_backtest"] {
+					t.Errorf("%s ranks with %s but lacks a leaderboard tool", p.ID, st.ID)
+				}
+			default:
+				t.Errorf("%s: unknown strategy kind %q", p.ID, st.Kind)
+			}
+		}
+		_ = own
+	}
+}
+
+func TestCharacterStrategiesAreOwnedByAKnownCharacter(t *testing.T) {
+	for _, st := range strategy.Presets() {
+		if st.Family != "persona" {
+			continue
+		}
+		if persona.ByID(st.Persona) == nil {
+			t.Errorf("%s belongs to unknown character %q", st.ID, st.Persona)
+		}
+		found := false
+		for _, ref := range persona.ByID(st.Persona).Strategies {
+			if ref.ID == st.ID {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s is not listed by its character %s, so the character would never run it", st.ID, st.Persona)
 		}
 	}
 }

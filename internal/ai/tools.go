@@ -11,6 +11,7 @@ import (
 	"floweysales/internal/market"
 	"floweysales/internal/sec"
 	"floweysales/internal/storage"
+	"floweysales/internal/strategy"
 	"floweysales/internal/valuation"
 )
 
@@ -51,6 +52,8 @@ type WebSearcher interface {
 type InvestorSource interface {
 	Leaderboard(ctx context.Context, universe, strategy, symbols string, limit int) (any, error)
 	StrategyBacktest(ctx context.Context, universe, strategy string, top, years int) (any, error)
+	// RuleStrategy replays a built-in rule strategy over one instrument.
+	RuleStrategy(ctx context.Context, strategyID, symbol, provider string, years int, costBps float64) (any, error)
 	WealthPlan(ctx context.Context) (any, error)
 	PortfolioAnalytics(ctx context.Context) (any, error)
 	InsiderActivity(ctx context.Context, symbol string, lookbackDays int) (any, error)
@@ -84,7 +87,11 @@ func ToolDefs() []Tool {
 	}
 
 	universeProp := str("Leaderboard universe: us_mega, us_tech, us_dividend, se_large or eu_leaders. Omit when passing symbols.")
-	strategyProp := str("Strategy: best, value, growth, momentum, quality or dip. Defaults to best.")
+	strategyProp := str("Strategy: best, value, growth, momentum, quality, dip, owner_compounder, teacher_defensive or pickerupper_garp. Defaults to best.")
+	ruleIDs := []string{}
+	for _, st := range strategy.Presets() {
+		ruleIDs = append(ruleIDs, st.ID)
+	}
 
 	return []Tool{
 		{Type: "function", Function: ToolFunction{
@@ -96,6 +103,15 @@ func ToolDefs() []Tool {
 			Name:        "run_strategy_backtest",
 			Description: "Replay a leaderboard strategy with monthly rebalancing over past prices and published quarters, against an index. Returns return, risk and turnover figures, the rebalance count and the bias warnings. Slow on a cold cache; results are not forecasts.",
 			Parameters:  obj(map[string]any{"universe": universeProp, "strategy": strategyProp, "top": map[string]any{"type": "integer", "description": "Holdings, 1-25 (default 10)"}, "years": map[string]any{"type": "integer", "description": "3 or 5 (default 3)"}}),
+		}},
+		{Type: "function", Function: ToolFunction{
+			Name: "run_rule_strategy",
+			Description: "Replay a built-in rule strategy (entry, exit and stop rules, including the Fibonacci strategies and the investor characters' strategies) over ONE instrument's daily prices. " +
+				"Returns return against buy and hold, worst fall, trade count, win rate, profit factor, average R, the signal on the last bar and the bias warnings. A test of an idea, not a forecast; a handful of trades says little. Strategy ids: " + strings.Join(ruleIDs, ", ") + ".",
+			Parameters: obj(map[string]any{
+				"strategy_id": str("One of: " + strings.Join(ruleIDs, ", ")), "symbol": str("Ticker, e.g. AAPL"), "provider": providerProp,
+				"years": map[string]any{"type": "integer", "description": "3, 5 or 10 (default 5)"}, "cost_bps": map[string]any{"type": "number", "description": "Cost per side in basis points, 0-200 (default 10)"},
+			}, "strategy_id", "symbol"),
 		}},
 		{Type: "function", Function: ToolFunction{
 			Name:        "get_wealth_plan",
@@ -344,7 +360,7 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 	}
 
 	switch name {
-	case "get_leaderboard", "run_strategy_backtest", "get_wealth_plan", "get_portfolio_analytics", "get_insider_activity", "get_macro_regime", "get_corporate_events":
+	case "get_leaderboard", "run_strategy_backtest", "run_rule_strategy", "get_wealth_plan", "get_portfolio_analytics", "get_insider_activity", "get_macro_regime", "get_corporate_events":
 		inv, ok := src.(InvestorSource)
 		if !ok {
 			return "", ErrInvestorToolsUnavailable
@@ -356,6 +372,16 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 			out, err = inv.Leaderboard(ctx, strArg(args, "universe"), strArg(args, "strategy"), strArg(args, "symbols"), intArg(args, "limit", 10))
 		case "run_strategy_backtest":
 			out, err = inv.StrategyBacktest(ctx, strArg(args, "universe"), strArg(args, "strategy"), intArg(args, "top", 10), intArg(args, "years", 3))
+		case "run_rule_strategy":
+			id, symbol := strArg(args, "strategy_id"), strArg(args, "symbol")
+			if id == "" || symbol == "" {
+				return "", fmt.Errorf("strategy_id and symbol are required")
+			}
+			cost := 10.0
+			if v, ok := args["cost_bps"].(float64); ok {
+				cost = v
+			}
+			out, err = inv.RuleStrategy(ctx, id, symbol, providerArg(args), intArg(args, "years", 5), cost)
 		case "get_wealth_plan":
 			out, err = inv.WealthPlan(ctx)
 		case "get_portfolio_analytics":

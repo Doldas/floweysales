@@ -70,6 +70,9 @@ export const LEADERBOARD_STRATEGIES: readonly { id: string; label: string }[] = 
   { id: 'momentum', label: 'Momentum leaders' },
   { id: 'quality', label: 'Quality compounders' },
   { id: 'dip', label: 'Quality on a dip' },
+  { id: 'owner_compounder', label: 'Ashgrove: compounders at a fair price' },
+  { id: 'teacher_defensive', label: 'Holm: defensive value' },
+  { id: 'pickerupper_garp', label: 'Fairbanks: growth at a reasonable price' },
 ];
 
 export const LEADERBOARD_FACTORS = ['value', 'quality', 'growth', 'momentum', 'timing', 'risk'] as const;
@@ -146,6 +149,12 @@ export const INVESTOR_PLAYBOOKS: readonly PlaybookInfo[] = [
     description: 'The strongest uptrends that are not overbought, reported once a week per company.' },
   { id: 'quality-dip', label: 'Quality on a dip (Sweden)', icon: 'bi-arrow-down-right-circle', schedule: 'Daily',
     description: 'Profitable Stockholm large caps that pulled back 8%+ while the 200-day trend holds, with an agent note on why each fell.' },
+  { id: 'owner-compounders', label: 'Ashgrove: compounders at a fair price', icon: 'bi-person-badge', schedule: 'Weekly',
+    description: 'The patient owner\'s screen on US mega caps: steady margins, a fair price and calm volatility, with a memo written by the fictional character Walter Ashgrove.' },
+  { id: 'teacher-defensive', label: 'Holm: defensive value', icon: 'bi-person-badge', schedule: 'Weekly',
+    description: 'The defensive investor\'s screen on US dividend and value stocks: low P/E, profitable, revenue not shrinking, with a memo by the fictional character Bernhard Holm.' },
+  { id: 'pickerupper-garp', label: 'Fairbanks: growth at a reasonable price', icon: 'bi-person-badge', schedule: 'Weekly',
+    description: 'The stock-picker\'s screen on US mega caps: growth with a PEG under 1.5, with a memo by the fictional character Marty Fairbanks.' },
   { id: 'earnings-scored', label: 'Quarterly reports, scored', icon: 'bi-clipboard-data', schedule: 'Every 6 hours',
     description: 'When a watchlist company files a 10-Q or 10-K, ranks it against the watchlist on the new numbers and summarizes what changed.' },
   { id: 'watchlist-health', label: 'Watchlist health check', icon: 'bi-heart-pulse', schedule: 'Weekly',
@@ -324,6 +333,39 @@ export function buildPlaybook(id: string, opts: BuildOptions): Playbook | null {
       add(agent, 'table');
       deliver('why', 'Quality on a dip {{date}}');
       note = 'Uses the Sweden large caps universe. A company is reported again after 3 days at most.';
+      break;
+    }
+    case 'owner-compounders': {
+      name = 'Ashgrove: compounders at a fair price'; interval = 10080;
+      add({ id: 'board', type: 'leaderboard', label: 'Rank compounders', universe: 'us_mega', strategy: 'owner_compounder', limit: 25 }, 'start');
+      add({ id: 'screen', type: 'screen', label: 'Steady and fairly priced', rule: 'quality >= 60 and net_margin_pct >= 12 and not (flags contains "unprofitable")', sort_by: '-score', limit: 10 }, 'board');
+      add({ id: 'table', type: 'report_table', label: 'Shortlist', title: 'Compounders at a fair price', columns: 'rank,symbol,score,quality,net_margin_pct,fcf_margin_pct,pe_ttm,volatility_pct,ttm_through', skip_empty: true }, 'screen');
+      add({ id: 'memo', type: 'agent', label: 'Ashgrove memo', persona: 'owner', require_grounding: true,
+        prompt: GROUNDED + LEADERBOARD_GUIDE + 'Keep the table at the top. For each company: what the margins say about the business, whether the price looks fair against them, and what you could not judge from these numbers (moat, management, debt history). Research, not a recommendation.' }, 'table');
+      deliver('memo', 'Compounders at a fair price {{date}}');
+      note = 'Weekly. The screen is a factor approximation of the patient-owner approach; it cannot see moats or management, and the memo says so. The memo is written by a fictional character.';
+      break;
+    }
+    case 'teacher-defensive': {
+      name = 'Holm: defensive value'; interval = 10080;
+      add({ id: 'board', type: 'leaderboard', label: 'Rank defensive value', universe: 'us_dividend', strategy: 'teacher_defensive', limit: 25 }, 'start');
+      add({ id: 'screen', type: 'screen', label: 'Cheap and safe', rule: 'pe_ttm < 15 and net_margin_pct >= 5 and not (flags contains "shrinking_revenue")', sort_by: '-score', limit: 10 }, 'board');
+      add({ id: 'table', type: 'report_table', label: 'Shortlist', title: 'Defensive value shortlist', columns: 'rank,symbol,score,pe_ttm,earnings_yield_pct,net_margin_pct,revenue_growth_pct,volatility_pct,ttm_through', skip_empty: true }, 'screen');
+      add({ id: 'memo', type: 'agent', label: 'Holm memo', persona: 'teacher', require_grounding: true,
+        prompt: GROUNDED + LEADERBOARD_GUIDE + 'Keep the table at the top. For each company: which of the defensive tests the numbers pass or fail, which tests cannot be run from this data (current ratio, ten-year earnings, dividend record), and the margin of safety if any. Research, not a recommendation.' }, 'table');
+      deliver('memo', 'Defensive value {{date}}');
+      note = 'Weekly. Only P/E and margins can be tested here; the memo lists the classic tests it could not run. The memo is written by a fictional character.';
+      break;
+    }
+    case 'pickerupper-garp': {
+      name = 'Fairbanks: growth at a reasonable price'; interval = 10080;
+      add({ id: 'board', type: 'leaderboard', label: 'Rank growth', universe: 'us_mega', strategy: 'pickerupper_garp', limit: 25 }, 'start');
+      add({ id: 'screen', type: 'screen', label: 'Growth at a fair PEG', rule: 'revenue_growth_pct >= 10 and peg < 1.5 and not (flags contains "unprofitable")', sort_by: '-score', limit: 10 }, 'board');
+      add({ id: 'table', type: 'report_table', label: 'Shortlist', title: 'Growth at a reasonable price', columns: 'rank,symbol,score,revenue_growth_pct,eps_growth_pct,pe_ttm,peg,net_margin_pct,ttm_through', skip_empty: true }, 'screen');
+      add({ id: 'memo', type: 'agent', label: 'Fairbanks memo', persona: 'pickerupper', require_grounding: true,
+        prompt: GROUNDED + LEADERBOARD_GUIDE + 'Keep the table at the top. For each company: which category it looks like (slow grower, stalwart, fast grower and so on) and why, whether the PEG is reasonable for that category, and what the user should check in the real world that numbers cannot show. Research, not a recommendation.' }, 'table');
+      deliver('memo', 'Growth at a reasonable price (Fairbanks) {{date}}');
+      note = 'Weekly. The memo is written by a fictional character; the screen needs revenue growth of 10%+ and a PEG under 1.5.';
       break;
     }
     case 'earnings-scored': {

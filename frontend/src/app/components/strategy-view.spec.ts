@@ -2,8 +2,8 @@
 //   node --test src/app/components/strategy-view.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { blankStrategy, cloneForEditing, defaultOperand, describeCondition, describeStrategy, geometry, nearestIndex, problems, tradeMarkers, usesFibonacci } from './strategy-view.ts';
-import type { StrategyDef, StrategyRunResult } from '../models';
+import { groupPresets, ownerLine, blankStrategy, cloneForEditing, defaultOperand, describeCondition, describeStrategy, geometry, nearestIndex, problems, tradeMarkers, usesFibonacci } from './strategy-view.ts';
+import type { Persona, StrategyDef, StrategyRunResult } from '../models';
 
 const pocket: StrategyDef = {
   name: 'Pocket', direction: 'long', family: 'fibonacci', id: 'fib_golden_pocket', sizing: { mode: 'risk_pct', value: 1 }, max_bars: 40,
@@ -62,4 +62,21 @@ test('trade markers land on the instrument line scaled by the base price', () =>
   assert.equal(entry.y, g.y(100));
   assert.equal(exit.y, g.y(120));
   assert.equal(exit.win, true);
+});
+
+const person = (id: string, name: string): Persona => ({ id, name, tagline: '', archetype: `The ${id} archetype.`, horizon: '', principles: [], checks: [], avoids: [], voice: '', tools: [] });
+const preset = (id: string, family: string, persona?: string): StrategyDef => ({ ...pocket, id, family, persona });
+
+test('presets are grouped by Fibonacci and by character, in the catalogue order', () => {
+  const groups = groupPresets(
+    [preset('p2', 'persona', 'quant'), preset('f1', 'fibonacci'), preset('p1', 'persona', 'owner'), preset('p3', 'persona', 'quant'), preset('x', 'persona', 'ghost')],
+    [person('owner', 'Walter'), person('quant', 'Isak')],
+  );
+  assert.deepEqual(groups.map(g => [g.key, g.items.map(i => i.id)]), [['fibonacci', ['f1']], ['owner', ['p1']], ['quant', ['p2', 'p3']], ['other', ['x']]]);
+  assert.match(groups[1].note ?? '', /fictional character/);
+});
+
+test('the owner line names the fictional character', () => {
+  assert.equal(ownerLine(preset('p', 'persona', 'quant'), [person('quant', 'Isak')]), "Isak's strategy · a fictional character following quant archetype");
+  assert.equal(ownerLine(preset('f', 'fibonacci'), [person('quant', 'Isak')]), '');
 });

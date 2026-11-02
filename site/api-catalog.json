@@ -589,6 +589,12 @@
       "note": "Backtest av en rankningsstrategi med månatlig ombalansering och varningar"
     },
     {
+      "name": "run_rule_strategy",
+      "status": "implemented",
+      "surface": "MCP tools/list",
+      "note": "Återspelar en regelbaserad strategi (Fibonacci och investerarkaraktärernas) över ett instrument, med nyckeltal, signal på sista stapeln och varningar"
+    },
+    {
       "name": "get_wealth_plan",
       "status": "implemented",
       "surface": "MCP tools/list",

@@ -78,6 +78,9 @@ func Presets() []Strategy {
 	}
 	for i := range list {
 		list[i].Family = "fibonacci"
+	}
+	list = append(list, personaPresets()...)
+	for i := range list {
 		if err := list[i].Normalize(); err != nil {
 			panic(fmt.Sprintf("preset %s: %v", list[i].ID, err))
 		}

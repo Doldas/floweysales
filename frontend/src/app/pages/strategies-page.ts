@@ -1,13 +1,14 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import type { Subscription } from 'rxjs';
 
 import { StrategyBuilderComponent } from '../components/strategy-builder';
 import {
-  blankStrategy, chartSummary, cloneForEditing, describeStrategy, geometry, levelLines, linePath, nowText, problems, resultTiles, strategyPrompt, tradeMarkers,
+  blankStrategy, chartSummary, cloneForEditing, describeStrategy, geometry, groupPresets, ownerLine, levelLines, linePath, nowText, problems, resultTiles, strategyPrompt, tradeMarkers,
 } from '../components/strategy-view';
 import { AgentSession } from '../core/agent-session';
 import { MarketState } from '../core/market-state';
-import type { SavedStrategy, StrategyCatalog, StrategyDef, StrategyRunResult } from '../models';
+import type { Persona, SavedStrategy, StrategyCatalog, StrategyDef, StrategyRunResult } from '../models';
 import { MarketService, describeHttpError } from '../services';
 import { SymbolSearchComponent } from '../shell/symbol-search';
 
@@ -37,13 +38,16 @@ const H_EQUITY = 160;
 
   <div class="layout">
     <aside class="list card" aria-label="Strategies">
-      <h2>Fibonacci</h2>
-      <ul>
-        @for (p of catalog()?.presets ?? []; track p.id) {
-          <li><button type="button" class="pick" [attr.aria-current]="draftId() === p.id ? 'true' : null" (click)="choose(p, p.id!)">
-            <strong>{{ p.name }}</strong><small>{{ p.direction === 'long' ? 'Long' : 'Short' }}</small></button></li>
-        }
-      </ul>
+      @for (g of groups(); track g.key) {
+        <h2>{{ g.label }}</h2>
+        @if (g.note) { <p class="grp-note">{{ g.note }}</p> }
+        <ul>
+          @for (p of g.items; track p.id) {
+            <li><button type="button" class="pick" [attr.aria-current]="draftId() === p.id ? 'true' : null" (click)="choose(p, p.id!)">
+              <strong>{{ p.name }}</strong><small>{{ p.direction === 'long' ? 'Long' : 'Short' }}</small></button></li>
+          }
+        </ul>
+      }
       <h2>My strategies</h2>
       <ul>
         @for (s of catalog()?.custom ?? []; track s.id) {
@@ -60,6 +64,7 @@ const H_EQUITY = 160;
           <div class="panel-head">
             <div>
               <h2>{{ d.name || 'Untitled strategy' }}</h2>
+              @if (owner(); as o) { <p class="owner"><i class="bi bi-person-badge" aria-hidden="true"></i> {{ o }}</p> }
               @if (d.description) { <p class="muted">{{ d.description }}</p> }
             </div>
             <div class="actions">
@@ -176,6 +181,8 @@ const H_EQUITY = 160;
 .layout { display: grid; grid-template-columns: 17rem minmax(0, 1fr); gap: 1rem; align-items: start; }
 .list { padding: 0.8rem; display: grid; gap: 0.5rem; }
 .list h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fs-muted); margin: 0.3rem 0 0; }
+.grp-note { font-size: 0.72rem; color: var(--fs-muted); margin: -0.2rem 0 0; }
+.owner { font-size: 0.8rem; color: var(--fs-accent-text, var(--fs-accent)); margin: 0.2rem 0 0; }
 .list ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.25rem; }
 .pick { width: 100%; text-align: left; background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 0.4rem 0.5rem; color: var(--fs-text);
   display: flex; flex-direction: column; font-size: 0.85rem; small { color: var(--fs-muted); } }
@@ -220,6 +227,7 @@ export class StrategiesPage {
   readonly market = inject(MarketState);
   readonly agent = inject(AgentSession);
   private readonly api = inject(MarketService);
+  private readonly route = inject(ActivatedRoute);
 
   readonly w = W;
   readonly hp = H_PRICE;
@@ -229,6 +237,7 @@ export class StrategiesPage {
   readonly now = nowText;
 
   readonly catalog = signal<StrategyCatalog | null>(null);
+  readonly personas = signal<Persona[]>([]);
   readonly draft = signal<StrategyDef | null>(null);
   /** The id of the strategy shown: a preset id, "custom:<n>", or null for an unsaved one. */
   readonly draftId = signal<string | null>(null);
@@ -247,6 +256,8 @@ export class StrategiesPage {
     const id = this.draftId();
     return id?.startsWith('custom:') ? Number(id.slice(7)) : null;
   });
+  readonly groups = computed(() => groupPresets(this.catalog()?.presets ?? [], this.personas()));
+  readonly owner = computed(() => (this.draft() && this.isPreset() ? ownerLine(this.draft()!, this.personas()) : ''));
   readonly words = computed(() => (this.draft() ? describeStrategy(this.draft()!) : []));
   readonly blocked = computed(() => (this.draft() && !this.isPreset() ? problems(this.draft()!) : []));
 
@@ -272,6 +283,7 @@ export class StrategiesPage {
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.request?.unsubscribe());
+    this.api.getPersonas().subscribe({ next: c => this.personas.set(c.personas), error: () => {} });
     this.reload(true);
     // A new instrument re-runs the strategy on show, so the picture follows the symbol.
     effect(() => {
@@ -284,7 +296,12 @@ export class StrategiesPage {
     this.api.getStrategies().subscribe({
       next: c => {
         this.catalog.set(c);
-        if (selectFirst && c.presets.length) this.choose(c.presets[0], c.presets[0].id!);
+        if (selectFirst && c.presets.length) {
+          // A link from a character's card can name the strategy to open.
+          const wanted = this.route.snapshot.queryParamMap.get('strategy');
+          const first = c.presets.find(p => p.id === wanted) ?? c.presets[0];
+          this.choose(first, first.id!);
+        }
       },
       error: err => this.error.set(describeHttpError(err)),
     });

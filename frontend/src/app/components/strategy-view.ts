@@ -3,7 +3,7 @@
  * under node --test; the rules themselves run on the server (internal/strategy).
  */
 import type {
-  StrategyComparison, StrategyCondition, StrategyDef, StrategyLevel, StrategyOperand, StrategyOperandType, StrategyRunResult, StrategyTrade,
+  Persona, StrategyComparison, StrategyCondition, StrategyDef, StrategyLevel, StrategyOperand, StrategyOperandType, StrategyRunResult, StrategyTrade,
 } from '../models';
 
 export const FIB_RATIOS = [0.236, 0.382, 0.5, 0.618, 0.65, 0.786, 0.886, 1, 1.272, 1.414, 1.618, 2, 2.618];
@@ -227,4 +227,33 @@ export function strategyPrompt(r: StrategyRunResult): string {
     `${s.trades} trades, ${s.win_rate_pct.toFixed(0)}% winners, profit factor ${s.profit_factor ?? 'n/a'}, average ${s.avg_r ?? 'n/a'} R, in the market ${s.exposure_pct.toFixed(0)}% of days.`,
   ];
   return 'Assess this backtest in under 200 words. Use only the figures below and do not add numbers of your own. Say whether the trade count supports any conclusion, what could be overfitted, and what to test next. This is research, not advice.\n\n' + lines.join('\n');
+}
+
+export interface PresetGroup { key: string; label: string; note?: string; items: StrategyDef[] }
+
+/**
+ * The built-in strategies in sections: the Fibonacci ones first, then one
+ * section per character that has rule strategies, in the catalogue's order.
+ * A strategy whose character is unknown still shows, under "Other".
+ */
+export function groupPresets(presets: StrategyDef[], personas: Persona[]): PresetGroup[] {
+  const groups: PresetGroup[] = [];
+  const fib = presets.filter(p => p.family === 'fibonacci');
+  if (fib.length) groups.push({ key: 'fibonacci', label: 'Fibonacci', items: fib });
+  const owned = new Set<string>();
+  for (const p of personas) {
+    const items = presets.filter(s => s.family === 'persona' && s.persona === p.id);
+    if (!items.length) continue;
+    items.forEach(s => owned.add(s.id ?? ''));
+    groups.push({ key: p.id, label: p.name, note: `${p.archetype} (fictional character)`, items });
+  }
+  const rest = presets.filter(s => s.family !== 'fibonacci' && !owned.has(s.id ?? ''));
+  if (rest.length) groups.push({ key: 'other', label: 'Other', items: rest });
+  return groups;
+}
+
+/** The character a strategy belongs to, for the heading of its panel. */
+export function ownerLine(s: StrategyDef, personas: Persona[]): string {
+  const p = s.persona ? personas.find(x => x.id === s.persona) : undefined;
+  return p ? `${p.name}'s strategy · a fictional character following ${p.archetype.replace(/^The /, '').replace(/\.$/, '')}` : '';
 }

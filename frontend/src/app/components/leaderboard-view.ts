@@ -16,6 +16,7 @@ export const FLAG_LABELS: Record<string, string> = {
 /** Which flow playbook automates a strategy. */
 export const STRATEGY_PLAYBOOK: Record<string, string> = {
   best: 'top10-buy-now', value: 'value-bargains', growth: 'garp-growth', momentum: 'momentum-leaders', quality: 'top10-buy-now', dip: 'quality-dip',
+  owner_compounder: 'owner-compounders', teacher_defensive: 'teacher-defensive', pickerupper_garp: 'pickerupper-garp',
 };
 
 export function scoreTone(score: number | undefined): 'pos' | 'neg' | 'mid' {

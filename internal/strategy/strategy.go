@@ -96,7 +96,8 @@ type Strategy struct {
 	ID          string      `json:"id,omitempty"`
 	Name        string      `json:"name"`
 	Description string      `json:"description,omitempty"`
-	Family      string      `json:"family,omitempty"` // "fibonacci" for the built-in ones
+	Family      string      `json:"family,omitempty"`  // "fibonacci" or "persona" for the built-in ones
+	Persona     string      `json:"persona,omitempty"` // the character whose strategy this is (built-in only)
 	Direction   string      `json:"direction"`
 	SwingBars   int         `json:"swing_bars,omitempty"`  // bars each side that confirm a swing, default 5
 	MinLegATR   float64     `json:"min_leg_atr,omitempty"` // smallest swing leg, in ATRs, default 2

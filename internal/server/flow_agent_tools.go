@@ -30,7 +30,7 @@ var flowAgentToolCatalog = []string{
 	"calculate_dcf", "calculate_wacc", "calculate_roic", "search_web",
 	// Investor tools that read public data. The wealth plan and the paper
 	// portfolio belong to one person and are not grantable to a flow's agent.
-	"get_leaderboard", "run_strategy_backtest", "get_insider_activity", "get_macro_regime", "get_corporate_events",
+	"get_leaderboard", "run_strategy_backtest", "run_rule_strategy", "get_insider_activity", "get_macro_regime", "get_corporate_events",
 }
 
 const (

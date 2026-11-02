@@ -1481,6 +1481,10 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 		}
 		if n.Persona != "" {
 			systemPrompt = persona.SystemPrompt(systemPrompt, n.Persona)
+			if len(n.Tools) == 0 {
+				// The character's prompt tells it to run its strategies; without a grant it cannot.
+				systemPrompt += "\nYou have no tools in this run. Ignore any instruction to run a tool or strategy; judge only from the input and say which of your tests the input cannot support."
+			}
 		}
 		options := flowAgentOptions(n, systemPrompt)
 		timeout := n.TimeoutSeconds

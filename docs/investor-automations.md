@@ -22,6 +22,9 @@ schedule; other users get an Output node and run the flow manually.
 | News catalyst digest | News headlines → Only new → agent groups catalysts and risks → Notify | Every 4 h |
 | Quality & value screen | Fundamentals → Screen growth, margin, P/E → table → grounded memo bullets | Weekly |
 | Top 10 buy-now leaderboard | Leaderboard (US mega caps, *Best buy now*, top 10) → table → grounded memo per pick | Daily |
+| Ashgrove: compounders at a fair price | Leaderboard `owner_compounder` → Screen → table → agent memo as the character Walter Ashgrove → Notify | Weekly |
+| Holm: defensive value | Leaderboard `teacher_defensive` → Screen → table → memo as Bernhard Holm → Notify | Weekly |
+| Fairbanks: growth at a reasonable price | Leaderboard `pickerupper_garp` → Screen → table → memo as Marty Fairbanks → Notify | Weekly |
 | New leaderboard entrants | Leaderboard top 10 → Only new (14 days per company) → table → Notify | Daily |
 | Cheap & solid bargains | Leaderboard (US dividend & value, *Cheap & solid*) → Screen `pe_ttm < 20`, margin, trend, growing revenue → table → value-trap memo | Weekly |
 | Growth at a reasonable price | Leaderboard (US technology, *Growth*) → Screen revenue growth ≥ 10% and `peg < 2` → table → memo | Weekly |

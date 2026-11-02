@@ -479,6 +479,7 @@ export type Stance = 'fits' | 'partly' | 'does_not_fit' | 'insufficient_data';
 export interface Persona {
   id: string; name: string; tagline: string; archetype: string; horizon: string;
   principles: string[]; checks: string[]; avoids: string[]; voice: string; tools: string[]; caveat?: string;
+  strategies?: { kind: 'leaderboard' | 'rules'; id: string; why: string }[];
 }
 export interface PersonaCatalog { personas: Persona[]; stances: Stance[]; max_team: number }
 /** One event of a team run, as streamed by POST /api/ai/team. */
@@ -486,14 +487,13 @@ export interface TeamEvent {
   type: 'member_start' | 'member_done' | 'delta' | 'tool_start' | 'tool_result' | 'notice' | 'error' | 'done' | string;
   agent?: string; name?: string; content?: string; result?: string; tool_error?: string; error?: string; stance?: string;
 }
-
 export type StrategyOperandType = 'price' | 'const' | 'ema' | 'sma' | 'rsi' | 'atr' | 'highest' | 'lowest' | 'fib_retr' | 'fib_ext' | 'swing_high' | 'swing_low';
 export interface StrategyOperand { type: StrategyOperandType; field?: string; period?: number; ratio?: number; value?: number }
 export type StrategyComparison = '>' | '>=' | '<' | '<=' | 'crosses_above' | 'crosses_below';
 export interface StrategyCondition { left: StrategyOperand; op: StrategyComparison; right: StrategyOperand }
 export interface StrategyLevel { of: StrategyOperand; atr?: number }
 export interface StrategyDef {
-  id?: string; name: string; description?: string; family?: string; direction: 'long' | 'short';
+  id?: string; name: string; description?: string; family?: string; persona?: string; direction: 'long' | 'short';
   swing_bars?: number; min_leg_atr?: number;
   entry: StrategyCondition[]; exit?: StrategyCondition[]; stop?: StrategyLevel | null; target?: StrategyLevel | null;
   max_bars?: number; sizing: { mode: 'fixed_pct' | 'risk_pct'; value: number };
@@ -516,6 +516,7 @@ export interface StrategyRunResult {
     leg_low?: number; leg_high?: number; leg_low_date?: string; leg_high_date?: string; levels?: { label: string; ratio: number; price: number }[] };
 }
 export interface StrategyRunRequest { strategy_id?: string; definition?: StrategyDef; symbol: string; provider?: string; range: '3Y' | '5Y' | '10Y'; cost_bps: number }
+
 export type WorldRole = 'benefits' | 'hurt' | 'mixed';
 export interface WorldExposure { kind: 'sector' | 'commodity' | 'macro'; name: string; role: WorldRole; why: string }
 export interface WorldHeadline { title: string; url: string; source?: string; published?: number; age?: string; summary?: string; via: string; themes?: string[] }

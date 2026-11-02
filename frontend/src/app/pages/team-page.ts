@@ -1,4 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, untracked } from '@angular/core';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 
@@ -17,7 +18,7 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
 @Component({
   selector: 'fs-team-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SymbolSearchComponent, NgTemplateOutlet],
+  imports: [SymbolSearchComponent, NgTemplateOutlet, RouterLink],
   template: `
 <div class="fs-page research-container">
   <header class="fs-page-header">
@@ -40,6 +41,21 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
         </button>
       }
     </div>
+    @if (team.chosen().length) {
+      <details class="strat">
+        <summary>Strategies the team will run</summary>
+        <ul>
+          @for (p of team.chosen(); track p.id) {
+            @for (st of p.strategies ?? []; track st.id) {
+              <li><strong>{{ p.name }}</strong> · {{ st.kind === 'rules' ? 'rules on one instrument' : 'ranking' }}:
+                @if (st.kind === 'rules') { <a routerLink="/strategies" [queryParams]="{ strategy: st.id }">{{ st.id }}</a> } @else { <code>{{ st.id }}</code> }
+                <span class="muted"> {{ st.why }}</span></li>
+            }
+          }
+        </ul>
+        <p class="muted">Each character runs its strategies with real data before it answers, and cites the trade count and warnings.</p>
+      </details>
+    }
     <label class="q">Question
       <textarea class="form-control" rows="2" maxlength="4000" [value]="team.question()" (input)="team.question.set($any($event.target).value)" [attr.aria-label]="'Question for the team'"></textarea>
     </label>
@@ -105,6 +121,7 @@ h2 { font-size: 1rem; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; al
 .member small, .arch { color: var(--fs-muted); font-size: 0.78rem; }
 .member:hover:not(:disabled) { background: var(--fs-surface-3); }
 .member[aria-pressed='true'] { border-color: var(--fs-accent); background: var(--fs-accent-soft); }
+.strat { font-size: 0.85rem; summary { cursor: pointer; color: var(--fs-muted); } ul { margin: 0.4rem 0; padding-left: 1.1rem; display: grid; gap: 0.25rem; } }
 .q { display: grid; gap: 0.25rem; font-size: 0.8rem; color: var(--fs-muted); }
 .run-bar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
 .check { display: flex; gap: 0.4rem; align-items: center; font-size: 0.85rem; }
