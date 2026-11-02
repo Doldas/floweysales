@@ -10,7 +10,7 @@ import { MarketService, describeHttpError } from '../services';
 import type { LeaderboardOption, LeaderboardResponse, LeaderboardRow } from '../models';
 import { LEADERBOARD_FACTORS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES } from './investor-nodes';
 import { BacktestPanelComponent } from './backtest-panel';
-import { FACTOR_LABELS, STRATEGY_PLAYBOOK, flagList, leaderboardPrompt, num, pct, reasonList, scoreTone } from './leaderboard-view';
+import { FACTOR_LABELS, STRATEGY_PLAYBOOK, alternativeList, flagList, leaderboardPrompt, num, pct, reasonList, scoreTone } from './leaderboard-view';
 
 const WATCHLIST = 'watchlist';
 const STORE_KEY = 'fs.leaderboard';
@@ -118,12 +118,20 @@ const STORE_KEY = 'fs.leaderboard';
                 <td class="why">
                   @for (reason of reasons(r); track reason) { <span class="reason">{{ reason }}</span> }
                   @for (flag of flags(r); track flag.id) { <span class="fs-status is-warning no-dot flag">{{ flag.label }}</span> }
+                  @if (r.confidence) { <span class="reason">Confidence: {{ r.confidence }}. {{ r.confidence_note }}</span> }
+                  @for (alt of alternatives(r); track alt) { <span class="reason">Against: {{ alt }}</span> }
                 </td>
               </tr>
             }
           </tbody>
         </table>
       </div>
+      <p class="board-sub mb-0 px-3 pt-2" data-testid="leaderboard-disclaimer">
+        {{ d.provenance?.disclaimer ?? 'Research suggestion, not personalized financial advice. Scores are percentiles within this list, not predictions.' }}
+        @if (d.provenance; as p) {
+          <span class="text-nowrap">Method {{ p.methodology.version }}/{{ p.methodology.hash }} · data {{ p.inputs_hash }} · prices {{ p.price_dates.oldest }} to {{ p.price_dates.newest }}</span>
+        }
+      </p>
       <div class="board-foot">
         @if (d.rows.length > 10) {
           <button type="button" class="btn btn-sm btn-ghost" (click)="showAll.set(!showAll())" [attr.aria-expanded]="showAll()">
@@ -278,6 +286,7 @@ export class LeaderboardComponent {
   tone(score: number | undefined): string { return scoreTone(score); }
   reasons(row: LeaderboardRow): string[] { return reasonList(row); }
   flags(row: LeaderboardRow) { return flagList(row); }
+  alternatives(row: LeaderboardRow): string[] { return alternativeList(row); }
 
   private save(): void {
     try { localStorage.setItem(STORE_KEY, JSON.stringify({ universe: this.universe(), strategy: this.strategy() })); } catch { /* ignore */ }
