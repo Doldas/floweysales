@@ -68,7 +68,8 @@ func (s engineSource) Leaderboard(ctx context.Context, universe, strategy, symbo
 		}
 	}
 	return map[string]any{"universe": universe, "strategy": strat.ID, "as_of": asOf, "rows": ranked, "unranked": splitLeaderboardRows(rows),
-		"note": "Scores are 0-100 percentiles within this list from provider data, not predictions."}, nil
+		"provenance": leaderboardProvenance(strat, universe, list, rows),
+		"note":       leaderboardDisclaimer}, nil
 }
 
 func (s engineSource) StrategyBacktest(ctx context.Context, universe, strategy string, top, years int) (any, error) {
