@@ -165,6 +165,7 @@ type Engine struct {
 
 	integrationMu     sync.Mutex
 	webSearchProvider string
+	secContact        string // saved SEC User-Agent, empty when the environment default is used
 	webSearchAPIKey   string
 	aiMu              sync.Mutex
 	aiBaseURL         string

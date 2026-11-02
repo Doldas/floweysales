@@ -14,6 +14,7 @@ import (
 	"os"
 	"strings"
 
+	"floweysales/internal/sec"
 	"floweysales/internal/storage"
 )
 
@@ -61,7 +62,7 @@ func openAPISecret(kind string, data []byte) (string, error) {
 
 // RestoreAPISecrets is called during normal AI config restoration at startup.
 func (e *Engine) RestoreAPISecrets(ctx context.Context) error {
-	for _, kind := range []string{"ai", "web_search"} {
+	for _, kind := range []string{"ai", "web_search", "sec"} {
 		entry, err := e.db.GetAPIIntegrationSecret(ctx, kind)
 		if storage.IsMissingAPIIntegration(err) {
 			continue
@@ -73,10 +74,13 @@ func (e *Engine) RestoreAPISecrets(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("%s credential restoration: %w", kind, err)
 		}
-		if kind == "ai" {
+		switch kind {
+		case "ai":
 			base, _, model := e.aiDefaults()
 			e.ConfigureAI(base, secret, model)
-		} else {
+		case "sec":
+			e.setSECContact(secret)
+		default:
 			e.integrationMu.Lock()
 			e.webSearchProvider = entry.Provider
 			e.webSearchAPIKey = registeredSecret(secret)
@@ -84,6 +88,18 @@ func (e *Engine) RestoreAPISecrets(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// setSECContact makes the SEC client identify itself with the saved contact;
+// an empty contact goes back to SEC_USER_AGENT from the environment.
+func (e *Engine) setSECContact(userAgent string) {
+	e.integrationMu.Lock()
+	e.secContact = userAgent
+	e.integrationMu.Unlock()
+	if userAgent == "" {
+		userAgent = os.Getenv("SEC_USER_AGENT")
+	}
+	sec.Production().SetUserAgent(userAgent)
 }
 func (e *Engine) registerIntegrationSettingsRoutes() {
 	e.mux.HandleFunc("GET /api/admin/integrations", func(w http.ResponseWriter, r *http.Request) {
@@ -95,11 +111,20 @@ func (e *Engine) registerIntegrationSettingsRoutes() {
 		e.integrationMu.Lock()
 		provider := e.webSearchProvider
 		webHasKey := e.webSearchAPIKey != ""
+		secSaved := e.secContact
 		e.integrationMu.Unlock()
+		secSource := "none"
+		switch ua := sec.Production().UserAgentValue(); {
+		case secSaved != "":
+			secSource = "saved"
+		case strings.Contains(ua, "@"):
+			secSource = "environment"
+		}
 		writeJSON(w, 200, map[string]any{
 			"encryption_ready": err == nil,
 			"ai":               map[string]any{"has_key": aiKey != ""},
 			"web_search":       map[string]any{"provider": provider, "has_key": webHasKey},
+			"sec":              map[string]any{"configured": secSource != "none", "source": secSource, "contact": secSaved},
 		})
 	})
 	e.mux.HandleFunc("PUT /api/admin/integrations/{kind}", func(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +132,7 @@ func (e *Engine) registerIntegrationSettingsRoutes() {
 			return
 		}
 		kind := r.PathValue("kind")
-		if kind != "ai" && kind != "web_search" {
+		if kind != "ai" && kind != "web_search" && kind != "sec" {
 			writeJSON(w, 404, map[string]string{"error": "Unknown integration"})
 			return
 		}
@@ -120,6 +145,7 @@ func (e *Engine) registerIntegrationSettingsRoutes() {
 		var body struct {
 			APIKey   string `json:"api_key"`
 			Provider string `json:"provider"`
+			Contact  string `json:"contact"`
 		}
 		dec := json.NewDecoder(r.Body)
 		dec.DisallowUnknownFields()
@@ -129,6 +155,25 @@ func (e *Engine) registerIntegrationSettingsRoutes() {
 		}
 		if err := dec.Decode(new(any)); err != io.EOF {
 			writeJSON(w, 400, map[string]string{"error": "Unexpected request body content"})
+			return
+		}
+		if kind == "sec" {
+			userAgent, err := sec.ContactUserAgent(body.Contact)
+			if err != nil {
+				writeJSON(w, 400, map[string]string{"error": err.Error()})
+				return
+			}
+			encrypted, err := sealAPISecret(kind, userAgent)
+			if err != nil {
+				writeJSON(w, 503, map[string]string{"error": "Credential encryption unavailable"})
+				return
+			}
+			if err := e.db.SaveAPIIntegrationSecret(r.Context(), kind, "sec_edgar", encrypted); err != nil {
+				writeJSON(w, 503, map[string]string{"error": "Unable to save the SEC contact"})
+				return
+			}
+			e.setSECContact(userAgent)
+			writeJSON(w, 200, map[string]any{"saved": true, "contact": userAgent})
 			return
 		}
 		body.APIKey = strings.TrimSpace(body.APIKey)
@@ -168,7 +213,7 @@ func (e *Engine) registerIntegrationSettingsRoutes() {
 			return
 		}
 		kind := r.PathValue("kind")
-		if kind != "ai" && kind != "web_search" {
+		if kind != "ai" && kind != "web_search" && kind != "sec" {
 			writeJSON(w, 404, map[string]string{"error": "Unknown integration"})
 			return
 		}
@@ -176,10 +221,13 @@ func (e *Engine) registerIntegrationSettingsRoutes() {
 			writeJSON(w, 503, map[string]string{"error": "Unable to remove credential"})
 			return
 		}
-		if kind == "ai" {
+		switch kind {
+		case "ai":
 			base, _, model := e.aiDefaults()
 			e.ConfigureAI(base, "", model)
-		} else {
+		case "sec":
+			e.setSECContact("")
+		default:
 			e.integrationMu.Lock()
 			e.webSearchProvider = ""
 			e.webSearchAPIKey = ""

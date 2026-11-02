@@ -1,6 +1,8 @@
 # SEC EDGAR filing provenance (#2)
 
-Configure `SEC_USER_AGENT="FloweySales Research you@your-domain.example"` on the Go server and MCP process. SEC explicitly asks for an identifying User-Agent contact and limits fair-use programmatic traffic; this adapter serializes to <=2 requests/second per process and caches the SEC ticker/CIK mapping for one day.
+Give the SEC a contact: a SYS_ADMIN can enter a **contact email under Settings → Integrations → SEC EDGAR contact** (stored encrypted, takes effect at once, and an address alone is sent as `FloweySales Research <email>`), or set `SEC_USER_AGENT="FloweySales Research you@your-domain.example"` on the Go server and MCP process. A contact saved in Settings takes precedence over the environment. SEC explicitly asks for an identifying User-Agent contact and limits fair-use programmatic traffic; this adapter serializes to <=2 requests/second per process and caches the SEC ticker/CIK mapping for one day.
+
+`get_sec_section` / `GET /api/sec/section` take the form (`10-K`, `10-Q`, `8-K`) and an item number: 10-K items 1, 1A, 2, 7 (MD&A), 7A, 8 (financial statements), 9A; 10-Q items 1 (financial statements), 2 (MD&A), 3, 4; 8-K items 1.01, 2.02, 5.02, 7.01, 8.01, 9.01. Spellings such as `Item 7`, `7.0` and `7a` are normalised, and an unsupported item lists what is supported.
 
 **Use `GET /api/sec/filings?symbol=NVDA` or `get_sec_filings`** for accession, 10-K/10-Q/8-K filings, filing dates, report-period end dates and official archive document URLs. **Use `GET /api/sec/facts?symbol=NVDA` or `get_sec_facts`** for XBRL concepts in SEC filings including revenue, net income, operating income, cash flow, capex, cash, assets, liabilities, diluted EPS and diluted shares when the filed taxonomy exposes them.
 
