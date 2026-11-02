@@ -6,7 +6,7 @@ import { FormsModule } from '@angular/forms';
 
 interface AIConfig {base_url:string;model:string;max_steps:number;max_tool_calls:number;configured:boolean}
 interface ModelEntry {id:number;model:string;label:string}
-interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_search:{provider:string;has_key:boolean}}
+interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_search:{provider:string;has_key:boolean};sec?:{configured:boolean;source:'saved'|'environment'|'none';contact:string}}
 
 @Component({
  selector:'fse-api-settings', host:{class:'fs-native-forms'},
@@ -79,7 +79,19 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
      <button class="btn btn-sm btn-primary" [disabled]="busy()||!encryptionReady()||!webKey().trim()" (click)="saveKey('web_search')">Save provider and encrypted key</button>
      <button class="btn btn-sm btn-outline-secondary" [disabled]="busy()||!webKeySaved()" (click)="deleteKey('web_search')">Remove key</button>
     </div>
-    <p class="muted">Provider credentials are configured here for upcoming web-search nodes. Crawling public HTML pages does not require a search API key. Search execution is not yet implemented by this settings change.</p>
+    <p class="muted">Used by the research agent's web search and the Flow Studio web search node. Crawling public HTML pages does not require a search API key.</p>
+   </div>
+   <div class="card">
+    <h3>SEC EDGAR contact</h3>
+    <p>Status: <strong>{{secStatus()}}</strong></p>
+    <label>Contact email
+     <input type="email" autocomplete="off" [ngModel]="secContact()" (ngModelChange)="secContact.set($event)" maxlength="200" placeholder="you@example.com">
+    </label>
+    <div class="actions">
+     <button class="btn btn-sm btn-primary" [disabled]="busy()||!encryptionReady()||!secContact().trim()" (click)="saveSec()">Save contact</button>
+     <button class="btn btn-sm btn-outline-secondary" [disabled]="busy()||secSource()!=='saved'" (click)="deleteSec()">Remove saved contact</button>
+    </div>
+    <p class="muted">The SEC requires every client to identify itself with a real contact email. Without it the filing tools (SEC sections, filings, insider activity and the SEC filings flow node) are refused. An address alone is sent as "FloweySales Research your@email". Setting SEC_USER_AGENT on the server also works; a contact saved here takes precedence.</p>
    </div>
   </div>
   } @else if(tab()==='plugins'){
@@ -123,6 +135,9 @@ export class ApiSettingsComponent{
  readonly webProvider=signal('brave');
  readonly webKey=signal('');
  readonly webKeySaved=signal(false);
+ readonly secContact=signal('');
+ readonly secSource=signal<'saved'|'environment'|'none'>('none');
+ readonly secStatus=()=>this.secSource()==='saved'?'Configured here':this.secSource()==='environment'?'Configured on the server (SEC_USER_AGENT)':'Not configured';
  readonly models=signal<ModelEntry[]>([]);
  readonly newModel=signal('');
  readonly newLabel=signal('');
@@ -146,6 +161,8 @@ export class ApiSettingsComponent{
    this.aiKeySaved.set(integrations.ai.has_key);
    this.webKeySaved.set(integrations.web_search.has_key);
    this.webProvider.set(integrations.web_search.provider||'brave');
+   this.secSource.set(integrations.sec?.source||'none');
+   this.secContact.set(integrations.sec?.contact?.replace(/^FloweySales Research /,'')||'');
    this.models.set(entries.models||[]);
   }catch(e){this.message.set('Unable to load API settings: '+String(e))}
  }
@@ -177,6 +194,23 @@ export class ApiSettingsComponent{
    if(kind==='ai'){this.aiKey.set('');this.aiKeySaved.set(false)}
    else{this.webKey.set('');this.webKeySaved.set(false)}
    this.message.set('Credential removed.');
+  });
+ }
+ async saveSec(){
+  const contact=this.secContact().trim();
+  if(!contact)return;
+  await this.perform(async()=>{
+   await this.api('/api/admin/integrations/sec',{method:'PUT',body:JSON.stringify({contact})});
+   this.secSource.set('saved');
+   this.message.set('SEC contact saved. The filing tools use it from now on.');
+  });
+ }
+ async deleteSec(){
+  if(!confirm('Remove the saved SEC contact? The server\'s SEC_USER_AGENT, if any, is used instead.'))return;
+  await this.perform(async()=>{
+   await this.api('/api/admin/integrations/sec',{method:'DELETE'});
+   await this.refresh();
+   this.message.set('Saved SEC contact removed.');
   });
  }
  async addModel(){

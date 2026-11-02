@@ -59,3 +59,43 @@ func TestSECRequiresContact(t *testing.T) {
 		t.Fatal("must reject unclassified bot")
 	}
 }
+
+func TestContactUserAgent(t *testing.T) {
+	for in, want := range map[string]string{
+		"me@example.com":                 "FloweySales Research me@example.com",
+		"  me@example.com ":              "FloweySales Research me@example.com",
+		"Acme Research dev@acme.example": "Acme Research dev@acme.example",
+	} {
+		if got, err := ContactUserAgent(in); err != nil || got != want {
+			t.Errorf("%q → %q %v", in, got, err)
+		}
+	}
+	for _, in := range []string{"", "no-at-sign", "@example.com", "me@", "me@localhost", "a@b.c\nX-Injected: 1", strings.Repeat("a", 201) + "@x.io"} {
+		if _, err := ContactUserAgent(in); err == nil {
+			t.Errorf("%q accepted", in)
+		}
+	}
+}
+
+func TestSetUserAgentTakesEffectAndAnEmptyOneStaysRefused(t *testing.T) {
+	var seen string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.Header.Get("User-Agent")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+	c := NewClient("")
+	var out map[string]any
+	err := c.get(context.Background(), srv.URL, 1024, &out)
+	if err == nil || !strings.Contains(err.Error(), "Settings → Integrations") {
+		t.Fatalf("an unconfigured client must say where to configure it: %v", err)
+	}
+	c.SetUserAgent("FloweySales Research me@example.com")
+	if err := c.get(context.Background(), srv.URL, 1024, &out); err != nil || seen != "FloweySales Research me@example.com" {
+		t.Fatalf("err=%v user-agent=%q", err, seen)
+	}
+	c.SetUserAgent("")
+	if err := c.get(context.Background(), srv.URL, 1024, &out); err == nil {
+		t.Fatal("clearing the contact must refuse requests again")
+	}
+}

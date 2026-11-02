@@ -25,7 +25,9 @@ const officialTickerURL = "https://www.sec.gov/files/company_tickers_exchange.js
 // Client has a configurable transport for hermetic tests, but production URLs
 // are fixed to SEC hosts. SEC_USER_AGENT must identify an actual contact.
 type Client struct {
-	HTTP      *http.Client
+	HTTP *http.Client
+	// UserAgent identifies the caller to the SEC. Set it at construction or
+	// with SetUserAgent, which is safe while requests are running.
 	UserAgent string
 	DataURL   string
 	TickerURL string
@@ -91,6 +93,43 @@ func NewClient(userAgent string) *Client {
 
 var production = NewClient(os.Getenv("SEC_USER_AGENT"))
 
+// SetUserAgent replaces the contact the client identifies itself with, for
+// example from Settings → Integrations. An empty value is stored as is and
+// makes requests fail with a clear message.
+func (c *Client) SetUserAgent(userAgent string) {
+	c.mu.Lock()
+	c.UserAgent = strings.TrimSpace(userAgent)
+	c.mu.Unlock()
+}
+
+// UserAgentValue is the contact the client currently identifies itself with.
+func (c *Client) UserAgentValue() string { return c.userAgent() }
+
+// userAgent reads the contact under the lock.
+func (c *Client) userAgent() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.UserAgent
+}
+
+// ContactUserAgent turns what a person types into a User-Agent the SEC
+// accepts: an email address alone becomes "FloweySales Research <email>", and
+// anything else must contain an address.
+func ContactUserAgent(input string) (string, error) {
+	input = strings.TrimSpace(input)
+	if input == "" || len(input) > 200 || strings.ContainsAny(input, "\r\n") {
+		return "", errors.New("enter a contact email address, for example you@example.com")
+	}
+	at := strings.Index(input, "@")
+	if at < 1 || at == len(input)-1 || !strings.Contains(input[at:], ".") {
+		return "", errors.New("the contact must contain a real email address, for example you@example.com")
+	}
+	if !strings.ContainsAny(input, " \t") {
+		return "FloweySales Research " + input, nil
+	}
+	return input, nil
+}
+
 func Production() *Client { return production }
 func (c *Client) get(ctx context.Context, endpoint string, limit int, into any) error {
 	raw, err := c.getRaw(ctx, endpoint, limit, "application/json")
@@ -105,8 +144,9 @@ func (c *Client) get(ctx context.Context, endpoint string, limit int, into any) 
 
 // getRaw fetches one SEC document within the rate limit and size bound.
 func (c *Client) getRaw(ctx context.Context, endpoint string, limit int, accept string) ([]byte, error) {
-	if c.UserAgent == "" || !strings.Contains(c.UserAgent, "@") {
-		return nil, errors.New("SEC_USER_AGENT must identify a real contact email for SEC fair access")
+	userAgent := c.userAgent()
+	if userAgent == "" || !strings.Contains(userAgent, "@") {
+		return nil, errors.New("the SEC needs a contact email: a SYS_ADMIN can set it under Settings → Integrations (or SEC_USER_AGENT on the server)")
 	}
 	// Global per-client 2 requests/s maximum, safely under SEC's 10 req/s guidance.
 	c.mu.Lock()
@@ -128,7 +168,7 @@ func (c *Client) getRaw(ctx context.Context, endpoint string, limit int, accept 
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", c.UserAgent)
+	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept", accept)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {

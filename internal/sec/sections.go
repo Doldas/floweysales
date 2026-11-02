@@ -73,6 +73,22 @@ func extractItem(text, item string, max int) (string, bool, error) {
 	}
 	return best, false, nil
 }
+
+// normalizeItem accepts the ways a model or a person writes an item number:
+// "Item 7", "7.0", "7a" all mean what the filing calls 7 or 7A.
+func normalizeItem(item string) string {
+	item = strings.ToUpper(strings.TrimSpace(item))
+	item = strings.TrimSpace(strings.TrimPrefix(item, "ITEM"))
+	item = strings.TrimSuffix(item, ".")
+	for strings.HasSuffix(item, ".0") {
+		item = strings.TrimSuffix(item, ".0")
+	}
+	return item
+}
+
+// itemHelp lists the supported items per form for error messages.
+const itemHelp = "10-K items 1, 1A, 2, 7 (MD&A), 7A, 8 (financial statements), 9A; 10-Q items 1 (financial statements), 2 (MD&A), 3, 4; 8-K items 1.01, 2.02, 5.02, 7.01, 8.01, 9.01"
+
 func allowedItem(form, item string) bool {
 	switch form {
 	case "10-K":
@@ -86,9 +102,9 @@ func allowedItem(form, item string) bool {
 }
 func (c *Client) FilingSection(ctx context.Context, ticker, form, item string) (Section, error) {
 	form = strings.ToUpper(strings.TrimSpace(form))
-	item = strings.ToUpper(strings.TrimSpace(item))
+	item = normalizeItem(item)
 	if !allowedItem(form, item) {
-		return Section{}, errors.New("invalid SEC form/item combination (only 10-K, 10-Q and selected 8-K items supported)")
+		return Section{}, fmt.Errorf("%s item %q is not supported. Supported: %s", form, item, itemHelp)
 	}
 	index, err := c.Filings(ctx, ticker, 30)
 	if err != nil {
@@ -108,7 +124,7 @@ func (c *Client) FilingSection(ctx context.Context, ticker, form, item string) (
 	if err != nil {
 		return Section{}, err
 	}
-	req.Header.Set("User-Agent", c.UserAgent)
+	req.Header.Set("User-Agent", c.userAgent())
 	req.Header.Set("Accept", "text/html")
 	// URLs come exclusively from our SEC submissions parser, never user input.
 	safeClient := *c.HTTP
