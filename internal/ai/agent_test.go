@@ -160,7 +160,7 @@ func TestAgentToolCallBudget(t *testing.T) {
 	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rounds++
 		w.Header().Set("Content-Type", "text/event-stream")
-		_, _ = fmt.Fprintf(w, `data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_%d","type":"function","function":{"name":"get_market_stats","arguments":"{\\"symbol\\":\\"TEST\\"}"}}]}}]}`+"\n\n", rounds)
+		_, _ = fmt.Fprintf(w, `data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_%d","type":"function","function":{"name":"get_market_stats","arguments":"{\"symbol\":\"TEST\"}"}}]}}]}`+"\n\n", rounds)
 		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}` + "\n\n"))
 		_, _ = w.Write([]byte("data: [DONE]\n\n"))
 	}))
@@ -245,5 +245,29 @@ func TestAnswerAfterToolBudgetWithdrawsTools(t *testing.T) {
 	}
 	if len(*bodies) != 3 || strings.Contains((*bodies)[2], `"tools"`) {
 		t.Fatalf("the round after the budget must be offered no tools: %d rounds", len(*bodies))
+	}
+}
+
+func TestLastRoundOfAnAnsweringAgentIsOfferedNoTools(t *testing.T) {
+	srv, bodies := scriptedOpenAI(t,
+		toolCallChunk("c1", "get_price_history"),
+		toolCallChunk("c2", "get_price_history"),
+		`{"choices":[{"delta":{"content":"final"},"finish_reason":"stop"}]}`)
+	var content strings.Builder
+	var errs int
+	err := Run(context.Background(), NewClient(srv.URL, "", "test"), fakeDS{}, []Message{{Role: "user", Content: "x"}},
+		AgentOptions{MaxSteps: 3, MaxToolCalls: 10, AllowedTools: []string{"get_price_history"}, AnswerAfterToolBudget: true}, func(e Event) {
+			switch e.Type {
+			case "delta":
+				content.WriteString(e.Content)
+			case "error":
+				errs++
+			}
+		})
+	if err != nil || content.String() != "final" || errs != 0 {
+		t.Fatalf("content %q errors %d err %v", content.String(), errs, err)
+	}
+	if len(*bodies) != 3 || strings.Contains((*bodies)[2], `"tools"`) || !strings.Contains((*bodies)[0], `"tools"`) {
+		t.Fatalf("only the last round may be offered no tools: %d rounds", len(*bodies))
 	}
 }

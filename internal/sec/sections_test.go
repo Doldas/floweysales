@@ -50,3 +50,21 @@ func TestUnsupportedItemsListWhatIsSupported(t *testing.T) {
 		t.Errorf("10-K 7.0 must be accepted as item 7: %v", err)
 	}
 }
+
+func TestNoBreakSpacesDoNotHideItemHeadings(t *testing.T) {
+	text := cleanFilingHTML([]byte("<p>Item&#160;2.02&#160;Results of Operations</p><p>Revenue grew strongly this quarter on demand, with record cash flow, new customers in every region and a larger backlog than a year ago.</p><p>Item&#160;9.01 Exhibits</p>"))
+	got, _, err := extractItem(text, "2.02", 12000)
+	if err != nil || !strings.Contains(got, "Revenue grew") || strings.Contains(got, "Exhibits") {
+		t.Fatalf("excerpt %q err %v", got, err)
+	}
+}
+
+func TestMissingFormExplainsForeignPrivateIssuers(t *testing.T) {
+	err := noFilingError("10-K", "GIB", []Filing{{Form: "40-F"}, {Form: "6-K"}})
+	if err == nil || !strings.Contains(err.Error(), "foreign private issuer") || !strings.Contains(err.Error(), "40-F") {
+		t.Fatalf("got %v", err)
+	}
+	if err := noFilingError("8-K", "X", []Filing{{Form: "10-K"}}); !strings.Contains(err.Error(), "found: 10-K") {
+		t.Fatalf("got %v", err)
+	}
+}
