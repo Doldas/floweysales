@@ -14,6 +14,11 @@ import {
   OrderResponse,
   CompanyWorld,
   EventsResponse,
+  SavedStrategy,
+  StrategyCatalog,
+  StrategyDef,
+  StrategyRunRequest,
+  StrategyRunResult,
   WorldView,
   PlanProfile,
   TodayBriefing,
@@ -95,6 +100,14 @@ export class MarketService {
     else params['universe'] = p.universe;
     return this.http.get<BacktestResult>('/api/market/backtest', { params });
   }
+
+  /** Built-in Fibonacci strategies and the user's saved ones. */
+  getStrategies(): Observable<StrategyCatalog> { return this.http.get<StrategyCatalog>('/api/strategies'); }
+  createStrategy(def: StrategyDef): Observable<SavedStrategy> { return this.http.post<SavedStrategy>('/api/strategies', def); }
+  updateStrategy(id: number, def: StrategyDef): Observable<SavedStrategy> { return this.http.put<SavedStrategy>(`/api/strategies/${id}`, def); }
+  deleteStrategy(id: number): Observable<void> { return this.http.delete<void>(`/api/strategies/${id}`); }
+  /** Replays a strategy over one instrument's daily bars. Nothing is ordered. */
+  runStrategy(req: StrategyRunRequest): Observable<StrategyRunResult> { return this.http.post<StrategyRunResult>('/api/strategies/backtest', req); }
 
   /** The signed-in user's saved wealth plan, or nulls when none is saved. */
   getPlan(): Observable<PlanResponse> {

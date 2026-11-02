@@ -475,6 +475,35 @@ export interface TodayBriefing {
   };
 }
 
+export type StrategyOperandType = 'price' | 'const' | 'ema' | 'sma' | 'rsi' | 'atr' | 'highest' | 'lowest' | 'fib_retr' | 'fib_ext' | 'swing_high' | 'swing_low';
+export interface StrategyOperand { type: StrategyOperandType; field?: string; period?: number; ratio?: number; value?: number }
+export type StrategyComparison = '>' | '>=' | '<' | '<=' | 'crosses_above' | 'crosses_below';
+export interface StrategyCondition { left: StrategyOperand; op: StrategyComparison; right: StrategyOperand }
+export interface StrategyLevel { of: StrategyOperand; atr?: number }
+export interface StrategyDef {
+  id?: string; name: string; description?: string; family?: string; direction: 'long' | 'short';
+  swing_bars?: number; min_leg_atr?: number;
+  entry: StrategyCondition[]; exit?: StrategyCondition[]; stop?: StrategyLevel | null; target?: StrategyLevel | null;
+  max_bars?: number; sizing: { mode: 'fixed_pct' | 'risk_pct'; value: number };
+}
+export interface SavedStrategy { id: number; updated_at: string; definition: StrategyDef }
+export interface StrategyCatalog { presets: StrategyDef[]; custom: SavedStrategy[]; warnings: Record<string, string> }
+export interface StrategyTrade {
+  entry_date: string; entry_price: number; exit_date: string; exit_price: number; stop?: number; target?: number;
+  bars: number; return_pct: number; r?: number; reason: 'stop' | 'target' | 'signal' | 'max_bars' | 'open';
+}
+export interface StrategyRunMetrics { cagr_pct: number; volatility_pct: number; sharpe: number; sortino: number; max_drawdown_pct: number; calmar: number }
+export interface StrategyRunResult {
+  symbol: string; provider: string; range: string; generated_at: string; strategy: StrategyDef;
+  config: { cost_bps: number }; base_price: number; from: string; to: string;
+  metrics: StrategyRunMetrics; buy_hold: StrategyRunMetrics; total_return_pct: number; buy_hold_return_pct: number;
+  stats: { trades: number; win_rate_pct: number; avg_win_pct: number; avg_loss_pct: number; profit_factor?: number; expectancy_pct: number; avg_r?: number; avg_bars: number; exposure_pct: number };
+  curve: { date: string; close: number; equity: number; in_position?: boolean }[];
+  trades: StrategyTrade[]; warnings: string[];
+  latest: { date: string; close: number; in_position: boolean; entry_signal: boolean; exit_signal: boolean; has_leg: boolean;
+    leg_low?: number; leg_high?: number; leg_low_date?: string; leg_high_date?: string; levels?: { label: string; ratio: number; price: number }[] };
+}
+export interface StrategyRunRequest { strategy_id?: string; definition?: StrategyDef; symbol: string; provider?: string; range: '3Y' | '5Y' | '10Y'; cost_bps: number }
 export type WorldRole = 'benefits' | 'hurt' | 'mixed';
 export interface WorldExposure { kind: 'sector' | 'commodity' | 'macro'; name: string; role: WorldRole; why: string }
 export interface WorldHeadline { title: string; url: string; source?: string; published?: number; age?: string; summary?: string; via: string; themes?: string[] }
