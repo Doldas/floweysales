@@ -31,6 +31,7 @@ func TestAllowedAPI(t *testing.T) {
 		{identity.RoleUser, http.MethodPost, "/api/plugin-tools/se-tax/k4", true},
 		{identity.RoleUser, http.MethodDelete, "/api/plugin-tools/se-tax/k4", false},
 		{identity.RoleUser, http.MethodGet, "/api/admin/plugins", false},
+		{identity.RoleUser, http.MethodPut, "/api/admin/plugins/fred/env/FRED_API_KEY", false},
 		{identity.RoleUser, http.MethodGet, "/api/portfolio/analytics", false},
 		{identity.RoleUser, http.MethodPost, "/api/trading/size", false},
 		{identity.RoleSysAdmin, http.MethodGet, "/api/portfolio/analytics", true},

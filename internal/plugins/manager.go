@@ -69,6 +69,8 @@ type Manager struct {
 	installMu sync.Mutex // serializes install, update and uninstall
 
 	mu        sync.Mutex
+	savedMu   sync.RWMutex
+	saved     map[string]string          // values entered in Settings, behind environment and config.properties
 	installed map[string]InstalledPlugin // by plugin id
 	procs     map[string]*process
 	failures  map[string]startFailure
@@ -116,7 +118,7 @@ func Open(cfg Config) (*Manager, error) {
 		return nil, fmt.Errorf("create plugin directory: %w", err)
 	}
 	m := &Manager{cfg: cfg, store: store, http: client, installed: map[string]InstalledPlugin{},
-		procs: map[string]*process{}, failures: map[string]startFailure{}}
+		saved: map[string]string{}, procs: map[string]*process{}, failures: map[string]startFailure{}}
 	raw, err := os.ReadFile(m.statePath())
 	switch {
 	case errors.Is(err, os.ErrNotExist):
@@ -209,10 +211,7 @@ func (m *Manager) env(manifest *Manifest) (env []string, missing []string) {
 		return env, nil
 	}
 	for _, e := range manifest.Env {
-		value := ""
-		if m.cfg.LookupEnv != nil {
-			value = m.cfg.LookupEnv(e.Name)
-		}
+		value, _ := m.lookup(e.Name)
 		if value == "" {
 			if e.Required {
 				missing = append(missing, e.Name)
@@ -588,6 +587,67 @@ func (m *Manager) Uninstall(id string) error {
 type EnvStatus struct {
 	EnvVar
 	Configured bool `json:"configured"`
+	// Source is "environment" (environment or config.properties), "saved"
+	// (entered in Settings) or empty.
+	Source string `json:"source,omitempty"`
+}
+
+// lookup resolves a declared variable: environment and config.properties
+// first, then a value saved in Settings.
+func (m *Manager) lookup(name string) (value, source string) {
+	if m.cfg.LookupEnv != nil {
+		if v := m.cfg.LookupEnv(name); v != "" {
+			return v, "environment"
+		}
+	}
+	m.savedMu.RLock()
+	defer m.savedMu.RUnlock()
+	if v := m.saved[name]; v != "" {
+		return v, "saved"
+	}
+	return "", ""
+}
+
+func (m *Manager) envStatus(e EnvVar) EnvStatus {
+	_, source := m.lookup(e.Name)
+	return EnvStatus{EnvVar: e, Configured: source != "", Source: source}
+}
+
+// Declares reports whether an installed plugin declares an environment variable.
+func (m *Manager) Declares(pluginID, name string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	p, ok := m.installed[pluginID]
+	if !ok {
+		return false
+	}
+	for _, e := range p.Manifest.Env {
+		if e.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// SetSaved stores (or, with an empty value, removes) a setting entered in
+// Settings and restarts the plugins that declare it so they pick it up.
+func (m *Manager) SetSaved(name, value string) {
+	m.savedMu.Lock()
+	if value == "" {
+		delete(m.saved, name)
+	} else {
+		m.saved[name] = value
+	}
+	m.savedMu.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for id, p := range m.installed {
+		for _, e := range p.Manifest.Env {
+			if e.Name == name {
+				m.stopLocked(id)
+			}
+		}
+	}
 }
 
 // InstalledStatus is an installed plugin with its runtime state.
@@ -681,7 +741,7 @@ func (m *Manager) Overview() Overview {
 		_, missing := m.env(&p.Manifest)
 		st.Ready = len(missing) == 0
 		for _, e := range p.Manifest.Env {
-			st.Env = append(st.Env, EnvStatus{EnvVar: e, Configured: m.cfg.LookupEnv != nil && m.cfg.LookupEnv(e.Name) != ""})
+			st.Env = append(st.Env, m.envStatus(e))
 		}
 		m.mu.Lock()
 		if proc := m.procs[p.Manifest.ID]; proc != nil {

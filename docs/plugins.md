@@ -61,8 +61,12 @@ In containers: `docker compose exec app /app/floweysales_backend plugins list`.
 | `DEFAULT_MARKET_PROVIDER` | `YAHOO` | Provider used when a request names none. |
 
 Settings a plugin declares (for example `FINNHUB_API_KEY`) are resolved like
-any other key — environment first, then `config.properties` — and passed
-**only to that plugin**. A plugin whose required settings are missing is
+any other key — environment first, then `config.properties`, then a value
+entered under **Settings → Plugins** — and passed **only to that plugin**.
+A value entered in Settings is stored encrypted (it needs
+`FLOWEYSALES_SECRETS_KEY`), is never shown again, and restarts the plugin when
+saved or removed (`PUT`/`DELETE /api/admin/plugins/{id}/env/{name}`, SYS_ADMIN).
+A variable set in the environment cannot be overridden from Settings. A plugin whose required settings are missing is
 listed as *Needs configuration* and its provider reports `enabled: false`.
 
 ## How a plugin runs

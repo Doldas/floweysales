@@ -74,11 +74,21 @@ type View = 'all' | 'installed' | 'available';
       <ul class="env">
        @for (e of i.env; track e.name) {
         <li><i class="bi" [class.bi-check-circle]="e.configured" [class.bi-exclamation-circle]="!e.configured" aria-hidden="true"></i>
-         <code>{{ e.name }}</code> {{ e.configured ? 'configured' : (e.required ? 'required, not set' : 'optional, not set') }}
-         <small>{{ e.description }}</small></li>
+         <code>{{ e.name }}</code> {{ e.configured ? (e.source === 'saved' ? 'configured in Settings' : 'configured in the server environment') : (e.required ? 'required, not set' : 'optional, not set') }}
+         <small>{{ e.description }}</small>
+         @if (e.source !== 'environment') {
+          <form class="envform" (submit)="$event.preventDefault(); saveEnv(row, e.name, value)">
+           <label class="visually-hidden" [for]="'env-' + row.id + '-' + e.name">{{ e.name }}</label>
+           <input #value [id]="'env-' + row.id + '-' + e.name" class="form-control form-control-sm" [type]="e.secret ? 'password' : 'text'" autocomplete="off" spellcheck="false"
+            [placeholder]="e.source === 'saved' ? 'Enter a new value to replace the saved one' : 'Value'" />
+           <button type="submit" class="btn btn-sm btn-primary" [disabled]="busy()">Save</button>
+           @if (e.source === 'saved') { <button type="button" class="btn btn-sm btn-ghost" [disabled]="busy()" (click)="removeEnv(row, e.name)">Remove</button> }
+          </form>
+         }
+        </li>
        }
       </ul>
-      @if (!i.ready) { <p class="muted small">Set the variables in the server environment or config.properties, then restart the backend.</p> }
+      @if (!i.ready) { <p class="muted small">Enter the values above (stored encrypted on the server), or set them in the server environment or config.properties. The plugin restarts when a value is saved.</p> }
      }
      @if (row.trackers.length) { <p class="small">Used by trackers: {{ row.trackers.join(', ') }}</p> }
      @if (i.last_error) { <p class="warning small">{{ i.last_error }}</p> }
@@ -175,6 +185,7 @@ floweysales_backend plugins update</pre>
  .status[data-tone=warn]{border-color:color-mix(in srgb, var(--fs-warn) 55%, transparent);background:var(--fs-warn-soft)}
  .env{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:14px}
  .env i{margin-right:6px}
+ .envform{display:flex;gap:6px;margin:4px 0 0 22px;max-width:520px}
  .env small{display:block;color:var(--fs-muted);margin-left:22px}
  .result{padding:10px 12px;border-left:4px solid var(--fs-accent);background:var(--fs-surface-3)}
  .warning{padding:12px;border-left:4px solid color-mix(in srgb, var(--fs-warn) 55%, transparent);background:var(--fs-warn-soft);color:var(--fs-text)}
@@ -283,6 +294,29 @@ export class PluginSettingsComponent {
 
  async updateAll(): Promise<void> {
   for (const row of this.updatable()) await this.install(row, row.installed?.latest_version);
+ }
+
+ async saveEnv(row: PluginRow, name: string, input: HTMLInputElement): Promise<void> {
+  const value = input.value.trim();
+  if (!value) { this.message.set(`Enter a value for ${name} first.`); return; }
+  await this.changeEnv(row, name, { method: 'PUT', body: JSON.stringify({ value }) }, `${name} was saved and ${row.manifest.name} restarted.`, () => { input.value = ''; });
+ }
+
+ async removeEnv(row: PluginRow, name: string): Promise<void> {
+  if (!confirm(`Remove the saved ${name}?`)) return;
+  await this.changeEnv(row, name, { method: 'DELETE' }, `${name} was removed.`, () => {});
+ }
+
+ private async changeEnv(row: PluginRow, name: string, init: RequestInit, done: string, after: () => void): Promise<void> {
+  this.busy.set(true); this.working.set(row.id); this.message.set('');
+  try {
+   this.overview.set(await this.api<PluginOverview>(`/api/admin/plugins/${encodeURIComponent(row.id)}/env/${encodeURIComponent(name)}`, init));
+   after();
+   this.message.set(done);
+   this.market.refreshProviders();
+   void this.tools.refresh();
+  } catch (e) { this.message.set(String((e as Error).message ?? e)); }
+  finally { this.busy.set(false); this.working.set(''); }
  }
 
  async uninstall(row: PluginRow): Promise<void> {

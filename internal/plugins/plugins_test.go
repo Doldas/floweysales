@@ -614,3 +614,35 @@ func TestManifestToolsAreValidated(t *testing.T) {
 		}
 	}
 }
+
+func TestSavedSettingEnablesPluginAndEnvironmentWins(t *testing.T) {
+	store := newFakeStore(t)
+	store.publish(fakeManifest("1.0.0"), fakeRelease(t, fakeManifest("1.0.0")))
+	key := ""
+	m := openManager(t, store, t.TempDir(), &key)
+	if _, err := m.Install(context.Background(), "fake", "", false); err != nil {
+		t.Fatal(err)
+	}
+	if !m.Declares("fake", "FAKE_API_KEY") || m.Declares("fake", "MYSQL_DSN") || m.Declares("nope", "FAKE_API_KEY") {
+		t.Fatal("Declares must only accept variables the manifest lists")
+	}
+	if caps := m.Providers(); caps[0].Enabled {
+		t.Fatalf("no key yet: %+v", caps)
+	}
+	m.SetSaved("FAKE_API_KEY", "from-settings")
+	if caps := m.Providers(); !caps[0].Enabled {
+		t.Fatalf("a saved key must enable the provider: %+v", caps)
+	}
+	if v, src := m.lookup("FAKE_API_KEY"); v != "from-settings" || src != "saved" {
+		t.Fatalf("%q %q", v, src)
+	}
+	key = "from-env"
+	if v, src := m.lookup("FAKE_API_KEY"); v != "from-env" || src != "environment" {
+		t.Fatalf("environment must win: %q %q", v, src)
+	}
+	key = ""
+	m.SetSaved("FAKE_API_KEY", "")
+	if caps := m.Providers(); caps[0].Enabled {
+		t.Fatalf("removing the saved key must disable it again: %+v", caps)
+	}
+}

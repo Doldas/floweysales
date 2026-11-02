@@ -3,7 +3,7 @@
  * Kept free of Angular dependencies so they can be tested without a DOM or TestBed.
  */
 
-export interface PluginEnvVar { name: string; secret?: boolean; required?: boolean; description: string; configured?: boolean }
+export interface PluginEnvVar { name: string; secret?: boolean; required?: boolean; description: string; configured?: boolean; source?: 'environment' | 'saved' }
 export interface PluginProvider {
   id: string; label: string; official_api: boolean; experimental: boolean; capabilities: string[];
   quote_kind: string; min_poll_seconds: number; cache_ttl_seconds: number; notes: string;

@@ -29,3 +29,21 @@ func (d *Database) DeleteAPIIntegrationSecret(ctx context.Context, kind string) 
 }
 
 func IsMissingAPIIntegration(err error) bool { return err == sql.ErrNoRows }
+
+// ListAPIIntegrationKinds returns the stored integration names with a prefix.
+func (d *Database) ListAPIIntegrationKinds(ctx context.Context, prefix string) ([]string, error) {
+	rows, err := d.db.QueryContext(ctx, "SELECT integration FROM api_integration_secrets WHERE integration LIKE ?", prefix+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			return nil, err
+		}
+		out = append(out, k)
+	}
+	return out, rows.Err()
+}
