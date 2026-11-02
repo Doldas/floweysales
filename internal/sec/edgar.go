@@ -261,8 +261,8 @@ func (c *Client) Filings(ctx context.Context, ticker string, limit int) (Filings
 	if limit < 1 {
 		limit = 8
 	}
-	if limit > 30 {
-		limit = 30
+	if limit > 100 {
+		limit = 100
 	}
 	cik := fmt.Sprintf("%010d", company.CIK)
 	var parsed struct {

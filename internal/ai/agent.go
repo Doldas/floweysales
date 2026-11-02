@@ -3,8 +3,12 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"strings"
+	"time"
 )
 
 // Event is one step of an agent run, streamed to the UI or logged by tests.
@@ -125,14 +129,28 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	own.Notice = func(text string) { emit(Event{Type: "notice", Content: text}) }
 	client = &own
 
-	toolCalls := 0
+	toolCalls, emptyReplies := 0, 0
 	for step := 1; step <= opts.MaxSteps; step++ {
-		assistant, err := client.Complete(ctx, messages, tools, func(d string) {
-			emit(Event{Type: "delta", Content: d})
-		})
+		if step == opts.MaxSteps && step > 1 && opts.AnswerAfterToolBudget && tools != nil {
+			// The last round must be an answer, not another tool call that
+			// the loop would then cut off without one.
+			tools = nil
+			messages = append(messages, Message{Role: "user", Content: "The research budget is used up. Answer now with the results you have, and say what is missing."})
+		}
+		assistant, err := completeWithRetry(ctx, client, &messages, tools, emit)
 		if err != nil {
 			emit(Event{Type: "error", Error: err.Error()})
 			return err
+		}
+		// Arguments that are not valid JSON make most providers reject the
+		// whole conversation on the next request, so they never enter the
+		// history; the model is told what was wrong in the tool reply instead.
+		badArgs := map[string]string{}
+		for i, tc := range assistant.ToolCalls {
+			if a := strings.TrimSpace(tc.Function.Arguments); a != "" && !json.Valid([]byte(a)) {
+				badArgs[tc.ID] = a
+				assistant.ToolCalls[i].Function.Arguments = "{}"
+			}
 		}
 
 		messages = append(messages, assistant)
@@ -142,17 +160,20 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		// used tools on the previous turn, nudge it to produce a final answer
 		// instead of silently ending the conversation.
 		if len(assistant.ToolCalls) == 0 && strings.TrimSpace(assistant.Content) == "" {
-			if step > 1 {
-				messages = append(messages, Message{
-					Role:    "user",
-					Content: "Please provide your final answer based on the tool results.",
-				})
-				continue
+			emptyReplies++
+			if emptyReplies > maxEmptyReplies {
+				err := fmt.Errorf("the model returned an empty reply %d times in a row, even when asked to continue", emptyReplies)
+				emit(Event{Type: "error", Error: err.Error()})
+				return err
 			}
-			// Step 1 with no content and no tools: just finish.
-			emit(Event{Type: "done", Steps: step})
-			return nil
+			nudge := "Please continue: use a tool or give your final answer."
+			if step > 1 {
+				nudge = "Please provide your final answer based on the tool results."
+			}
+			messages = append(messages, Message{Role: "user", Content: nudge})
+			continue
 		}
+		emptyReplies = 0
 
 		if len(assistant.ToolCalls) == 0 {
 			emit(Event{Type: "done", Steps: step})
@@ -178,7 +199,9 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 
 			var result string
 			var err error
-			if granted != nil && !granted[tc.Function.Name] {
+			if bad, isBad := badArgs[tc.ID]; isBad {
+				err = fmt.Errorf("the arguments of this call were not valid JSON (%s). Send the call again with one complete, valid JSON object", clip(bad, 160))
+			} else if granted != nil && !granted[tc.Function.Name] {
 				err = fmt.Errorf("tool %s is not granted to this agent", tc.Function.Name)
 			} else if opts.Execute != nil {
 				result, err = opts.Execute(ctx, tc.Function.Name, tc.Function.Arguments)
@@ -188,7 +211,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 			ev := Event{Type: "tool_result", Name: tc.Function.Name}
 			if err != nil {
 				ev.ToolError = err.Error()
-				if payload, mErr := json.Marshal(map[string]string{"error": err.Error()}); mErr == nil {
+				if payload, mErr := json.Marshal(map[string]string{"error": err.Error(), "hint": toolErrorHint}); mErr == nil {
 					result = string(payload)
 				} else {
 					result = fmt.Sprintf(`{"error":%q}`, err.Error())
@@ -212,4 +235,96 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	emit(Event{Type: "error", Error: fmt.Sprintf("Agent reached the limit of %d model rounds; the task may be incomplete. Continue the conversation to resume.", opts.MaxSteps)})
 	emit(Event{Type: "done", Steps: opts.MaxSteps})
 	return nil
+}
+
+// toolErrorHint travels with every failed tool result so the model reads the
+// error and corrects itself instead of repeating the call or giving up.
+const toolErrorHint = "Read the error, fix the arguments (or pick another tool or source) and try again. If the data is truly unavailable, say so in your answer."
+
+const (
+	// maxModelAttempts is how often one model round is tried before the run
+	// stops with the last error.
+	maxModelAttempts = 3
+	// maxEmptyReplies is how many empty replies in a row are nudged.
+	maxEmptyReplies = 2
+)
+
+// retryDelay is the pause before attempt n+1 (a variable so tests can skip it).
+var retryDelay = func(attempt int) time.Duration { return time.Duration(attempt) * 2 * time.Second }
+
+func clip(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
+}
+
+type failureKind int
+
+const (
+	failPermanent failureKind = iota
+	failTransient             // network, stall, rate limit or server error: same request again
+	failModel                 // the model produced something the endpoint could not parse: tell it
+)
+
+func classifyFailure(err error) failureKind {
+	var status *StatusError
+	text := strings.ToLower(err.Error())
+	if strings.Contains(text, "tool call") || strings.Contains(text, "tool_call") || strings.Contains(text, "invalid character") || strings.Contains(text, "unexpected end of json") {
+		if errors.As(err, &status) && status.Code != 400 && status.Code != 422 && status.Code < 500 {
+			return failPermanent
+		}
+		return failModel
+	}
+	if errors.As(err, &status) {
+		switch {
+		case status.Code == 408 || status.Code == 425 || status.Code == 429 || status.Code >= 500:
+			return failTransient
+		}
+		return failPermanent
+	}
+	if errors.Is(err, errStalled) || strings.Contains(text, "ended before the model finished") || strings.Contains(text, "read stream") {
+		return failTransient
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) || errors.Is(err, io.ErrUnexpectedEOF) || strings.Contains(text, "eof") || strings.Contains(text, "connection") {
+		return failTransient
+	}
+	return failPermanent
+}
+
+// completeWithRetry runs one model round. A transient failure is retried
+// after a pause; a reply the endpoint could not parse (a malformed tool call)
+// is retried after telling the model exactly what went wrong. After
+// maxModelAttempts the last error is returned.
+func completeWithRetry(ctx context.Context, client *Client, messages *[]Message, tools []Tool, emit func(Event)) (Message, error) {
+	var last error
+	for attempt := 1; attempt <= maxModelAttempts; attempt++ {
+		msg, err := client.Complete(ctx, *messages, tools, func(d string) { emit(Event{Type: "delta", Content: d}) })
+		if err == nil {
+			return msg, nil
+		}
+		last = err
+		if ctx.Err() != nil {
+			return Message{}, err
+		}
+		kind := classifyFailure(err)
+		if kind == failPermanent || attempt == maxModelAttempts {
+			break
+		}
+		emit(Event{Type: "notice", Content: fmt.Sprintf("The model call failed (%s). Retrying, attempt %d of %d.", clip(err.Error(), 300), attempt+1, maxModelAttempts)})
+		if kind == failModel {
+			*messages = append(*messages, Message{Role: "user", Content: "Your last reply could not be processed: " + clip(err.Error(), 400) +
+				"\nContinue the task. If you call a tool, send one complete, valid JSON object as its arguments (plain ASCII characters in values, for example 10-Q with a normal hyphen), or answer without a tool."})
+		}
+		select {
+		case <-time.After(retryDelay(attempt)):
+		case <-ctx.Done():
+			return Message{}, ctx.Err()
+		}
+	}
+	if classifyFailure(last) == failPermanent {
+		return Message{}, last
+	}
+	return Message{}, fmt.Errorf("%w (gave up after %d attempts)", last, maxModelAttempts)
 }
