@@ -192,6 +192,23 @@ func TestToolsOnlyManifestNeedsNoProvider(t *testing.T) {
 	}
 }
 
+func TestTaxCapabilityBelongsToAToolsPlugin(t *testing.T) {
+	m := toolsManifest()
+	m.Provider.Capabilities = []string{CapTax}
+	if err := m.Validate(); err != nil {
+		t.Fatalf("tax on a tools plugin must be accepted without a provider id: %v", err)
+	}
+	m.Tools = nil
+	if err := m.Validate(); err == nil {
+		t.Fatal("tax without a tools tab must be rejected")
+	}
+	m = toolsManifest()
+	m.Provider.Capabilities = []string{CapTax, CapQuote}
+	if err := m.Validate(); err == nil {
+		t.Fatal("mixing tax with a market-data capability needs a full provider declaration")
+	}
+}
+
 func TestToolsDeclarationIsValidated(t *testing.T) {
 	cases := map[string]func(*ToolsInfo){
 		"duplicate tool":        func(i *ToolsInfo) { i.Tools = append(i.Tools, i.Tools[0]) },

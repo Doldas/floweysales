@@ -93,7 +93,7 @@ export function pluginStatus(row: PluginRow): { label: string; tone: PluginTone 
 
 const CAPABILITIES: Record<string, string> = {
   quote: 'Quotes', history: 'Price history', search: 'Symbol search',
-  financials: 'Financial statements', research: 'Research data', forum: 'Community posts',
+  financials: 'Financial statements', research: 'Research data', forum: 'Community posts', tax: 'Tax',
 };
 
 /** Human names of declared capabilities, in a stable order. */

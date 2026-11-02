@@ -82,3 +82,7 @@ test('tool labels stand in for capabilities on a tools-only plugin', () => {
   assert.deepEqual(toolLabels({ tools: { tools: [{ id: 'k4', label: 'K4 report' }, { id: 'holdings', label: 'Holdings & cost basis' }] } }), ['K4 report', 'Holdings & cost basis']);
   assert.deepEqual(toolLabels({}), []);
 });
+
+test('tax is a capability label', () => {
+  assert.deepEqual(capabilityLabels(['tax']), ['Tax']);
+});
