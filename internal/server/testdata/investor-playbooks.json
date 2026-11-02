@@ -1949,6 +1949,528 @@
   },
   "note": "Uses the Sweden large caps universe. A company is reported again after 3 days at most."
  },
+ "owner-compounders/admin": {
+  "name": "Ashgrove: compounders at a fair price",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Rank compounders",
+     "universe": "us_mega",
+     "strategy": "owner_compounder",
+     "limit": 25,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "screen",
+     "type": "screen",
+     "label": "Steady and fairly priced",
+     "rule": "quality >= 60 and net_margin_pct >= 12 and not (flags contains \"unprofitable\")",
+     "sort_by": "-score",
+     "limit": 10,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Shortlist",
+     "title": "Compounders at a fair price",
+     "columns": "rank,symbol,score,quality,net_margin_pct,fcf_margin_pct,pe_ttm,volatility_pct,ttm_through",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "Ashgrove memo",
+     "persona": "owner",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. Keep the table at the top. For each company: what the margins say about the business, whether the price looks fair against them, and what you could not judge from these numbers (moat, management, debt history). Research, not a recommendation.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Compounders at a fair price {{date}}",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "screen"
+    },
+    {
+     "from": "screen",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Weekly. The screen is a factor approximation of the patient-owner approach; it cannot see moats or management, and the memo says so. The memo is written by a fictional character."
+ },
+ "owner-compounders/user": {
+  "name": "Ashgrove: compounders at a fair price",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Rank compounders",
+     "universe": "us_mega",
+     "strategy": "owner_compounder",
+     "limit": 25,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "screen",
+     "type": "screen",
+     "label": "Steady and fairly priced",
+     "rule": "quality >= 60 and net_margin_pct >= 12 and not (flags contains \"unprofitable\")",
+     "sort_by": "-score",
+     "limit": 10,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Shortlist",
+     "title": "Compounders at a fair price",
+     "columns": "rank,symbol,score,quality,net_margin_pct,fcf_margin_pct,pe_ttm,volatility_pct,ttm_through",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "Ashgrove memo",
+     "persona": "owner",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. Keep the table at the top. For each company: what the margins say about the business, whether the price looks fair against them, and what you could not judge from these numbers (moat, management, debt history). Research, not a recommendation.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "screen"
+    },
+    {
+     "from": "screen",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Weekly. The screen is a factor approximation of the patient-owner approach; it cannot see moats or management, and the memo says so. The memo is written by a fictional character."
+ },
+ "teacher-defensive/admin": {
+  "name": "Holm: defensive value",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Rank defensive value",
+     "universe": "us_dividend",
+     "strategy": "teacher_defensive",
+     "limit": 25,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "screen",
+     "type": "screen",
+     "label": "Cheap and safe",
+     "rule": "pe_ttm < 15 and net_margin_pct >= 5 and not (flags contains \"shrinking_revenue\")",
+     "sort_by": "-score",
+     "limit": 10,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Shortlist",
+     "title": "Defensive value shortlist",
+     "columns": "rank,symbol,score,pe_ttm,earnings_yield_pct,net_margin_pct,revenue_growth_pct,volatility_pct,ttm_through",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "Holm memo",
+     "persona": "teacher",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. Keep the table at the top. For each company: which of the defensive tests the numbers pass or fail, which tests cannot be run from this data (current ratio, ten-year earnings, dividend record), and the margin of safety if any. Research, not a recommendation.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Defensive value {{date}}",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "screen"
+    },
+    {
+     "from": "screen",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Weekly. Only P/E and margins can be tested here; the memo lists the classic tests it could not run. The memo is written by a fictional character."
+ },
+ "teacher-defensive/user": {
+  "name": "Holm: defensive value",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Rank defensive value",
+     "universe": "us_dividend",
+     "strategy": "teacher_defensive",
+     "limit": 25,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "screen",
+     "type": "screen",
+     "label": "Cheap and safe",
+     "rule": "pe_ttm < 15 and net_margin_pct >= 5 and not (flags contains \"shrinking_revenue\")",
+     "sort_by": "-score",
+     "limit": 10,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Shortlist",
+     "title": "Defensive value shortlist",
+     "columns": "rank,symbol,score,pe_ttm,earnings_yield_pct,net_margin_pct,revenue_growth_pct,volatility_pct,ttm_through",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "Holm memo",
+     "persona": "teacher",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. Keep the table at the top. For each company: which of the defensive tests the numbers pass or fail, which tests cannot be run from this data (current ratio, ten-year earnings, dividend record), and the margin of safety if any. Research, not a recommendation.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "screen"
+    },
+    {
+     "from": "screen",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Weekly. Only P/E and margins can be tested here; the memo lists the classic tests it could not run. The memo is written by a fictional character."
+ },
+ "pickerupper-garp/admin": {
+  "name": "Fairbanks: growth at a reasonable price",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Rank growth",
+     "universe": "us_mega",
+     "strategy": "pickerupper_garp",
+     "limit": 25,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "screen",
+     "type": "screen",
+     "label": "Growth at a fair PEG",
+     "rule": "revenue_growth_pct >= 10 and peg < 1.5 and not (flags contains \"unprofitable\")",
+     "sort_by": "-score",
+     "limit": 10,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Shortlist",
+     "title": "Growth at a reasonable price",
+     "columns": "rank,symbol,score,revenue_growth_pct,eps_growth_pct,pe_ttm,peg,net_margin_pct,ttm_through",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "Fairbanks memo",
+     "persona": "pickerupper",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. Keep the table at the top. For each company: which category it looks like (slow grower, stalwart, fast grower and so on) and why, whether the PEG is reasonable for that category, and what the user should check in the real world that numbers cannot show. Research, not a recommendation.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "notify",
+     "type": "notify",
+     "label": "Email me",
+     "channel": "email",
+     "subject": "Growth at a reasonable price (Fairbanks) {{date}}",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "screen"
+    },
+    {
+     "from": "screen",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "notify"
+    }
+   ]
+  },
+  "note": "Weekly. The memo is written by a fictional character; the screen needs revenue growth of 10%+ and a PEG under 1.5."
+ },
+ "pickerupper-garp/user": {
+  "name": "Fairbanks: growth at a reasonable price",
+  "intervalMinutes": 10080,
+  "graph": {
+   "version": 2,
+   "nodes": [
+    {
+     "id": "start",
+     "type": "trigger",
+     "label": "Start",
+     "x": 40,
+     "y": 160
+    },
+    {
+     "id": "board",
+     "type": "leaderboard",
+     "label": "Rank growth",
+     "universe": "us_mega",
+     "strategy": "pickerupper_garp",
+     "limit": 25,
+     "x": 215,
+     "y": 160
+    },
+    {
+     "id": "screen",
+     "type": "screen",
+     "label": "Growth at a fair PEG",
+     "rule": "revenue_growth_pct >= 10 and peg < 1.5 and not (flags contains \"unprofitable\")",
+     "sort_by": "-score",
+     "limit": 10,
+     "x": 390,
+     "y": 160
+    },
+    {
+     "id": "table",
+     "type": "report_table",
+     "label": "Shortlist",
+     "title": "Growth at a reasonable price",
+     "columns": "rank,symbol,score,revenue_growth_pct,eps_growth_pct,pe_ttm,peg,net_margin_pct,ttm_through",
+     "skip_empty": true,
+     "x": 565,
+     "y": 160
+    },
+    {
+     "id": "memo",
+     "type": "agent",
+     "label": "Fairbanks memo",
+     "persona": "pickerupper",
+     "require_grounding": true,
+     "prompt": "Use only figures that appear in the input data and name the date they are as of. Leaderboard scores are 0–100 percentiles within the ranked universe (value, quality, growth, momentum, timing, risk), not price targets or predictions. Keep the table at the top. For each company: which category it looks like (slow grower, stalwart, fast grower and so on) and why, whether the PEG is reasonable for that category, and what the user should check in the real world that numbers cannot show. Research, not a recommendation.",
+     "x": 740,
+     "y": 160
+    },
+    {
+     "id": "output",
+     "type": "output",
+     "label": "Result",
+     "x": 915,
+     "y": 160
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "board"
+    },
+    {
+     "from": "board",
+     "to": "screen"
+    },
+    {
+     "from": "screen",
+     "to": "table"
+    },
+    {
+     "from": "table",
+     "to": "memo"
+    },
+    {
+     "from": "memo",
+     "to": "output"
+    }
+   ]
+  },
+  "note": "Weekly. The memo is written by a fictional character; the screen needs revenue growth of 10%+ and a PEG under 1.5."
+ },
  "earnings-scored/admin": {
   "name": "Quarterly reports, scored",
   "intervalMinutes": 360,

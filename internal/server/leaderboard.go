@@ -66,6 +66,8 @@ type leaderboardStrategy struct {
 	Label       string             `json:"label"`
 	Description string             `json:"description"`
 	Weights     map[string]float64 `json:"weights"`
+	// Persona names the character whose approach the weights approximate.
+	Persona string `json:"persona,omitempty"`
 }
 
 var leaderboardStrategies = []leaderboardStrategy{
@@ -81,6 +83,15 @@ var leaderboardStrategies = []leaderboardStrategy{
 		Weights: map[string]float64{"quality": 0.5, "growth": 0.2, "risk": 0.2, "value": 0.1}},
 	{ID: "dip", Label: "Quality on a dip", Description: "Profitable companies that pulled back from their high while the long-term trend holds.",
 		Weights: map[string]float64{"timing": 0.35, "quality": 0.3, "value": 0.2, "momentum": 0.15}},
+	{ID: "owner_compounder", Persona: "owner", Label: "Ashgrove: compounders at a fair price",
+		Description: "The patient owner's screen: the highest and steadiest margins first, then a fair price, calm volatility and some growth. A factor approximation; it cannot see moats, management or ten-year records.",
+		Weights:     map[string]float64{"quality": 0.4, "value": 0.3, "risk": 0.15, "growth": 0.15}},
+	{ID: "teacher_defensive", Persona: "teacher", Label: "Holm: defensive value",
+		Description: "The defensive investor's screen: cheap on earnings, profitable, and calm, with little weight on trend or growth. A factor approximation of his tests; it cannot check ten-year earnings or current ratio.",
+		Weights:     map[string]float64{"value": 0.45, "quality": 0.2, "risk": 0.3, "timing": 0.05}},
+	{ID: "pickerupper_garp", Persona: "pickerupper", Label: "Fairbanks: growth at a reasonable price",
+		Description: "The stock-picker's screen: strong growth that is not over-priced (low PEG), with margins and a trend that confirm the story. It cannot see the two-minute story or the shelves.",
+		Weights:     map[string]float64{"growth": 0.35, "value": 0.3, "quality": 0.15, "momentum": 0.15, "risk": 0.05}},
 }
 
 func findLeaderboardStrategy(id string) (leaderboardStrategy, bool) {

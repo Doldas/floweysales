@@ -10,6 +10,7 @@ import (
 	"floweysales/internal/ai"
 	"floweysales/internal/identity"
 	"floweysales/internal/market"
+	"floweysales/internal/strategy"
 )
 
 var _ ai.InvestorSource = engineSource{}
@@ -79,6 +80,55 @@ func (s engineSource) StrategyBacktest(ctx context.Context, universe, strategy s
 		return nil, err
 	}
 	return json.RawMessage(out), nil
+}
+
+// RuleStrategy replays a built-in rule strategy on one instrument and
+// returns a compact answer for an agent: figures, the signal on the last bar,
+// the last few trades and the bias warnings in words.
+func (s engineSource) RuleStrategy(ctx context.Context, id, symbol, provider string, years int, costBps float64) (any, error) {
+	def, ok := strategy.Preset(id)
+	if !ok {
+		return nil, fmt.Errorf("unknown rule strategy %q", id)
+	}
+	rng := ""
+	switch years {
+	case 3:
+		rng = market.Range3Y
+	case 0, 5:
+		rng, years = market.Range5Y, 5
+	case 10:
+		rng = market.Range10Y
+	default:
+		return nil, errors.New("years must be 3, 5 or 10")
+	}
+	canonical, err := market.CanonicalSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	series, err := s.e.strategyBars(ctx, canonical, s.e.parseProvider(provider), rng)
+	if err != nil {
+		return nil, err
+	}
+	res, err := strategy.Run(def, series.Points, strategy.Config{CostBps: costBps})
+	if err != nil {
+		return nil, err
+	}
+	recent := res.Trades
+	if len(recent) > 5 {
+		recent = recent[len(recent)-5:]
+	}
+	warnings := make([]string, 0, len(res.Warnings))
+	for _, w := range res.Warnings {
+		warnings = append(warnings, strategy.WarningTexts[w])
+	}
+	return map[string]any{
+		"strategy": def.Name, "strategy_id": def.ID, "persona": def.Persona, "rules": def.Description,
+		"symbol": canonical, "provider": series.Provider, "from": res.From, "to": res.To, "cost_bps": costBps,
+		"total_return_pct": res.TotalPct, "buy_hold_return_pct": res.BuyHoldPct,
+		"max_drawdown_pct": res.Metrics.MaxDrawdownPct, "buy_hold_max_drawdown_pct": res.BuyHold.MaxDrawdownPct, "sharpe": res.Metrics.SharpeRatio,
+		"stats": res.Stats, "latest": res.Latest, "recent_trades": recent, "warnings": warnings,
+		"note": "A replay on past prices, not a forecast. Trade count and the warnings say how much weight it can bear.",
+	}, nil
 }
 
 func (s engineSource) WealthPlan(ctx context.Context) (any, error) {

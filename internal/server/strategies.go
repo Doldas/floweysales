@@ -82,7 +82,7 @@ func storeErrorStatus(err error) int {
 // normalizedDefinition validates a strategy the caller sent and returns it
 // with defaults filled in, without any id: the saved row owns the id.
 func normalizedDefinition(def strategy.Strategy) (strategy.Strategy, string, error) {
-	def.ID, def.Family = "", ""
+	def.ID, def.Family, def.Persona = "", "", ""
 	if err := def.Normalize(); err != nil {
 		return def, "", err
 	}
@@ -279,7 +279,7 @@ func (e *Engine) runStrategyBacktest(ctx context.Context, u identity.User, req s
 	switch {
 	case req.Definition != nil:
 		def = *req.Definition
-		def.ID, def.Family = "", ""
+		def.ID, def.Family, def.Persona = "", "", ""
 	case strings.HasPrefix(req.StrategyID, "custom:"):
 		id, perr := strconv.ParseInt(strings.TrimPrefix(req.StrategyID, "custom:"), 10, 64)
 		store := e.strategyStore()

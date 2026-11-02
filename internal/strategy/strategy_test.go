@@ -344,3 +344,44 @@ func TestPresetsRunOnANoisyWalkAndEncode(t *testing.T) {
 		t.Fatal("no preset traded on 2000 noisy bars")
 	}
 }
+
+func TestPersonaPresetsBelongToACharacterAndTrade(t *testing.T) {
+	r := uint64(777)
+	next := func() float64 {
+		r = r*6364136223846793005 + 1442695040888963407
+		return float64(r>>33)/float64(1<<31) - 0.5
+	}
+	var pts []market.HistoryPoint
+	day := time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)
+	p := 100.0
+	for i := 0; i < 2500; i++ {
+		open := p
+		p *= 1 + 0.0006 + 0.025*next()
+		pts = append(pts, market.HistoryPoint{Timestamp: day.Unix(), Open: open, High: math.Max(open, p) * (1 + 0.008*math.Abs(next())),
+			Low: math.Min(open, p) * (1 - 0.008*math.Abs(next())), Close: p, Volume: 1000 * (1 + math.Abs(next()))})
+		day = day.AddDate(0, 0, 1)
+	}
+	seen := 0
+	for _, def := range Presets() {
+		if def.Family != "persona" {
+			continue
+		}
+		seen++
+		if def.Persona == "" || def.Description == "" {
+			t.Fatalf("%s lacks a persona or description", def.ID)
+		}
+		res, err := Run(def, pts, Config{CostBps: 10})
+		if err != nil {
+			t.Fatalf("%s: %v", def.ID, err)
+		}
+		if len(res.Trades) == 0 {
+			t.Errorf("%s made no trades on 2500 noisy bars", def.ID)
+		}
+		if _, err := json.Marshal(res); err != nil {
+			t.Errorf("%s cannot be encoded: %v", def.ID, err)
+		}
+	}
+	if seen < 5 {
+		t.Fatalf("expected the character strategies, got %d", seen)
+	}
+}

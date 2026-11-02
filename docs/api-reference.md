@@ -49,6 +49,8 @@ Regelbaserade strategier för ett instrument, återspelade över dagliga kurser 
 - `POST /api/strategies`, `PUT /api/strategies/{id}`, `DELETE /api/strategies/{id}` – spara, ändra och ta bort egna strategier (högst 30 per användare, tabellen `custom_strategies`).
 - `POST /api/strategies/backtest` – `{strategy_id | definition, symbol, provider?, range: 3Y|5Y|10Y, cost_bps?}`. Svaret innehåller nyckeltal, affärer, kurvor och vad reglerna säger på sista stapeln, inklusive Fibonacci-nivåerna för den senaste svängen.
 
+Karaktärernas regelstrategier (`family: persona`, med `persona` satt) ligger bland de inbyggda. Agenter kör dem med verktyget `run_rule_strategy` (`strategy_id`, `symbol`, `years` 3/5/10, `cost_bps`).
+
 En strategi är data: villkor (pris, EMA/SMA, RSI, ATR, högsta/lägsta, Fibonacci-nivåer), stop, mål, tidsgräns och storlek. Fibonacci-nivåer mäts på den senaste *bekräftade* svängen (pivå med `swing_bars` staplar på var sida), så en nivå flyttas aldrig bakåt i tiden. Signaler på stängning fylls på nästa öppning; träffar en stapel både stop och mål antas stoppet först.
 
 ## Investeringsanalys

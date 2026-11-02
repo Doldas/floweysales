@@ -479,6 +479,7 @@ export type Stance = 'fits' | 'partly' | 'does_not_fit' | 'insufficient_data';
 export interface Persona {
   id: string; name: string; tagline: string; archetype: string; horizon: string;
   principles: string[]; checks: string[]; avoids: string[]; voice: string; tools: string[]; caveat?: string;
+  strategies?: { kind: 'leaderboard' | 'rules'; id: string; why: string }[];
 }
 export interface PersonaCatalog { personas: Persona[]; stances: Stance[]; max_team: number }
 /** One event of a team run, as streamed by POST /api/ai/team. */
@@ -492,7 +493,7 @@ export type StrategyComparison = '>' | '>=' | '<' | '<=' | 'crosses_above' | 'cr
 export interface StrategyCondition { left: StrategyOperand; op: StrategyComparison; right: StrategyOperand }
 export interface StrategyLevel { of: StrategyOperand; atr?: number }
 export interface StrategyDef {
-  id?: string; name: string; description?: string; family?: string; direction: 'long' | 'short';
+  id?: string; name: string; description?: string; family?: string; persona?: string; direction: 'long' | 'short';
   swing_bars?: number; min_leg_atr?: number;
   entry: StrategyCondition[]; exit?: StrategyCondition[]; stop?: StrategyLevel | null; target?: StrategyLevel | null;
   max_bars?: number; sizing: { mode: 'fixed_pct' | 'risk_pct'; value: number };

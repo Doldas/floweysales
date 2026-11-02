@@ -9,6 +9,7 @@ import (
 
 	"floweysales/internal/ai"
 	"floweysales/internal/identity"
+	"floweysales/internal/persona"
 	"floweysales/internal/sec"
 	"floweysales/internal/tracker"
 )
@@ -35,7 +36,7 @@ func TestInvestorToolsAreAdvertisedAndRefusedWithoutASource(t *testing.T) {
 	for _, n := range ai.ToolNames() {
 		names[n] = true
 	}
-	tools := []string{"get_leaderboard", "run_strategy_backtest", "get_wealth_plan", "get_portfolio_analytics", "get_insider_activity", "get_macro_regime", "get_corporate_events"}
+	tools := []string{"get_leaderboard", "run_strategy_backtest", "run_rule_strategy", "get_wealth_plan", "get_portfolio_analytics", "get_insider_activity", "get_macro_regime", "get_corporate_events"}
 	for _, name := range tools {
 		if !names[name] {
 			t.Errorf("%s is not advertised", name)
@@ -52,7 +53,7 @@ func TestInvestorToolsAreAdvertisedAndRefusedWithoutASource(t *testing.T) {
 			t.Errorf("%s reads one person's data and must not be grantable to flows", personal)
 		}
 	}
-	for _, public := range []string{"get_leaderboard", "run_strategy_backtest", "get_insider_activity", "get_macro_regime", "get_corporate_events"} {
+	for _, public := range []string{"get_leaderboard", "run_strategy_backtest", "run_rule_strategy", "get_insider_activity", "get_macro_regime", "get_corporate_events"} {
 		if !flowAgentToolGrantable(public) {
 			t.Errorf("%s should be grantable", public)
 		}
@@ -162,5 +163,55 @@ func TestAgentWebSearchUsesTheSavedKey(t *testing.T) {
 	_, err = ai.Execute(context.Background(), engineSource{e: e}, "search_web", `{"query":"gold price"}`)
 	if err == nil || strings.Contains(err.Error(), "Settings → Integrations") || !strings.Contains(err.Error(), "unsupported web search provider") {
 		t.Fatalf("with a saved key the search must go through the saved provider: %v", err)
+	}
+}
+
+func TestCharactersLeaderboardStrategiesExistAndAreAdvertised(t *testing.T) {
+	var desc string
+	for _, d := range ai.ToolDefs() {
+		if d.Function.Name == "get_leaderboard" {
+			raw, _ := json.Marshal(d.Function.Parameters)
+			desc = string(raw)
+		}
+	}
+	for _, s := range leaderboardStrategies {
+		if !strings.Contains(desc, s.ID) {
+			t.Errorf("get_leaderboard does not mention strategy %s", s.ID)
+		}
+	}
+	for _, p := range persona.Personas {
+		for _, st := range p.Strategies {
+			if st.Kind != persona.KindLeaderboard {
+				continue
+			}
+			if _, ok := findLeaderboardStrategy(st.ID); !ok {
+				t.Errorf("%s uses unknown leaderboard strategy %s", p.ID, st.ID)
+			}
+		}
+	}
+	for _, s := range leaderboardStrategies {
+		if s.Persona != "" && persona.ByID(s.Persona) == nil {
+			t.Errorf("leaderboard strategy %s names unknown character %s", s.ID, s.Persona)
+		}
+	}
+}
+
+func TestRuleStrategyToolReplaysACharactersStrategy(t *testing.T) {
+	e := strategyEngine()
+	got, err := runTool(t, e, context.Background(), "run_rule_strategy", `{"strategy_id":"persona_allocator_trend","symbol":"test","years":5}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["persona"] != "allocator" || got["symbol"] != "TEST" || got["stats"] == nil || got["latest"] == nil || got["note"] == nil {
+		t.Fatalf("%+v", got)
+	}
+	warnings, _ := got["warnings"].([]any)
+	if len(warnings) == 0 {
+		t.Fatal("the answer must carry the bias warnings in words")
+	}
+	for _, bad := range []string{`{"strategy_id":"nope","symbol":"TEST"}`, `{"symbol":"TEST"}`, `{"strategy_id":"persona_allocator_trend","symbol":"TEST","years":7}`} {
+		if _, err := ai.Execute(context.Background(), engineSource{e: e}, "run_rule_strategy", bad); err == nil {
+			t.Errorf("%s: want an error", bad)
+		}
 	}
 }
