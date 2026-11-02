@@ -117,6 +117,7 @@ Responses may arrive in any order. Lines are limited to 1 MiB (requests) and
 | `forum_posts` | `symbol`, `limit` | `[{id,title,content,symbol,upvotes,author,timestamp}]` | `forum` |
 | `news` | `symbol`, `limit` (1–20) | `[{title,url,source,published,summary,symbol,provider}]` (`published` unix seconds, optional) | `news` |
 | `events` | `symbol`, `from`, `to` (ISO dates, window at most 400 days) | `[{symbol,kind,date,amount,currency,ratio,confirmed,provider}]` | `events` |
+| `tool` | `tool`, `input` | `{title?, blocks:[…]}` | manifest `tools` |
 
 Error codes: `unsupported`, `invalid_argument` (HTTP 400), `not_configured`
 (503), `upstream` and `internal` (502). An uninstalled provider is HTTP 404.
@@ -139,6 +140,49 @@ Provider rules from [CONTRIBUTING](../CONTRIBUTING.md) apply to plugins too:
 a missing figure stays absent rather than `0`; currency is never guessed; a
 fallback source is named in `provider` (the Avanza plugin labels its Yahoo
 history fallback `YAHOO`); research is read-only and allowlisted.
+
+## Tool plugins: a tab of tools
+
+A plugin can add a **tab of interactive tools** to the app, with or without
+market data. The manifest's `tools` section declares the tab and each tool's
+form; the backend renders it, sends the values with the `tool` method and
+shows the blocks the plugin returns. A plugin that only declares `tools` has
+no `provider` (a half-declared provider is rejected).
+
+```json
+{
+  "protocol": 1, "id": "se-tax", "name": "Swedish tax", "version": "1.0.0",
+  "tools": {
+    "tab": {"label": "Tax", "icon": "bi-receipt", "description": "…"},
+    "tools": [{
+      "id": "k4", "label": "K4 report", "description": "…", "submit": "Calculate",
+      "inputs": [
+        {"name": "year", "label": "Income year", "type": "number", "required": true},
+        {"name": "files", "label": "Transactions", "type": "files", "accept": ".csv"}
+      ]
+    }]
+  }
+}
+```
+
+Input types: `text`, `textarea`, `number`, `date`, `select` (with `options`),
+`checkbox`, `file` (the value is the file's text) and `files` (a list of
+`{name, content}`). The backend checks required fields, select choices and
+types, drops undeclared fields and caps all input at 8 MB before the plugin
+sees it.
+
+A result is a list of blocks: `text`, `notice` (`info`, `success`, `warning`,
+`error`), `table` (`columns` and string `rows`), `stats` (label/value tiles)
+and `file` (a download: `name`, `mime`, `encoding` `utf8` or `base64`,
+`content`; use base64 for other character sets). The backend rejects a result
+that breaks this contract.
+
+Tools are **stateless**: the user's data travels in the request and the
+backend neither stores nor logs it. Any signed-in user may call
+`GET /api/plugin-tools` (installed tool plugins) and
+`POST /api/plugin-tools/{plugin}/{tool}` with `{"input": {…}}`. In Go set
+`Plugin.Tool`; `plugintest.Conformance` checks that declared tools have a
+handler and that an undeclared tool is refused.
 
 ## Writing a plugin
 

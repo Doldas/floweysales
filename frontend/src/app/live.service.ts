@@ -9,6 +9,8 @@ import { TradingRecord } from './models';
 export class LiveSseService {
   private source: EventSource | null = null;
   private currentConfigKey: string | null = null;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryDelay = 1000;
 
   readonly latestTick = signal<TradingRecord | null>(null);
   readonly connected = signal(false);
@@ -17,7 +19,8 @@ export class LiveSseService {
   /** (Re)connects for the given symbol. Reopening the source is cheap. */
   connectFor(symbol: string,provider=''): void {
     const key = (symbol || '__all__')+'|'+provider;
-    if (this.currentConfigKey === key && this.source) {
+    // A source the browser gave up on (error status, proxy reset) is not "connected".
+    if (this.currentConfigKey === key && this.source && this.source.readyState !== EventSource.CLOSED) {
       return;
     }
     this.close();
@@ -33,7 +36,7 @@ export class LiveSseService {
       const es = new EventSource('/api/prices/stream?'+query.toString());
       this.source = es;
 
-      es.onopen = () => this.connected.set(true);
+      es.onopen = () => { this.retryDelay = 1000; this.connected.set(true); };
       es.onmessage = (ev) => {
         try {
           if(this.currentConfigKey!==key)return;
@@ -50,6 +53,13 @@ export class LiveSseService {
       // state through the signal so the UI can show "reconnecting".
       es.onerror = () => {
         this.connected.set(false);
+        // After a non-recoverable failure the browser stops retrying; reopen ourselves.
+        if (es.readyState === EventSource.CLOSED && this.source === es && this.currentConfigKey === key) {
+          es.close();
+          this.source = null;
+          this.retryTimer = setTimeout(open, this.retryDelay);
+          this.retryDelay = Math.min(this.retryDelay * 2, 30000);
+        }
       };
     };
     open();
@@ -57,6 +67,10 @@ export class LiveSseService {
 
   /** Drops the connection entirely (used when the app reloads a new asset). */
   close(): void {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
     if (this.source) {
       this.source.close();
       this.source = null;

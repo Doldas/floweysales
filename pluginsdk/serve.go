@@ -24,10 +24,13 @@ type Plugin struct {
 	ForumPosts func(context.Context, ForumParams) ([]ForumPost, error)
 	News       func(context.Context, NewsParams) ([]NewsItem, error)
 	Events     func(context.Context, EventsParams) ([]CorporateEvent, error)
+	// Tool runs a tool declared in Manifest.Tools.
+	Tool func(context.Context, ToolParams) (ToolResult, error)
 }
 
-// maxRequestBytes bounds one request line; requests are tiny.
-const maxRequestBytes = 1 << 20
+// maxRequestBytes bounds one request line. Market-data requests are tiny; a
+// tool call carries the user's input files (MaxToolInputBytes) plus framing.
+const maxRequestBytes = MaxToolInputBytes + 1<<20
 
 // maxConcurrent bounds in-flight requests per process.
 const maxConcurrent = 8
@@ -164,7 +167,35 @@ func (p Plugin) dispatch(ctx context.Context, req Request) (any, error) {
 		return call(ctx, req.Params, p.News)
 	case MethodEvents:
 		return call(ctx, req.Params, p.Events)
+	case MethodTool:
+		return p.runTool(ctx, req.Params)
 	default:
 		return nil, Errorf(CodeUnsupported, "unknown method %q", req.Method)
 	}
+}
+
+// runTool answers a "tool" request for a tool the manifest declares and
+// checks the result against the display contract.
+func (p Plugin) runTool(ctx context.Context, raw json.RawMessage) (any, error) {
+	if p.Tool == nil || p.Manifest.Tools == nil {
+		return nil, Errorf(CodeUnsupported, "method not supported by this plugin")
+	}
+	params, err := decode[ToolParams](raw)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := p.Manifest.Tools.Tool(params.Tool); !ok {
+		return nil, Errorf(CodeInvalidArgument, "unknown tool %q", params.Tool)
+	}
+	result, err := p.Tool(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	if err := result.Validate(); err != nil {
+		return nil, Errorf(CodeInternal, "invalid tool result: %v", err)
+	}
+	if result.Blocks == nil {
+		result.Blocks = []ToolBlock{}
+	}
+	return result, nil
 }

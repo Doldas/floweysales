@@ -331,7 +331,7 @@ export function buildPlaybook(id: string, opts: BuildOptions): Playbook | null {
       add({ id: 'filings', type: 'sec_filings', label: 'New reports', symbols, forms: '10-Q, 10-K', lookback_days: 7 }, 'start');
       add({ id: 'new', type: 'only_new', label: 'Not seen yet' }, 'filings');
       add({ id: 'board', type: 'leaderboard', label: 'Score the filers', symbols, strategy: 'best', limit: 25, skip_empty: true }, 'new');
-      add({ id: 'table', type: 'report_table', label: 'Scores', title: 'Fresh quarterly reports, scored', columns: 'rank,symbol,score,grade,revenue_growth_pct,eps_growth_pct,net_margin_pct,pe_ttm,ttm_through,flags', skip_empty: true }, 'board');
+      add({ id: 'table', type: 'report_table', label: 'Scores', title: 'Fresh quarterly reports, scored', columns: 'rank,symbol,score,grade,reasons,revenue_growth_pct,eps_growth_pct,net_margin_pct,pe_ttm,ttm_through,flags', skip_empty: true }, 'board');
       add({ id: 'memo', type: 'agent', label: 'What changed', require_grounding: true,
         prompt: GROUNDED + LEADERBOARD_GUIDE + 'These companies just filed a quarterly or annual report; their rank is within the whole watchlist. Keep the table at the top. For each: what the trailing-twelve-month figures show now, how it ranks against the watchlist and why, and what to read in the filing next. Research, not a recommendation.' }, 'table');
       deliver('memo', 'Quarterly reports scored {{date}}');
@@ -342,7 +342,7 @@ export function buildPlaybook(id: string, opts: BuildOptions): Playbook | null {
       name = 'Watchlist health check'; interval = 10080;
       add({ id: 'board', type: 'leaderboard', label: 'Score watchlist', symbols, strategy: 'best', limit: 25 }, 'start');
       add({ id: 'laggards', type: 'screen', label: 'Laggards', rule: 'score < 45 or flags contains "below_sma200" or flags contains "unprofitable" or flags contains "shrinking_revenue"', sort_by: 'score' }, 'board');
-      add({ id: 'table', type: 'report_table', label: 'Laggards', title: 'Watchlist laggards', columns: 'rank,symbol,score,grade,flags,from_high_pct,revenue_growth_pct,net_margin_pct', skip_empty: true }, 'laggards');
+      add({ id: 'table', type: 'report_table', label: 'Laggards', title: 'Watchlist laggards', columns: 'rank,symbol,score,grade,reasons,flags,from_high_pct,revenue_growth_pct,net_margin_pct', skip_empty: true }, 'laggards');
       add({ id: 'memo', type: 'agent', label: 'Review notes', require_grounding: true,
         prompt: GROUNDED + LEADERBOARD_GUIDE + 'Keep the table at the top. For each laggard: which factor or flag pulled it down, what would repair the thesis, and what would confirm it is broken. Do not tell anyone to sell; this is a review list.' }, 'table');
       deliver('memo', 'Watchlist health check {{date}}');
@@ -385,7 +385,7 @@ export function buildPlaybook(id: string, opts: BuildOptions): Playbook | null {
       add({ id: 'moves', type: 'screen', label: 'Suggested moves', rule: 'kind == "suggestion"' }, 'check');
       add({ id: 'table', type: 'report_table', label: 'Moves', title: 'Rebalancing suggestions', columns: 'side,symbol,amount,reason', skip_empty: true }, 'moves');
       add({ id: 'notes', type: 'agent', label: 'Rebalance notes', require_grounding: true,
-        prompt: GROUNDED + 'Keep the table at the top. Then, in a short paragraph, say which asset classes drifted from the wealth plan and what the moves would do. Mention that selling can trigger tax and costs. These are suggestions to review, not orders.' }, 'table');
+        prompt: GROUNDED + 'Keep the table at the top. Then, in a short paragraph, explain what the moves would do using the reason column. Do not state drift or allocation figures that are not in the table. Mention that selling can trigger tax and costs. These are suggestions to review, not orders.' }, 'table');
       deliver('notes', 'Rebalance check {{date}}');
       note = 'Administrators only. Needs a saved wealth plan; without one there are no suggestions. Runs every 30 days.';
       break;
@@ -412,7 +412,7 @@ export function buildPlaybook(id: string, opts: BuildOptions): Playbook | null {
       name = 'Earnings this week, scored'; interval = 10080;
       add({ id: 'events', type: 'corporate_events', label: 'Earnings dates', symbols, kinds: 'earnings', limit: 7 }, 'start');
       add({ id: 'board', type: 'leaderboard', label: 'Score the reporters', symbols, strategy: 'best', limit: 25, skip_empty: true }, 'events');
-      add({ id: 'table', type: 'report_table', label: 'Scores', title: 'Reporting this week, scored', columns: 'rank,symbol,score,grade,pe_ttm,revenue_growth_pct,eps_growth_pct,flags,ttm_through', skip_empty: true }, 'board');
+      add({ id: 'table', type: 'report_table', label: 'Scores', title: 'Reporting this week, scored', columns: 'rank,symbol,score,grade,reasons,pe_ttm,revenue_growth_pct,eps_growth_pct,flags,ttm_through', skip_empty: true }, 'board');
       add({ id: 'memo', type: 'agent', label: 'What to look for', require_grounding: true,
         prompt: GROUNDED + LEADERBOARD_GUIDE + 'These companies report earnings in the next 7 days. Keep the table at the top. For each: where it ranks in the watchlist and why, and the one figure in the next report that would change that picture. Research, not a recommendation.' }, 'table');
       deliver('memo', 'Earnings this week {{date}}');
@@ -422,9 +422,9 @@ export function buildPlaybook(id: string, opts: BuildOptions): Playbook | null {
     case 'strategy-scorecard': {
       name = 'Strategy scorecard'; interval = 43200;
       add({ id: 'backtest', type: 'backtest', label: 'Backtest all strategies', universe: 'us_mega', strategy: 'all', limit: 10, years: 3 }, 'start');
-      add({ id: 'table', type: 'report_table', label: 'Scorecard', title: 'Strategy scorecard (US mega caps, 3 years, monthly)', columns: 'strategy_label,cagr_pct,excess_cagr_pct,max_drawdown_pct,sharpe,hit_rate_pct,avg_turnover_pct,from,to', skip_empty: true }, 'backtest');
+      add({ id: 'table', type: 'report_table', label: 'Scorecard', title: 'Strategy scorecard (US mega caps, 3 years, monthly)', columns: 'strategy_label,cagr_pct,benchmark_cagr_pct,excess_cagr_pct,max_drawdown_pct,sharpe,hit_rate_pct,avg_turnover_pct,from,to', skip_empty: true }, 'backtest');
       add({ id: 'compare', type: 'agent', label: 'Compare strategies', require_grounding: true,
-        prompt: GROUNDED + 'Keep the table at the top. Compare the strategies: which returned most, which fell least, which turned over most, and how the best one compares with the benchmark. State the caveats from warning_text (survivorship bias, price-index benchmark) in plain words and say that past results do not predict future ones.' }, 'table');
+        prompt: GROUNDED + 'Keep the table at the top. Compare the strategies: which returned most, which fell least, which turned over most, and how the best one compares with the benchmark, using the benchmark cagr pct column. Do not calculate new figures. State the caveats in plain words: the universe is today\'s constituents (survivorship bias) and the benchmark is a price index without dividends. Say that past results do not predict future ones.' }, 'table');
       deliver('compare', 'Strategy scorecard {{date}}');
       note = 'Replays six strategies, so the first run takes a while; later runs reuse results for six hours. Change the universe or years on the backtest node.';
       break;

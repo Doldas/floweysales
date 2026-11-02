@@ -126,10 +126,12 @@ func allowedAPI(role, method, path string) bool {
 	}
 }
 
-// isPlanRoute matches the wealth plan routes, which every signed-in user
-// may call for their own plan.
+// isPlanRoute matches the routes every signed-in user may call for their own
+// data: the wealth plan, the Today briefing and plugin tools (which keep no
+// state between calls).
 func isPlanRoute(method, path string) bool {
-	return (method == http.MethodGet && path == "/api/plan") ||
+	return isToolRoute(method, path) ||
+		(method == http.MethodGet && path == "/api/plan") ||
 		(method == http.MethodPut && path == "/api/plan/profile") ||
 		(method == http.MethodPost && path == "/api/plan/preview") ||
 		(method == http.MethodGet && path == "/api/today")

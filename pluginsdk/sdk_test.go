@@ -2,9 +2,11 @@ package pluginsdk
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -162,5 +164,104 @@ func TestFilterFinancialYearsInclusive(t *testing.T) {
 	}
 	if CalendarQuarterLabel("2026-06-30") != "CY2026 Q2" {
 		t.Fatal("quarter label")
+	}
+}
+
+func toolsManifest() Manifest {
+	return Manifest{Protocol: ProtocolVersion, ID: "tools-demo", Name: "Tools demo", Version: "1.0.0",
+		Tools: &ToolsInfo{Tab: ToolsTab{Label: "Demo", Icon: "bi-receipt"}, Tools: []Tool{{
+			ID: "echo", Label: "Echo", Inputs: []ToolInput{
+				{Name: "text", Label: "Text", Type: InputText, Required: true},
+				{Name: "mode", Label: "Mode", Type: InputSelect, Options: []ToolOption{{Value: "a", Label: "A"}}},
+			}}}}}
+}
+
+func TestToolsOnlyManifestNeedsNoProvider(t *testing.T) {
+	if err := toolsManifest().Validate(); err != nil {
+		t.Fatal(err)
+	}
+	m := toolsManifest()
+	m.Tools = nil
+	if err := m.Validate(); err == nil {
+		t.Fatal("a plugin without provider or tools must be rejected")
+	}
+	m = toolsManifest()
+	m.Provider.ID = "demo" // a half-declared provider is not silently ignored
+	if err := m.Validate(); err == nil {
+		t.Fatal("a half-declared provider must be rejected")
+	}
+}
+
+func TestToolsDeclarationIsValidated(t *testing.T) {
+	cases := map[string]func(*ToolsInfo){
+		"duplicate tool":        func(i *ToolsInfo) { i.Tools = append(i.Tools, i.Tools[0]) },
+		"bad tool id":           func(i *ToolsInfo) { i.Tools[0].ID = "Echo!" },
+		"unknown input type":    func(i *ToolsInfo) { i.Tools[0].Inputs[0].Type = "slider" },
+		"select without choice": func(i *ToolsInfo) { i.Tools[0].Inputs[1].Options = nil },
+		"options on text":       func(i *ToolsInfo) { i.Tools[0].Inputs[0].Options = []ToolOption{{Value: "x", Label: "x"}} },
+		"bad icon":              func(i *ToolsInfo) { i.Tab.Icon = "fa-receipt" },
+		"empty tab":             func(i *ToolsInfo) { i.Tab.Label = " " },
+		"no tools":              func(i *ToolsInfo) { i.Tools = nil },
+	}
+	for name, mutate := range cases {
+		m := toolsManifest()
+		mutate(m.Tools)
+		if err := m.Validate(); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestToolResultValidation(t *testing.T) {
+	good := ToolResult{Blocks: []ToolBlock{
+		{Type: BlockText, Text: "hi"},
+		{Type: BlockNotice, Level: LevelWarning, Text: "careful"},
+		{Type: BlockTable, Columns: []ToolColumn{{Label: "a"}}, Rows: [][]string{{"1"}}},
+		{Type: BlockFile, File: &ToolOutput{Name: "a.txt", MIME: "text/plain", Encoding: "utf8", Content: "x"}},
+	}}
+	if err := good.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	bad := map[string]ToolBlock{
+		"unknown type":   {Type: "chart"},
+		"bad level":      {Type: BlockNotice, Level: "loud"},
+		"ragged row":     {Type: BlockTable, Columns: []ToolColumn{{Label: "a"}}, Rows: [][]string{{"1", "2"}}},
+		"file path name": {Type: BlockFile, File: &ToolOutput{Name: "../a", MIME: "text/plain", Encoding: "utf8"}},
+		"file encoding":  {Type: BlockFile, File: &ToolOutput{Name: "a", MIME: "text/plain", Encoding: "latin1"}},
+		"empty stats":    {Type: BlockStats},
+	}
+	for name, b := range bad {
+		if err := (ToolResult{Blocks: []ToolBlock{b}}).Validate(); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestToolDispatchAndParams(t *testing.T) {
+	p := Plugin{Manifest: toolsManifest(), Tool: func(_ context.Context, in ToolParams) (ToolResult, error) {
+		return ToolResult{Blocks: []ToolBlock{{Type: BlockText, Text: in.String("text") + "/" + fmt.Sprint(in.Bool("flag")) + "/" + fmt.Sprint(len(in.Files("docs")))}}}, nil
+	}}
+	req := `{"id":1,"method":"tool","params":{"tool":"echo","input":{"text":"hej","flag":true,"docs":[{"name":"a.csv","content":"x"},{"name":"b.csv","content":"y"}]}}}` + "\n" +
+		`{"id":2,"method":"tool","params":{"tool":"nope","input":{}}}` + "\n"
+	var out bytes.Buffer
+	if err := ServeIO(context.Background(), p, strings.NewReader(req), &out); err != nil {
+		t.Fatal(err)
+	}
+	got := map[uint64]Response{}
+	dec := json.NewDecoder(&out)
+	for dec.More() {
+		var r Response
+		raw := json.RawMessage{}
+		if err := dec.Decode(&raw); err != nil {
+			t.Fatal(err)
+		}
+		_ = json.Unmarshal(raw, &r)
+		got[r.ID] = r
+	}
+	if r := got[1]; r.Error != nil || !strings.Contains(fmt.Sprint(r.Result), "hej/true/2") {
+		t.Errorf("tool call: %+v", r)
+	}
+	if r := got[2]; r.Error == nil || r.Error.Code != CodeInvalidArgument {
+		t.Errorf("undeclared tool: %+v", r)
 	}
 }

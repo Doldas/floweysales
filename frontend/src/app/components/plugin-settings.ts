@@ -1,5 +1,6 @@
 import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
 import { MarketState } from '../core/market-state';
+import { PluginTools } from '../core/plugin-tools';
 import {
   capabilityLabels, matchesFilter, pluginRows, pluginStatus, uninstallPrompt,
   type PluginOverview, type PluginRow,
@@ -190,6 +191,7 @@ floweysales_backend plugins update</pre>
 })
 export class PluginSettingsComponent {
  private readonly market = inject(MarketState);
+ private readonly tools = inject(PluginTools);
  private readonly termsDialog = viewChild<ElementRef<HTMLDialogElement>>('termsDialog');
 
  readonly overview = signal<PluginOverview | null>(null);
@@ -258,6 +260,7 @@ export class PluginSettingsComponent {
    this.overview.set(res.overview);
    this.message.set(`${res.installed.manifest.name} ${res.installed.manifest.version} is installed.`);
    this.market.refreshProviders();
+   void this.tools.refresh();
   } catch (e) {
    const err = e as Error & { status?: number; body?: { terms?: string } };
    if (err.status === 409 && err.body?.terms) {
@@ -290,6 +293,7 @@ export class PluginSettingsComponent {
    this.overview.set(await this.api<PluginOverview>('/api/admin/plugins/' + encodeURIComponent(row.id) + force, { method: 'DELETE' }));
    this.message.set(`${row.manifest.name} was uninstalled.`);
    this.market.refreshProviders();
+   void this.tools.refresh();
   } catch (e) { this.message.set(String((e as Error).message ?? e)); }
   finally { this.busy.set(false); this.working.set(''); }
  }
