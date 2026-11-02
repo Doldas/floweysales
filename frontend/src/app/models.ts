@@ -302,6 +302,22 @@ export interface LeaderboardRow {
   ttm_through?: string;
   reasons: string;
   flags: string;
+  /** How far the score can be trusted, and why. */
+  confidence?: 'high' | 'medium' | 'low';
+  confidence_note?: string;
+  /** Competing explanations, separated by semicolons. */
+  alternatives?: string;
+  fundamentals_age_days?: number;
+}
+
+/** What a ranking was computed with, so it can be reproduced and judged. */
+export interface LeaderboardProvenance {
+  methodology: { version: string; hash: string };
+  universe_id: string;
+  universe_hash: string;
+  inputs_hash: string;
+  price_dates: { newest: string; oldest: string };
+  disclaimer: string;
 }
 
 export interface LeaderboardOption { id: string; label: string; description: string; benchmark?: string }
@@ -316,6 +332,7 @@ export interface LeaderboardResponse {
   unranked: { symbol: string; error: string }[];
   universes: LeaderboardOption[];
   strategies: LeaderboardOption[];
+  provenance?: LeaderboardProvenance;
 }
 
 /** Return and risk figures of a backtest (see internal/backtest). */

@@ -10,7 +10,7 @@ export const FACTOR_LABELS: Record<string, string> = {
 
 export const FLAG_LABELS: Record<string, string> = {
   overbought: 'Overbought', below_sma200: 'Below 200-day', death_cross: 'Death cross', unprofitable: 'Unprofitable',
-  shrinking_revenue: 'Shrinking revenue', no_fundamentals: 'No fundamentals', stale_price: 'Stale price',
+  shrinking_revenue: 'Shrinking revenue', no_fundamentals: 'No fundamentals', stale_price: 'Stale price', stale_fundamentals: 'Old fundamentals',
 };
 
 /** Which flow playbook automates a strategy. */
@@ -26,6 +26,11 @@ export function scoreTone(score: number | undefined): 'pos' | 'neg' | 'mid' {
 
 export function flagList(row: Pick<LeaderboardRow, 'flags'>): { id: string; label: string }[] {
   return (row.flags || '').split(',').map(f => f.trim()).filter(Boolean).map(id => ({ id, label: FLAG_LABELS[id] ?? id.replace(/_/g, ' ') }));
+}
+
+/** Competing explanations for a rank, from the server. */
+export function alternativeList(row: Pick<LeaderboardRow, 'alternatives'>): string[] {
+  return (row.alternatives || '').split(';').map(r => r.trim()).filter(Boolean);
 }
 
 export function reasonList(row: Pick<LeaderboardRow, 'reasons'>): string[] {

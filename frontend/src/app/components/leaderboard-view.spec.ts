@@ -2,7 +2,7 @@
 //   node --test src/app/components/leaderboard-view.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { STRATEGY_PLAYBOOK, flagList, leaderboardPrompt, pct, reasonList, scoreTone } from './leaderboard-view.ts';
+import { STRATEGY_PLAYBOOK, alternativeList, flagList, leaderboardPrompt, pct, reasonList, scoreTone } from './leaderboard-view.ts';
 import { INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES } from './investor-nodes.ts';
 
 test('tones, flags, reasons and figures', () => {
@@ -30,4 +30,10 @@ test('the agent prompt carries the figures', () => {
   assert.match(prompt, /1\. AAPL score 81\.2 \(A\): value: P\/E 15\.0/);
   assert.match(prompt, /MSFT score 70 \(B\) \[flags: overbought\]/);
   assert.match(prompt, /as of 2026-10-30/);
+});
+
+test('alternatives and the stale-fundamentals flag', () => {
+  assert.deepEqual(alternativeList({ alternatives: 'Overbought: wait; Negative earnings: trap' }), ['Overbought: wait', 'Negative earnings: trap']);
+  assert.deepEqual(alternativeList({}), []);
+  assert.equal(flagList({ flags: 'stale_fundamentals' })[0].label, 'Old fundamentals');
 });
