@@ -177,6 +177,8 @@ type Engine struct {
 	// Order lifecycle: account settings and the match loop guard.
 	tradingMu      sync.Mutex
 	tradingCfg     trading.Config
+	envTradingCfg  trading.Config // from the environment; what a reset goes back to
+	tradingSaved   bool           // settings saved in Settings are in use
 	matchMu        sync.Mutex
 	flowWorkerID   string
 	flowWake       chan struct{}
@@ -284,6 +286,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerForumRoutes()
 	e.registerAIRoutes()
 	e.registerIntegrationSettingsRoutes()
+	e.registerTradingSettingsRoutes()
 	e.registerUserManagementRoutes()
 	e.registerTrackerEmailRoutes()
 	e.registerFlowRoutes()
