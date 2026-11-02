@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -14,9 +15,12 @@ import (
 // tool call, anything else is text. It also records the request bodies.
 func scriptedServer(t *testing.T, replies []string) (*httptest.Server, *[]string) {
 	t.Helper()
+	var mu sync.Mutex
 	var bodies []string
 	n := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
 		var req ChatRequest
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		raw, _ := json.Marshal(req.Messages)

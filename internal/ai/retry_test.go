@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -82,11 +83,10 @@ func TestAuthErrorsAreNotRetried(t *testing.T) {
 }
 
 func TestStalledModelIsAbortedAndRetried(t *testing.T) {
-	var n int
+	var n atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.ReadAll(r.Body)
-		n++
-		if n == 1 {
+		if n.Add(1) == 1 {
 			<-r.Context().Done() // never answers
 			return
 		}
@@ -102,8 +102,8 @@ func TestStalledModelIsAbortedAndRetried(t *testing.T) {
 			answer += e.Content
 		}
 	})
-	if err != nil || answer != "ok" || n != 2 {
-		t.Fatalf("answer %q err %v requests %d", answer, err, n)
+	if err != nil || answer != "ok" || n.Load() != 2 {
+		t.Fatalf("answer %q err %v requests %d", answer, err, n.Load())
 	}
 }
 
