@@ -9,7 +9,7 @@ import (
 
 // Event is one step of an agent run, streamed to the UI or logged by tests.
 type Event struct {
-	Type      string   `json:"type"` // delta | tool_start | tool_result | transcript_message | error | done
+	Type      string   `json:"type"` // delta | tool_start | tool_result | transcript_message | notice | error | done
 	Message   *Message `json:"message,omitempty"`
 	Content   string   `json:"content,omitempty"`
 	Name      string   `json:"name,omitempty"`
@@ -114,6 +114,12 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	if opts.DisableTools || len(tools) == 0 {
 		tools = nil
 	}
+
+	// Explanations from the client (a full context window, say) reach the UI as
+	// notices; the shared client is copied so concurrent runs do not mix them.
+	own := *client
+	own.Notice = func(text string) { emit(Event{Type: "notice", Content: text}) }
+	client = &own
 
 	toolCalls := 0
 	for step := 1; step <= opts.MaxSteps; step++ {

@@ -10,6 +10,7 @@ import (
 	"floweysales/internal/ai"
 	"floweysales/internal/identity"
 	"floweysales/internal/sec"
+	"floweysales/internal/tracker"
 )
 
 func runTool(t *testing.T, e *Engine, ctx context.Context, name, args string) (map[string]any, error) {
@@ -143,5 +144,23 @@ func TestInsiderMacroAndEventTools(t *testing.T) {
 	ev, err := runTool(t, e, ctx, "get_corporate_events", `{"symbol":"KO","days_ahead":45}`)
 	if err != nil || ev["symbol"] != "KO" || len(ev["events"].([]any)) != 2 {
 		t.Fatalf("%+v %v", ev, err)
+	}
+}
+
+// The research agent must search with the key saved in Settings → Integrations,
+// not only with BRAVE_SEARCH_API_KEY from the environment.
+func TestAgentWebSearchUsesTheSavedKey(t *testing.T) {
+	t.Setenv("BRAVE_SEARCH_API_KEY", "")
+	e := NewEngine(nil, &SharedMarketConfig{}, nil, tracker.DefaultConfig())
+	_, err := ai.Execute(context.Background(), engineSource{e: e}, "search_web", `{"query":"gold price"}`)
+	if err == nil || !strings.Contains(err.Error(), "Settings → Integrations") {
+		t.Fatalf("an unconfigured search must say where to configure it: %v", err)
+	}
+	e.integrationMu.Lock()
+	e.webSearchProvider, e.webSearchAPIKey = "not-a-provider", "saved-key"
+	e.integrationMu.Unlock()
+	_, err = ai.Execute(context.Background(), engineSource{e: e}, "search_web", `{"query":"gold price"}`)
+	if err == nil || strings.Contains(err.Error(), "Settings → Integrations") || !strings.Contains(err.Error(), "unsupported web search provider") {
+		t.Fatalf("with a saved key the search must go through the saved provider: %v", err)
 	}
 }
