@@ -53,6 +53,13 @@ Karaktärernas regelstrategier (`family: persona`, med `persona` satt) ligger bl
 
 En strategi är data: villkor (pris, EMA/SMA, RSI, ATR, högsta/lägsta, Fibonacci-nivåer), stop, mål, tidsgräns och storlek. Fibonacci-nivåer mäts på den senaste *bekräftade* svängen (pivå med `swing_bars` staplar på var sida), så en nivå flyttas aldrig bakåt i tiden. Signaler på stängning fylls på nästa öppning; träffar en stapel både stop och mål antas stoppet först.
 
+## Omvärld (World)
+
+- `GET /api/world[?refresh=1]` – rubriker sorterade i teman (olja, räntor, geopolitik, tullar, AI/halvledare, Kina, kredit, tillväxt, valuta, metaller, mat/väder, hälsopolitik, reglering) med vilka sektorer och råvaror varje tema berör. Källor: en nyhets-plugin (`news`-capability) och den sparade webbsökningsnyckeln. Cachas i 15 minuter.
+- `GET /api/world/company?symbol=XOM[&sector=Energy]` – hur temana når ett bolag, utifrån dess sektor (vald, `PAPER_SYMBOL_SECTORS` eller inbyggd lista) och dess egna rubriker.
+
+Kopplingen tema → sektor/råvara är en fast tabell i `internal/market/world.go`, inte modellutdata: den säger vem som är exponerad och åt vilket håll om temats drivkraft stiger, inte vad som kommer att hända. Inga rubrikers tonalitet tolkas.
+
 ## Investeringsanalys
 
 `GET /api/market/leaderboard?universe=…&strategy=…` rankar ett urval bolag på
