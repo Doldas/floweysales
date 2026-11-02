@@ -19,7 +19,8 @@ import (
 func (e *Engine) ConfigureTrading(cfg trading.Config) {
 	e.tradingMu.Lock()
 	defer e.tradingMu.Unlock()
-	e.tradingCfg = cfg
+	e.envTradingCfg = cfg
+	e.tradingCfg, e.tradingSaved = e.restoreTradingSettings(context.Background(), cfg)
 }
 
 // tradingConfig returns the current account settings.

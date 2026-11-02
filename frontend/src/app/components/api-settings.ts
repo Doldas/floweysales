@@ -2,6 +2,7 @@ import { Component, signal } from '@angular/core';
 import { AdminAccessSettingsComponent } from './admin-access-settings';
 import { UpdateSettingsComponent } from './update-settings';
 import { PluginSettingsComponent } from './plugin-settings';
+import { TradingSettingsComponent } from './trading-settings';
 import { FormsModule } from '@angular/forms';
 
 interface AIConfig {base_url:string;model:string;max_steps:number;max_tool_calls:number;configured:boolean}
@@ -11,7 +12,7 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
 @Component({
  selector:'fse-api-settings', host:{class:'fs-native-forms'},
  standalone:true,
- imports:[FormsModule,AdminAccessSettingsComponent,UpdateSettingsComponent,PluginSettingsComponent],
+ imports:[FormsModule,AdminAccessSettingsComponent,UpdateSettingsComponent,PluginSettingsComponent,TradingSettingsComponent],
  template:`
  <div class="api-settings">
   @if(!encryptionReady()){
@@ -24,6 +25,7 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
     <button type="button" role="tab" [attr.aria-selected]="tab()==='roles'" [class.active]="tab()==='roles'" (click)="tab.set('roles')">Role management</button>
     <button type="button" role="tab" [attr.aria-selected]="tab()==='permissions'" [class.active]="tab()==='permissions'" (click)="tab.set('permissions')">Permission management</button>
     <button type="button" role="tab" [attr.aria-selected]="tab()==='mail'" [class.active]="tab()==='mail'" (click)="tab.set('mail')">Mail configuration</button>
+    <button type="button" role="tab" [attr.aria-selected]="tab()==='trading'" [class.active]="tab()==='trading'" (click)="tab.set('trading')">Trading limits</button>
     <button type="button" role="tab" [attr.aria-selected]="tab()==='plugins'" [class.active]="tab()==='plugins'" (click)="tab.set('plugins')">Plugins</button>
     <button type="button" role="tab" [attr.aria-selected]="tab()==='updates'" [class.active]="tab()==='updates'" (click)="tab.set('updates')">Updates</button>
   </nav>
@@ -94,6 +96,8 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
     <p class="muted">The SEC requires every client to identify itself with a real contact email. Without it the filing tools (SEC sections, filings, insider activity and the SEC filings flow node) are refused. An address alone is sent as "FloweySales Research your@email". Setting SEC_USER_AGENT on the server also works; a contact saved here takes precedence.</p>
    </div>
   </div>
+  } @else if(tab()==='trading'){
+    <fse-trading-settings></fse-trading-settings>
   } @else if(tab()==='plugins'){
     <fse-plugin-settings></fse-plugin-settings>
   } @else if(tab()==='updates'){

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="035-trading-configuration" author="floweysales" dbms="mysql">
+  <createTable tableName="trading_configuration" remarks="Paper-trading limits and costs saved in Settings; they replace the PAPER_* and TRADE_COMMISSION_* values from the environment">
+   <column name="id" type="TINYINT"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_trading_configuration"/></column>
+   <column name="settings" type="TEXT"><constraints nullable="false"/></column>
+   <column name="updated_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <rollback><dropTable tableName="trading_configuration"/></rollback>
+ </changeSet>
+</databaseChangeLog>

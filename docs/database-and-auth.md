@@ -154,6 +154,8 @@ MySQL identities, sessions, persisted AI settings, local `.env` and SQLite data.
 
 ## Optional paper-trading order-size guard
 
+> **Settings → Trading limits.** Every `PAPER_*` limit below except the sector and volume tables, plus `TRADE_COMMISSION_*`, `ALLOW_SHORT_SELLING`, the kill switch and the approval switch, can also be changed by a SYS_ADMIN under Settings → Trading limits (`GET`/`PUT`/`DELETE /api/admin/trading-settings`). Saved values replace the environment ones, apply to the next order without a restart, are written to the server log with the administrator's email, and **Reset** returns to the environment. The starting cash (`PORTFOLIO_CASH`) is not editable there because it would rewrite the account's history.
+
 Set `PAPER_MAX_ORDER_NOTIONAL=1000` in the backend environment to reject
 simulated orders whose worst-case quantity × execution/reference price exceeds
 1000 units of that instrument's quote currency. The default `0` disables this
