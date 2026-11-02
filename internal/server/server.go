@@ -191,6 +191,7 @@ type Engine struct {
 	flowState  flowNodeStateStore
 	profiles   investorProfileStore
 	strategies strategyStore
+	agentTasks agentTaskStore
 	// strategyHistory replaces the provider history read in tests.
 	strategyHistory func(ctx context.Context, symbol string, p market.Provider, rng string) (market.HistorySeries, error)
 	paperState      func() ([]trading.Position, trading.Summary)
@@ -285,6 +286,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerConfigRoutes()
 	e.registerForumRoutes()
 	e.registerAIRoutes()
+	e.registerAgentTaskRoutes()
 	e.registerIntegrationSettingsRoutes()
 	e.registerTradingSettingsRoutes()
 	e.registerUserManagementRoutes()
