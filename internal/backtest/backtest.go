@@ -442,3 +442,7 @@ func metricsFromCurve(eq []float64) Metrics {
 	}
 	return m
 }
+
+// MetricsFromCurve computes the return and risk figures of a daily equity
+// curve, for engines that build their own curve.
+func MetricsFromCurve(equity []float64) Metrics { return metricsFromCurve(equity) }

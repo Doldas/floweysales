@@ -134,7 +134,23 @@ func isPlanRoute(method, path string) bool {
 		(method == http.MethodGet && path == "/api/plan") ||
 		(method == http.MethodPut && path == "/api/plan/profile") ||
 		(method == http.MethodPost && path == "/api/plan/preview") ||
-		(method == http.MethodGet && path == "/api/today")
+		(method == http.MethodGet && path == "/api/today") ||
+		isStrategyRoute(method, path)
+}
+
+// isStrategyRoute matches the strategy builder: built-in and saved
+// strategies, and replays over public prices. Saved strategies belong to the
+// caller; no orders are placed.
+func isStrategyRoute(method, path string) bool {
+	switch {
+	case path == "/api/strategies":
+		return method == http.MethodGet || method == http.MethodPost
+	case path == "/api/strategies/backtest":
+		return method == http.MethodPost
+	case strings.HasPrefix(path, "/api/strategies/"):
+		return method == http.MethodPut || method == http.MethodDelete
+	}
+	return false
 }
 
 func (e *Engine) allowedUserAPI(r *http.Request, u identity.User) bool {

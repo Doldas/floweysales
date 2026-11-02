@@ -73,6 +73,7 @@ export class ShellComponent {
       label: 'Markets',
       items: [
         { path: '/markets', label: 'Markets', icon: 'bi-graph-up-arrow', visible: () => true },
+        { path: '/strategies', label: 'Strategies', icon: 'bi-diagram-2', visible: () => true },
         { path: '/world', label: 'World', icon: 'bi-globe2', visible: () => true },
         { path: '/plan', label: 'Wealth plan', icon: 'bi-bullseye', visible: () => true },
         { path: '/financials', label: 'Financials', icon: 'bi-bank', visible: () => true },

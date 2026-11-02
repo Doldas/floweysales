@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="034-custom-strategies" author="floweysales" dbms="mysql">
+  <!-- No foreign key to auth_users: with authentication disabled the single user is id 0.
+       Deleting an account removes its rows in Service.DeleteUser. -->
+  <createTable tableName="custom_strategies" remarks="Rule-based trading strategies a user built in the Strategies page, as JSON">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_custom_strategies"/></column>
+   <column name="user_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="name" type="VARCHAR(60)"><constraints nullable="false"/></column>
+   <column name="definition" type="MEDIUMTEXT"><constraints nullable="false"/></column>
+   <column name="created_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+   <column name="updated_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <addUniqueConstraint tableName="custom_strategies" columnNames="user_id, name" constraintName="uq_custom_strategies_user_name"/>
+  <rollback><dropTable tableName="custom_strategies"/></rollback>
+ </changeSet>
+</databaseChangeLog>
