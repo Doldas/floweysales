@@ -122,6 +122,9 @@ type chatRequestBody struct {
 	Provider string `json:"provider,omitempty"`
 	Range    string `json:"range,omitempty"`
 	Price    string `json:"price,omitempty"`
+	// Deliverables turns the chat into a saved task: the answer must report
+	// each one done, and the run can be resumed from its last checkpoint.
+	Deliverables []string `json:"deliverables,omitempty"`
 }
 
 // registerAIRoutes wires the OpenAI-compatible chat proxy and its config probe.
@@ -335,33 +338,54 @@ func (e *Engine) registerAIRoutes() {
 		}
 
 		client := ai.NewClient(baseURL, apiKey, model)
-		maxSteps, maxCalls := e.agentLimits()
-		opts := ai.AgentOptions{SystemPrompt: req.SystemPrompt, MaxSteps: maxSteps, MaxToolCalls: maxCalls}
-		if req.Persona != "" {
-			opts.SystemPrompt = persona.SystemPrompt(firstNonEmpty(req.SystemPrompt, ai.DefaultSystemPrompt), req.Persona)
-		}
-		if req.Tools != nil && !*req.Tools {
-			opts.DisableTools = true
-		}
-		if e.authService != nil {
-			u, ok := e.currentUser(r)
-			if !ok || u.Role != identity.RoleSysAdmin {
-				// Engine config, local ticks and orders are currently shared.
-				// Disable all LLM tools until a USER-safe, scoped catalog exists.
-				opts.DisableTools = true
+		opts := e.chatAgentOptions(r, req.SystemPrompt, req.Persona, req.Tools)
+		deliverables := ai.NewDeliverables(req.Deliverables)
+		var rec *taskRecorder
+		if len(deliverables) > 0 {
+			opts.Deliverables = deliverables
+			if rec = e.startTask(r, req.Messages, deliverables, send); rec != nil {
+				send = rec.wrap(send)
 			}
 		}
 
 		// Run synchronously against the request context; every event is flushed
 		// as it happens so the client sees token-by-token streaming.
-		runCtx := r.Context()
-		if e.authService != nil {
-			if u, ok := e.currentUser(r); ok {
-				runCtx = withAgentUser(runCtx, u)
-			}
-		}
-		_ = ai.Run(runCtx, client, engineSource{e: e}, req.Messages, opts, send)
+		err = ai.Run(e.chatRunContext(r), client, engineSource{e: e}, req.Messages, opts, send)
+		rec.finish(r.Context(), err)
 	})
+}
+
+// chatAgentOptions builds the limits, prompt and tool grants of a chat or
+// resumed task run for the caller.
+func (e *Engine) chatAgentOptions(r *http.Request, systemPrompt, personaID string, tools *bool) ai.AgentOptions {
+	maxSteps, maxCalls := e.agentLimits()
+	opts := ai.AgentOptions{SystemPrompt: systemPrompt, MaxSteps: maxSteps, MaxToolCalls: maxCalls}
+	if personaID != "" {
+		opts.SystemPrompt = persona.SystemPrompt(firstNonEmpty(systemPrompt, ai.DefaultSystemPrompt), personaID)
+	}
+	if tools != nil && !*tools {
+		opts.DisableTools = true
+	}
+	if e.authService != nil {
+		u, ok := e.currentUser(r)
+		if !ok || u.Role != identity.RoleSysAdmin {
+			// Engine config, local ticks and orders are currently shared.
+			// Disable all LLM tools until a USER-safe, scoped catalog exists.
+			opts.DisableTools = true
+		}
+	}
+	return opts
+}
+
+// chatRunContext carries the caller into tool execution.
+func (e *Engine) chatRunContext(r *http.Request) context.Context {
+	ctx := r.Context()
+	if e.authService != nil {
+		if u, ok := e.currentUser(r); ok {
+			ctx = withAgentUser(ctx, u)
+		}
+	}
+	return ctx
 }
 
 // resolveChatEndpoint picks the model endpoint for a chat or team run and

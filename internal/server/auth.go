@@ -121,9 +121,20 @@ func allowedAPI(role, method, path string) bool {
 		return true
 	case method == http.MethodPost && (path == "/api/ai/chat" || path == "/api/ai/team") || path == "/api/valuation/dcf":
 		return true
+	case isTaskRoute(method, path):
+		return true
 	default:
 		return false
 	}
+}
+
+// isTaskRoute matches a user's saved research-agent tasks: listing, reading,
+// deleting and resuming their own.
+func isTaskRoute(method, path string) bool {
+	if path != "/api/ai/tasks" && !strings.HasPrefix(path, "/api/ai/tasks/") {
+		return false
+	}
+	return method == http.MethodGet || method == http.MethodDelete || (method == http.MethodPost && strings.HasSuffix(path, "/resume"))
 }
 
 // isPlanRoute matches the routes every signed-in user may call for their own
@@ -185,6 +196,9 @@ func (e *Engine) allowedUserAPI(r *http.Request, u identity.User) bool {
 		return e.authService.HasPermission(r.Context(), u.Role, "research.read")
 	}
 	if method == http.MethodPost && (path == "/api/ai/chat" || path == "/api/ai/team") {
+		return e.authService.HasPermission(r.Context(), u.Role, "ai.chat")
+	}
+	if isTaskRoute(method, path) {
 		return e.authService.HasPermission(r.Context(), u.Role, "ai.chat")
 	}
 	if method == http.MethodPost && path == "/api/valuation/dcf" {

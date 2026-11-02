@@ -26,6 +26,9 @@ type Event struct {
 	Agent string `json:"agent,omitempty"`
 	// Stance is set on member_done: the persona's closing STANCE value, if it gave one.
 	Stance string `json:"stance,omitempty"`
+	// Checkpoint is set on checkpoint events (task runs): the state a failed
+	// or cancelled run resumes from.
+	Checkpoint *Checkpoint `json:"checkpoint,omitempty"`
 }
 
 // AgentOptions tunes a run.
@@ -44,6 +47,13 @@ type AgentOptions struct {
 	// Execute, when set, runs granted tool calls instead of the built-in
 	// tools, for example against recorded fixtures in an evaluation.
 	Execute func(ctx context.Context, name, argsJSON string) (string, error)
+	// Deliverables makes the run a task: the final answer must report each
+	// one done, and the run ends "incomplete" otherwise. Progress is emitted
+	// as checkpoint events.
+	Deliverables []Deliverable
+	// Resume continues from a saved checkpoint: its conversation, evidence
+	// ledger and spent budgets are restored, and transcript is appended.
+	Resume *Checkpoint
 }
 
 // DefaultSystemPrompt instructs the model how to use the market tools.
@@ -100,9 +110,38 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		system = DefaultSystemPrompt
 	}
 
+	var noTools bool // set once the tool catalogue is known
+	isTask := len(opts.Deliverables) > 0 || opts.Resume != nil
+	deliverables := append([]Deliverable(nil), opts.Deliverables...)
+	var ledger []LedgerEntry
 	messages := make([]Message, 0, len(transcript)+2)
+	toolCalls, stepsBefore := 0, 0
+	if opts.Resume != nil {
+		ledger = append(ledger, opts.Resume.Ledger...)
+		toolCalls, stepsBefore = opts.Resume.ToolCalls, opts.Resume.Steps
+		opts.DisableTools = opts.DisableTools || opts.Resume.NoTools
+		if len(deliverables) == 0 {
+			deliverables = append(deliverables, opts.Resume.Deliverables...)
+		}
+	}
+	if len(deliverables) > 0 {
+		system += reportFormat(deliverables)
+	}
 	messages = append(messages, Message{Role: "system", Content: system})
+	if opts.Resume != nil {
+		messages = append(messages, opts.Resume.Messages...)
+	}
 	messages = append(messages, transcript...)
+	// checkpoint publishes the resumable state of a task run.
+	checkpoint := func(step int, status string) {
+		if !isTask {
+			return
+		}
+		emit(Event{Type: "checkpoint", Checkpoint: &Checkpoint{
+			Messages: append([]Message(nil), messages[1:]...), Ledger: append([]LedgerEntry(nil), ledger...),
+			Deliverables: deliverables, Steps: stepsBefore + step, ToolCalls: toolCalls, Status: status, NoTools: noTools,
+		}})
+	}
 
 	tools := ToolDefs()
 	var granted map[string]bool
@@ -122,6 +161,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	if opts.DisableTools || len(tools) == 0 {
 		tools = nil
 	}
+	noTools = tools == nil
 
 	// Explanations from the client (a full context window, say) reach the UI as
 	// notices; the shared client is copied so concurrent runs do not mix them.
@@ -129,7 +169,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	own.Notice = func(text string) { emit(Event{Type: "notice", Content: text}) }
 	client = &own
 
-	toolCalls, emptyReplies := 0, 0
+	emptyReplies, nudges := 0, 0
 	for step := 1; step <= opts.MaxSteps; step++ {
 		if step == opts.MaxSteps && step > 1 && opts.AnswerAfterToolBudget && tools != nil {
 			// The last round must be an answer, not another tool call that
@@ -139,6 +179,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		}
 		assistant, err := completeWithRetry(ctx, client, &messages, tools, emit)
 		if err != nil {
+			checkpoint(step-1, TaskFailed)
 			emit(Event{Type: "error", Error: err.Error()})
 			return err
 		}
@@ -176,13 +217,37 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		emptyReplies = 0
 
 		if len(assistant.ToolCalls) == 0 {
-			emit(Event{Type: "done", Steps: step})
+			if len(deliverables) == 0 {
+				emit(Event{Type: "done", Steps: step})
+				return nil
+			}
+			deliverables = ApplyReport(deliverables, assistant.Content)
+			missing := OutstandingDeliverables(deliverables)
+			complete := Complete(deliverables, ledger, tools != nil)
+			if !complete && nudges < maxCompletionNudges && step < opts.MaxSteps {
+				nudges++
+				ask := "Not everything is finished. Use tools and finish, or mark with `[missing] <deliverable> - <reason>`: " + strings.Join(missing, "; ")
+				if len(missing) == 0 {
+					ask = "Your answer rests on no tool results. Gather sourced data with the tools before reporting deliverables done."
+				}
+				messages = append(messages, Message{Role: "user", Content: ask})
+				checkpoint(step, TaskRunning)
+				continue
+			}
+			status := TaskComplete
+			if !complete {
+				status = TaskIncomplete
+				emit(Event{Type: "notice", Content: "The task is incomplete. Missing: " + strings.Join(append(missing, noEvidence(ledger, tools != nil)...), "; ")})
+			}
+			checkpoint(step, status)
+			emit(Event{Type: "done", Steps: stepsBefore + step})
 			return nil
 		}
 
 		for _, tc := range assistant.ToolCalls {
 			if toolCalls >= opts.MaxToolCalls {
 				if !opts.AnswerAfterToolBudget {
+					checkpoint(step, TaskIncomplete)
 					emit(Event{Type: "error", Error: fmt.Sprintf("Agent tool-call budget exhausted (%d calls). Task may be incomplete.", opts.MaxToolCalls)})
 					emit(Event{Type: "done", Steps: step})
 					return nil
@@ -225,15 +290,26 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 			}
 			ev.Result = result
 			emit(ev)
+			ledger = append(ledger, LedgerEntry{Seq: len(ledger) + 1, Tool: tc.Function.Name, Arguments: clip(tc.Function.Arguments, 300),
+				Preview: clip(result, ledgerPreviewBytes), Error: ev.ToolError, At: time.Now().UTC()})
 
 			toolMessage := Message{Role: "tool", ToolCallID: tc.ID, Content: result}
 			messages = append(messages, toolMessage)
 			emit(Event{Type: "transcript_message", Message: &toolMessage})
 		}
+		checkpoint(step, TaskRunning)
 	}
 
+	checkpoint(opts.MaxSteps, TaskIncomplete)
 	emit(Event{Type: "error", Error: fmt.Sprintf("Agent reached the limit of %d model rounds; the task may be incomplete. Continue the conversation to resume.", opts.MaxSteps)})
 	emit(Event{Type: "done", Steps: opts.MaxSteps})
+	return nil
+}
+
+func noEvidence(ledger []LedgerEntry, toolsAvailable bool) []string {
+	if toolsAvailable && len(ledger) == 0 {
+		return []string{"no tool results back the answer"}
+	}
 	return nil
 }
 

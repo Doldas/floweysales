@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="036-agent-tasks" author="floweysales" dbms="mysql">
+  <!-- No foreign key to auth_users: with authentication disabled the single user is id 0.
+       Deleting an account removes its rows in Service.DeleteUser. -->
+  <createTable tableName="agent_tasks" remarks="Research-agent tasks: checklist, evidence ledger and the checkpoint a run resumes from">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_agent_tasks"/></column>
+   <column name="user_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="title" type="VARCHAR(200)"><constraints nullable="false"/></column>
+   <column name="status" type="VARCHAR(16)"><constraints nullable="false"/></column>
+   <column name="deliverables" type="TEXT"><constraints nullable="false"/></column>
+   <column name="checkpoint" type="MEDIUMTEXT"><constraints nullable="false"/></column>
+   <column name="steps" type="INT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+   <column name="tool_calls" type="INT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+   <column name="created_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+   <column name="updated_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <createIndex tableName="agent_tasks" indexName="ix_agent_tasks_user_updated"><column name="user_id"/><column name="updated_at"/></createIndex>
+  <rollback><dropTable tableName="agent_tasks"/></rollback>
+ </changeSet>
+</databaseChangeLog>

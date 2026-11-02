@@ -37,4 +37,5 @@
   <include file="033-investor-profile.xml" relativeToChangelogFile="true"/>
   <include file="034-custom-strategies.xml" relativeToChangelogFile="true"/>
   <include file="035-trading-configuration.xml" relativeToChangelogFile="true"/>
+  <include file="036-agent-tasks.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
