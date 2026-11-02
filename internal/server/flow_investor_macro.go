@@ -17,7 +17,7 @@ var macroSeries = []struct{ id, field string }{
 	{"T10Y2Y", "curve_spread"}, {"UNRATE", "unemployment"}, {"FEDFUNDS", "fed_funds"}, {"BAMLH0A0HYM2", "hy_spread"}, {"VIXCLS", "vix"},
 }
 
-const macroNotInstalled = "Install the FRED plugin (Settings → Plugins) and set FRED_API_KEY."
+const macroNotInstalled = "Install the FRED plugin and enter FRED_API_KEY under Settings → Plugins."
 
 type obs struct {
 	at time.Time

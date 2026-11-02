@@ -62,6 +62,7 @@ func openAPISecret(kind string, data []byte) (string, error) {
 
 // RestoreAPISecrets is called during normal AI config restoration at startup.
 func (e *Engine) RestoreAPISecrets(ctx context.Context) error {
+	e.restorePluginEnv(ctx)
 	for _, kind := range []string{"ai", "web_search", "sec"} {
 		entry, err := e.db.GetAPIIntegrationSecret(ctx, kind)
 		if storage.IsMissingAPIIntegration(err) {

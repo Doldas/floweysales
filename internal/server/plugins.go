@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -20,6 +21,34 @@ func (e *Engine) ConfigurePlugins(m *plugins.Manager, defaultProvider market.Pro
 	e.plugins = m
 	e.providers = m
 	e.defaultProvider = defaultProvider
+}
+
+const pluginEnvKind = "plugin_env:" // prefix of the integration name; the whole name fits 32 characters
+
+var pluginEnvName = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,19}$`)
+
+// restorePluginEnv loads the settings saved in Settings → Plugins.
+func (e *Engine) restorePluginEnv(ctx context.Context) {
+	if e.db == nil || e.plugins == nil {
+		return
+	}
+	kinds, err := e.db.ListAPIIntegrationKinds(ctx, pluginEnvKind)
+	if err != nil {
+		log.Printf("[Plugins] cannot list saved settings: %v", err)
+		return
+	}
+	for _, kind := range kinds {
+		entry, err := e.db.GetAPIIntegrationSecret(ctx, kind)
+		if err != nil {
+			continue
+		}
+		value, err := openAPISecret(kind, entry.Ciphertext)
+		if err != nil {
+			log.Printf("[Plugins] cannot read saved setting %s: %v", strings.TrimPrefix(kind, pluginEnvKind), err)
+			continue
+		}
+		e.plugins.SetSaved(strings.TrimPrefix(kind, pluginEnvKind), registeredSecret(value))
+	}
 }
 
 // Providers is the market-data backend (the tracker loop reads through it).
@@ -151,6 +180,68 @@ func (e *Engine) registerPluginRoutes() {
 		e.clearProviderCaches()
 		log.Printf("[Plugins] %s installed %s %s (sha256 %s)", user.Email, installed.Manifest.ID, installed.Manifest.Version, installed.SHA256)
 		writeJSON(w, http.StatusOK, map[string]any{"installed": installed, "overview": e.pluginOverview()})
+	})
+	e.mux.HandleFunc("PUT /api/admin/plugins/{id}/env/{name}", func(w http.ResponseWriter, r *http.Request) {
+		user, ok := e.pluginAdmin(w, r)
+		if !ok {
+			return
+		}
+		id, name := r.PathValue("id"), r.PathValue("name")
+		if !pluginEnvName.MatchString(name) || !e.plugins.Declares(id, name) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "The plugin does not declare that setting"})
+			return
+		}
+		if _, err := apiSecretCipher(); err != nil || e.db == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "Server secret encryption key is unavailable; check server startup configuration"})
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 8192)
+		var body struct {
+			Value string `json:"value"`
+		}
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid setting"})
+			return
+		}
+		body.Value = strings.TrimSpace(body.Value)
+		if body.Value == "" || len(body.Value) > 4096 || strings.ContainsAny(body.Value, "\r\n\x00") {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid value"})
+			return
+		}
+		kind := pluginEnvKind + name
+		encrypted, err := sealAPISecret(kind, body.Value)
+		if err == nil {
+			err = e.db.SaveAPIIntegrationSecret(r.Context(), kind, "plugin", encrypted)
+		}
+		if err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "Unable to save the setting"})
+			return
+		}
+		e.plugins.SetSaved(name, registeredSecret(body.Value))
+		e.clearProviderCaches()
+		log.Printf("[Plugins] %s saved setting %s for %s", user.Email, name, id)
+		writeJSON(w, http.StatusOK, e.pluginOverview())
+	})
+	e.mux.HandleFunc("DELETE /api/admin/plugins/{id}/env/{name}", func(w http.ResponseWriter, r *http.Request) {
+		user, ok := e.pluginAdmin(w, r)
+		if !ok {
+			return
+		}
+		id, name := r.PathValue("id"), r.PathValue("name")
+		if !pluginEnvName.MatchString(name) || !e.plugins.Declares(id, name) || e.db == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "The plugin does not declare that setting"})
+			return
+		}
+		if err := e.db.DeleteAPIIntegrationSecret(r.Context(), pluginEnvKind+name); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "Unable to remove the setting"})
+			return
+		}
+		e.plugins.SetSaved(name, "")
+		e.clearProviderCaches()
+		log.Printf("[Plugins] %s removed setting %s for %s", user.Email, name, id)
+		writeJSON(w, http.StatusOK, e.pluginOverview())
 	})
 	e.mux.HandleFunc("DELETE /api/admin/plugins/{id}", func(w http.ResponseWriter, r *http.Request) {
 		user, ok := e.pluginAdmin(w, r)
