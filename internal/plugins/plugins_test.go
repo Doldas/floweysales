@@ -615,6 +615,21 @@ func TestManifestToolsAreValidated(t *testing.T) {
 	}
 }
 
+func TestTaxCapabilityDoesNotMakeAPluginAProvider(t *testing.T) {
+	m := toolsManifest("1.0.0")
+	m.Provider.Capabilities = []string{CapTax}
+	if err := m.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if m.ProvidesMarketData() {
+		t.Fatal("a tax tools plugin must stay out of market data")
+	}
+	m.Tools = nil
+	if err := m.Validate(); err == nil {
+		t.Fatal("tax without a tools tab must be rejected")
+	}
+}
+
 func TestSavedSettingEnablesPluginAndEnvironmentWins(t *testing.T) {
 	store := newFakeStore(t)
 	store.publish(fakeManifest("1.0.0"), fakeRelease(t, fakeManifest("1.0.0")))

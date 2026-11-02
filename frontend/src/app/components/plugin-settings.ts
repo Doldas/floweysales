@@ -2,7 +2,7 @@ import { Component, ElementRef, computed, inject, signal, viewChild } from '@ang
 import { MarketState } from '../core/market-state';
 import { PluginTools } from '../core/plugin-tools';
 import {
-  capabilityLabels, matchesFilter, pluginRows, pluginStatus, uninstallPrompt,
+  capabilityLabels, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt,
   type PluginOverview, type PluginRow,
 } from './plugin-store';
 
@@ -54,18 +54,21 @@ type View = 'all' | 'installed' | 'available';
     <header>
      <div>
       <h3 [id]="'plugin-' + row.id">{{ row.manifest.name }}</h3>
-      <p class="muted small">{{ row.manifest.publisher }} · provider <code>{{ row.manifest.provider.id }}</code>
+      <p class="muted small">{{ row.manifest.publisher }}@if (row.manifest.provider.id) { · provider <code>{{ row.manifest.provider.id }}</code> }
        · @if (row.installed) { v{{ row.installed.manifest.version }} } @else { v{{ row.store?.latest_version || row.manifest.version }} }</p>
      </div>
      <div class="badges">
-      <span class="badge" [class.text-bg-success]="row.manifest.provider.official_api" [class.text-bg-secondary]="!row.manifest.provider.official_api">
-       {{ row.manifest.provider.official_api ? 'Official API' : 'Unofficial' }}</span>
+      @if (row.manifest.provider.id) {
+       <span class="badge" [class.text-bg-success]="row.manifest.provider.official_api" [class.text-bg-secondary]="!row.manifest.provider.official_api">
+        {{ row.manifest.provider.official_api ? 'Official API' : 'Unofficial' }}</span>
+      }
       @if (row.manifest.provider.experimental) { <span class="badge text-bg-warning">Experimental</span> }
      </div>
     </header>
     <p>{{ row.manifest.description }}</p>
     <ul class="chips" aria-label="Capabilities">
      @for (c of capabilityLabels(row.manifest.provider.capabilities); track c) { <li>{{ c }}</li> }
+     @for (t of toolLabels(row.manifest); track t) { <li>{{ t }}</li> }
     </ul>
     <p class="status" [attr.data-tone]="status(row).tone" role="status">{{ status(row).label }}</p>
 
@@ -113,7 +116,7 @@ type View = 'all' | 'installed' | 'available';
      <dl class="small">
       @if (row.manifest.homepage) { <dt>Homepage</dt><dd><a [href]="row.manifest.homepage" target="_blank" rel="noopener">{{ row.manifest.homepage }}</a></dd> }
       @if (row.manifest.license) { <dt>License</dt><dd>{{ row.manifest.license }}</dd> }
-      <dt>Polling</dt><dd>at most every {{ row.manifest.provider.min_poll_seconds }} s</dd>
+      @if (row.manifest.provider.id) { <dt>Polling</dt><dd>at most every {{ row.manifest.provider.min_poll_seconds }} s</dd> }
       @if (row.installed; as i) {
        <dt>Installed</dt><dd>{{ when(i.installed_at) }} from {{ i.source === 'file' ? 'a local file' : 'the store' }}</dd>
        <dt>SHA-256</dt><dd><code>{{ i.sha256 }}</code></dd>
@@ -218,6 +221,7 @@ export class PluginSettingsComponent {
   { id: 'all', label: 'All' }, { id: 'installed', label: 'Installed' }, { id: 'available', label: 'Available' },
  ];
  readonly capabilityLabels = capabilityLabels;
+ readonly toolLabels = toolLabels;
  readonly status = pluginStatus;
 
  readonly rows = computed(() => { const o = this.overview(); return o ? pluginRows(o) : []; });

@@ -38,6 +38,10 @@ const (
 	CapForum      = "forum"
 	CapNews       = "news"
 	CapEvents     = "events"
+	// CapTax is a tool capability: the plugin offers tax tools in its tools
+	// tab. It has no protocol method of its own (the tools use "tool"), so a
+	// plugin with it needs Tools and may leave the provider id empty.
+	CapTax = "tax"
 )
 
 // Manifest describes a plugin. Each plugin ships it as plugin.json (embedded
@@ -114,7 +118,21 @@ var (
 )
 
 var knownCapabilities = map[string]bool{
-	CapQuote: true, CapHistory: true, CapSearch: true, CapFinancials: true, CapResearch: true, CapForum: true, CapNews: true, CapEvents: true,
+	CapQuote: true, CapHistory: true, CapSearch: true, CapFinancials: true, CapResearch: true, CapForum: true, CapNews: true, CapEvents: true, CapTax: true,
+}
+
+// toolCapabilities describe what a tools tab does. They are not market-data
+// provider capabilities: a plugin that declares only these is no provider.
+var toolCapabilities = map[string]bool{CapTax: true}
+
+// onlyToolCapabilities reports whether every capability is a tool capability.
+func onlyToolCapabilities(capabilities []string) bool {
+	for _, c := range capabilities {
+		if !toolCapabilities[c] {
+			return false
+		}
+	}
+	return true
 }
 
 // reservedEnv can never be forwarded to a plugin: they belong to the backend.
@@ -158,8 +176,13 @@ func (m Manifest) Validate() error {
 // have no provider at all; any provider field then makes it a provider.
 func (m Manifest) validateProvider() error {
 	p := m.Provider
-	if m.Tools != nil && p.ID == "" && p.Label == "" && len(p.Capabilities) == 0 && len(p.Research) == 0 {
-		return nil
+	if p.ID == "" && p.Label == "" && len(p.Research) == 0 && onlyToolCapabilities(p.Capabilities) {
+		if len(p.Capabilities) > 0 && m.Tools == nil {
+			return errors.New("tool capabilities need a tools tab")
+		}
+		if m.Tools != nil {
+			return nil
+		}
 	}
 	if !providerIDPattern.MatchString(p.ID) {
 		return fmt.Errorf("invalid provider id %q", p.ID)

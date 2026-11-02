@@ -11,6 +11,8 @@ export interface PluginProvider {
 export interface PluginManifest {
   protocol: number; id: string; name: string; version: string; description: string; publisher: string;
   homepage?: string; license?: string; terms?: string; provider: PluginProvider; env?: PluginEnvVar[];
+  /** A tab of interactive tools; a plugin with tools may have no market-data provider. */
+  tools?: { tab?: { label?: string }; tools?: { id: string; label: string }[] };
 }
 export interface InstalledPlugin {
   manifest: PluginManifest; installed_at: string; source: string; sha256: string; running: boolean;
@@ -91,12 +93,18 @@ export function pluginStatus(row: PluginRow): { label: string; tone: PluginTone 
 
 const CAPABILITIES: Record<string, string> = {
   quote: 'Quotes', history: 'Price history', search: 'Symbol search',
-  financials: 'Financial statements', research: 'Research data', forum: 'Community posts',
+  financials: 'Financial statements', research: 'Research data', forum: 'Community posts', tax: 'Tax',
 };
 
 /** Human names of declared capabilities, in a stable order. */
-export function capabilityLabels(capabilities: string[]): string[] {
-  return Object.keys(CAPABILITIES).filter(c => capabilities.includes(c)).map(c => CAPABILITIES[c]);
+export function capabilityLabels(capabilities: string[] | null | undefined): string[] {
+  const have = capabilities ?? [];
+  return Object.keys(CAPABILITIES).filter(c => have.includes(c)).map(c => CAPABILITIES[c]);
+}
+
+/** What a plugin's tools tab offers, as chip labels (K4 report, Holdings, ...). */
+export function toolLabels(manifest: Pick<PluginManifest, 'tools'>): string[] {
+  return (manifest.tools?.tools ?? []).map(t => t.label).filter(Boolean);
 }
 
 /** Matches a free-text filter against name, id, provider and description. */
@@ -104,12 +112,13 @@ export function matchesFilter(row: PluginRow, filter: string): boolean {
   const q = filter.trim().toLowerCase();
   if (!q) return true;
   const m = row.manifest;
-  return [m.name, m.id, m.provider.id, m.provider.label, m.description, m.publisher].some(v => v?.toLowerCase().includes(q));
+  return [m.name, m.id, m.provider?.id, m.provider?.label, m.description, m.publisher].some(v => v?.toLowerCase().includes(q));
 }
 
 /** Confirmation text before removing a plugin. */
 export function uninstallPrompt(row: PluginRow): string {
-  const base = `Uninstall ${row.manifest.name}? The ${row.manifest.provider.id} provider stops being available.`;
+  const what = row.manifest.provider?.id ? `The ${row.manifest.provider.id} provider` : 'Its tools tab';
+  const base = `Uninstall ${row.manifest.name}? ${what} stops being available.`;
   if (!row.trackers.length) return base;
   const n = row.trackers.length;
   return `${base} ${n} active tracker${n === 1 ? '' : 's'} (${row.trackers.join(', ')}) will stop receiving prices until it is installed again; their history is kept.`;

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  capabilityLabels, compareVersions, matchesFilter, pluginRows, pluginStatus, uninstallPrompt,
+  capabilityLabels, compareVersions, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt,
   type InstalledPlugin, type PluginManifest, type PluginOverview, type StorePlugin,
 } from './plugin-store.ts';
 
@@ -64,4 +64,25 @@ test('capabilities and filtering', () => {
   assert.equal(matchesFilter(row, 'AVANZA'), true);
   assert.equal(matchesFilter(row, '  '), true);
   assert.equal(matchesFilter(row, 'crypto'), false);
+});
+
+test('a tools-only plugin has no provider and null capabilities', () => {
+  // The server sends capabilities: null for a plugin without a provider.
+  assert.deepEqual(capabilityLabels(null), []);
+  const row = {
+    id: 'se-tax', manifest: { id: 'se-tax', name: 'Swedish tax', publisher: 'FloweySales', description: 'K4', version: '1.0.0', protocol: 1,
+      provider: { id: '', label: '', capabilities: null }, tools: { tab: { label: 'Tax' } } },
+    trackers: [],
+  } as unknown as Parameters<typeof uninstallPrompt>[0];
+  assert.equal(matchesFilter(row, 'tax'), true);
+  assert.match(uninstallPrompt(row), /tools tab stops being available/);
+});
+
+test('tool labels stand in for capabilities on a tools-only plugin', () => {
+  assert.deepEqual(toolLabels({ tools: { tools: [{ id: 'k4', label: 'K4 report' }, { id: 'holdings', label: 'Holdings & cost basis' }] } }), ['K4 report', 'Holdings & cost basis']);
+  assert.deepEqual(toolLabels({}), []);
+});
+
+test('tax is a capability label', () => {
+  assert.deepEqual(capabilityLabels(['tax']), ['Tax']);
 });
