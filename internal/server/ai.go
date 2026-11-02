@@ -22,6 +22,19 @@ type engineSource struct {
 	e *Engine
 }
 
+// WebSearch uses the web search provider and key saved under Settings →
+// Integrations, as the Flow Studio web search node does, and only falls back
+// to BRAVE_SEARCH_API_KEY in the environment when none is saved.
+func (s engineSource) WebSearch(ctx context.Context, query string) (string, error) {
+	s.e.integrationMu.Lock()
+	saved := s.e.webSearchAPIKey != ""
+	s.e.integrationMu.Unlock()
+	if !saved {
+		return ai.SearchWeb(ctx, query)
+	}
+	return s.e.runWebSearch(ctx, query)
+}
+
 func (s engineSource) Search(query, provider string) ([]market.SearchResult, error) {
 	return s.e.providers.Search(context.Background(), s.e.parseProvider(provider), query)
 }

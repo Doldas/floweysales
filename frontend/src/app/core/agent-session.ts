@@ -269,6 +269,10 @@ export class AgentSession {
         case 'error':
           this.error.set(ev.error || 'AI error');
           break;
+        case 'notice':
+          // The backend explains why a reply was cut off (a full context window, say).
+          if (ev.content) this.error.set(ev.content);
+          break;
       }
     }
   }

@@ -31,7 +31,7 @@ type webSearchResponse struct {
 func SearchWeb(ctx context.Context, query string) (string, error) {
 	apiKey := strings.TrimSpace(os.Getenv("BRAVE_SEARCH_API_KEY"))
 	if apiKey == "" {
-		return "", errors.New("web search unavailable: SYS_ADMIN must configure BRAVE_SEARCH_API_KEY on the backend")
+		return "", errors.New("web search unavailable: a SYS_ADMIN must add a Brave or Tavily key under Settings → Integrations (or set BRAVE_SEARCH_API_KEY on the backend)")
 	}
 	return searchBrave(ctx, query, apiKey, "https://api.search.brave.com/res/v1/web/search", &http.Client{Timeout: 12 * time.Second})
 }

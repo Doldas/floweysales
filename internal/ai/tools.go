@@ -35,6 +35,13 @@ type ProviderCatalog interface {
 	ProviderQuote(symbol, provider string) (market.QuoteSnapshot, error)
 }
 
+// WebSearcher is the optional part of a DataSource that runs web searches
+// with the provider and key the server holds (Settings → Integrations). A
+// data source without it falls back to BRAVE_SEARCH_API_KEY in the environment.
+type WebSearcher interface {
+	WebSearch(ctx context.Context, query string) (string, error)
+}
+
 // InvestorSource is the optional part of a DataSource behind the investor
 // tools: the leaderboard and its backtest, the signed-in user's wealth plan,
 // the paper portfolio's risk, insider activity, the macro regime and
@@ -491,6 +498,9 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 		return toJSON(out)
 	case "search_web":
 		query := strArg(args, "query")
+		if ws, ok := src.(WebSearcher); ok {
+			return ws.WebSearch(ctx, query)
+		}
 		return SearchWeb(ctx, query)
 	case "search_symbols":
 		query := strArg(args, "query")
