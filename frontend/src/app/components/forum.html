@@ -1,51 +1,176 @@
-<div class="forum">
-  <section class="card composer-card" aria-labelledby="forum-compose-title">
-    <div class="card-body">
-      <h2 class="h6 mb-3" id="forum-compose-title">Share a thesis @if (trackedSymbol()) { <span class="text-muted fw-normal">on {{ trackedSymbol() }}</span> }</h2>
-      <div class="row g-2">
-        <div class="col-sm-4">
-          <label class="form-label" for="forum-author">Name or handle</label>
-          <input class="form-control" id="forum-author" [(ngModel)]="author" maxlength="40">
+<div class="community">
+  <!-- Composer -->
+  <section class="composer card" aria-labelledby="composer-title">
+    @if (!composerOpen()) {
+      <button type="button" class="composer-trigger" (click)="openComposer()">
+        <i class="bi bi-pencil-square" aria-hidden="true"></i>
+        <span id="composer-title">Share a thesis@if (topic()) { on <strong>{{ topic() }}</strong> }…</span>
+        <span class="composer-hint">What are you seeing, and what is the evidence?</span>
+      </button>
+    } @else {
+      <form class="card-body" (ngSubmit)="submit()" (keydown)="onComposeKey($event)" novalidate>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h2 class="h6 mb-0" id="composer-title">New post</h2>
+          <button type="button" class="btn btn-sm btn-link text-muted" (click)="discard()">Cancel</button>
         </div>
-        <div class="col-sm-8">
-          <label class="form-label" for="forum-title">Title</label>
-          <input class="form-control" id="forum-title" [(ngModel)]="title" maxlength="120">
-        </div>
-        <div class="col-12">
-          <label class="form-label" for="forum-content">Your thesis</label>
-          <textarea class="form-control" id="forum-content" [(ngModel)]="content" rows="3" placeholder="What are you seeing, and what is the evidence?"></textarea>
-        </div>
-      </div>
-      <div class="d-flex justify-content-end mt-3">
-        <button type="button" class="btn btn-primary" (click)="submit()"><i class="bi bi-send" aria-hidden="true"></i> Publish post</button>
-      </div>
-    </div>
-  </section>
-
-  @if (loading()) {
-    <p class="text-muted">Loading posts…</p>
-  } @else if (!posts().length) {
-    <div class="fs-empty"><i class="bi bi-chat-square-text"></i><h3>No posts yet</h3><p class="mb-0">Be the first to share a thesis@if (trackedSymbol()) { on {{ trackedSymbol() }}}.</p></div>
-  }
-
-  <div class="post-list">
-    @for (post of posts(); track post.id) {
-      <article class="card post-card">
-        <div class="card-body">
-          <div class="post-head">
-            <span class="post-avatar" aria-hidden="true">{{ (post.author || '?').slice(0, 1).toUpperCase() }}</span>
-            <div class="min-w-0">
-              <div class="post-author">{{ post.author }} @if (post.symbol) { <span class="badge text-bg-secondary ms-1">{{ post.symbol }}</span> }</div>
-              <div class="post-time">{{ post.timestamp * 1000 | date: 'medium' }}</div>
-            </div>
+        <div class="row g-3">
+          <div class="col-sm-6 col-lg-4">
+            <label class="form-label" for="forum-author">Your name</label>
+            <input #authorField class="form-control" id="forum-author" name="author" [(ngModel)]="author" (ngModelChange)="edited()" maxlength="40" autocomplete="nickname" placeholder="Shown on your posts">
           </div>
-          <h3 class="post-title">{{ post.title }}</h3>
-          <p class="post-body">{{ post.content }}</p>
-          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="vote(post)" [attr.aria-label]="'Upvote, ' + post.upvotes + ' votes'">
-            <i class="bi bi-hand-thumbs-up" aria-hidden="true"></i> {{ post.upvotes }}
+          <div class="col-sm-6 col-lg-4">
+            <label class="form-label" for="forum-topic">Topic</label>
+            <select class="form-select" id="forum-topic" name="topic" [(ngModel)]="composeTopic" (ngModelChange)="edited()">
+              <option value="">General (no market)</option>
+              @for (t of topics(); track t.symbol) {
+                <option [value]="t.symbol">{{ t.symbol }}</option>
+              }
+              @if (composeTopic && !topics().some(t => t.symbol === composeTopic)) {
+                <option [value]="composeTopic">{{ composeTopic }}</option>
+              }
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label d-flex justify-content-between" for="forum-title">
+              <span>Headline</span>
+              <span class="count" [class.near]="title.length > titleMax - 20" aria-hidden="true">{{ title.length }}/{{ titleMax }}</span>
+            </label>
+            <input #titleField class="form-control" id="forum-title" name="title" [(ngModel)]="title" (ngModelChange)="edited()" [maxlength]="titleMax" placeholder="One line that states the claim">
+          </div>
+          <div class="col-12">
+            <label class="form-label d-flex justify-content-between" for="forum-content">
+              <span>Thesis and evidence</span>
+              <span class="count" [class.near]="content.length > bodyMax - 200" aria-hidden="true">{{ content.length }}/{{ bodyMax }}</span>
+            </label>
+            <textarea #bodyField class="form-control" id="forum-content" name="content" [(ngModel)]="content" (ngModelChange)="edited()" [maxlength]="bodyMax" rows="5" placeholder="What are you seeing, and what is the evidence? Numbers, filings and links make it easy to check."></textarea>
+          </div>
+        </div>
+        <div class="composer-actions">
+          <span class="text-muted small" aria-live="polite">
+            @if (missing().length) { Add {{ missing().join(', ') }} to publish. } @else { Draft saved on this device. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to publish. }
+          </span>
+          <button type="submit" class="btn btn-primary" [disabled]="publishing()" [attr.aria-disabled]="missing().length ? 'true' : null">
+            @if (publishing()) { <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Publishing… } @else { <i class="bi bi-send" aria-hidden="true"></i> Publish }
           </button>
         </div>
-      </article>
+      </form>
     }
+  </section>
+
+  <div class="layout">
+    <!-- Topics -->
+    <nav class="topics" aria-label="Topics">
+      <h2 class="topics-title">Topics</h2>
+      <ul class="topic-list">
+        <li>
+          <button type="button" class="topic" [attr.aria-pressed]="!topic()" (click)="selectTopic('')">
+            <span class="topic-name"><i class="bi bi-collection" aria-hidden="true"></i> All posts</span>
+            <span class="topic-count">{{ allPosts().length }}</span>
+          </button>
+        </li>
+        @for (t of topics(); track t.symbol) {
+          <li>
+            <button type="button" class="topic" [attr.aria-pressed]="topic() === t.symbol" (click)="selectTopic(t.symbol)">
+              <span class="topic-name">{{ t.symbol }} @if (t.symbol === trackedSymbol()) { <span class="topic-tag">tracking</span> }</span>
+              <span class="topic-count" [class.is-zero]="!t.count">{{ t.count }}</span>
+            </button>
+          </li>
+        }
+      </ul>
+    </nav>
+
+    <!-- Feed -->
+    <section class="feed" aria-labelledby="feed-title" [attr.aria-busy]="loading()">
+      <div class="feed-bar">
+        <div class="feed-heading">
+          <h2 id="feed-title" class="h5 mb-0">{{ topic() ? topic() + ' discussion' : 'All discussions' }}</h2>
+          <span class="text-muted small" aria-live="polite">
+            @if (!loading() && !failed()) {
+              {{ visible().length }} {{ visible().length === 1 ? 'post' : 'posts' }}@if (query()) { matching “{{ query() }}” }
+              @if (topic() || query()) { · <button type="button" class="btn btn-link btn-sm p-0 align-baseline" (click)="clearFilters()">Show everything</button> }
+            }
+          </span>
+        </div>
+        <div class="feed-tools">
+          <div class="search">
+            <i class="bi bi-search" aria-hidden="true"></i>
+            <input class="form-control form-control-sm" type="search" aria-label="Search posts" placeholder="Search posts" [ngModel]="query()" (ngModelChange)="query.set($event)" name="search">
+          </div>
+          <div class="fs-segmented" role="group" aria-label="Sort posts">
+            <button type="button" [attr.aria-pressed]="sort() === 'latest'" (click)="sort.set('latest')">Latest</button>
+            <button type="button" [attr.aria-pressed]="sort() === 'top'" (click)="sort.set('top')">Top</button>
+          </div>
+        </div>
+      </div>
+
+      @if (failed()) {
+        <div class="fs-empty" role="alert">
+          <i class="bi bi-wifi-off" aria-hidden="true"></i>
+          <h3>Could not load the community</h3>
+          <p class="mb-0">{{ failed() }}</p>
+          <button type="button" class="btn btn-sm btn-primary mt-2" (click)="reload()">Try again</button>
+        </div>
+      } @else if (loading()) {
+        <div class="post-list" role="status" aria-label="Loading posts">
+          @for (n of [1, 2, 3]; track n) {
+            <div class="card post skeleton" aria-hidden="true"><div class="card-body"><span class="bar w-25"></span><span class="bar w-75"></span><span class="bar"></span><span class="bar w-50"></span></div></div>
+          }
+        </div>
+      } @else if (!visible().length) {
+        <div class="fs-empty">
+          @if (query()) {
+            <i class="bi bi-search" aria-hidden="true"></i>
+            <h3>No posts match “{{ query() }}”</h3>
+            <p class="mb-0">Check the spelling or search with fewer words.</p>
+            <button type="button" class="btn btn-sm btn-outline-secondary mt-2" (click)="query.set('')">Clear search</button>
+          } @else if (topic()) {
+            <i class="bi bi-chat-square-text" aria-hidden="true"></i>
+            <h3>Nobody has posted about {{ topic() }} yet</h3>
+            <p class="mb-0">Start the conversation with a thesis and the evidence behind it.</p>
+            <button type="button" class="btn btn-sm btn-primary mt-2" (click)="openComposer(topic())">Post about {{ topic() }}</button>
+          } @else {
+            <i class="bi bi-chat-square-text" aria-hidden="true"></i>
+            <h3>The community is quiet</h3>
+            <p class="mb-0">Share the first thesis. Posts are visible to everyone on this workspace.</p>
+            <button type="button" class="btn btn-sm btn-primary mt-2" (click)="openComposer()">Write the first post</button>
+          }
+        </div>
+      } @else {
+        <div class="post-list">
+          @for (post of visible(); track postKey(post)) {
+            <article class="card post" [attr.aria-labelledby]="'post-' + postKey(post)">
+              <div class="card-body">
+                <header class="post-head">
+                  <span class="post-avatar" aria-hidden="true">{{ initials(post.author) }}</span>
+                  <div class="post-meta">
+                    <span class="post-author">{{ post.author || 'Anonymous' }}</span>
+                    <time [attr.datetime]="postMillis(post) ? (postMillis(post) | date: 'yyyy-MM-ddTHH:mm:ssZZZZZ') : null" [title]="postMillis(post) | date: 'medium'">· {{ timeAgo(postMillis(post)) }}</time>
+                    @if (post.source === 'provider') { <span class="fs-status is-info no-dot" title="Posted on the data provider's own forum">Provider</span> }
+                  </div>
+                  @if (post.symbol && post.symbol !== topic()) {
+                    <button type="button" class="fs-chip post-topic" (click)="selectTopic(post.symbol)" [attr.aria-label]="'Show only ' + post.symbol + ' posts'">{{ post.symbol }}</button>
+                  }
+                </header>
+                <h3 class="post-title" [id]="'post-' + postKey(post)">{{ post.title }}</h3>
+                <p class="post-body">{{ isExpanded(post) ? post.content : excerpt(post.content) }}</p>
+                @if (isLong(post.content)) {
+                  <button type="button" class="btn btn-link btn-sm p-0 mb-2" [attr.aria-expanded]="isExpanded(post)" (click)="toggleExpanded(post)">{{ isExpanded(post) ? 'Show less' : 'Read more' }}</button>
+                }
+                <footer class="post-foot">
+                  @if (post.source === 'provider') {
+                    <span class="text-muted small"><i class="bi bi-hand-thumbs-up" aria-hidden="true"></i> {{ post.upvotes }} <span class="visually-hidden">votes</span></span>
+                  } @else {
+                    <button type="button" class="vote" [class.is-voted]="hasVoted(post)" [attr.aria-pressed]="hasVoted(post)" [disabled]="voting().has(postKey(post))" (click)="vote(post)" [attr.aria-label]="'Upvote “' + post.title + '”, ' + post.upvotes + ' votes'">
+                      <i class="bi" [class.bi-hand-thumbs-up]="!hasVoted(post)" [class.bi-hand-thumbs-up-fill]="hasVoted(post)" aria-hidden="true"></i>
+                      <span aria-hidden="true">{{ post.upvotes }}</span>
+                    </button>
+                  }
+                </footer>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
   </div>
 </div>

@@ -66,6 +66,7 @@ func (e *Engine) registerForumRoutes() {
 				jList = append(jList, map[string]any{
 					"id": post.ID, "author": post.Author, "title": post.Title, "content": post.Content,
 					"symbol": post.Symbol, "timestamp": post.Timestamp, "upvotes": post.Upvotes,
+					"source": "provider",
 				})
 			}
 			cancel()

@@ -161,6 +161,8 @@ export interface ForumPost {
   symbol?: string;
   timestamp: number;
   upvotes: number;
+  /** Set by the server for posts that come from an installed provider plugin (read-only). */
+  source?: 'provider';
 }
 
 export interface MarketStats {
