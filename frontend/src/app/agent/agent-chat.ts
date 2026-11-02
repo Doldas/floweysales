@@ -70,6 +70,7 @@ export class AgentChatComponent {
 
   constructor() {
     void this.session.loadConfig();
+    void this.session.loadPersonas();
     // Keep the newest message in view while the agent streams.
     effect(() => {
       this.session.entries();

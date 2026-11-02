@@ -13,6 +13,7 @@ import (
 
 	"floweysales/internal/ai"
 	"floweysales/internal/grounding"
+	"floweysales/internal/persona"
 	"floweysales/internal/redact"
 )
 
@@ -57,6 +58,17 @@ func flowAgentToolGrantable(name string) bool {
 
 // validateFlowAgentTools checks a node's tool grant and call budget.
 func validateFlowAgentTools(n flowNode) error {
+	if n.Persona != "" {
+		if n.Type != "agent" {
+			return fmt.Errorf("node %s: only agent nodes can take a persona", n.ID)
+		}
+		if persona.ByID(n.Persona) == nil {
+			return fmt.Errorf("agent %s: unknown persona %q", n.ID, n.Persona)
+		}
+		if n.OutputMode == "json" {
+			return fmt.Errorf("agent %s: a persona answers in prose, so it cannot be combined with JSON output", n.ID)
+		}
+	}
 	if n.Type != "agent" {
 		if len(n.Tools) > 0 || n.MaxToolCalls != 0 || n.RequireGrounding {
 			return fmt.Errorf("only agent nodes can be granted tools")

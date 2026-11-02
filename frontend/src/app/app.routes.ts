@@ -15,6 +15,8 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/command-center').then(m => m.CommandCenterPage) },
   { path: 'agent', title: 'Research Agent · FloweySales', data: { title: 'Research Agent' },
     loadComponent: () => import('./pages/agent-page').then(m => m.AgentPage) },
+  { path: 'team', title: 'Agent team · FloweySales', data: { title: 'Agent team' },
+    loadComponent: () => import('./pages/team-page').then(m => m.TeamPage) },
   { path: 'flows', title: 'Flows · FloweySales', data: { title: 'Flows' }, canMatch: [requires('flowsRead')],
     loadComponent: () => import('./pages/flows-page').then(m => m.FlowsPage) },
   { path: 'inbox', title: 'Inbox · FloweySales', data: { title: 'Inbox' }, canMatch: [requires('inbox')],

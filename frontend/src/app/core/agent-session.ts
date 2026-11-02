@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
-import type { Message } from '../models';
+import type { Message, Persona } from '../models';
 import { MarketState } from './market-state';
 
 export interface AiPreset {
@@ -35,6 +35,8 @@ export interface ChatEntry {
   status?: 'running' | 'ok' | 'error';
   startedAt?: number;
   durationMs?: number;
+  /** The character that wrote an assistant message, when one was chosen. */
+  persona?: string;
 }
 
 /** Conversation context the agent receives alongside the transcript. */
@@ -68,6 +70,10 @@ export class AgentSession {
   readonly presets = signal<AiPreset[]>([]);
   readonly tools = signal<string[]>([]);
   readonly catalog = signal<{ id: number; model: string; label: string }[]>([]);
+  /** The investor character answering, or '' for the plain analyst. */
+  readonly persona = signal('');
+  readonly personas = signal<Persona[]>([]);
+  readonly personaName = computed(() => this.personas().find(p => p.id === this.persona())?.name ?? '');
   /** Whether the floating dock is open. */
   readonly dockOpen = signal(false);
 
@@ -120,6 +126,14 @@ export class AgentSession {
       this.maxToolCalls.set(cfg.max_tool_calls || 48);
       this.configLoaded.set(true);
       if (cfg.can_configure) void this.loadCatalog();
+    } catch {}
+  }
+
+  async loadPersonas(): Promise<void> {
+    if (this.personas().length) return;
+    try {
+      const res = await fetch('/api/ai/personas', { credentials: 'same-origin' });
+      if (res.ok) this.personas.set((await res.json()).personas || []);
     } catch {}
   }
 
@@ -183,6 +197,7 @@ export class AgentSession {
         body: JSON.stringify({
           messages: this.wire.map(m => ({ ...m })),
           model: this.canConfigure() ? this.chatModel() : undefined,
+          persona: this.persona() || undefined,
           symbol: ctx.symbol,
           provider: ctx.provider,
           range: ctx.range,
@@ -299,7 +314,7 @@ export class AgentSession {
 
   private appendAssistant(delta: string): void {
     if (this.assistantId < 0) {
-      this.assistantId = this.push({ role: 'assistant', content: delta });
+      this.assistantId = this.push({ role: 'assistant', content: delta, persona: this.personaName() || undefined });
       return;
     }
     const id = this.assistantId;

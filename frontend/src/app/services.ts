@@ -13,6 +13,7 @@ import {
   OrderRequest,
   OrderResponse,
   EventsResponse,
+  PersonaCatalog,
   PlanProfile,
   TodayBriefing,
   SizeResponse,
@@ -93,6 +94,9 @@ export class MarketService {
     else params['universe'] = p.universe;
     return this.http.get<BacktestResult>('/api/market/backtest', { params });
   }
+
+  /** The investor characters an agent can answer as. */
+  getPersonas(): Observable<PersonaCatalog> { return this.http.get<PersonaCatalog>('/api/ai/personas'); }
 
   /** The signed-in user's saved wealth plan, or nulls when none is saved. */
   getPlan(): Observable<PlanResponse> {

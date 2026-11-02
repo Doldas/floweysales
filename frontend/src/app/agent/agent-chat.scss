@@ -157,3 +157,6 @@
   .composer-hint { display: none; }
   .steps { margin-left: 0; }
 }
+
+.persona-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; font-size: 0.78rem; color: var(--fs-muted); select { width: auto; max-width: 100%; flex: 1 1 auto; min-width: 0; } }
+.persona-tag { font-size: 0.72rem; font-weight: 600; color: var(--fs-accent-text, var(--fs-accent)); margin-bottom: 0.25rem; span { font-weight: 400; color: var(--fs-muted); margin-left: 0.3rem; } }

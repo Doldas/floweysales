@@ -20,7 +20,7 @@ import { FlowNotifyChannelsComponent } from './flow-notify-channels';
 import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES, SCREEN_FIELDS, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'|'watchlist_quotes'|'technical_scan'|'fundamentals'|'sec_filings'|'news'|'leaderboard'|'screen'|'only_new'|'report_table'|'notify'|'insider_activity'|'macro_regime'|'portfolio_check'|'corporate_events'|'wealth_plan'|'backtest'; label:string; symbols?:string; universe?:string; strategy?:string; provider?:string; rule?:string; sort_by?:string; limit?:number; columns?:string; title?:string; key_fields?:string; cooldown_hours?:number; lookback_days?:number; forms?:string; kinds?:string; years?:number; channel?:'email'|'webhook'; subject?:string; skip_empty?:boolean; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number;require_grounding?:boolean; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'|'watchlist_quotes'|'technical_scan'|'fundamentals'|'sec_filings'|'news'|'leaderboard'|'screen'|'only_new'|'report_table'|'notify'|'insider_activity'|'macro_regime'|'portfolio_check'|'corporate_events'|'wealth_plan'|'backtest'; label:string; symbols?:string; universe?:string; strategy?:string; provider?:string; rule?:string; sort_by?:string; limit?:number; columns?:string; title?:string; key_fields?:string; cooldown_hours?:number; lookback_days?:number; forms?:string; kinds?:string; years?:number; channel?:'email'|'webhook'; subject?:string; skip_empty?:boolean; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number;persona?:string;require_grounding?:boolean; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FunctionDef { id:number; name:string; graph?:unknown }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
@@ -183,6 +183,10 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
           @if(n.tools?.length){<label>Max tool calls (0 = default {{toolLimits().default_tool_calls}}) <input type="number" min="0" [max]="toolLimits().max_tool_calls" step="1" [ngModel]="n.max_tool_calls||0" (ngModelChange)="updateToolBudget(n.id,+$event)"></label>}
          </fieldset>
         } @else if(n.tools?.length){<p class="muted">This agent has {{n.tools.length}} research tool(s) granted by an administrator.</p>}
+        @if(n.output_mode!=='json' && personas().length){
+         <label>Answer as a character <select [ngModel]="n.persona||''" (ngModelChange)="setPersona(n.id,$event)"><option value="">None (plain analyst)</option>@for(p of personas();track p.id){<option [value]="p.id">{{p.name}} · {{p.tagline}}</option>}</select></label>
+         <p class="muted">A fictional investor character that judges the input by its own approach and ends with a stance. Combine several agents with different characters and a Merge node to build a panel.</p>
+        }
         <label class="checkbox-row"><input type="checkbox" [checked]="!!n.require_grounding" (change)="setGrounding(n.id,$any($event.target).checked)"> Require grounded figures</label>
         <p class="muted">Every figure in the answer must appear in {{n.tools?.length?'this attempt\'s tool results or ':''}}the node input, for example rows from a Watchlist or Fundamentals node. Otherwise the attempt fails and lists the unsupported figures.</p>
         @if(n.output_mode==='json'){
@@ -962,6 +966,7 @@ export class FlowStudioComponent {
  readonly defaultAIModel=signal('');
  readonly functions=signal<(FunctionDef&PublishState)[]>([]);
  readonly agentTools=signal<GrantableTool[]>([]);
+ readonly personas=signal<{id:string;name:string;tagline:string}[]>([]);
  readonly toolLimits=signal({max_tools:8,max_tool_calls:16,default_tool_calls:6});
  readonly toolLabel=toolLabel;
  readonly describeToolCall=describeToolCall;
@@ -1161,7 +1166,7 @@ export class FlowStudioComponent {
  constructor(){
   // Load the revision list of the selected call node's target for its pin selector.
   effect(()=>{const n=this.selectedNode();if(n?.type==='flow'&&n.flow_id)void this.loadTargetRevisions('flow',n.flow_id);if(n?.type==='function'&&n.function_id)void this.loadTargetRevisions('function',n.function_id)});
-  this.resetGraphHistory();this.savedSnapshot.set(this.currentSnapshot());void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN'){void this.loadFunctions();void this.loadAgentTools()}void this.loadModels();void this.loadProviders();
+  this.resetGraphHistory();this.savedSnapshot.set(this.currentSnapshot());void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN'){void this.loadFunctions();void this.loadAgentTools()}void this.loadModels();void this.loadPersonas();void this.loadProviders();
     effect(()=>{
       const current=JSON.stringify(this.graph());
       if(current===this.lastGraphVersion||this.dragHistoryStart!==null)return;
@@ -1406,6 +1411,8 @@ export class FlowStudioComponent {
  connectValue(from:string,to:string){if(!to||this.node(from)?.value_type!=='text'){this.message.set('Typed link requires a text value and an agent or flow input');return}if(this.graph().edges.some(e=>e.from===from&&e.to===to))return;this.graph.update(g=>({...g,edges:[...g.edges,{from,to,from_port:'value',to_port:'input'}]}))}
  addSubflow(){const n=this.graph().nodes;const id='flow-'+Date.now().toString(36);this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'flow',label:'Call flow',flow_id:0,x:260+(n.length%4)*140,y:40+Math.floor(n.length/4)*100}]}));this.chosen.set(id)}
  updateFlowReference(target:number){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>{if(n.id!==this.chosen())return n;const next={...n,flow_id:target};delete next.flow_revision;return next})}))}
+ async loadPersonas(){try{const data=await this.request('/api/ai/personas');this.personas.set(data.personas||[])}catch{/* The character picker stays hidden. */}}
+ setPersona(id:string,value:string){this.graph.update(g=>({...g,nodes:g.nodes.map(x=>{if(x.id!==id)return x;const {persona:_p,...rest}=x;return value?{...rest,persona:value}:rest})}))}
  async loadAgentTools(){try{const data=await this.request('/api/admin/flow-agent-tools');this.agentTools.set(data.tools||[]);this.toolLimits.set({max_tools:data.max_tools,max_tool_calls:data.max_tool_calls,default_tool_calls:data.default_tool_calls})}catch{/* Tool grants stay hidden when the catalogue is unavailable. */}}
  toggleAgentTool(id:string,name:string){
    const n=this.node(id);const next=toggleTool(n?.tools,name,this.toolLimits().max_tools);

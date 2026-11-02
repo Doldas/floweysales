@@ -1,0 +1,73 @@
+// Runs with Node's built-in test runner:
+//   node --test src/app/components/team-view.spec.ts
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { DEFAULT_TEAM, applyTeamEvent, shownText, stanceCounts, startTeam, stripStance, togglePersona } from './team-view.ts';
+import type { TeamEvent } from '../models';
+
+const run = (events: TeamEvent[]) => events.reduce(applyTeamEvent, startTeam([{ id: 'a', name: 'Alpha' }, { id: 'b', name: 'Beta' }], true));
+
+test('events fold into per-member state and a chair', () => {
+  const s = run([
+    { type: 'member_start', agent: 'a', name: 'Alpha' }, { type: 'member_start', agent: 'b', name: 'Beta' },
+    { type: 'tool_start', agent: 'a', name: 'get_sec_facts' }, { type: 'delta', agent: 'b', content: 'Too ' }, { type: 'delta', agent: 'b', content: 'dear.' },
+    { type: 'tool_result', agent: 'a', name: 'get_sec_facts' },
+    { type: 'member_done', agent: 'a', content: 'Good cash.\nSTANCE: fits', stance: 'fits' },
+    { type: 'member_done', agent: 'b', content: 'Too dear.\nSTANCE: does_not_fit', stance: 'does_not_fit' },
+    { type: 'member_start', agent: 'chair' }, { type: 'delta', agent: 'chair', content: 'They disagree on price.' },
+    { type: 'member_done', agent: 'chair', content: 'They disagree on price.' }, { type: 'done' },
+  ]);
+  assert.equal(s.finished, true);
+  assert.deepEqual(s.members[0].steps, [{ name: 'get_sec_facts', status: 'ok' }]);
+  assert.equal(s.members[0].stance, 'fits');
+  assert.equal(s.members[1].stance, 'does_not_fit');
+  assert.equal(s.chair?.status, 'done');
+  assert.equal(shownText(s.members[0]), 'Good cash.');
+});
+
+test('streamed text shows until the final answer arrives, without the stance line', () => {
+  const s = run([{ type: 'member_start', agent: 'a' }, { type: 'delta', agent: 'a', content: 'Working\nSTANCE: fits' }]);
+  assert.equal(s.members[0].status, 'running');
+  assert.equal(shownText(s.members[0]), 'Working');
+});
+
+test('a member that fails is marked and does not stop the others', () => {
+  const s = run([
+    { type: 'error', agent: 'a', error: 'model unavailable' }, { type: 'member_done', agent: 'a', content: '', error: 'model unavailable' },
+    { type: 'member_done', agent: 'b', content: 'ok\nSTANCE: partly', stance: 'partly' },
+  ]);
+  assert.equal(s.members[0].status, 'error');
+  assert.equal(s.members[0].error, 'model unavailable');
+  assert.equal(s.members[1].status, 'done');
+});
+
+test('an unknown stance value is ignored and counts are fixed-order', () => {
+  const s = run([
+    { type: 'member_done', agent: 'a', content: 'x', stance: 'buy' }, { type: 'member_done', agent: 'b', content: 'y', stance: 'partly' },
+  ]);
+  assert.equal(s.members[0].stance, undefined);
+  assert.deepEqual(stanceCounts(s.members), [{ stance: 'partly', label: 'Partly fits', count: 1 }]);
+});
+
+test('team errors without an agent end up on the team', () => {
+  assert.equal(run([{ type: 'error', error: 'rate limited' }]).error, 'rate limited');
+});
+
+test('stripStance only removes a closing stance line', () => {
+  assert.equal(stripStance('Body\n**STANCE: partly**'), 'Body');
+  assert.equal(stripStance('A stance: matters\nmore text'), 'A stance: matters\nmore text');
+});
+
+test('selection is toggled and capped', () => {
+  assert.deepEqual(togglePersona(['a'], 'b', 3), ['a', 'b']);
+  assert.deepEqual(togglePersona(['a', 'b'], 'a', 3), ['b']);
+  assert.deepEqual(togglePersona(['a', 'b', 'c'], 'd', 3), ['a', 'b', 'c']);
+  assert.ok(DEFAULT_TEAM.length >= 2);
+});
+
+test('members still waiting when the run ends are settled, not left spinning', () => {
+  const s = run([{ type: 'member_start', agent: 'a' }, { type: 'done' }]);
+  assert.equal(s.members[0].status, 'error');
+  assert.equal(s.members[1].error, 'No answer before the run ended.');
+  assert.equal(s.chair?.status, 'error');
+});
