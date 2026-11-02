@@ -385,3 +385,24 @@ func TestPersonaPresetsBelongToACharacterAndTrade(t *testing.T) {
 		t.Fatalf("expected the character strategies, got %d", seen)
 	}
 }
+
+func TestWalkForwardCoversEveryTradeOnce(t *testing.T) {
+	def := Presets()[0]
+	res, err := Run(def, swings(40), Config{CostBps: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Walk) != WalkPeriods {
+		t.Fatalf("want %d periods, got %d", WalkPeriods, len(res.Walk))
+	}
+	total := 0
+	for i, p := range res.Walk {
+		total += p.Trades
+		if i > 0 && p.From <= res.Walk[i-1].To {
+			t.Fatalf("period %d overlaps the previous one", i)
+		}
+	}
+	if total != len(res.Trades) {
+		t.Fatalf("periods hold %d trades, replay has %d", total, len(res.Trades))
+	}
+}
