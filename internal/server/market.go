@@ -248,10 +248,19 @@ func (e *Engine) registerMarketRoutes() {
 
 		// Client is registered before headers, so overloads return HTTP 503.
 
+		// A comment line keeps quiet symbols from idling out at proxies and
+		// lets a dead client surface as a failed write, freeing its slot.
+		keepAlive := time.NewTicker(sseKeepAliveInterval)
+		defer keepAlive.Stop()
 		for {
 			select {
 			case <-cancel:
 				return
+			case <-keepAlive.C:
+				if _, err := w.Write([]byte(": keep-alive\n\n")); err != nil {
+					return
+				}
+				flusher.Flush()
 			case data := <-ch:
 				if _, err := w.Write(data); err != nil {
 					return
@@ -261,6 +270,9 @@ func (e *Engine) registerMarketRoutes() {
 		}
 	})
 }
+
+// sseKeepAliveInterval is how often an idle price stream sends a comment frame.
+const sseKeepAliveInterval = 15 * time.Second
 
 // GetHistory returns a provider OHLC series, reusing a short-lived cache so
 // repeated UI range switches don't hammer the upstream APIs.
