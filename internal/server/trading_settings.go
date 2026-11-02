@@ -14,9 +14,11 @@ import (
 // tradingSettings are the paper-trading limits and costs an administrator can
 // change in Settings. Saved values replace the PAPER_* and TRADE_COMMISSION_*
 // ones from the environment, take effect at once and survive a restart. The
-// starting cash and the per-symbol sector and volume maps stay in the
-// environment: changing them would rewrite the history of the account.
+// per-symbol sector and volume maps stay in the environment. Changing the
+// starting cash moves the equity of the whole history; Reset account starts
+// over from the new amount.
 type tradingSettings struct {
+	BaseCash               float64 `json:"base_cash"`
 	AllowShort             bool    `json:"allow_short"`
 	HaltNewOrders          bool    `json:"halt_new_orders"`
 	RequirePaperApproval   bool    `json:"require_paper_approval"`
@@ -31,7 +33,7 @@ type tradingSettings struct {
 }
 
 func tradingSettingsOf(c trading.Config) tradingSettings {
-	return tradingSettings{AllowShort: c.AllowShort, HaltNewOrders: c.HaltNewOrders, RequirePaperApproval: c.RequirePaperApproval,
+	return tradingSettings{BaseCash: c.BaseCash, AllowShort: c.AllowShort, HaltNewOrders: c.HaltNewOrders, RequirePaperApproval: c.RequirePaperApproval,
 		ApprovalTTLMinutes: int(c.ApprovalTTLSeconds() / 60), MaxOrderNotional: c.MaxOrderNotional,
 		MaxSymbolAllocationPct: c.MaxSymbolAllocationPct, MaxSectorAllocationPct: c.MaxSectorAllocationPct,
 		MaxDailyVolumePct: c.MaxDailyVolumePct, MaxDrawdownPct: c.MaxDrawdownPct,
@@ -39,6 +41,7 @@ func tradingSettingsOf(c trading.Config) tradingSettings {
 }
 
 func (s tradingSettings) applyTo(c trading.Config) trading.Config {
+	c.BaseCash = s.BaseCash
 	c.AllowShort, c.HaltNewOrders, c.RequirePaperApproval = s.AllowShort, s.HaltNewOrders, s.RequirePaperApproval
 	c.ApprovalTTLMinutes, c.MaxOrderNotional = s.ApprovalTTLMinutes, s.MaxOrderNotional
 	c.MaxSymbolAllocationPct, c.MaxSectorAllocationPct = s.MaxSymbolAllocationPct, s.MaxSectorAllocationPct
@@ -53,6 +56,8 @@ func finiteBetween(v, lo, hi float64) bool {
 
 func (s tradingSettings) validate() string {
 	switch {
+	case !finiteBetween(s.BaseCash, 1, 1e12):
+		return "Starting cash must be a positive amount"
 	case s.ApprovalTTLMinutes < 1 || s.ApprovalTTLMinutes > trading.MaxApprovalTTLMinutes:
 		return "Approval lifetime must be from 1 minute to 7 days"
 	case !finiteBetween(s.MaxOrderNotional, 0, 1e12):
@@ -137,6 +142,32 @@ func (e *Engine) registerTradingSettingsRoutes() {
 			log.Printf("[Trading] %s saved paper-trading settings: %s", user.Email, raw)
 		}
 		writeJSON(w, http.StatusOK, view)
+	})
+	e.mux.HandleFunc("POST /api/admin/trading-settings/reset-account", func(w http.ResponseWriter, r *http.Request) {
+		if !e.flowAdmin(w, r) {
+			return
+		}
+		if e.db == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "No database"})
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 1024)
+		var body struct {
+			Confirm string `json:"confirm"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Confirm != "RESET" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Send {\"confirm\":\"RESET\"} to delete the paper account history"})
+			return
+		}
+		orders, err := e.db.ResetPaperAccount(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "Unable to reset the paper account"})
+			return
+		}
+		if user, ok := e.currentUser(r); ok {
+			log.Printf("[Trading] %s reset the paper account: %d orders and their audit trail deleted", user.Email, orders)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"deleted_orders": orders})
 	})
 	e.mux.HandleFunc("DELETE /api/admin/trading-settings", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {

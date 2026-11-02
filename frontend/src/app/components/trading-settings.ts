@@ -1,6 +1,7 @@
 import { Component, signal } from '@angular/core';
 
 interface TradingSettings {
+  base_cash: number;
   allow_short: boolean; halt_new_orders: boolean; require_paper_approval: boolean; approval_ttl_minutes: number;
   max_order_notional: number; max_symbol_allocation_pct: number; max_sector_allocation_pct: number;
   max_daily_volume_pct: number; max_drawdown_pct: number; commission_pct: number; commission_fixed: number;
@@ -11,6 +12,7 @@ type NumberKey = { [K in keyof TradingSettings]: TradingSettings[K] extends numb
 type BoolKey = { [K in keyof TradingSettings]: TradingSettings[K] extends boolean ? K : never }[keyof TradingSettings];
 
 const LIMITS: { key: NumberKey; label: string; hint: string; step: string }[] = [
+  { key: 'base_cash', label: 'Starting cash', hint: 'The account’s equity before any trade. Changing it moves the equity of the whole history; use Reset account below to start over.', step: '1' },
   { key: 'max_order_notional', label: 'Largest single order', hint: 'Orders worth more are rejected. 0 means no limit.', step: '1' },
   { key: 'max_symbol_allocation_pct', label: 'Largest share of equity in one symbol (%)', hint: 'New buys that would exceed it are rejected. 0 means off.', step: '0.1' },
   { key: 'max_sector_allocation_pct', label: 'Largest share of equity in one sector (%)', hint: 'Needs PAPER_SYMBOL_SECTORS in the server environment. 0 means off.', step: '0.1' },
@@ -32,7 +34,7 @@ const SWITCHES: { key: BoolKey; label: string; hint: string }[] = [
   template: `
   <div class="card">
    <h3>Paper trading limits and costs</h3>
-   <p class="muted">Applies to simulated orders only, and takes effect at once. Values saved here replace <code>PAPER_*</code> and <code>TRADE_COMMISSION_*</code> from the server environment; Reset goes back to them. The starting cash and the sector and volume tables stay in the environment.</p>
+   <p class="muted">Applies to simulated orders only, and takes effect at once. Values saved here replace <code>PAPER_*</code> and <code>TRADE_COMMISSION_*</code> from the server environment; Reset goes back to them. The sector and volume tables stay in the environment.</p>
    @if (error()) { <p class="warning" role="alert">{{ error() }}</p> }
    @if (message()) { <p role="status">{{ message() }}</p> }
    @if (form(); as f) {
@@ -54,6 +56,15 @@ const SWITCHES: { key: BoolKey; label: string; hint: string }[] = [
      </div>
     </form>
    }
+  </div>
+  <div class="card danger">
+   <h3>Reset the paper account</h3>
+   <p class="muted">Deletes every simulated order with its audit trail, approval proposals and the drawdown high-water mark, so the account starts again from the starting cash. This cannot be undone. Settings above are kept.</p>
+   <form class="reset" (submit)="$event.preventDefault(); resetAccount(confirm.value); confirm.value = ''">
+    <label class="visually-hidden" for="reset-confirm">Type RESET to confirm</label>
+    <input #confirm id="reset-confirm" class="form-control form-control-sm" autocomplete="off" placeholder="Type RESET to confirm" />
+    <button type="submit" class="btn btn-sm btn-danger" [disabled]="busy()">Reset account</button>
+   </form>
   </div>`,
   styles: [`
    :host{display:flex;flex-direction:column;gap:18px}
@@ -64,6 +75,8 @@ const SWITCHES: { key: BoolKey; label: string; hint: string }[] = [
    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:14px}
    .grid label{display:flex;flex-direction:column;gap:4px;font-weight:500}
    .actions{display:flex;gap:8px}
+   .reset{display:flex;gap:8px;max-width:420px}
+   .danger{border:1px solid var(--fs-danger, #c0392b)}
   `],
 })
 export class TradingSettingsComponent {
@@ -102,6 +115,18 @@ export class TradingSettingsComponent {
   async reset(): Promise<void> {
     if (!confirm('Go back to the values from the server environment?')) return;
     await this.run(() => this.api({ method: 'DELETE' }), 'Reset to the environment values.');
+  }
+
+  async resetAccount(typed: string): Promise<void> {
+    if (typed.trim() !== 'RESET') { this.error.set('Type RESET in the box to confirm.'); return; }
+    this.busy.set(true); this.message.set(''); this.error.set('');
+    try {
+      const res = await fetch('/api/admin/trading-settings/reset-account', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: 'RESET' }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+      this.message.set(`The paper account was reset (${data.deleted_orders} orders deleted).`);
+    } catch (e) { this.error.set(String((e as Error).message ?? e)); }
+    finally { this.busy.set(false); }
   }
 
   private async run(call: () => Promise<TradingView>, done: string): Promise<void> {

@@ -23,6 +23,7 @@ func TestTradingSettingsValidation(t *testing.T) {
 		"nan order":         func(s *tradingSettings) { s.MaxOrderNotional = math.NaN() },
 		"over 100 percent":  func(s *tradingSettings) { s.MaxSymbolAllocationPct = 101 },
 		"negative drawdown": func(s *tradingSettings) { s.MaxDrawdownPct = -5 },
+		"zero cash":         func(s *tradingSettings) { s.BaseCash = 0 },
 		"negative fee":      func(s *tradingSettings) { s.CommissionFixed = -1 },
 	} {
 		s := ok
@@ -33,7 +34,7 @@ func TestTradingSettingsValidation(t *testing.T) {
 	}
 }
 
-func TestTradingSettingsKeepWhatSettingsCannotChange(t *testing.T) {
+func TestTradingSettingsKeepTheMapsFromTheEnvironment(t *testing.T) {
 	env := trading.DefaultConfig()
 	env.BaseCash = 250000
 	env.SymbolSectors = map[string]string{"AAPL": "Technology"}
@@ -44,15 +45,23 @@ func TestTradingSettingsKeepWhatSettingsCannotChange(t *testing.T) {
 		t.Fatalf("saved values not applied: %+v", got)
 	}
 	if got.BaseCash != 250000 || got.SymbolSectors["AAPL"] != "Technology" {
-		t.Fatalf("starting cash and sector map must stay as configured: %+v", got)
+		t.Fatalf("unchanged cash and the sector map must stay as configured: %+v", got)
+	}
+	s.BaseCash = 50000
+	if s.applyTo(env).BaseCash != 50000 {
+		t.Fatal("starting cash must be settable")
 	}
 }
 
 func TestTradingSettingsRoutesNeedAdmin(t *testing.T) {
 	e := NewEngine(nil, &SharedMarketConfig{}, nil, tracker.DefaultConfig())
-	for _, m := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
+	for _, m := range []string{http.MethodGet, http.MethodPut, http.MethodDelete, http.MethodPost} {
 		rec := httptest.NewRecorder()
-		e.mux.ServeHTTP(rec, httptest.NewRequest(m, "/api/admin/trading-settings", strings.NewReader(`{}`)))
+		path := "/api/admin/trading-settings"
+		if m == http.MethodPost {
+			path += "/reset-account"
+		}
+		e.mux.ServeHTTP(rec, httptest.NewRequest(m, path, strings.NewReader(`{}`)))
 		if rec.Code != http.StatusForbidden {
 			t.Errorf("%s without authentication: %d", m, rec.Code)
 		}
