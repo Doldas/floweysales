@@ -23,6 +23,8 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/inbox-page').then(m => m.InboxPage) },
   { path: 'markets', title: 'Markets · FloweySales', data: { title: 'Markets' },
     loadComponent: () => import('./pages/markets-page').then(m => m.MarketsPage) },
+  { path: 'strategies', title: 'Strategies · FloweySales', data: { title: 'Strategies' },
+    loadComponent: () => import('./pages/strategies-page').then(m => m.StrategiesPage) },
   { path: 'plan', title: 'Wealth plan · FloweySales', data: { title: 'Wealth plan' },
     loadComponent: () => import('./pages/plan-page').then(m => m.PlanPage) },
   { path: 'financials', title: 'Financials · FloweySales', data: { title: 'Financials' },

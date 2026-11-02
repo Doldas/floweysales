@@ -188,9 +188,12 @@ type Engine struct {
 	secFilings func(ctx context.Context, ticker string, limit int) (sec.Filings, error)
 	flowState  flowNodeStateStore
 	profiles   investorProfileStore
-	paperState func() ([]trading.Position, trading.Summary)
-	paperPeak  func(equity float64) (float64, error)
-	flowOwner  func(ctx context.Context, flowID int64) (int64, error)
+	strategies strategyStore
+	// strategyHistory replaces the provider history read in tests.
+	strategyHistory func(ctx context.Context, symbol string, p market.Provider, rng string) (market.HistorySeries, error)
+	paperState      func() ([]trading.Position, trading.Summary)
+	paperPeak       func(equity float64) (float64, error)
+	flowOwner       func(ctx context.Context, flowID int64) (int64, error)
 	// insiderTrades replaces the SEC Form 4 reader in tests.
 	insiderTrades func(ctx context.Context, ticker string, lookbackDays, maxFilings int) ([]sec.InsiderTrade, error)
 	planLimits    adapterLimiter
@@ -241,6 +244,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerEventRoutes()
 	e.registerTodayRoutes()
 	e.registerTeamRoutes()
+	e.registerStrategyRoutes()
 	e.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
