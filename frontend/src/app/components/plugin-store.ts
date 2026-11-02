@@ -12,7 +12,7 @@ export interface PluginManifest {
   protocol: number; id: string; name: string; version: string; description: string; publisher: string;
   homepage?: string; license?: string; terms?: string; provider: PluginProvider; env?: PluginEnvVar[];
   /** A tab of interactive tools; a plugin with tools may have no market-data provider. */
-  tools?: { tab?: { label?: string } };
+  tools?: { tab?: { label?: string }; tools?: { id: string; label: string }[] };
 }
 export interface InstalledPlugin {
   manifest: PluginManifest; installed_at: string; source: string; sha256: string; running: boolean;
@@ -100,6 +100,11 @@ const CAPABILITIES: Record<string, string> = {
 export function capabilityLabels(capabilities: string[] | null | undefined): string[] {
   const have = capabilities ?? [];
   return Object.keys(CAPABILITIES).filter(c => have.includes(c)).map(c => CAPABILITIES[c]);
+}
+
+/** What a plugin's tools tab offers, as chip labels (K4 report, Holdings, ...). */
+export function toolLabels(manifest: Pick<PluginManifest, 'tools'>): string[] {
+  return (manifest.tools?.tools ?? []).map(t => t.label).filter(Boolean);
 }
 
 /** Matches a free-text filter against name, id, provider and description. */

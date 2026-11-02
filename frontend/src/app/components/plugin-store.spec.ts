@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  capabilityLabels, compareVersions, matchesFilter, pluginRows, pluginStatus, uninstallPrompt,
+  capabilityLabels, compareVersions, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt,
   type InstalledPlugin, type PluginManifest, type PluginOverview, type StorePlugin,
 } from './plugin-store.ts';
 
@@ -76,4 +76,9 @@ test('a tools-only plugin has no provider and null capabilities', () => {
   } as unknown as Parameters<typeof uninstallPrompt>[0];
   assert.equal(matchesFilter(row, 'tax'), true);
   assert.match(uninstallPrompt(row), /tools tab stops being available/);
+});
+
+test('tool labels stand in for capabilities on a tools-only plugin', () => {
+  assert.deepEqual(toolLabels({ tools: { tools: [{ id: 'k4', label: 'K4 report' }, { id: 'holdings', label: 'Holdings & cost basis' }] } }), ['K4 report', 'Holdings & cost basis']);
+  assert.deepEqual(toolLabels({}), []);
 });

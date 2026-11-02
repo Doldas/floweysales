@@ -2,7 +2,7 @@ import { Component, ElementRef, computed, inject, signal, viewChild } from '@ang
 import { MarketState } from '../core/market-state';
 import { PluginTools } from '../core/plugin-tools';
 import {
-  capabilityLabels, matchesFilter, pluginRows, pluginStatus, uninstallPrompt,
+  capabilityLabels, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt,
   type PluginOverview, type PluginRow,
 } from './plugin-store';
 
@@ -68,7 +68,7 @@ type View = 'all' | 'installed' | 'available';
     <p>{{ row.manifest.description }}</p>
     <ul class="chips" aria-label="Capabilities">
      @for (c of capabilityLabels(row.manifest.provider.capabilities); track c) { <li>{{ c }}</li> }
-     @if (row.manifest.tools) { <li>{{ row.manifest.tools.tab?.label || 'Tools' }} tab</li> }
+     @for (t of toolLabels(row.manifest); track t) { <li>{{ t }}</li> }
     </ul>
     <p class="status" [attr.data-tone]="status(row).tone" role="status">{{ status(row).label }}</p>
 
@@ -221,6 +221,7 @@ export class PluginSettingsComponent {
   { id: 'all', label: 'All' }, { id: 'installed', label: 'Installed' }, { id: 'available', label: 'Available' },
  ];
  readonly capabilityLabels = capabilityLabels;
+ readonly toolLabels = toolLabels;
  readonly status = pluginStatus;
 
  readonly rows = computed(() => { const o = this.overview(); return o ? pluginRows(o) : []; });
