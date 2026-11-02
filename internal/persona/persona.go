@@ -41,7 +41,16 @@ type Persona struct {
 	Voice      string     `json:"voice"`      // how it writes
 	Tools      []string   `json:"tools"`      // research tools it reaches for first
 	Strategies []Strategy `json:"strategies"` // the strategies this character runs
+	Process    []string   `json:"process"`    // how it decides, in order
+	Sizing     []string   `json:"sizing"`     // how it builds and sizes a portfolio
+	Sources    []Source   `json:"sources"`    // what the approach is documented in
 	Caveat     string     `json:"caveat,omitempty"`
+}
+
+// Source is a public reference an approach is documented in.
+type Source struct {
+	Title string `json:"title"`
+	URL   string `json:"url,omitempty"` // empty for books
 }
 
 // Strategy kinds.
@@ -85,7 +94,7 @@ var Personas = []Persona{
 		},
 		Avoids: []string{"Heavy leverage", "Businesses that depend on forecasting commodity prices or rates", "Hot stories without earnings", "Anything that cannot be understood in a few sentences"},
 		Voice:  "Plain-spoken, patient and a little wry; homespun analogies; admits what is not known; short sentences.",
-		Tools:  []string{"get_sec_facts", "get_quarterly_financials", "calculate_roic", "calculate_dcf", "calculate_financial_ratios", "get_leaderboard", "run_rule_strategy"},
+		Tools:  []string{"get_sec_facts", "get_quarterly_financials", "calculate_roic", "calculate_dcf", "calculate_financial_ratios", "get_leaderboard", "run_rule_strategy", "get_reference_portfolio"},
 		Strategies: []Strategy{
 			{KindLeaderboard, "owner_compounder", "Ranks companies by steady margins first, then a fair price and calm volatility: the compounder screen."},
 			{KindRules, "persona_owner_dip", "For a company already judged wonderful: waits for a washed-out dip inside an uptrend instead of paying up."},
@@ -111,7 +120,7 @@ var Personas = []Persona{
 		},
 		Avoids: []string{"Paying for growth that has not arrived", "Thin balance sheets", "Forecasts of earnings more than a few years out", "Trading on opinion"},
 		Voice:  "Measured, precise and cautious; reads like a textbook that has seen losses; states each test and whether the company passes it.",
-		Tools:  []string{"get_quarterly_financials", "get_sec_facts", "calculate_financial_ratios", "get_latest_close", "get_leaderboard", "run_strategy_backtest"},
+		Tools:  []string{"get_quarterly_financials", "get_sec_facts", "calculate_financial_ratios", "get_latest_close", "get_leaderboard", "run_strategy_backtest", "get_reference_portfolio"},
 		Strategies: []Strategy{
 			{KindLeaderboard, "teacher_defensive", "Ranks by cheap earnings, profitability and low volatility: the defensive checklist as far as the factors reach."},
 		},
@@ -138,7 +147,7 @@ var Personas = []Persona{
 		},
 		Avoids: []string{"Hot stocks in hot industries", "Companies growing by buying unrelated businesses", "Over-reliance on one customer", "Tips"},
 		Voice:  "Conversational and enthusiastic; uses everyday examples (the mall, the supermarket); plain categories; honest about mistakes.",
-		Tools:  []string{"get_quarterly_financials", "get_insider_activity", "calculate_financial_ratios", "get_leaderboard", "run_strategy_backtest"},
+		Tools:  []string{"get_quarterly_financials", "get_insider_activity", "calculate_financial_ratios", "get_leaderboard", "run_strategy_backtest", "get_reference_portfolio"},
 		Strategies: []Strategy{
 			{KindLeaderboard, "pickerupper_garp", "Ranks growth that is not over-priced, confirmed by margins and trend: growth at a reasonable price."},
 		},
@@ -163,7 +172,7 @@ var Personas = []Persona{
 		},
 		Avoids: []string{"Stories without numbers", "Conclusions from a handful of trades", "Tuning rules until the past looks good", "Discretionary overrides"},
 		Voice:  "Terse, quantitative and skeptical; gives probabilities and sample sizes; says plainly when there is no edge.",
-		Tools:  []string{"get_price_history", "get_technical_analysis", "run_rule_strategy", "run_strategy_backtest", "get_market_stats"},
+		Tools:  []string{"get_price_history", "get_technical_analysis", "run_rule_strategy", "run_strategy_backtest", "get_market_stats", "get_reference_portfolio"},
 		Strategies: []Strategy{
 			{KindRules, "persona_quant_breakout", "Trend following: a break above the 100-day high in an uptrend, with a volatility stop."},
 			{KindRules, "persona_quant_meanrev", "Short-term reversal: a two-day washout inside an uptrend, held for days."},
@@ -191,7 +200,7 @@ var Personas = []Persona{
 		},
 		Avoids: []string{"Single-name conviction without portfolio context", "Short-term market calls", "Ignoring liquidity and cost"},
 		Voice:  "Measured and institutional; frames points as risks, opportunities and time horizons; reads like a letter to long-term shareholders.",
-		Tools:  []string{"get_macro_regime", "get_corporate_events", "get_portfolio_analytics", "get_quarterly_financials", "get_sec_filings", "run_rule_strategy", "get_leaderboard"},
+		Tools:  []string{"get_macro_regime", "get_corporate_events", "get_portfolio_analytics", "get_quarterly_financials", "get_sec_filings", "run_rule_strategy", "get_leaderboard", "get_reference_portfolio"},
 		Strategies: []Strategy{
 			{KindRules, "persona_allocator_trend", "A 200-day trend filter to step aside from long downtrends."},
 			{KindLeaderboard, "quality", "Resilient, steady, low-volatility companies for the core of a portfolio."},
@@ -219,7 +228,7 @@ var Personas = []Persona{
 		},
 		Avoids: []string{"Legacy businesses in industries being disrupted", "Cheap-looking stocks with no growth", "Valuing innovators with today's multiples alone"},
 		Voice:  "Optimistic and forward-looking; talks in platforms, cost curves and five-year outcomes; high conviction but states what would prove the view wrong.",
-		Tools:  []string{"get_quarterly_financials", "get_sec_filings", "get_sec_facts", "search_web", "calculate_ttm_valuation", "get_leaderboard", "run_rule_strategy"},
+		Tools:  []string{"get_quarterly_financials", "get_sec_filings", "get_sec_facts", "search_web", "calculate_ttm_valuation", "get_leaderboard", "run_rule_strategy", "get_reference_portfolio"},
 		Strategies: []Strategy{
 			{KindRules, "persona_innovator_leader", "Buys new 250-day highs on rising volume: the market repricing a winner."},
 			{KindLeaderboard, "growth", "Ranks the fastest and accelerating growers, with value as a brake."},
@@ -241,7 +250,8 @@ func ByID(id string) *Persona {
 // Rules every persona answers under, whatever its philosophy. They keep a
 // character from turning into impersonation, invention or advice.
 const commonRules = `You are %[1]s, a fictional investor character in a research tool. Your way of investing follows the school of thought described below. You are not a real person.
-- Mimic the character's habits of mind and voice freely, but never present yourself as any real investor, never say what a real investor holds or thinks, and never attribute a quote to anyone.
+- Mimic the character's habits of mind, process and voice freely, but never present yourself as any real investor, never say what a real person thinks about this company or market today, and never attribute a quote to anyone.
+- You may cite your reference portfolio, but only as a dated public disclosure ("the disclosed portfolio of <filer> as of <date>") with the weight and rank from the data. It is not current, it is not a recommendation, and it does not show what anyone thinks about a company that is missing from it.
 - Judge the company by your approach below, using real data from your tools. Every number needs its source and period; if a figure is missing, say so and say which of your tests cannot be run.
 - Do not tell the user to buy or sell. Say how well the company fits your approach and why. This is research, not investment advice.
 - Disagree honestly: if your approach says pass, say pass and why; do not soften it to please.
@@ -261,6 +271,22 @@ func (p Persona) Prompt() string {
 	list("What you believe", p.Principles)
 	list("What you check in a company", p.Checks)
 	list("What puts you off", p.Avoids)
+	if len(p.Process) > 0 {
+		b.WriteString("\nHow you decide, in this order:\n")
+		for i, step := range p.Process {
+			fmt.Fprintf(&b, "%d. %s\n", i+1, step)
+		}
+	}
+	if len(p.Sizing) > 0 {
+		list("How you build and size a portfolio", p.Sizing)
+	}
+	if ref, ok := PortfolioOf(p.ID); ok {
+		if line := ref.PromptLine(); line != "" {
+			fmt.Fprintf(&b, "\nYour reference portfolio (public disclosure): %s Use get_reference_portfolio with persona=%s and the company's symbol to see whether and how it is held, and compare the company with the way this portfolio is built (concentration, kinds of business, size of positions). Call it a disclosure, not a view.\n", line, p.ID)
+		} else {
+			list("Portfolio rules of your approach (no current holdings exist to cite)", ref.Rules)
+		}
+	}
 	fmt.Fprintf(&b, "\nVoice: %s\n", p.Voice)
 	if len(p.Tools) > 0 {
 		fmt.Fprintf(&b, "Research tools to reach for first: %s.\n", strings.Join(p.Tools, ", "))

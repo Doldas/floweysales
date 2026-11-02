@@ -78,17 +78,94 @@ func TestStanceOf(t *testing.T) {
 	}
 }
 
-// The characters are invented: no real investor's name may appear in what
-// the user sees or what the model is told.
-func TestNoRealInvestorNamesAppear(t *testing.T) {
-	real := []string{"Buffett", "Graham", "Lynch", "Simons", "Fink", "Cathie", "Berkshire", "BlackRock", "Renaissance", "Medallion", "Magellan", "Fidelity", "Intelligent Investor", "Mr. Market"}
+// The characters are invented: no real person's name may appear in what the
+// model is told or in the character's own fields. Institutions appear only as
+// the source of a reference portfolio, and in the Sources list.
+func TestNoRealPeopleAreNamedInACharacter(t *testing.T) {
+	people := []string{"Buffett", "Munger", "Abel", "Graham", "Lynch", "Simons", "Fink", "Cathie", "Wood", "Zuckerman", "Mr. Market"}
 	for _, p := range persona.Personas {
-		text := p.Name + " " + p.Tagline + " " + p.Archetype + " " + p.Voice + " " + p.Caveat + " " + p.Prompt() + " " + strings.Join(p.Principles, " ") + " " + strings.Join(p.Checks, " ") + " " + strings.Join(p.Avoids, " ")
-		for _, name := range real {
+		text := p.Name + " " + p.Tagline + " " + p.Archetype + " " + p.Voice + " " + p.Caveat + " " + p.Prompt()
+		for _, list := range [][]string{p.Principles, p.Checks, p.Avoids, p.Process, p.Sizing} {
+			text += " " + strings.Join(list, " ")
+		}
+		for _, name := range people {
 			if strings.Contains(text, name) {
-				t.Errorf("%s mentions %q", p.ID, name)
+				t.Errorf("%s mentions the real person %q", p.ID, name)
 			}
 		}
+	}
+}
+
+func TestEveryCharacterDocumentsItsProcessSizingAndSources(t *testing.T) {
+	for _, p := range persona.Personas {
+		if len(p.Process) < 5 || len(p.Sizing) < 3 || len(p.Sources) < 1 {
+			t.Errorf("%s: process %d, sizing %d, sources %d", p.ID, len(p.Process), len(p.Sizing), len(p.Sources))
+		}
+		for _, s := range p.Sources {
+			if s.Title == "" || (s.URL != "" && !strings.HasPrefix(s.URL, "https://")) {
+				t.Errorf("%s: bad source %+v", p.ID, s)
+			}
+		}
+		if !strings.Contains(p.Prompt(), "How you decide, in this order") {
+			t.Errorf("%s: the process is missing from the prompt", p.ID)
+		}
+	}
+}
+
+func TestReferencePortfoliosAreDatedSourcedAndConsistent(t *testing.T) {
+	for _, p := range persona.Personas {
+		ref, ok := persona.PortfolioOf(p.ID)
+		if !ok {
+			t.Errorf("%s has no reference portfolio", p.ID)
+			continue
+		}
+		if len(ref.Notes) == 0 {
+			t.Errorf("%s: a reference portfolio needs its caveats", p.ID)
+		}
+		if ref.Kind == persona.PortfolioKindRules {
+			if len(ref.Rules) < 3 || len(ref.Positions) != 0 {
+				t.Errorf("%s: rules portfolio looks wrong: %+v", p.ID, ref)
+			}
+			continue
+		}
+		if ref.Period == "" || !strings.HasPrefix(ref.SourceURL, "https://") || ref.Stats.Positions == 0 || len(ref.Positions) == 0 {
+			t.Errorf("%s: undated or unsourced: %+v", p.ID, ref.Stats)
+		}
+		sum := 0.0
+		for i, pos := range ref.Positions {
+			sum += pos.WeightPct
+			if i > 0 && pos.WeightPct > ref.Positions[i-1].WeightPct+1e-9 {
+				t.Errorf("%s: positions are not sorted by weight at %d", p.ID, i)
+			}
+		}
+		if sum <= 0 || sum > 100.5 {
+			t.Errorf("%s: listed weights sum to %.2f", p.ID, sum)
+		}
+		if ref.Stats.Top5Pct < ref.Stats.Top1Pct || ref.Stats.Top10Pct < ref.Stats.Top5Pct {
+			t.Errorf("%s: concentration figures are not nested: %+v", p.ID, ref.Stats)
+		}
+		if !strings.Contains(p.Prompt(), ref.Period) {
+			t.Errorf("%s: the prompt does not carry the date of the portfolio", p.ID)
+		}
+	}
+}
+
+func TestPortfolioLookupAndOverlap(t *testing.T) {
+	ref, _ := persona.PortfolioOf("owner")
+	h := ref.Lookup(" aapl ")
+	if !h.Held || h.Rank != 1 || h.WeightPct <= 0 || !strings.Contains(h.Note, ref.Period) {
+		t.Fatalf("%+v", h)
+	}
+	if h := ref.Lookup("ZZZZ"); h.Held || !strings.Contains(h.Note, "Not among") {
+		t.Fatalf("%+v", h)
+	}
+	cover, matched := ref.Overlap([]string{"AAPL", "ko", "NOPE"})
+	if len(matched) != 2 || cover <= 0 {
+		t.Fatalf("%v %v", cover, matched)
+	}
+	teacher, _ := persona.PortfolioOf("teacher")
+	if h := teacher.Lookup("AAPL"); h.Held || !strings.Contains(h.Note, "no disclosed holdings") {
+		t.Fatalf("%+v", h)
 	}
 }
 

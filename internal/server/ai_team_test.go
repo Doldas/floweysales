@@ -31,6 +31,28 @@ func TestPersonaCatalogueListsTheSixCharacters(t *testing.T) {
 	if len(body.Personas) != 6 || body.MaxTeam != 6 {
 		t.Fatalf("got %+v", body)
 	}
+	var detail struct {
+		Personas []struct {
+			ID        string
+			Process   []string
+			Sizing    []string
+			Sources   []struct{ Title string }
+			Portfolio *struct {
+				Period    string
+				Filer     string
+				Positions []struct{ Symbol string }
+			}
+		}
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &detail)
+	for _, p := range detail.Personas {
+		if len(p.Process) == 0 || len(p.Sizing) == 0 || len(p.Sources) == 0 || p.Portfolio == nil || p.Portfolio.Filer == "" {
+			t.Errorf("%s lacks its process, sizing, sources or reference portfolio: %+v", p.ID, p)
+		}
+		if p.Portfolio != nil && len(p.Portfolio.Positions) > 15 {
+			t.Errorf("%s: the catalogue should carry a summary, not %d positions", p.ID, len(p.Portfolio.Positions))
+		}
+	}
 }
 
 func TestTeamRequestsAreValidatedBeforeAnyModelIsCalled(t *testing.T) {
@@ -91,5 +113,31 @@ func TestFlowAgentPersonaIsValidated(t *testing.T) {
 		if err := validateFlowAgentTools(n); err == nil {
 			t.Errorf("%s: want an error", name)
 		}
+	}
+}
+
+func TestReferenceUniversesComeFromDisclosedPortfolios(t *testing.T) {
+	want := map[string]bool{"ref_owner": true, "ref_quant": true, "ref_allocator": true, "ref_innovator": true}
+	for _, u := range leaderboardUniverses {
+		if !want[u.ID] {
+			continue
+		}
+		delete(want, u.ID)
+		if len(u.Symbols) < 10 || len(u.Symbols) > 25 || u.Persona == "" || u.AsOf == "" || !strings.Contains(u.Description, "hindsight") && !strings.Contains(u.Description, "flatters the past") {
+			t.Errorf("%s: %d symbols, persona %q, as of %q, description %q", u.ID, len(u.Symbols), u.Persona, u.AsOf, u.Description)
+		}
+		seen := map[string]bool{}
+		for _, s := range u.Symbols {
+			if seen[s] || s == "" || s == "IVV" {
+				t.Errorf("%s: bad or repeated symbol %q", u.ID, s)
+			}
+			seen[s] = true
+		}
+		if _, ok := findLeaderboardUniverse(u.ID); !ok {
+			t.Errorf("%s cannot be looked up", u.ID)
+		}
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing universes: %v", want)
 	}
 }
