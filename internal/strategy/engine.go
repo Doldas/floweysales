@@ -115,6 +115,7 @@ type Result struct {
 	BuyHoldPct float64          `json:"buy_hold_return_pct"`
 	Curve      []Point          `json:"curve"`
 	Trades     []Trade          `json:"trades"`
+	Walk       []Period         `json:"walk_forward,omitempty"`
 	Latest     Latest           `json:"latest"`
 	Warnings   []string         `json:"warnings"`
 }
@@ -506,7 +507,8 @@ func Run(def Strategy, points []market.HistoryPoint, cfg Config) (Result, error)
 	res := Result{Strategy: def, Config: cfg, BasePrice: round2(base), From: curve[0].Date, To: curve[len(curve)-1].Date,
 		Metrics: backtest.MetricsFromCurve(equities), BuyHold: backtest.MetricsFromCurve(buyHold),
 		TotalPct: round2(equities[len(equities)-1] - 100), BuyHoldPct: round2(buyHold[len(buyHold)-1] - 100),
-		Curve: thin(curve, maxCurvePoints), Trades: trades, Stats: tradeStats(trades, inBars, len(equities))}
+		Curve: thin(curve, maxCurvePoints), Trades: trades, Stats: tradeStats(trades, inBars, len(equities)),
+		Walk: walkForward(s.t, s.close, trades)}
 
 	last := n - 1
 	res.Latest = Latest{Date: s.t[last].Format(dateLayout), Close: round2(s.close[last]), InPosition: len(trades) > 0 && trades[len(trades)-1].Reason == "open",

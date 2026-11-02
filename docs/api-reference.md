@@ -47,7 +47,7 @@ Regelbaserade strategier för ett instrument, återspelade över dagliga kurser 
 
 - `GET /api/strategies` – inbyggda Fibonacci-strategier (`presets`) och användarens sparade (`custom`).
 - `POST /api/strategies`, `PUT /api/strategies/{id}`, `DELETE /api/strategies/{id}` – spara, ändra och ta bort egna strategier (högst 30 per användare, tabellen `custom_strategies`).
-- `POST /api/strategies/backtest` – `{strategy_id | definition, symbol, provider?, range: 3Y|5Y|10Y, cost_bps?}`. Svaret innehåller nyckeltal, affärer, kurvor och vad reglerna säger på sista stapeln, inklusive Fibonacci-nivåerna för den senaste svängen.
+- `POST /api/strategies/backtest` – `{strategy_id | definition, symbol, provider?, range: 3Y|5Y|10Y, cost_bps?}`. Svaret innehåller nyckeltal, affärer, kurvor och vad reglerna säger på sista stapeln, inklusive Fibonacci-nivåerna för den senaste svängen. `walk_forward` delar historiken i fyra följande fönster och redovisar affärer, träffsäkerhet och avkastning per fönster mot buy and hold, så att man ser om resultatet bara hänger på en period.
 
 Karaktärernas regelstrategier (`family: persona`, med `persona` satt) ligger bland de inbyggda. Agenter kör dem med verktyget `run_rule_strategy` (`strategy_id`, `symbol`, `years` 3/5/10, `cost_bps`).
 

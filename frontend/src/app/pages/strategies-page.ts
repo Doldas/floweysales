@@ -151,6 +151,28 @@ const H_EQUITY = 160;
               </ul>
             </div>
 
+            @if (r.walk_forward?.length) {
+              <h3 class="h6 mt-3">Consistency across the period</h3>
+              <p class="text-muted small mb-1">The history is cut into four consecutive windows and the trades are scored by when they were entered. The rules are the same in each, so a result that holds in only one window leans on that stretch.</p>
+              <div class="fs-scroll-x">
+                <table class="table table-sm align-middle">
+                  <caption class="visually-hidden">Trades per window</caption>
+                  <thead><tr><th scope="col">Window</th><th scope="col" class="text-end">Trades</th><th scope="col" class="text-end">Win rate</th><th scope="col" class="text-end">Strategy</th><th scope="col" class="text-end">Buy and hold</th></tr></thead>
+                  <tbody>
+                    @for (w of r.walk_forward; track w.from) {
+                      <tr>
+                        <td>{{ w.from }} – {{ w.to }}</td>
+                        <td class="text-end">{{ w.trades }}</td>
+                        <td class="text-end">{{ w.trades ? w.win_rate_pct.toFixed(0) + '%' : '–' }}</td>
+                        <td class="text-end">{{ w.trades ? (w.return_pct >= 0 ? '+' : '') + w.return_pct.toFixed(1) + '%' : '–' }}</td>
+                        <td class="text-end">{{ (w.buy_hold_return_pct >= 0 ? '+' : '') + w.buy_hold_return_pct.toFixed(1) }}%</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+
             <button type="button" class="btn btn-sm btn-ghost" (click)="showTrades.set(!showTrades())" [attr.aria-expanded]="showTrades()">{{ showTrades() ? 'Hide' : 'Show' }} {{ r.trades.length }} trades</button>
             @if (showTrades()) {
               <div class="fs-scroll-x">

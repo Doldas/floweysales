@@ -514,6 +514,7 @@ export interface StrategyRunResult {
   stats: { trades: number; win_rate_pct: number; avg_win_pct: number; avg_loss_pct: number; profit_factor?: number; expectancy_pct: number; avg_r?: number; avg_bars: number; exposure_pct: number };
   curve: { date: string; close: number; equity: number; in_position?: boolean }[];
   trades: StrategyTrade[]; warnings: string[];
+  walk_forward?: { from: string; to: string; trades: number; win_rate_pct: number; return_pct: number; buy_hold_return_pct: number; expectancy_pct: number }[];
   latest: { date: string; close: number; in_position: boolean; entry_signal: boolean; exit_signal: boolean; has_leg: boolean;
     leg_low?: number; leg_high?: number; leg_low_date?: string; leg_high_date?: string; levels?: { label: string; ratio: number; price: number }[] };
 }
