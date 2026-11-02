@@ -95,6 +95,13 @@ func runFakePlugin() {
 			})
 		case "forum_posts":
 			reply([]map[string]any{{"id": 1, "title": "hello", "symbol": symbol}})
+		case "tool":
+			input, _ := req.Params["input"].(map[string]any)
+			if req.Params["tool"] == "broken" {
+				reply(map[string]any{"blocks": []map[string]any{{"type": "chart"}}})
+				continue
+			}
+			reply(map[string]any{"title": "Echo", "blocks": []map[string]any{{"type": "text", "text": fmt.Sprint(input["text"], "/", input["files"])}}})
 		default:
 			fail(CodeUnsupported, "unknown method")
 		}
@@ -517,5 +524,93 @@ func TestManifestRejectsBackendSecretsAndBadIDs(t *testing.T) {
 	}
 	if validBinaryPath("../x") || validBinaryPath("/abs") || !validBinaryPath("fake/1.0.0-ab/plugin") {
 		t.Fatal("binary path validation")
+	}
+}
+
+func toolsManifest(version string) Manifest {
+	return Manifest{Protocol: 1, ID: "tools", Name: "Tools", Version: version, Description: "Test double.", Publisher: "Tests",
+		Tools: &ToolsInfo{Tab: ToolsTab{Label: "Tax", Icon: "bi-receipt"}, Tools: []Tool{
+			{ID: "echo", Label: "Echo", Inputs: []ToolInput{
+				{Name: "text", Label: "Text", Type: "text", Required: true},
+				{Name: "mode", Label: "Mode", Type: "select", Options: []ToolOption{{Value: "a", Label: "A"}}},
+				{Name: "files", Label: "Files", Type: "files"},
+			}},
+			{ID: "broken", Label: "Broken"},
+		}}}
+}
+
+func TestToolsOnlyPluginInstallsRoutesAndStaysOutOfMarketData(t *testing.T) {
+	store := newFakeStore(t)
+	store.publish(toolsManifest("1.0.0"), fakeRelease(t, toolsManifest("1.0.0")))
+	store.publish(fakeManifest("1.0.0"), fakeRelease(t, fakeManifest("1.0.0")))
+	key := "k"
+	m := openManager(t, store, t.TempDir(), &key)
+	ctx := context.Background()
+	if _, err := m.Install(ctx, "tools", "1.0.0", false); err != nil {
+		t.Fatal(err)
+	}
+	// A provider-less plugin must not appear as an empty provider, and it must
+	// not block installing a real provider.
+	if got := m.Providers(); len(got) != 0 {
+		t.Fatalf("tools plugin leaked into providers: %+v", got)
+	}
+	if _, err := m.Install(ctx, "fake", "1.0.0", false); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.Providers(); len(got) != 1 || got[0].ID != "FAKE" {
+		t.Fatalf("%+v", got)
+	}
+	list := m.ToolPlugins()
+	if len(list) != 1 || list[0].PluginID != "tools" || !list[0].Ready || list[0].Tools.Tab.Label != "Tax" {
+		t.Fatalf("%+v", list)
+	}
+
+	files := []any{map[string]any{"name": "a.csv", "content": "x"}}
+	res, err := m.CallTool(ctx, "tools", "echo", map[string]any{"text": "hej", "mode": "a", "files": files, "stray": "dropped"})
+	if err != nil || len(res.Blocks) != 1 || !strings.HasPrefix(res.Blocks[0].Text, "hej/") {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+	for name, input := range map[string]map[string]any{
+		"missing required": {},
+		"bad select":       {"text": "x", "mode": "zzz"},
+		"wrong type":       {"text": 5},
+		"bad files":        {"text": "x", "files": "nope"},
+	} {
+		if _, err := m.CallTool(ctx, "tools", "echo", input); !errors.Is(err, ErrToolInput) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if _, err := m.CallTool(ctx, "tools", "nope", nil); !errors.Is(err, ErrNoSuchTool) {
+		t.Errorf("unknown tool: %v", err)
+	}
+	if _, err := m.CallTool(ctx, "fake", "echo", nil); !errors.Is(err, ErrNoSuchTool) {
+		t.Errorf("a provider plugin has no tools: %v", err)
+	}
+	if _, err := m.CallTool(ctx, "tools", "broken", nil); err == nil || !strings.Contains(err.Error(), "invalid result") {
+		t.Errorf("an invalid plugin result must be refused: %v", err)
+	}
+	if _, err := m.CallTool(ctx, "tools", "echo", map[string]any{"text": strings.Repeat("x", MaxToolInputBytes+1)}); !errors.Is(err, ErrToolInput) {
+		t.Errorf("oversized input: %v", err)
+	}
+}
+
+func TestManifestToolsAreValidated(t *testing.T) {
+	good := toolsManifest("1.0.0")
+	if err := good.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*Manifest){
+		"no provider and no tools": func(m *Manifest) { m.Tools = nil },
+		"half-declared provider":   func(m *Manifest) { m.Provider.ID = "TOOLS" },
+		"duplicate tool":           func(m *Manifest) { m.Tools.Tools = append(m.Tools.Tools, m.Tools.Tools[0]) },
+		"unknown input type":       func(m *Manifest) { m.Tools.Tools[0].Inputs[0].Type = "slider" },
+		"select without options":   func(m *Manifest) { m.Tools.Tools[0].Inputs[1].Options = nil },
+		"bad icon":                 func(m *Manifest) { m.Tools.Tab.Icon = "x" },
+	} {
+		m := toolsManifest("1.0.0")
+		mutate(&m)
+		if err := m.Validate(); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
 	}
 }

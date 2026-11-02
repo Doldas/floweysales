@@ -35,5 +35,7 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/notifications-page').then(m => m.NotificationsPage) },
   { path: 'settings', title: 'Settings · FloweySales', data: { title: 'Settings' }, canMatch: [requires('settings')],
     loadComponent: () => import('./pages/settings-page').then(m => m.SettingsPage) },
+  { path: 'tools/:plugin', title: 'Tools · FloweySales', data: { title: 'Tools' },
+    loadComponent: () => import('./pages/plugin-tools-page').then(m => m.PluginToolsPage) },
   { path: '**', redirectTo: '' },
 ];

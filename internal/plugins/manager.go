@@ -178,6 +178,9 @@ func (m *Manager) Installed() []InstalledPlugin {
 
 // byProviderLocked finds the plugin providing a provider id.
 func (m *Manager) byProviderLocked(provider string) (InstalledPlugin, bool) {
+	if provider == "" {
+		return InstalledPlugin{}, false
+	}
 	for _, p := range m.installed {
 		if p.Manifest.Provider.ID == provider {
 			return p, true

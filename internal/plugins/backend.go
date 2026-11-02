@@ -49,6 +49,9 @@ func (m *Manager) Providers() []market.ProviderCapability {
 	installed := m.Installed()
 	out := make([]market.ProviderCapability, 0, len(installed))
 	for _, p := range installed {
+		if !p.Manifest.ProvidesMarketData() {
+			continue
+		}
 		info := p.Manifest.Provider
 		_, missing := m.env(&p.Manifest)
 		requiresKey := false

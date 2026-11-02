@@ -8,6 +8,8 @@ import { Access } from '../core/access';
 import { ActivityStore } from '../core/activity';
 import { AgentSession } from '../core/agent-session';
 import { MarketState } from '../core/market-state';
+import { PluginTools } from '../core/plugin-tools';
+import { tabIcon } from '../components/plugin-tools';
 import { ThemeService } from '../theme.service';
 import { AgentDockComponent } from './agent-dock';
 import { CommandPaletteComponent, CommandPaletteService } from './command-palette';
@@ -41,6 +43,7 @@ export class ShellComponent {
   readonly market = inject(MarketState);
   readonly agent = inject(AgentSession);
   readonly activity = inject(ActivityStore);
+  readonly pluginTools = inject(PluginTools);
   readonly theme = inject(ThemeService);
   readonly palette = inject(CommandPaletteService);
   private readonly router = inject(Router);
@@ -83,6 +86,11 @@ export class ShellComponent {
     },
   ];
 
+  /** One entry per installed tools plugin (for example Tax). */
+  readonly toolItems = computed<NavItem[]>(() => this.pluginTools.plugins().map(p => ({
+    path: '/tools/' + encodeURIComponent(p.plugin_id), label: p.tools.tab.label, icon: tabIcon(p.tools.tab), visible: () => true,
+  })));
+
   readonly footerItems: NavItem[] = [
     { path: '/notifications', label: 'Notifications', icon: 'bi-bell', visible: () => this.access.notifications() },
     { path: '/settings', label: 'Settings', icon: 'bi-gear', visible: () => this.access.settings() },
@@ -106,6 +114,7 @@ export class ShellComponent {
   constructor() {
     this.market.init(this.access.liveMarkets() ? 'live' : 'research');
     void this.agent.loadConfig();
+    void this.pluginTools.refresh();
     if (this.access.inbox()) void this.activity.refreshInbox();
     const timer = setInterval(() => {
       if (this.access.inbox() && document.visibilityState === 'visible') void this.activity.refreshInbox();
@@ -115,7 +124,9 @@ export class ShellComponent {
     this.router.events.pipe(filter(e => e instanceof NavigationEnd)).subscribe(() => {
       let r = this.route.snapshot;
       while (r.firstChild) r = r.firstChild;
-      this.pageTitle.set((r.data?.['title'] as string) ?? 'FloweySales');
+      const plugin = r.paramMap.get('plugin');
+      const tab = plugin ? this.pluginTools.plugins().find(p => p.plugin_id === plugin)?.tools.tab.label : undefined;
+      this.pageTitle.set(tab ?? (r.data?.['title'] as string) ?? 'FloweySales');
       this.navOpen.set(false);
       this.userMenuOpen.set(false);
     });
