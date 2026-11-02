@@ -13,6 +13,12 @@ An agent can answer as one of six **fictional investor characters**, each follow
 
 Every answer ends with a `STANCE:` line (`fits`, `partly`, `does_not_fit` or `insufficient_data`) that says how well the company fits that approach, never whether to buy it. The prompts forbid presenting as a real investor, reporting what a real investor holds or thinks, and telling the user to buy or sell. The definitions are in `internal/persona`.
 
+## Process, portfolio and sources
+
+Each character carries the documented **decision process** of its school of thought (in order), its **portfolio rules** (concentration, sizing, cash, turnover), the **sources** it rests on and a **reference portfolio**: the holdings its public counterpart has disclosed, dated and sourced. Portfolios are taken from SEC 13F filings and ARK's published daily holdings (`internal/persona/data`, refreshed by `scripts/refresh_reference_portfolios.py`). For the two characters whose counterpart has no portfolio to cite, the reference is the approach's portfolio rules.
+
+The agent tool `get_reference_portfolio` returns a portfolio with its filer, as-of date, concentration and largest positions, and looks up whether a symbol is held. It always answers that this is a disclosure, not a current position or a view. The leaderboard universes `ref_owner`, `ref_quant`, `ref_allocator` and `ref_innovator` rank a company against a character's disclosed holdings; a backtest on them has hindsight bias, and their description says so. The Agent team page has a profile panel for each character. The full analysis, including what each source does and does not show, is in [investor-profiles.md](investor-profiles.md).
+
 ## Their strategies
 
 Every character has strategies of its own and is told to **run them with its tools** and use the results as evidence, rather than just describing them. Two kinds exist:

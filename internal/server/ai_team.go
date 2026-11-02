@@ -59,10 +59,29 @@ func teamMembers(ids []string) ([]ai.TeamMember, string) {
 	return members, ""
 }
 
+// personaView is a character with its reference portfolio, for the catalogue.
+type personaView struct {
+	persona.Persona
+	Portfolio *persona.Portfolio `json:"portfolio,omitempty"`
+}
+
+func personaViews() []personaView {
+	out := make([]personaView, 0, len(persona.Personas))
+	for _, p := range persona.Personas {
+		v := personaView{Persona: p}
+		if ref, ok := persona.PortfolioOf(p.ID); ok {
+			s := ref.Summary(15)
+			v.Portfolio = &s
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
 // registerTeamRoutes serves GET /api/ai/personas and POST /api/ai/team.
 func (e *Engine) registerTeamRoutes() {
 	e.mux.HandleFunc("GET /api/ai/personas", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"personas": persona.Personas, "stances": persona.Stances, "max_team": ai.MaxTeamMembers})
+		writeJSON(w, http.StatusOK, map[string]any{"personas": personaViews(), "snapshot": persona.SnapshotDate(), "stances": persona.Stances, "max_team": ai.MaxTeamMembers})
 	})
 
 	e.mux.HandleFunc("POST /api/ai/team", func(w http.ResponseWriter, r *http.Request) {

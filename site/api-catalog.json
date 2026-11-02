@@ -589,6 +589,12 @@
       "note": "Backtest av en rankningsstrategi med månatlig ombalansering och varningar"
     },
     {
+      "name": "get_reference_portfolio",
+      "status": "implemented",
+      "surface": "MCP tools/list",
+      "note": "Det offentligt redovisade innehavet (SEC 13F eller fondens dagliga innehav) som en investerarkaraktär följer, med datum, koncentration och uppslag av en ticker"
+    },
+    {
       "name": "run_rule_strategy",
       "status": "implemented",
       "surface": "MCP tools/list",

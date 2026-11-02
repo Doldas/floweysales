@@ -1,9 +1,10 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { ChangeDetectionStrategy, Component, computed, effect, inject, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 
 import { toolLabel } from '../components/agent-tools';
+import { KIND_LABEL, changeLabel, stalenessNote, summaryLine, usdCompact } from '../components/portfolio-view';
 import { STANCE_ICON, STANCE_LABEL, defaultQuestion, shownText, stanceCounts, togglePersona, type MemberState } from '../components/team-view';
 import { MarketState } from '../core/market-state';
 import { TeamSession } from '../core/team-session';
@@ -41,6 +42,51 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
         </button>
       }
     </div>
+    <div class="profile-links" role="group" aria-label="Character profiles">
+      @for (p of team.personas(); track p.id) {
+        <button type="button" class="btn btn-sm btn-ghost" [attr.aria-expanded]="viewing() === p.id" (click)="view(p.id)"><i class="bi bi-person-lines-fill"></i> {{ p.name }}: profile and portfolio</button>
+      }
+    </div>
+    @if (profile(); as p) {
+      <article class="profile" [attr.aria-label]="p.name + ' profile'">
+        <h3>{{ p.name }} <small>a fictional character · {{ p.archetype }}</small></h3>
+        <div class="cols">
+          <section>
+            <h4>How it decides</h4>
+            <ol>@for (x of p.process ?? []; track $index) { <li>{{ x }}</li> }</ol>
+            <h4>How it builds a portfolio</h4>
+            <ul>@for (x of p.sizing ?? []; track $index) { <li>{{ x }}</li> }</ul>
+          </section>
+          <section>
+            @if (p.portfolio; as ref) {
+              <h4>Reference portfolio <small>{{ kindLabel(ref.kind) }}</small></h4>
+              <p class="muted">{{ summary(ref) }}</p>
+              @if (ref.kind !== 'rules') {
+                <table>
+                  <caption class="visually-hidden">Largest disclosed positions</caption>
+                  <thead><tr><th scope="col">Position</th><th scope="col" class="num">Weight</th><th scope="col" class="num">Change in shares</th></tr></thead>
+                  <tbody>
+                    @for (x of ref.positions.slice(0, 10); track $index) {
+                      <tr><td>{{ x.symbol || x.name }} <small>{{ x.symbol ? x.name : '' }}</small></td><td class="num">{{ x.weight_pct.toFixed(1) }}%</td><td class="num">{{ change(x, ref.kind) }}</td></tr>
+                    }
+                  </tbody>
+                </table>
+                <p class="muted">{{ staleness(ref) }} Source: <a [href]="ref.source_url" target="_blank" rel="noopener noreferrer">{{ ref.form || 'published holdings' }}</a>@if (ref.total_value_usd) { , {{ usd(ref.total_value_usd) }} in disclosed holdings}.</p>
+                @if (ref.exited_since_previous?.length) { <p class="muted">Sold out of since the previous quarter: {{ ref.exited_since_previous!.join(', ') }}.</p> }
+              } @else {
+                <ul>@for (x of ref.rules ?? []; track $index) { <li>{{ x }}</li> }</ul>
+              }
+              @for (n of ref.notes; track $index) { <p class="caveat">{{ n }}</p> }
+            }
+            <h4>Documented in</h4>
+            <ul class="src">
+              @for (x of p.sources ?? []; track x.title) { <li>@if (x.url) { <a [href]="x.url" target="_blank" rel="noopener noreferrer">{{ x.title }}</a> } @else { {{ x.title }} }</li> }
+            </ul>
+          </section>
+        </div>
+        <p class="muted">A disclosure of past holdings is not a current position, a view or a recommendation. The character is invented; it follows the approach, not the person.</p>
+      </article>
+    }
     @if (team.chosen().length) {
       <details class="strat">
         <summary>Strategies the team will run</summary>
@@ -121,6 +167,15 @@ h2 { font-size: 1rem; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; al
 .member small, .arch { color: var(--fs-muted); font-size: 0.78rem; }
 .member:hover:not(:disabled) { background: var(--fs-surface-3); }
 .member[aria-pressed='true'] { border-color: var(--fs-accent); background: var(--fs-accent-soft); }
+.profile-links { display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; }
+.profile { border: 1px solid var(--fs-border); border-radius: 8px; padding: 0.9rem 1.1rem; display: grid; gap: 0.6rem; }
+.profile h3 { font-size: 0.95rem; margin: 0; small { font-weight: 400; color: var(--fs-muted); margin-left: 0.4rem; } }
+.profile h4 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fs-muted); margin: 0.6rem 0 0.3rem; small { text-transform: none; letter-spacing: 0; margin-left: 0.4rem; } }
+.profile .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: 1.2rem; }
+.profile ol, .profile ul { padding-left: 1.2rem; margin: 0; display: grid; gap: 0.3rem; font-size: 0.85rem; }
+.profile table { width: 100%; border-collapse: collapse; font-size: 0.82rem; th, td { padding: 0.25rem 0.4rem; border-top: 1px solid var(--fs-border); text-align: left; } thead th { border-top: 0; color: var(--fs-muted); } }
+.profile .num { text-align: right; white-space: nowrap; }
+.caveat { font-size: 0.8rem; color: var(--fs-warn); margin: 0.3rem 0 0; }
 .strat { font-size: 0.85rem; summary { cursor: pointer; color: var(--fs-muted); } ul { margin: 0.4rem 0; padding-left: 1.1rem; display: grid; gap: 0.25rem; } }
 .q { display: grid; gap: 0.25rem; font-size: 0.8rem; color: var(--fs-muted); }
 .run-bar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
@@ -143,6 +198,15 @@ export class TeamPage {
   readonly team = inject(TeamSession);
   readonly market = inject(MarketState);
   private readonly sanitizer = inject(DomSanitizer);
+
+  readonly viewing = signal('');
+  readonly profile = computed(() => this.team.personas().find(p => p.id === this.viewing()));
+  readonly kindLabel = (k: keyof typeof KIND_LABEL) => KIND_LABEL[k];
+  readonly summary = summaryLine;
+  readonly change = changeLabel;
+  readonly usd = usdCompact;
+  readonly staleness = (ref: Parameters<typeof stalenessNote>[0]) => stalenessNote(ref, new Date().toISOString().slice(0, 10));
+  view(id: string): void { this.viewing.update(v => (v === id ? '' : id)); }
 
   readonly counts = computed(() => stanceCounts(this.team.state()?.members ?? []));
   readonly icon = (s: string) => STANCE_ICON[s as keyof typeof STANCE_ICON];

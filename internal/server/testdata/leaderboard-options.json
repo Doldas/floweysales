@@ -4,7 +4,11 @@
   "us_tech",
   "us_dividend",
   "se_large",
-  "eu_leaders"
+  "eu_leaders",
+  "ref_owner",
+  "ref_quant",
+  "ref_allocator",
+  "ref_innovator"
  ],
  "strategies": [
   "best",

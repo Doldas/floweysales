@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"floweysales/internal/market"
+	"floweysales/internal/persona"
 )
 
 // The leaderboard ranks a universe of stocks on six factors computed in Go
@@ -34,6 +35,10 @@ type leaderboardUniverse struct {
 	Description string   `json:"description"`
 	Benchmark   string   `json:"benchmark"` // index or ETF the backtest compares with
 	Symbols     []string `json:"symbols"`
+	// Persona and AsOf mark a universe built from a character's reference
+	// portfolio, and the date of the disclosure it comes from.
+	Persona string `json:"persona,omitempty"`
+	AsOf    string `json:"as_of,omitempty"`
 }
 
 // Universes use Yahoo-style tickers, the default provider's format.
@@ -48,6 +53,38 @@ var leaderboardUniverses = []leaderboardUniverse{
 		Benchmark: "^OMX", Symbols: []string{"ABB.ST", "ALFA.ST", "ASSA-B.ST", "AZN.ST", "ATCO-A.ST", "BOL.ST", "EPI-A.ST", "EQT.ST", "ERIC-B.ST", "ESSITY-B.ST", "EVO.ST", "GETI-B.ST", "HEXA-B.ST", "HM-B.ST", "INVE-B.ST", "NDA-SE.ST", "NIBE-B.ST", "SAAB-B.ST", "SAND.ST", "SCA-B.ST", "SEB-A.ST", "SHB-A.ST", "SKF-B.ST", "SWED-A.ST", "TEL2-B.ST", "TELIA.ST", "VOLV-B.ST", "ELUX-B.ST", "KINV-B.ST", "SINCH.ST"}},
 	{ID: "eu_leaders", Label: "European leaders", Description: "Large companies listed in Amsterdam, Frankfurt, Paris, Zurich, Copenhagen, Madrid and London.",
 		Benchmark: "^STOXX50E", Symbols: []string{"ASML.AS", "SAP.DE", "NOVO-B.CO", "MC.PA", "NESN.SW", "ROG.SW", "NOVN.SW", "AZN.L", "SHEL.L", "OR.PA", "SIE.DE", "TTE.PA", "ALV.DE", "SU.PA", "AIR.PA", "ULVR.L", "HSBA.L", "BNP.PA", "SAN.PA", "IBE.MC", "DTE.DE", "RMS.PA", "ABBN.SW", "ADYEN.AS", "INGA.AS"}},
+}
+
+func init() {
+	leaderboardUniverses = append(leaderboardUniverses, referenceUniverses()...)
+}
+
+// referenceUniverses turn each character's disclosed portfolio into a list
+// the leaderboard can rank: the largest positions that have a ticker. The
+// list is today's holdings, so anything tested on it carries hindsight bias.
+func referenceUniverses() []leaderboardUniverse {
+	labels := map[string]string{"owner": "Ashgrove's reference portfolio", "quant": "Voss's reference portfolio", "allocator": "Lindholm's reference portfolio", "innovator": "Whitfield's reference portfolio"}
+	var out []leaderboardUniverse
+	for _, p := range persona.Personas {
+		ref, ok := persona.PortfolioOf(p.ID)
+		if !ok || ref.Kind == persona.PortfolioKindRules {
+			continue
+		}
+		symbols := []string{}
+		for _, pos := range ref.Positions {
+			// Index-fund wrappers and symbols a provider cannot quote add nothing to a ranking.
+			if pos.Symbol == "" || pos.Symbol == "IVV" || len(symbols) == 25 {
+				continue
+			}
+			symbols = append(symbols, pos.Symbol)
+		}
+		out = append(out, leaderboardUniverse{
+			ID: "ref_" + p.ID, Label: labels[p.ID],
+			Description: fmt.Sprintf("The largest positions in the public disclosure of %s as of %s. Today's holdings only: a backtest on this list looks back through companies someone chose to hold, so it flatters the past.", ref.Filer, ref.Period),
+			Benchmark:   "SPY", Symbols: symbols, Persona: p.ID, AsOf: ref.Period,
+		})
+	}
+	return out
 }
 
 func findLeaderboardUniverse(id string) (leaderboardUniverse, bool) {

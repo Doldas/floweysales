@@ -61,6 +61,10 @@ export const LEADERBOARD_UNIVERSES: readonly { id: string; label: string }[] = [
   { id: 'us_dividend', label: 'US dividend & value' },
   { id: 'se_large', label: 'Sweden large caps' },
   { id: 'eu_leaders', label: 'European leaders' },
+  { id: 'ref_owner', label: 'Ashgrove\'s reference portfolio' },
+  { id: 'ref_quant', label: 'Voss\'s reference portfolio' },
+  { id: 'ref_allocator', label: 'Lindholm\'s reference portfolio' },
+  { id: 'ref_innovator', label: 'Whitfield\'s reference portfolio' },
 ];
 
 export const LEADERBOARD_STRATEGIES: readonly { id: string; label: string }[] = [

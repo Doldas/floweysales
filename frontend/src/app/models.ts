@@ -480,6 +480,8 @@ export interface Persona {
   id: string; name: string; tagline: string; archetype: string; horizon: string;
   principles: string[]; checks: string[]; avoids: string[]; voice: string; tools: string[]; caveat?: string;
   strategies?: { kind: 'leaderboard' | 'rules'; id: string; why: string }[];
+  process?: string[]; sizing?: string[]; sources?: { title: string; url?: string }[];
+  portfolio?: ReferencePortfolio;
 }
 export interface PersonaCatalog { personas: Persona[]; stances: Stance[]; max_team: number }
 /** One event of a team run, as streamed by POST /api/ai/team. */
@@ -516,3 +518,10 @@ export interface StrategyRunResult {
     leg_low?: number; leg_high?: number; leg_low_date?: string; leg_high_date?: string; levels?: { label: string; ratio: number; price: number }[] };
 }
 export interface StrategyRunRequest { strategy_id?: string; definition?: StrategyDef; symbol: string; provider?: string; range: '3Y' | '5Y' | '10Y'; cost_bps: number }
+
+export interface ReferencePosition { symbol: string; name: string; weight_pct: number; shares?: number; shares_change_pct?: number }
+export interface ReferencePortfolio {
+  persona: string; kind: '13f' | 'etf_daily' | 'rules'; filer: string; form?: string; period: string; filed?: string; accession?: string; source_url: string;
+  total_value_usd?: number; stats: { positions: number; top1_pct: number; top5_pct: number; top10_pct: number; hhi: number };
+  positions: ReferencePosition[]; exited_since_previous?: string[]; notes: string[]; rules?: string[];
+}

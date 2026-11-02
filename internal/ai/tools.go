@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"floweysales/internal/market"
+	"floweysales/internal/persona"
 	"floweysales/internal/sec"
 	"floweysales/internal/storage"
 	"floweysales/internal/strategy"
@@ -86,8 +87,12 @@ func ToolDefs() []Tool {
 		return m
 	}
 
-	universeProp := str("Leaderboard universe: us_mega, us_tech, us_dividend, se_large or eu_leaders. Omit when passing symbols.")
+	universeProp := str("Leaderboard universe: us_mega, us_tech, us_dividend, se_large, eu_leaders, or a character's disclosed portfolio: ref_owner, ref_quant, ref_allocator, ref_innovator (today's holdings, so a backtest on them has hindsight bias). Omit when passing symbols.")
 	strategyProp := str("Strategy: best, value, growth, momentum, quality, dip, owner_compounder, teacher_defensive or pickerupper_garp. Defaults to best.")
+	personaIDs := []string{}
+	for _, p := range persona.Personas {
+		personaIDs = append(personaIDs, p.ID)
+	}
 	ruleIDs := []string{}
 	for _, st := range strategy.Presets() {
 		ruleIDs = append(ruleIDs, st.ID)
@@ -103,6 +108,15 @@ func ToolDefs() []Tool {
 			Name:        "run_strategy_backtest",
 			Description: "Replay a leaderboard strategy with monthly rebalancing over past prices and published quarters, against an index. Returns return, risk and turnover figures, the rebalance count and the bias warnings. Slow on a cold cache; results are not forecasts.",
 			Parameters:  obj(map[string]any{"universe": universeProp, "strategy": strategyProp, "top": map[string]any{"type": "integer", "description": "Holdings, 1-25 (default 10)"}, "years": map[string]any{"type": "integer", "description": "3 or 5 (default 3)"}}),
+		}},
+		{Type: "function", Function: ToolFunction{
+			Name: "get_reference_portfolio",
+			Description: "The publicly disclosed portfolio a built-in investor character follows: a dated SEC 13F filing or a fund's published daily holdings, with the filer, the as-of date, concentration (top 1, 5 and 10 weights, number of positions), the largest positions and, where known, the change in shares since the previous quarter. " +
+				"Optionally says whether and how a symbol (or a list) is held. A disclosure of past holdings, not a current position, a view or a recommendation: a 13F covers long US-listed equity only and is filed up to 45 days after the quarter ends. Characters: " + strings.Join(personaIDs, ", ") + ".",
+			Parameters: obj(map[string]any{
+				"persona": str("One of: " + strings.Join(personaIDs, ", ")), "symbol": str("A ticker to look up in the portfolio, e.g. KO"),
+				"symbols": str("Comma-separated tickers to measure overlap with the portfolio"),
+			}, "persona"),
 		}},
 		{Type: "function", Function: ToolFunction{
 			Name: "run_rule_strategy",
@@ -360,6 +374,26 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 	}
 
 	switch name {
+	case "get_reference_portfolio":
+		id := strArg(args, "persona")
+		p := persona.ByID(id)
+		if p == nil {
+			return "", fmt.Errorf("unknown persona %q", id)
+		}
+		ref, ok := persona.PortfolioOf(id)
+		if !ok {
+			return "", fmt.Errorf("persona %q has no reference portfolio", id)
+		}
+		out := map[string]any{"persona": p.ID, "character": p.Name, "portfolio": ref,
+			"note": "A dated public disclosure, not a current position, a view or a recommendation. Cite it with its as-of date."}
+		if symbol := strArg(args, "symbol"); symbol != "" {
+			out["lookup"] = ref.Lookup(symbol)
+		}
+		if list := strArg(args, "symbols"); list != "" {
+			cover, matched := ref.Overlap(strings.FieldsFunc(list, func(r rune) bool { return r == ',' || r == ' ' || r == ';' }))
+			out["overlap"] = map[string]any{"matched": matched, "covered_weight_pct": cover}
+		}
+		return toJSON(out)
 	case "get_leaderboard", "run_strategy_backtest", "run_rule_strategy", "get_wealth_plan", "get_portfolio_analytics", "get_insider_activity", "get_macro_regime", "get_corporate_events":
 		inv, ok := src.(InvestorSource)
 		if !ok {
