@@ -12,7 +12,9 @@ import {
   Order,
   OrderRequest,
   OrderResponse,
+  CompanyWorld,
   EventsResponse,
+  WorldView,
   PlanProfile,
   TodayBriefing,
   SizeResponse,
@@ -123,6 +125,18 @@ export class MarketService {
     const params: Record<string, string> = { symbol, from, to };
     if (provider) params['provider'] = provider;
     return this.http.get<EventsResponse>('/api/events', { params });
+  }
+
+  /** Headlines sorted into themes, with the sectors and commodities each theme touches. */
+  getWorld(refresh = false): Observable<WorldView> {
+    return this.http.get<WorldView>('/api/world', { params: refresh ? { refresh: '1' } : {} });
+  }
+
+  /** How today's world themes reach one company, from its sector and its own headlines. */
+  getCompanyWorld(symbol: string, sector = ''): Observable<CompanyWorld> {
+    const params: Record<string, string> = { symbol };
+    if (sector) params['sector'] = sector;
+    return this.http.get<CompanyWorld>('/api/world/company', { params });
   }
 
   /** Phase, macro regime, paper portfolio and three things worth a look; no model runs. */
