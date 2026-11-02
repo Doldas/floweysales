@@ -516,3 +516,18 @@ export interface StrategyRunResult {
     leg_low?: number; leg_high?: number; leg_low_date?: string; leg_high_date?: string; levels?: { label: string; ratio: number; price: number }[] };
 }
 export interface StrategyRunRequest { strategy_id?: string; definition?: StrategyDef; symbol: string; provider?: string; range: '3Y' | '5Y' | '10Y'; cost_bps: number }
+
+export type WorldRole = 'benefits' | 'hurt' | 'mixed';
+export interface WorldExposure { kind: 'sector' | 'commodity' | 'macro'; name: string; role: WorldRole; why: string }
+export interface WorldHeadline { title: string; url: string; source?: string; published?: number; age?: string; summary?: string; via: string; themes?: string[] }
+export interface WorldTheme { id: string; label: string; driver: string; exposures: WorldExposure[]; headlines: WorldHeadline[]; count: number }
+export interface WorldSector { name: string; benefits_from?: string[]; hurt_by?: string[]; mixed?: string[] }
+export interface WorldView { generated_at: string; sources: string[]; notes?: string[]; themes: WorldTheme[]; sectors: WorldSector[] }
+export interface CompanyWorldTheme {
+  id: string; label: string; driver: string; role?: WorldRole; why?: string; basis: string; count: number;
+  headlines: WorldHeadline[]; own_headlines?: WorldHeadline[];
+}
+export interface CompanyWorld {
+  symbol: string; sector?: string; sector_source?: 'chosen' | 'config' | 'built-in'; generated_at: string;
+  themes: CompanyWorldTheme[]; news: WorldHeadline[]; notes?: string[];
+}
