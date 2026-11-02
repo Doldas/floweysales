@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 
 import { FinancialsComponent } from '../components/financials';
+import { WorldImpactComponent } from '../components/world-impact';
 import { UpcomingEventsComponent } from '../components/upcoming-events';
 import { MarketState } from '../core/market-state';
 import { SymbolSearchComponent } from '../shell/symbol-search';
@@ -9,7 +10,7 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
 @Component({
   selector: 'fs-financials-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FinancialsComponent, SymbolSearchComponent, UpcomingEventsComponent],
+  imports: [FinancialsComponent, SymbolSearchComponent, UpcomingEventsComponent, WorldImpactComponent],
   template: `
     <div class="fs-page research-container">
       <header class="fs-page-header">
@@ -22,6 +23,7 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
       </header>
       @if (market.trackedSymbol()) {
         <fs-upcoming-events [symbol]="market.trackedSymbol()" [price]="market.livePrice()" />
+        <fs-world-impact [symbol]="market.trackedSymbol()" />
         <fse-financials [symbol]="market.trackedSymbol()" [provider]="market.provider()" />
       } @else {
         <div class="fs-empty"><i class="bi bi-bank"></i><h3>Choose a company</h3><p class="mb-0">Search a ticker to load its quarterly statements.</p></div>
