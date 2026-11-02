@@ -106,7 +106,7 @@ Restart the backend after changes.
 			fmt.Fprintln(stderr, err)
 			return 1
 		}
-		fmt.Fprintf(stdout, "%s %s installed (provider %s, sha256 %s)\n", p.Manifest.ID, p.Manifest.Version, p.Manifest.Provider.ID, p.SHA256)
+		fmt.Fprintf(stdout, "%s %s installed (%s, sha256 %s)\n", p.Manifest.ID, p.Manifest.Version, providerOrTools(p.Manifest), p.SHA256)
 		return 0
 	}
 
@@ -124,7 +124,7 @@ Restart the backend after changes.
 			if p.UpdateAvailable {
 				update = p.LatestVersion
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", p.Manifest.ID, p.Manifest.Version, p.Manifest.Provider.ID, status, update)
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", p.Manifest.ID, p.Manifest.Version, providerOrTools(p.Manifest), status, update)
 		}
 		fmt.Fprintf(tw, "\n%d installed in %s\n", len(ov.Installed), m.Dir())
 	case "store":
@@ -142,7 +142,7 @@ Restart the backend after changes.
 			if p.Manifest.Terms != "" {
 				notes += " has terms"
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", p.Manifest.ID, p.LatestVersion, p.Manifest.Provider.ID, installed, notes)
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", p.Manifest.ID, p.LatestVersion, providerOrTools(p.Manifest), installed, notes)
 		}
 	case "install":
 		if file != "" {
@@ -186,4 +186,15 @@ Restart the backend after changes.
 		return 2
 	}
 	return 0
+}
+
+// providerOrTools names what a plugin contributes in command-line listings.
+func providerOrTools(m plugins.Manifest) string {
+	switch {
+	case m.ProvidesMarketData():
+		return m.Provider.ID
+	case m.Tools != nil:
+		return "tools: " + m.Tools.Tab.Label
+	}
+	return "-"
 }

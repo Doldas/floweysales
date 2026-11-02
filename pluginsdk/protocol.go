@@ -24,6 +24,8 @@ const (
 	MethodForumPosts = "forum_posts"
 	MethodNews       = "news"
 	MethodEvents     = "events"
+	// MethodTool runs a tool declared in Manifest.Tools (see tools.go).
+	MethodTool = "tool"
 )
 
 // Capabilities a provider can declare.
@@ -52,9 +54,13 @@ type Manifest struct {
 	License     string `json:"license,omitempty"`
 	// Terms, when set, must be shown to and accepted by the administrator
 	// before installation (for example unofficial upstream interfaces).
-	Terms    string       `json:"terms,omitempty"`
+	Terms string `json:"terms,omitempty"`
+	// Provider is the market-data provider a plugin contributes. It may be
+	// left empty when the plugin only contributes Tools.
 	Provider ProviderInfo `json:"provider"`
-	Env      []EnvVar     `json:"env,omitempty"`
+	// Tools adds a tab of interactive tools to the app.
+	Tools *ToolsInfo `json:"tools,omitempty"`
+	Env   []EnvVar   `json:"env,omitempty"`
 }
 
 // ProviderInfo is the market-data provider a plugin contributes.
@@ -129,33 +135,52 @@ func (m Manifest) Validate() error {
 		return errors.New("plugin name must be 1-80 characters")
 	case !versionPattern.MatchString(m.Version):
 		return fmt.Errorf("plugin version %q is not a semantic version", m.Version)
-	case !providerIDPattern.MatchString(m.Provider.ID):
-		return fmt.Errorf("invalid provider id %q", m.Provider.ID)
 	case len(m.Description) > 600 || len(m.Terms) > 4000 || len(m.Provider.Notes) > 1000:
 		return errors.New("manifest text fields are too long")
 	}
-	if len(m.Provider.Capabilities) == 0 {
-		return errors.New("provider declares no capabilities")
+	if err := m.validateProvider(); err != nil {
+		return err
 	}
-	for _, c := range m.Provider.Capabilities {
-		if !knownCapabilities[c] {
-			return fmt.Errorf("unknown capability %q", c)
+	if m.Tools != nil {
+		if err := m.Tools.Validate(); err != nil {
+			return err
 		}
-	}
-	if m.Provider.HasCapability(CapResearch) != (len(m.Provider.Research) > 0) {
-		return errors.New("research capability and research operations must be declared together")
-	}
-	seen := map[string]bool{}
-	for _, op := range m.Provider.Research {
-		if op.Operation == "" || seen[op.Operation] {
-			return fmt.Errorf("invalid or duplicate research operation %q", op.Operation)
-		}
-		seen[op.Operation] = true
 	}
 	for _, e := range m.Env {
 		if !envNamePattern.MatchString(e.Name) || reservedEnv[e.Name] || strings.HasPrefix(e.Name, "FLOWEYSALES_") {
 			return fmt.Errorf("environment variable %q cannot be declared by a plugin", e.Name)
 		}
+	}
+	return nil
+}
+
+// validateProvider checks the provider part. A plugin that declares Tools may
+// have no provider at all; any provider field then makes it a provider.
+func (m Manifest) validateProvider() error {
+	p := m.Provider
+	if m.Tools != nil && p.ID == "" && p.Label == "" && len(p.Capabilities) == 0 && len(p.Research) == 0 {
+		return nil
+	}
+	if !providerIDPattern.MatchString(p.ID) {
+		return fmt.Errorf("invalid provider id %q", p.ID)
+	}
+	if len(p.Capabilities) == 0 {
+		return errors.New("provider declares no capabilities")
+	}
+	for _, c := range p.Capabilities {
+		if !knownCapabilities[c] {
+			return fmt.Errorf("unknown capability %q", c)
+		}
+	}
+	if p.HasCapability(CapResearch) != (len(p.Research) > 0) {
+		return errors.New("research capability and research operations must be declared together")
+	}
+	seen := map[string]bool{}
+	for _, op := range p.Research {
+		if op.Operation == "" || seen[op.Operation] {
+			return fmt.Errorf("invalid or duplicate research operation %q", op.Operation)
+		}
+		seen[op.Operation] = true
 	}
 	return nil
 }

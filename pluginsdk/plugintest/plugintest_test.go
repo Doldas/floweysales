@@ -93,3 +93,18 @@ func TestConformanceCatchesMismatches(t *testing.T) {
 		})
 	}
 }
+
+func TestToolsPluginConforms(t *testing.T) {
+	m := sdk.Manifest{Protocol: sdk.ProtocolVersion, ID: "tools-demo", Name: "Tools demo", Version: "1.0.0",
+		Tools: &sdk.ToolsInfo{Tab: sdk.ToolsTab{Label: "Demo"}, Tools: []sdk.Tool{{ID: "echo", Label: "Echo"}}}}
+	p := sdk.Plugin{Manifest: m, Tool: func(context.Context, sdk.ToolParams) (sdk.ToolResult, error) {
+		return sdk.ToolResult{Blocks: []sdk.ToolBlock{{Type: sdk.BlockText, Text: "ok"}}}, nil
+	}}
+	Conformance(t, p)
+	p.Tool = nil
+	failed := false
+	conformance(&fakeT{T: t, fail: func(string) { failed = true }}, p)
+	if !failed {
+		t.Fatal("declared tools without a handler must fail conformance")
+	}
+}

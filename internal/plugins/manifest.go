@@ -43,7 +43,9 @@ type Manifest struct {
 	License     string       `json:"license,omitempty"`
 	Terms       string       `json:"terms,omitempty"`
 	Provider    ProviderInfo `json:"provider"`
-	Env         []EnvVar     `json:"env,omitempty"`
+	// Tools adds a tab of interactive tools. A plugin with Tools may have no provider.
+	Tools *ToolsInfo `json:"tools,omitempty"`
+	Env   []EnvVar   `json:"env,omitempty"`
 }
 
 // ProviderInfo is the provider a plugin contributes.
@@ -108,6 +110,33 @@ var reservedEnv = map[string]bool{
 // directory name, so the pattern excludes separators and dots.
 func ValidPluginID(id string) bool { return pluginIDPattern.MatchString(id) }
 
+// ProvidesMarketData reports whether the plugin contributes a provider.
+func (m Manifest) ProvidesMarketData() bool { return m.Provider.ID != "" }
+
+// validateProvider checks the provider part; a plugin with Tools may leave it
+// out entirely, but a half-declared provider is rejected.
+func (m Manifest) validateProvider() error {
+	p := m.Provider
+	if m.Tools != nil && p.ID == "" && p.Label == "" && len(p.Capabilities) == 0 && len(p.Research) == 0 {
+		return nil
+	}
+	if !providerIDPattern.MatchString(p.ID) {
+		return fmt.Errorf("invalid provider id %q", p.ID)
+	}
+	if len(p.Capabilities) == 0 {
+		return errors.New("provider declares no capabilities")
+	}
+	for _, c := range p.Capabilities {
+		if !knownCapabilities[c] {
+			return fmt.Errorf("unknown capability %q", c)
+		}
+	}
+	if p.HasCapability(CapResearch) != (len(p.Research) > 0) {
+		return errors.New("research capability and research operations must be declared together")
+	}
+	return nil
+}
+
 // Validate checks everything the backend relies on: identifiers that become
 // paths and routing keys, the protocol, and that no backend secret is
 // requested.
@@ -121,20 +150,16 @@ func (m Manifest) Validate() error {
 		return errors.New("plugin name must be 1-80 characters")
 	case !ValidVersion(m.Version):
 		return fmt.Errorf("plugin version %q is not a semantic version", m.Version)
-	case !providerIDPattern.MatchString(m.Provider.ID):
-		return fmt.Errorf("invalid provider id %q", m.Provider.ID)
 	case len(m.Description) > 600 || len(m.Terms) > 4000 || len(m.Provider.Notes) > 1000:
 		return errors.New("manifest text fields are too long")
-	case len(m.Provider.Capabilities) == 0:
-		return errors.New("provider declares no capabilities")
 	}
-	for _, c := range m.Provider.Capabilities {
-		if !knownCapabilities[c] {
-			return fmt.Errorf("unknown capability %q", c)
+	if err := m.validateProvider(); err != nil {
+		return err
+	}
+	if m.Tools != nil {
+		if err := m.Tools.Validate(); err != nil {
+			return err
 		}
-	}
-	if m.Provider.HasCapability(CapResearch) != (len(m.Provider.Research) > 0) {
-		return errors.New("research capability and research operations must be declared together")
 	}
 	for _, e := range m.Env {
 		if !envNamePattern.MatchString(e.Name) || reservedEnv[e.Name] || strings.HasPrefix(e.Name, "FLOWEYSALES_") {
