@@ -276,6 +276,7 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     '/api/providers': ['YAHOO', 'BINANCE', 'AVANZA'].map(id => provider(id)),
     '/api/admin/plugins': pluginOverview,
     '/api/admin/plugins/check': pluginOverview,
+    '/api/plugin-tools': { plugins: [] },
   };
   const flowMatch = /^\/api\/admin\/flows\/(\d+)(?:\/(.*))?$/.exec(p);
   if (flowMatch) {
