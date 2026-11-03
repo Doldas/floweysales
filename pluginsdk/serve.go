@@ -24,6 +24,8 @@ type Plugin struct {
 	ForumPosts func(context.Context, ForumParams) ([]ForumPost, error)
 	News       func(context.Context, NewsParams) ([]NewsItem, error)
 	Events     func(context.Context, EventsParams) ([]CorporateEvent, error)
+	// Domain answers the operations of a domain provider (Manifest.Provider.Operations).
+	Domain func(context.Context, DomainParams) (any, error)
 	// Tool runs a tool declared in Manifest.Tools.
 	Tool func(context.Context, ToolParams) (ToolResult, error)
 }
@@ -167,6 +169,8 @@ func (p Plugin) dispatch(ctx context.Context, req Request) (any, error) {
 		return call(ctx, req.Params, p.News)
 	case MethodEvents:
 		return call(ctx, req.Params, p.Events)
+	case MethodDomain:
+		return p.runDomain(ctx, req.Params)
 	case MethodTool:
 		return p.runTool(ctx, req.Params)
 	default:

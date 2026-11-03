@@ -192,20 +192,64 @@ func TestToolsOnlyManifestNeedsNoProvider(t *testing.T) {
 	}
 }
 
-func TestTaxCapabilityBelongsToAToolsPlugin(t *testing.T) {
-	m := toolsManifest()
-	m.Provider.Capabilities = []string{CapTax}
-	if err := m.Validate(); err != nil {
-		t.Fatalf("tax on a tools plugin must be accepted without a provider id: %v", err)
+func taxManifest() Manifest {
+	return Manifest{Protocol: ProtocolVersion, ID: "se-tax", Name: "Tax", Version: "1.0.0", Description: "d", Publisher: "p",
+		Provider: ProviderInfo{ID: "SE_TAX", Label: "Swedish tax", Type: TypeTax, Capabilities: []string{CapTaxReport, CapTaxEstimate},
+			Operations: []DomainOperation{
+				{Capability: CapTaxReport, Description: "K4 rows", Inputs: []DomainField{{Name: "year", Type: FieldInteger, Description: "Income year", Required: true}}},
+				{Capability: CapTaxEstimate, Description: "Estimate"},
+			}}}
+}
+
+func TestDomainProviderIsValidated(t *testing.T) {
+	if err := taxManifest().Validate(); err != nil {
+		t.Fatal(err)
 	}
-	m.Tools = nil
-	if err := m.Validate(); err == nil {
-		t.Fatal("tax without a tools tab must be rejected")
+	if !taxManifest().Provider.IsDomain() || (ProviderInfo{Type: TypeMarket}).IsDomain() {
+		t.Fatal("only a known non-market type is a domain provider")
 	}
-	m = toolsManifest()
-	m.Provider.Capabilities = []string{CapTax, CapQuote}
-	if err := m.Validate(); err == nil {
-		t.Fatal("mixing tax with a market-data capability needs a full provider declaration")
+	for name, mutate := range map[string]func(*Manifest){
+		"unknown type":                func(m *Manifest) { m.Provider.Type = "weather" },
+		"market capability on tax":    func(m *Manifest) { m.Provider.Capabilities = []string{CapQuote}; m.Provider.Operations = nil },
+		"no capabilities":             func(m *Manifest) { m.Provider.Capabilities = nil },
+		"duplicate capability":        func(m *Manifest) { m.Provider.Capabilities = []string{CapTaxReport, CapTaxReport} },
+		"operation not declared":      func(m *Manifest) { m.Provider.Operations[1].Capability = CapTaxHoldings },
+		"capability without a schema": func(m *Manifest) { m.Provider.Operations = m.Provider.Operations[:1] },
+		"no description":              func(m *Manifest) { m.Provider.Operations[0].Description = "" },
+		"bad input type":              func(m *Manifest) { m.Provider.Operations[0].Inputs[0].Type = "date" },
+		"bad input name":              func(m *Manifest) { m.Provider.Operations[0].Inputs[0].Name = "Year" },
+		"no provider id":              func(m *Manifest) { m.Provider.ID = "" },
+		"operations on market type": func(m *Manifest) {
+			m.Provider.Type, m.Provider.Capabilities = "", []string{CapQuote}
+		},
+	} {
+		m := taxManifest()
+		mutate(&m)
+		if err := m.Validate(); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestDomainCallsOnlyDeclaredOperations(t *testing.T) {
+	p := Plugin{Manifest: taxManifest(), Domain: func(_ context.Context, d DomainParams) (any, error) {
+		return map[string]string{"operation": d.Operation}, nil
+	}}
+	var out strings.Builder
+	in := `{"id":1,"method":"domain","params":{"operation":"tax_report"}}` + "\n" +
+		`{"id":2,"method":"domain","params":{"operation":"tax_holdings"}}` + "\n"
+	if err := ServeIO(context.Background(), p, strings.NewReader(in), &out); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.Contains(got, `"operation":"tax_report"`) || !strings.Contains(got, CodeInvalidArgument) {
+		t.Fatalf("responses = %s", got)
+	}
+	none := Plugin{Manifest: taxManifest()}
+	out.Reset()
+	_ = ServeIO(context.Background(), none, strings.NewReader(in), &out)
+	if !strings.Contains(out.String(), CodeUnsupported) {
+		t.Fatalf("a plugin without a handler must answer unsupported: %s", out.String())
 	}
 }
 

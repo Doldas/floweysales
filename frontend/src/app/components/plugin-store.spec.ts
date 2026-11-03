@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  capabilityLabels, compareVersions, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt,
+  capabilityLabels, compareVersions, isDomainProvider, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt,
   type InstalledPlugin, type PluginManifest, type PluginOverview, type StorePlugin,
 } from './plugin-store.ts';
 
@@ -83,6 +83,9 @@ test('tool labels stand in for capabilities on a tools-only plugin', () => {
   assert.deepEqual(toolLabels({}), []);
 });
 
-test('tax is a capability label', () => {
-  assert.deepEqual(capabilityLabels(['tax']), ['Tax']);
+test('domain capabilities have labels and a provider type', () => {
+  assert.deepEqual(capabilityLabels(['tax_report', 'tax_estimate']), ['Tax report', 'Tax estimate']);
+  assert.equal(isDomainProvider({ type: 'tax' }), true);
+  assert.equal(isDomainProvider({ type: 'market' }), false);
+  assert.equal(isDomainProvider({}), false);
 });

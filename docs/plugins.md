@@ -145,6 +145,36 @@ a missing figure stays absent rather than `0`; currency is never guessed; a
 fallback source is named in `provider` (the Avanza plugin labels its Yahoo
 history fallback `YAHOO`); research is read-only and allowlisted.
 
+## Domain providers: tax and other typed providers
+
+A provider has a **type**. No type (or `"market"`) is a market-data provider
+with the capabilities above. Any other type is a **domain provider**: the type
+fixes which capabilities exist, and each capability is an *operation* with a
+declared input that the app and the AI agent call without special code.
+
+```json
+"provider": {
+  "id": "SE_TAX", "label": "Swedish tax", "type": "tax",
+  "capabilities": ["tax_report", "tax_estimate"],
+  "operations": [
+    {"capability": "tax_report", "description": "K4 rows, totals and a tax estimate for an income year",
+     "inputs": [{"name": "year", "type": "integer", "description": "Income year", "required": true},
+                {"name": "csv", "type": "string", "description": "Transactions as CSV text", "required": true}]},
+    {"capability": "tax_estimate", "description": "Tax on gains and losses you already know"}
+  ]
+}
+```
+
+| Type | Capabilities |
+| --- | --- |
+| `tax` | `tax_report` (sales of the income year with cost basis and totals), `tax_holdings` (holdings and average cost at a date), `tax_estimate` (tax on known gains and losses) |
+
+- One wire method, `domain`, with `{operation, input}`; the result is any JSON of at most 1 MB. A plugin sets `Plugin.Domain` in the Go SDK and `plugintest.Conformance` checks it.
+- The manifest needs a provider id, only capabilities of its type, and one described operation per capability. Input fields are `string`, `number`, `integer` or `boolean` (strings may list an `enum`). The backend rejects undeclared fields, wrong types and missing required fields before the plugin sees anything.
+- A domain provider is never a market-data provider: it does not appear in provider lists, trackers or polling.
+- `GET /api/domain-providers[?type=tax]` lists installed ones with their operations; `POST /api/domain-providers/{provider}/{operation}` with `{"input": {...}}` runs one. Calls are stateless, nothing is stored or logged, and any signed-in user may make them.
+- The AI agent gets `list_domain_providers` and `call_domain_provider`. The agent must not invent input such as transactions, and results are calculations from the data given, not advice. These tools are not grantable to flow agents.
+
 ## Tool plugins: a tab of tools
 
 A plugin can add a **tab of interactive tools** to the app, with or without

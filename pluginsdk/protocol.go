@@ -24,6 +24,8 @@ const (
 	MethodForumPosts = "forum_posts"
 	MethodNews       = "news"
 	MethodEvents     = "events"
+	// MethodDomain runs an operation of a domain provider (see domain.go).
+	MethodDomain = "domain"
 	// MethodTool runs a tool declared in Manifest.Tools (see tools.go).
 	MethodTool = "tool"
 )
@@ -38,10 +40,6 @@ const (
 	CapForum      = "forum"
 	CapNews       = "news"
 	CapEvents     = "events"
-	// CapTax is a tool capability: the plugin offers tax tools in its tools
-	// tab. It has no protocol method of its own (the tools use "tool"), so a
-	// plugin with it needs Tools and may leave the provider id empty.
-	CapTax = "tax"
 )
 
 // Manifest describes a plugin. Each plugin ships it as plugin.json (embedded
@@ -79,6 +77,12 @@ type ProviderInfo struct {
 	CacheTTLSeconds int                 `json:"cache_ttl_seconds"`
 	Notes           string              `json:"notes"`
 	Research        []ResearchOperation `json:"research,omitempty"`
+	// Type says what kind of provider this is. Empty or "market" is a
+	// market-data provider; other types are domain providers (see domain.go).
+	Type string `json:"type,omitempty"`
+	// Operations describe what a domain provider's capabilities accept, so
+	// the app and the AI agent can call them without special code.
+	Operations []DomainOperation `json:"operations,omitempty"`
 }
 
 // EnvVar is a configuration value the backend passes to the plugin process.
@@ -118,21 +122,7 @@ var (
 )
 
 var knownCapabilities = map[string]bool{
-	CapQuote: true, CapHistory: true, CapSearch: true, CapFinancials: true, CapResearch: true, CapForum: true, CapNews: true, CapEvents: true, CapTax: true,
-}
-
-// toolCapabilities describe what a tools tab does. They are not market-data
-// provider capabilities: a plugin that declares only these is no provider.
-var toolCapabilities = map[string]bool{CapTax: true}
-
-// onlyToolCapabilities reports whether every capability is a tool capability.
-func onlyToolCapabilities(capabilities []string) bool {
-	for _, c := range capabilities {
-		if !toolCapabilities[c] {
-			return false
-		}
-	}
-	return true
+	CapQuote: true, CapHistory: true, CapSearch: true, CapFinancials: true, CapResearch: true, CapForum: true, CapNews: true, CapEvents: true,
 }
 
 // reservedEnv can never be forwarded to a plugin: they belong to the backend.
@@ -176,16 +166,20 @@ func (m Manifest) Validate() error {
 // have no provider at all; any provider field then makes it a provider.
 func (m Manifest) validateProvider() error {
 	p := m.Provider
-	if p.ID == "" && p.Label == "" && len(p.Research) == 0 && onlyToolCapabilities(p.Capabilities) {
-		if len(p.Capabilities) > 0 && m.Tools == nil {
-			return errors.New("tool capabilities need a tools tab")
-		}
-		if m.Tools != nil {
-			return nil
-		}
+	if m.Tools != nil && p.ID == "" && p.Label == "" && p.Type == "" && len(p.Capabilities) == 0 && len(p.Research) == 0 && len(p.Operations) == 0 {
+		return nil
 	}
 	if !providerIDPattern.MatchString(p.ID) {
 		return fmt.Errorf("invalid provider id %q", p.ID)
+	}
+	if p.IsDomain() {
+		return p.validateDomain()
+	}
+	if p.Type != "" && p.Type != TypeMarket {
+		return fmt.Errorf("unknown provider type %q", p.Type)
+	}
+	if len(p.Operations) > 0 {
+		return errors.New("operations belong to domain providers; a market-data provider declares capabilities")
 	}
 	if len(p.Capabilities) == 0 {
 		return errors.New("provider declares no capabilities")

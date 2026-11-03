@@ -29,9 +29,6 @@ const (
 	CapForum      = "forum"
 	CapNews       = "news"
 	CapEvents     = "events"
-	// CapTax is a tool capability: tax tools in the plugin's tools tab. It is
-	// not a market-data capability, so it never makes a plugin a provider.
-	CapTax = "tax"
 )
 
 // Manifest is a plugin's plugin.json; see pluginsdk.Manifest.
@@ -63,6 +60,10 @@ type ProviderInfo struct {
 	CacheTTLSeconds int                 `json:"cache_ttl_seconds"`
 	Notes           string              `json:"notes"`
 	Research        []ResearchOperation `json:"research,omitempty"`
+	// Type is empty or "market" for a market-data provider, otherwise a domain
+	// type (see domain.go) whose capabilities are callable operations.
+	Type       string            `json:"type,omitempty"`
+	Operations []DomainOperation `json:"operations,omitempty"`
 }
 
 // EnvVar is a configuration value forwarded to the plugin process.
@@ -99,19 +100,7 @@ var (
 )
 
 var knownCapabilities = map[string]bool{
-	CapQuote: true, CapHistory: true, CapSearch: true, CapFinancials: true, CapResearch: true, CapForum: true, CapNews: true, CapEvents: true, CapTax: true,
-}
-
-// toolCapabilities describe a tools tab rather than a market-data provider.
-var toolCapabilities = map[string]bool{CapTax: true}
-
-func onlyToolCapabilities(capabilities []string) bool {
-	for _, c := range capabilities {
-		if !toolCapabilities[c] {
-			return false
-		}
-	}
-	return true
+	CapQuote: true, CapHistory: true, CapSearch: true, CapFinancials: true, CapResearch: true, CapForum: true, CapNews: true, CapEvents: true,
 }
 
 // reservedEnv are backend secrets that a plugin can never ask for.
@@ -126,22 +115,29 @@ var reservedEnv = map[string]bool{
 func ValidPluginID(id string) bool { return pluginIDPattern.MatchString(id) }
 
 // ProvidesMarketData reports whether the plugin contributes a provider.
-func (m Manifest) ProvidesMarketData() bool { return m.Provider.ID != "" }
+func (m Manifest) ProvidesMarketData() bool { return m.Provider.ID != "" && !m.Provider.IsDomain() }
+
+// ProvidesDomain reports whether the plugin contributes a domain provider such as tax.
+func (m Manifest) ProvidesDomain() bool { return m.Provider.ID != "" && m.Provider.IsDomain() }
 
 // validateProvider checks the provider part; a plugin with Tools may leave it
 // out entirely, but a half-declared provider is rejected.
 func (m Manifest) validateProvider() error {
 	p := m.Provider
-	if p.ID == "" && p.Label == "" && len(p.Research) == 0 && onlyToolCapabilities(p.Capabilities) {
-		if len(p.Capabilities) > 0 && m.Tools == nil {
-			return errors.New("tool capabilities need a tools tab")
-		}
-		if m.Tools != nil {
-			return nil
-		}
+	if m.Tools != nil && p.ID == "" && p.Label == "" && p.Type == "" && len(p.Capabilities) == 0 && len(p.Research) == 0 && len(p.Operations) == 0 {
+		return nil
 	}
 	if !providerIDPattern.MatchString(p.ID) {
 		return fmt.Errorf("invalid provider id %q", p.ID)
+	}
+	if p.IsDomain() {
+		return p.validateDomain()
+	}
+	if p.Type != "" && p.Type != TypeMarket {
+		return fmt.Errorf("unknown provider type %q", p.Type)
+	}
+	if len(p.Operations) > 0 {
+		return errors.New("operations belong to domain providers; a market-data provider declares capabilities")
 	}
 	if len(p.Capabilities) == 0 {
 		return errors.New("provider declares no capabilities")

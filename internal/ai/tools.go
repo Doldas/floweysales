@@ -62,6 +62,18 @@ type InvestorSource interface {
 	CorporateEvents(ctx context.Context, symbol string, daysAhead int) (any, error)
 }
 
+// DomainSource is the optional part of a DataSource behind the domain provider
+// tools: providers of something other than market data, such as tax, that
+// plugins contribute. A data source without it answers those tools with a
+// clear error.
+type DomainSource interface {
+	DomainProviders(providerType string) (any, error)
+	CallDomainProvider(ctx context.Context, provider, operation string, input map[string]any) (any, error)
+}
+
+// ErrDomainToolsUnavailable is returned when the data source has no domain providers.
+var ErrDomainToolsUnavailable = fmt.Errorf("domain provider tools are unavailable for this data source")
+
 // ErrInvestorToolsUnavailable is returned when the data source has no
 // investor tools.
 var ErrInvestorToolsUnavailable = fmt.Errorf("investor tools are unavailable for this data source")
@@ -151,6 +163,20 @@ func ToolDefs() []Tool {
 			Name:        "get_corporate_events",
 			Description: "Upcoming dividends, splits and earnings dates for a company from an installed provider plugin with the events capability.",
 			Parameters:  obj(map[string]any{"symbol": str("Ticker, e.g. KO"), "days_ahead": map[string]any{"type": "integer", "description": "1-90 (default 30)"}}, "symbol"),
+		}},
+		{Type: "function", Function: ToolFunction{
+			Name:        "list_domain_providers",
+			Description: "List installed domain providers, plugins that offer something other than market data (type tax: tax reports, holdings with average cost, tax estimates). Each lists its capabilities and the operations with their inputs. Call this before call_domain_provider to learn the exact operation names and inputs.",
+			Parameters:  obj(map[string]any{"type": str("Provider type to list, e.g. tax. Omit for all.")}),
+		}},
+		{Type: "function", Function: ToolFunction{
+			Name:        "call_domain_provider",
+			Description: "Run one operation of an installed domain provider (see list_domain_providers). Inputs are checked against the operation's declared fields. Results are calculations from the data the user supplies, not advice; state the provider, its warnings and what the input covered. Never invent input data such as transactions.",
+			Parameters: obj(map[string]any{
+				"provider":  str("Provider id from list_domain_providers, e.g. SE_TAX"),
+				"operation": str("Operation (capability) name, e.g. tax_report"),
+				"input":     map[string]any{"type": "object", "description": "The operation's inputs, by the names list_domain_providers shows"},
+			}, "provider", "operation"),
 		}},
 		{Type: "function", Function: ToolFunction{
 			Name: "get_provider_endpoints", Description: "List the allowlisted read-only research operations declared by the installed provider plugins, with their upstream paths.",
@@ -392,6 +418,27 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 		if list := strArg(args, "symbols"); list != "" {
 			cover, matched := ref.Overlap(strings.FieldsFunc(list, func(r rune) bool { return r == ',' || r == ' ' || r == ';' }))
 			out["overlap"] = map[string]any{"matched": matched, "covered_weight_pct": cover}
+		}
+		return toJSON(out)
+	case "list_domain_providers", "call_domain_provider":
+		dom, ok := src.(DomainSource)
+		if !ok {
+			return "", ErrDomainToolsUnavailable
+		}
+		var out any
+		var err error
+		if name == "list_domain_providers" {
+			out, err = dom.DomainProviders(strArg(args, "type"))
+		} else {
+			provider, operation := strArg(args, "provider"), strArg(args, "operation")
+			if provider == "" || operation == "" {
+				return "", fmt.Errorf("provider and operation are required")
+			}
+			input, _ := args["input"].(map[string]any)
+			out, err = dom.CallDomainProvider(ctx, provider, operation, input)
+		}
+		if err != nil {
+			return "", err
 		}
 		return toJSON(out)
 	case "get_leaderboard", "run_strategy_backtest", "run_rule_strategy", "get_wealth_plan", "get_portfolio_analytics", "get_insider_activity", "get_macro_regime", "get_corporate_events":
