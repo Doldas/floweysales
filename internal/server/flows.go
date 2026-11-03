@@ -1453,8 +1453,8 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			if err != nil {
 				return "", fmt.Errorf("subflow %d failed: %w", n.FlowID, err)
 			}
-			if len(output) > 6000 {
-				output = output[:6000]
+			if err := checkFlowOutputSize(fmt.Sprintf("subflow %d", n.FlowID), len(output)); err != nil {
+				return "", err
 			}
 			previous = output
 			record(map[string]string{"node": n.ID, "label": n.Label, "output": output})
