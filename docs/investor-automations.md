@@ -226,3 +226,20 @@ Beyond the market-data providers, the official store has:
 
 They work in every watchlist, technical and screen node: set the node's
 provider to `FRED` or `ECB`.
+
+### Reproducible, dated and humble rankings
+
+Every ranking (`GET /api/market/leaderboard`, the `get_leaderboard` agent tool) returns a `provenance` block, and every row says how far to trust it:
+
+| Field | Meaning |
+| --- | --- |
+| `provenance.methodology` | `version` and `hash` of the factors, metrics, strategy weights, caps and the below-median value for missing factors. Any change to the rules changes the hash. |
+| `provenance.universe_hash` | Hash of the symbol list that was ranked. |
+| `provenance.inputs_hash` | Hash of the metric rows the scores came from. Same methodology, universe and inputs hash give the same scores. |
+| `provenance.price_dates` | Newest and oldest price date in the data. |
+| `provenance.disclaimer` | "Research suggestion, not personalized financial advice." Shown under the table. |
+| row `confidence`, `confidence_note` | `high`, `medium` or `low` from factor coverage, universe size and input age, with the reason. |
+| row `fundamentals_age_days` | Age of the newest reported quarter at the price date (never the clock). Over 200 days adds the `stale_fundamentals` flag. |
+| row `alternatives` | Up to three competing explanations: a trend that may already be priced in, overbought entry, negative earnings, old fundamentals, and heavily weighted factors that score low or have no data. |
+
+The methodology version (`leaderboardMethodologyVersion`) must be bumped when the scoring rules change. Out-of-sample splits and a survivorship-free universe are not provided; the backtest states those biases.

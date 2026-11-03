@@ -390,7 +390,7 @@ func scoreLeaderboard(rows []map[string]any, strategy leaderboardStrategy) []map
 			}
 		}
 		entry["reasons"] = strings.Join(leaderboardReasons(row, fs, strategy), "; ")
-		entry["flags"] = strings.Join(leaderboardFlags(row, fs), ", ")
+		entry["flags"] = strings.Join(annotateRank(entry, row, fs, strategy, leaderboardFlags(row, fs), len(ranked)), ", ")
 		out = append(out, entry)
 	}
 	sort.SliceStable(out, func(a, b int) bool {
@@ -733,6 +733,7 @@ func (e *Engine) registerLeaderboardRoutes() {
 			"generated_at": time.Now().UTC().Format(time.RFC3339),
 			"rows":         scoreLeaderboard(rows, strategy), "unranked": splitLeaderboardRows(rows),
 			"universes": leaderboardUniverses, "strategies": leaderboardStrategies,
+			"provenance": leaderboardProvenance(strategy, universe, symbols, rows),
 		})
 	})
 }

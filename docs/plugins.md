@@ -183,6 +183,13 @@ form; the backend renders it, sends the values with the `tool` method and
 shows the blocks the plugin returns. A plugin that only declares `tools` has
 no `provider` (a half-declared provider is rejected).
 
+A tools plugin may describe what it does with a **tool capability**:
+`"provider": {"capabilities": ["tax"]}`. `tax` has no protocol method (the
+tools use `tool`), needs `tools`, and leaves the provider id empty, so the
+plugin is still not a market-data provider. Settings → Plugins shows it as a
+"Tax" chip. Mixing `tax` with a market-data capability requires a full
+provider declaration.
+
 ```json
 {
   "protocol": 1, "id": "se-tax", "name": "Swedish tax", "version": "1.0.0",
