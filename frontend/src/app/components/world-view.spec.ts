@@ -2,7 +2,7 @@
 //   node --test src/app/components/world-view.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ageLabel, companyPrompt, roleLine, themeLabels, worldPrompt } from './world-view.ts';
+import { ageLabel, companyPrompt, publishedLabel, roleLine, themeLabels, worldPrompt } from './world-view.ts';
 import type { CompanyWorld, WorldView } from '../models';
 
 const world: WorldView = {
@@ -45,4 +45,23 @@ test('the company prompt separates its own headlines from the world ones', () =>
   assert.match(p, /Company headlines: Own item/);
   assert.match(p, /World headlines: World item/);
   assert.match(p, /XOM \(Energy\)/);
+});
+
+test('a headline shows its UTC publication date, or says the date is unavailable', () => {
+  const now = Date.parse('2026-11-03T17:00:00Z');
+  const published = Date.parse('2026-11-03T14:32:00Z') / 1000;
+  assert.equal(publishedLabel({ title: 't', url: 'u', via: 'v', published }, now), 'Published Nov 3, 2026, 14:32 UTC (2 h ago)');
+  assert.equal(publishedLabel({ title: 't', url: 'u', via: 'v' }, now), 'Date unavailable');
+});
+
+test('a relative age from search is approximate and never becomes a date', () => {
+  const label = publishedLabel({ title: 't', url: 'u', via: 'web search', age: '2 days ago' }, Date.now());
+  assert.match(label, /^About 2 days ago/);
+  assert.doesNotMatch(label, /Published|UTC/);
+});
+
+test('agent prompts carry each headline\'s publisher and date', () => {
+  const w: WorldView = { ...world, themes: [{ ...world.themes[0], headlines: [{ title: 'Brent jumps', url: 'https://a.example/1', via: 'x', source: 'Reuters', published: Date.parse('2026-11-02T08:00:00Z') / 1000 }] }] };
+  assert.match(worldPrompt(w), /Brent jumps \(Reuters, Nov 2, 2026, 08:00 UTC\)/);
+  assert.match(worldPrompt(world), /Brent jumps \(date unavailable\)/);
 });
