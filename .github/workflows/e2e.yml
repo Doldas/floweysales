@@ -1,0 +1,49 @@
+name: End-to-end tests
+
+# Browser tests with Playwright against the production build and the mock
+# backend (no database, credentials or provider calls). They run after a
+# change has been merged into main, and on demand.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright:
+    name: playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frozen dependencies
+        run: npm ci --prefix frontend
+      - name: Production Angular build
+        run: npm run build --prefix frontend
+      - name: Install Chromium for Playwright
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run Playwright tests (desktop and mobile)
+        working-directory: frontend
+        run: npm run e2e
+      - name: Upload the HTML report and traces
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 14

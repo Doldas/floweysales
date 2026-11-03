@@ -112,6 +112,22 @@ flow, catch an unconnected node in preflight, wire it with click-to-connect,
 save (checking the exact graph sent), publish, run and inspect the node trace
 with its tool calls. CI runs all three.
 
+## End-to-end tests (Playwright)
+
+`frontend/e2e/` holds browser tests that run against the production build and the same deterministic mock backend as the smoke tests (`smoke-fixtures.mjs`): no database, credentials or provider calls. They run on a desktop and a phone viewport, with en-US locale and UTC time.
+
+```bash
+cd frontend
+npm ci
+npx playwright install chromium   # first time only
+npm run build
+npm run e2e                       # starts the static server itself
+npm run e2e:ui                    # interactive runner
+npm run e2e:report                # open the last HTML report
+```
+
+The `End-to-end tests` workflow runs them when a change is merged into `main`, and on demand (Actions → End-to-end tests → Run workflow). It uploads the HTML report and traces of failures as an artifact. To add a test, import `test` and `expect` from `e2e/fixtures.ts`: every test gets the mock API, and fails on an uncaught page error. Use `role` and `grants` (`test.use({ role: 'USER', grants: [] })`) to change the session. The older `smoke:*` scripts stay in place.
+
 ## Market-data provider plugins
 
 Providers are plugins installed from a plugin store, not part of the

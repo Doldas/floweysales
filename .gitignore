@@ -38,3 +38,7 @@ tmp-*
 # Host updater state and pre-update database backups
 update-control/
 backups/
+
+# Playwright
+frontend/playwright-report/
+frontend/test-results/

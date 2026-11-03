@@ -16,7 +16,10 @@
     "smoke:trading": "node smoke-trading.mjs",
     "smoke:responsive": "node smoke-responsive.mjs",
     "smoke:a11y": "node smoke-a11y.mjs",
-    "smoke:flow-editor": "node smoke-flow-editor.mjs"
+    "smoke:flow-editor": "node smoke-flow-editor.mjs",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:report": "playwright show-report"
   },
   "private": true,
   "packageManager": "npm@12.2.0",
@@ -39,6 +42,7 @@
     "@angular/build": "^22.2.5",
     "@angular/cli": "^22.2.5",
     "@angular/compiler-cli": "^22.2.0",
+    "@playwright/test": "^1.64.1",
     "axe-core": "4.14.0",
     "playwright": "^1.64.1",
     "prettier": "^3.8.1",
