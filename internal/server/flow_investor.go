@@ -522,6 +522,20 @@ func (e *Engine) runInvestorDataNode(ctx context.Context, n flowNode, input stri
 	return flowRowsJSON(rows)
 }
 
+// sortNewsRows puts the newest article first and articles without a date last.
+// Comparing the printed value would put a missing date ("<nil>") above every year.
+func sortNewsRows(items []map[string]any) {
+	published := func(row map[string]any) time.Time {
+		s, _ := row["published"].(string)
+		t, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			return time.Time{}
+		}
+		return t
+	}
+	sort.SliceStable(items, func(i, j int) bool { return published(items[i]).After(published(items[j])) })
+}
+
 func (e *Engine) runNewsNode(ctx context.Context, n flowNode, symbols []string, provider market.Provider, now time.Time) (string, error) {
 	limit := n.Limit
 	if limit == 0 {
@@ -550,8 +564,14 @@ func (e *Engine) runNewsNode(ctx context.Context, n flowNode, symbols []string, 
 			}
 			row := map[string]any{"id": item.URL, "symbol": symbol, "title": trimSearchField(item.Title, 200), "source": trimSearchField(item.Source, 60),
 				"url": item.URL, "provider": item.Provider}
+			// A date the provider did not give is stated as missing, never guessed;
+			// retrieved_at is when we fetched it, which is not the article's date.
+			row["retrieved_at"] = now.UTC().Format(time.RFC3339)
 			if item.Published > 0 {
 				row["published"] = time.Unix(item.Published, 0).UTC().Format(time.RFC3339)
+				row["date_status"] = "published"
+			} else {
+				row["date_status"] = "unavailable"
 			}
 			if item.Summary != "" {
 				row["summary"] = trimSearchField(item.Summary, 280)
@@ -563,7 +583,7 @@ func (e *Engine) runNewsNode(ctx context.Context, n flowNode, symbols []string, 
 	if err != nil {
 		return "", err
 	}
-	sort.SliceStable(items, func(i, j int) bool { return fmt.Sprint(items[i]["published"]) > fmt.Sprint(items[j]["published"]) })
+	sortNewsRows(items)
 	return flowRowsJSON(items)
 }
 
