@@ -187,11 +187,12 @@ type Engine struct {
 	flowRunCancels map[int64]context.CancelFunc
 	adapterLimits  adapterLimiter
 	// Test seams for investor nodes; nil uses SEC EDGAR and the database.
-	secFilings func(ctx context.Context, ticker string, limit int) (sec.Filings, error)
-	flowState  flowNodeStateStore
-	profiles   investorProfileStore
-	strategies strategyStore
-	agentTasks agentTaskStore
+	secFilings   func(ctx context.Context, ticker string, limit int) (sec.Filings, error)
+	flowState    flowNodeStateStore
+	profiles     investorProfileStore
+	strategies   strategyStore
+	transactions transactionStore
+	agentTasks   agentTaskStore
 	// strategyHistory replaces the provider history read in tests.
 	strategyHistory func(ctx context.Context, symbol string, p market.Provider, rng string) (market.HistorySeries, error)
 	paperState      func() ([]trading.Position, trading.Summary)
@@ -304,6 +305,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerPluginRoutes()
 	e.registerPluginToolRoutes()
 	e.registerDomainRoutes()
+	e.registerTransactionRoutes()
 	e.registerUserspaceRoutes()
 	e.registerMCPTrackerRoutes()
 	e.registerStaticRoutes()

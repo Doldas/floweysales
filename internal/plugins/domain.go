@@ -48,6 +48,15 @@ const (
 	FieldBoolean = "boolean"
 )
 
+// Sources the backend can fill an input from when the caller leaves it empty.
+const (
+	// SourceUserTransactions fills a string input with the caller's saved
+	// transaction exports, each file preceded by a DomainFileMarker line.
+	SourceUserTransactions = "user_transactions"
+	// DomainFileMarker starts each file in a multi-file input: "=== file: NAME ===".
+	DomainFileMarker = "=== file: "
+)
+
 // DomainField is one input of an operation.
 type DomainField struct {
 	Name        string   `json:"name"`
@@ -55,6 +64,9 @@ type DomainField struct {
 	Description string   `json:"description"`
 	Required    bool     `json:"required,omitempty"`
 	Enum        []string `json:"enum,omitempty"`
+	// Source, when set, lets the backend fill the input from the caller's own
+	// stored data if the caller leaves it empty (see SourceUserTransactions).
+	Source string `json:"source,omitempty"`
 }
 
 // DomainOperation describes one capability of a domain provider.
@@ -136,6 +148,9 @@ func (p ProviderInfo) validateDomain() error {
 			}
 			if len(f.Enum) > 0 && f.Type != FieldString {
 				return fmt.Errorf("operation %s input %q: enum only applies to strings", op.Capability, f.Name)
+			}
+			if f.Source != "" && (f.Source != SourceUserTransactions || f.Type != FieldString) {
+				return fmt.Errorf("operation %s input %q: unknown source %q or not a string input", op.Capability, f.Name, f.Source)
 			}
 			if len(f.Description) > 400 {
 				return fmt.Errorf("operation %s input %q: description is too long", op.Capability, f.Name)

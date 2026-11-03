@@ -644,6 +644,8 @@ func TestDomainProviderManifestIsValidated(t *testing.T) {
 		"capability without a doc": func(m *Manifest) { m.Provider.Operations = m.Provider.Operations[:1] },
 		"bad input type":           func(m *Manifest) { m.Provider.Operations[0].Inputs[0].Type = "date" },
 		"no provider id":           func(m *Manifest) { m.Provider.ID = "" },
+		"unknown source":           func(m *Manifest) { m.Provider.Operations[0].Inputs[0].Source = "bank_accounts" },
+		"source on an integer":     func(m *Manifest) { m.Provider.Operations[0].Inputs[0].Source = SourceUserTransactions },
 		"operations on market":     func(m *Manifest) { m.Provider.Type, m.Provider.Capabilities = "", []string{CapQuote} },
 	} {
 		m := taxManifest("1.0.0")

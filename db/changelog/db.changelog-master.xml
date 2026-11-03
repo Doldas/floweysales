@@ -38,4 +38,5 @@
   <include file="034-custom-strategies.xml" relativeToChangelogFile="true"/>
   <include file="035-trading-configuration.xml" relativeToChangelogFile="true"/>
   <include file="036-agent-tasks.xml" relativeToChangelogFile="true"/>
+  <include file="037-user-transaction-files.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
