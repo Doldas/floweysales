@@ -19,6 +19,7 @@
     "smoke:flow-editor": "node smoke-flow-editor.mjs"
   },
   "private": true,
+  "license": "MIT",
   "packageManager": "npm@12.2.0",
   "dependencies": {
     "@angular/common": "^22.2.0",

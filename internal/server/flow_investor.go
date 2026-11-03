@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"floweysales/internal/market"
@@ -22,9 +23,8 @@ import (
 // provider plugins and SEC EDGAR, compute every figure in Go and never ask a
 // model for a number. Each row names its provider and the date of the data.
 const (
-	flowMaxSymbols      = 25
-	flowInvestorMaxJSON = 16000
-	flowSymbolFetches   = 4 // concurrent provider calls per node
+	flowMaxSymbols    = 25
+	flowSymbolFetches = 4 // concurrent provider calls per node
 )
 
 var investorNodeTypes = map[string]bool{
@@ -129,13 +129,44 @@ func flowEachSymbol(ctx context.Context, symbols []string, fetch func(ctx contex
 	return rows, nil
 }
 
+// Bounds of the per-node output limit, in bytes. Every output is kept in the
+// run checkpoint (several times over), so the ceiling stays well below the
+// checkpoint cap.
+const (
+	flowNodeOutputMin     = 16 << 10
+	flowNodeOutputMax     = 1 << 20
+	flowNodeOutputDefault = 256 << 10
+)
+
+var flowNodeOutputLimit atomic.Int64
+
+func init() { flowNodeOutputLimit.Store(flowNodeOutputDefault) }
+
+// ConfigureFlowOutputLimit sets the largest output one flow node may produce,
+// clamped to a safe range. It returns the limit in effect.
+func ConfigureFlowOutputLimit(bytes int) int {
+	bytes = max(flowNodeOutputMin, min(bytes, flowNodeOutputMax))
+	flowNodeOutputLimit.Store(int64(bytes))
+	return bytes
+}
+
+// checkFlowOutputSize fails with advice the user can act on when a node's
+// output is larger than the limit. node names what produced it.
+func checkFlowOutputSize(node string, size int) error {
+	limit := int(flowNodeOutputLimit.Load())
+	if size <= limit {
+		return nil
+	}
+	return fmt.Errorf("%s output is %d bytes, above the %d byte flow limit; lower the node's row limit, select fewer columns, or raise FLOW_NODE_OUTPUT_MAX_BYTES", node, size, limit)
+}
+
 func flowRowsJSON(rows any) (string, error) {
 	raw, err := json.Marshal(rows)
 	if err != nil {
 		return "", err
 	}
-	if len(raw) > flowInvestorMaxJSON {
-		return "", fmt.Errorf("output is %d bytes, above the %d byte flow limit; use fewer symbols", len(raw), flowInvestorMaxJSON)
+	if err := checkFlowOutputSize("node", len(raw)); err != nil {
+		return "", err
 	}
 	return string(raw), nil
 }
@@ -491,6 +522,20 @@ func (e *Engine) runInvestorDataNode(ctx context.Context, n flowNode, input stri
 	return flowRowsJSON(rows)
 }
 
+// sortNewsRows puts the newest article first and articles without a date last.
+// Comparing the printed value would put a missing date ("<nil>") above every year.
+func sortNewsRows(items []map[string]any) {
+	published := func(row map[string]any) time.Time {
+		s, _ := row["published"].(string)
+		t, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			return time.Time{}
+		}
+		return t
+	}
+	sort.SliceStable(items, func(i, j int) bool { return published(items[i]).After(published(items[j])) })
+}
+
 func (e *Engine) runNewsNode(ctx context.Context, n flowNode, symbols []string, provider market.Provider, now time.Time) (string, error) {
 	limit := n.Limit
 	if limit == 0 {
@@ -519,8 +564,14 @@ func (e *Engine) runNewsNode(ctx context.Context, n flowNode, symbols []string, 
 			}
 			row := map[string]any{"id": item.URL, "symbol": symbol, "title": trimSearchField(item.Title, 200), "source": trimSearchField(item.Source, 60),
 				"url": item.URL, "provider": item.Provider}
+			// A date the provider did not give is stated as missing, never guessed;
+			// retrieved_at is when we fetched it, which is not the article's date.
+			row["retrieved_at"] = now.UTC().Format(time.RFC3339)
 			if item.Published > 0 {
 				row["published"] = time.Unix(item.Published, 0).UTC().Format(time.RFC3339)
+				row["date_status"] = "published"
+			} else {
+				row["date_status"] = "unavailable"
 			}
 			if item.Summary != "" {
 				row["summary"] = trimSearchField(item.Summary, 280)
@@ -532,7 +583,7 @@ func (e *Engine) runNewsNode(ctx context.Context, n flowNode, symbols []string, 
 	if err != nil {
 		return "", err
 	}
-	sort.SliceStable(items, func(i, j int) bool { return fmt.Sprint(items[i]["published"]) > fmt.Sprint(items[j]["published"]) })
+	sortNewsRows(items)
 	return flowRowsJSON(items)
 }
 
@@ -775,8 +826,8 @@ func reportTable(input, title, columns string, limit int) (string, error) {
 		}
 		b.WriteString("| " + strings.Join(cells, " | ") + " |\n")
 	}
-	if b.Len() > flowInvestorMaxJSON {
-		return "", errors.New("report table exceeds the flow output limit; select fewer columns or rows")
+	if err := checkFlowOutputSize("report table", b.Len()); err != nil {
+		return "", err
 	}
 	return b.String(), nil
 }
