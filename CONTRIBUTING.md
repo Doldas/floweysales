@@ -33,6 +33,10 @@ Market-data providers are plugins, developed and released in [Doldas/floweysales
 
 `npm run build` creates the Angular bundle; the GitHub Pages site in `site/` is **static documentation**, not a hosted trading engine.
 
+## License
+
+By contributing you agree that your contribution is released under the [MIT License](LICENSE). User-facing text is US English, and every displayed date and time is UTC.
+
 ## Safety rules
 
 - Never commit provider credentials, account data, portfolio details, or trading tokens.

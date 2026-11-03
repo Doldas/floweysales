@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, effect, inject, input, signal, untr
 import type { CompanyWorld, WorldHeadline } from '../models';
 import { AgentSession } from '../core/agent-session';
 import { MarketService } from '../services';
-import { ROLE_ICON, ageLabel, companyPrompt, roleLine } from './world-view';
+import { ROLE_ICON, companyPrompt, publishedLabel, roleLine } from './world-view';
 
 const SECTORS = ['Energy', 'Materials', 'Industrials', 'Consumer Discretionary', 'Consumer Staples', 'Health Care', 'Financials',
   'Information Technology', 'Communication Services', 'Utilities', 'Real Estate'];
@@ -51,10 +51,10 @@ const SECTORS = ['Energy', 'Materials', 'Industrials', 'Consumer Discretionary',
         <p class="basis">Matched on: {{ t.basis }}</p>
         <ul>
           @for (h of t.own_headlines ?? []; track h.url) {
-            <li><span class="tag">{{ symbol() }}</span> <a [href]="h.url" target="_blank" rel="noopener noreferrer">{{ h.title }}</a> <small>{{ h.source }} {{ age(h) }}</small></li>
+            <li><span class="tag">{{ symbol() }}</span> <a [href]="h.url" target="_blank" rel="noopener noreferrer">{{ h.title }}</a> <small>{{ h.source }} · {{ published(h) }}</small></li>
           }
           @for (h of t.headlines.slice(0, 2); track h.url) {
-            <li><span class="tag world-tag">World</span> <a [href]="h.url" target="_blank" rel="noopener noreferrer">{{ h.title }}</a> <small>{{ h.source }} {{ age(h) }}</small></li>
+            <li><span class="tag world-tag">World</span> <a [href]="h.url" target="_blank" rel="noopener noreferrer">{{ h.title }}</a> <small>{{ h.source }} · {{ published(h) }}</small></li>
           }
         </ul>
       </article>
@@ -64,7 +64,7 @@ const SECTORS = ['Energy', 'Materials', 'Industrials', 'Consumer Discretionary',
     @if (d.news.length) {
       <details>
         <summary>All {{ d.news.length }} headlines about {{ symbol() }}</summary>
-        <ul>@for (h of d.news; track h.url) { <li><a [href]="h.url" target="_blank" rel="noopener noreferrer">{{ h.title }}</a> <small>{{ h.source }} {{ age(h) }}</small></li> }</ul>
+        <ul>@for (h of d.news; track h.url) { <li><a [href]="h.url" target="_blank" rel="noopener noreferrer">{{ h.title }}</a> <small>{{ h.source }} · {{ published(h) }}</small></li> }</ul>
       </details>
     }
   }
@@ -109,7 +109,7 @@ export class WorldImpactComponent {
 
   readonly icon = (role: 'benefits' | 'hurt' | 'mixed') => ROLE_ICON[role];
   readonly line = roleLine;
-  age(h: WorldHeadline): string { return ageLabel(h, this.now); }
+  published(h: WorldHeadline): string { return publishedLabel(h, this.now); }
 
   sourceNote(d: CompanyWorld): string {
     return d.sector_source === 'chosen' ? 'chosen by you' : d.sector_source === 'config' ? 'from PAPER_SYMBOL_SECTORS' : 'built-in list';
