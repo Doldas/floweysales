@@ -343,3 +343,7 @@ deployed environment. Invitations do not auto-login the recipient.
 At startup, Floweysales uses `FLOWEYSALES_SECRETS_KEY` if provided (32 random bytes encoded as standard Base64). If it is unset or empty, the server generates a key and stores it in a local file, reusing the same key on subsequent starts. The key is never printed to logs.
 
 The default path for a standalone server is `<user-config-dir>/floweysales/secrets.key`. Set `FLOWEYSALES_SECRETS_KEY_FILE` to use a different persistent path. Both Docker Compose configurations set it to `/secrets/secrets.key` and mount the named `secrets_data` volume; **back up this volume together with the database**. Do not delete the key file or change the explicit environment key after saving integration credentials: previously stored API credentials would become undecryptable. An invalid environment key or a corrupt persisted key makes startup fail rather than silently generating a replacement.
+
+## License
+
+FloweySales is released under the [MIT License](LICENSE). Third-party packages keep their own licenses; the frontend bundle lists them in `3rdpartylicenses.txt`.
