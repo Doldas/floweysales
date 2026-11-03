@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="037-user-transaction-files" author="floweysales" dbms="mysql">
+  <!-- No foreign key to auth_users: with authentication disabled the single user is id 0.
+       Deleting an account removes its rows in Service.DeleteUser. -->
+  <createTable tableName="user_transaction_files" remarks="A user's imported transaction exports (broker CSV), encrypted with the server secret key">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_user_transaction_files"/></column>
+   <column name="user_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="name" type="VARCHAR(120)"><constraints nullable="false"/></column>
+   <column name="size_bytes" type="INT"><constraints nullable="false"/></column>
+   <column name="ciphertext" type="MEDIUMBLOB"><constraints nullable="false"/></column>
+   <column name="created_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <addUniqueConstraint tableName="user_transaction_files" columnNames="user_id, name" constraintName="uq_user_transaction_files_user_name"/>
+  <rollback><dropTable tableName="user_transaction_files"/></rollback>
+ </changeSet>
+</databaseChangeLog>

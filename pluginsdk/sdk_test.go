@@ -219,6 +219,8 @@ func TestDomainProviderIsValidated(t *testing.T) {
 		"bad input type":              func(m *Manifest) { m.Provider.Operations[0].Inputs[0].Type = "date" },
 		"bad input name":              func(m *Manifest) { m.Provider.Operations[0].Inputs[0].Name = "Year" },
 		"no provider id":              func(m *Manifest) { m.Provider.ID = "" },
+		"unknown source":              func(m *Manifest) { m.Provider.Operations[0].Inputs[0].Source = "bank_accounts" },
+		"source on a number":          func(m *Manifest) { m.Provider.Operations[0].Inputs[0].Source = SourceUserTransactions },
 		"operations on market type": func(m *Manifest) {
 			m.Provider.Type, m.Provider.Capabilities = "", []string{CapQuote}
 		},
@@ -228,6 +230,15 @@ func TestDomainProviderIsValidated(t *testing.T) {
 		if err := m.Validate(); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
+	}
+}
+
+func TestSourcedStringInputIsAccepted(t *testing.T) {
+	m := taxManifest()
+	m.Provider.Operations[0].Inputs = append(m.Provider.Operations[0].Inputs,
+		DomainField{Name: "csv", Type: FieldString, Description: "Transactions", Source: SourceUserTransactions})
+	if err := m.Validate(); err != nil {
+		t.Fatal(err)
 	}
 }
 

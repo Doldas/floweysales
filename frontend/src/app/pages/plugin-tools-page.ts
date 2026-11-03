@@ -8,6 +8,7 @@ import {
   alignClass, collectInput, fileBytes, fileText, formatBytes, initialValues, isTextFile, paragraphs, tableToTsv, tabIcon,
   type FormValues, type PickedFile, type Tool, type ToolBlock, type ToolInput, type ToolResult,
 } from '../components/plugin-tools';
+import { SavedTransactionsPanel } from '../components/saved-transactions-panel';
 import { PluginTools } from '../core/plugin-tools';
 import { NotifyService } from '../core/notify.service';
 
@@ -19,7 +20,7 @@ import { NotifyService } from '../core/notify.service';
 @Component({
   selector: 'fs-plugin-tools-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, NgTemplateOutlet],
+  imports: [RouterLink, NgTemplateOutlet, SavedTransactionsPanel],
   template: `
 @if (plugin(); as p) {
 <div class="fs-page">
@@ -30,6 +31,8 @@ import { NotifyService } from '../core/notify.service';
       @if (p.tools.tab.description) { <p>{{ p.tools.tab.description }}</p> }
     </div>
   </header>
+
+  @if (takesFiles()) { <fs-saved-transactions /> }
 
   <div class="tools-layout">
     <nav class="tool-list" aria-label="Tools">
@@ -217,6 +220,8 @@ export class PluginToolsPage {
   private readonly pluginId = toSignal(inject(ActivatedRoute).paramMap.pipe(map(p => p.get('plugin') ?? '')), { initialValue: '' });
 
   readonly plugin = computed(() => this.store.plugins().find(p => p.plugin_id === this.pluginId()) ?? null);
+  /** Plugins whose tools take transaction files can use the user's saved ones. */
+  readonly takesFiles = computed(() => !!this.plugin()?.tools.tools.some(t => (t.inputs ?? []).some(i => i.type === 'files')));
   readonly icon = computed(() => { const p = this.plugin(); return p ? tabIcon(p.tools.tab) : ''; });
   private readonly selected = signal<Record<string, string>>({});
   readonly tool = computed<Tool | null>(() => {

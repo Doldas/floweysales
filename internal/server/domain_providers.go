@@ -46,11 +46,22 @@ func (s engineSource) CallDomainProvider(ctx context.Context, provider, operatio
 	}
 	ctx, cancel := context.WithTimeout(ctx, domainTimeout)
 	defer cancel()
+	var used []string
+	if u, ok := s.e.agentUser(ctx); ok {
+		var err error
+		if input, used, err = s.e.withSavedInputs(ctx, u.ID, provider, operation, input); err != nil {
+			return nil, err
+		}
+	}
 	raw, err := s.e.plugins.CallDomain(ctx, provider, operation, input)
 	if err != nil {
 		return nil, domainError(err)
 	}
-	return map[string]any{"provider": strings.ToUpper(strings.TrimSpace(provider)), "operation": operation, "result": json.RawMessage(raw), "note": domainNote}, nil
+	out := map[string]any{"provider": strings.ToUpper(strings.TrimSpace(provider)), "operation": operation, "result": json.RawMessage(raw), "note": domainNote}
+	if len(used) > 0 {
+		out["used_saved_files"] = used
+	}
+	return out, nil
 }
 
 // domainError turns a plugin error into text the agent can act on; the
@@ -86,7 +97,17 @@ func (e *Engine) registerDomainRoutes() {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), domainTimeout)
 		defer cancel()
-		raw, err := e.plugins.CallDomain(ctx, r.PathValue("provider"), r.PathValue("operation"), body.Input)
+		input := body.Input
+		if u, ok := e.planUser(w, r); ok {
+			var err error
+			if input, _, err = e.withSavedInputs(ctx, u.ID, r.PathValue("provider"), r.PathValue("operation"), input); err != nil {
+				writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+				return
+			}
+		} else {
+			return
+		}
+		raw, err := e.plugins.CallDomain(ctx, r.PathValue("provider"), r.PathValue("operation"), input)
 		var coded *plugins.CallError
 		switch {
 		case errors.Is(err, plugins.ErrNoSuchDomain):

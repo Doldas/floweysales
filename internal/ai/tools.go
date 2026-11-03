@@ -171,7 +171,7 @@ func ToolDefs() []Tool {
 		}},
 		{Type: "function", Function: ToolFunction{
 			Name:        "call_domain_provider",
-			Description: "Run one operation of an installed domain provider (see list_domain_providers). Inputs are checked against the operation's declared fields. Results are calculations from the data the user supplies, not advice; state the provider, its warnings and what the input covered. Never invent input data such as transactions.",
+			Description: "Run one operation of an installed domain provider (see list_domain_providers). Inputs are checked against the operation's declared fields. Results are calculations from the data the user supplies, not advice; state the provider, its warnings and what the input covered. Never invent input data such as transactions. An input that list_domain_providers marks with source user_transactions can be left out: the backend then fills it from the user's own saved transaction files (the result lists used_saved_files); if none are saved, ask the user to save their export or paste it.",
 			Parameters: obj(map[string]any{
 				"provider":  str("Provider id from list_domain_providers, e.g. SE_TAX"),
 				"operation": str("Operation (capability) name, e.g. tax_report"),

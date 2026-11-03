@@ -141,7 +141,7 @@ func isTaskRoute(method, path string) bool {
 // data: the wealth plan, the Today briefing and plugin tools (which keep no
 // state between calls).
 func isPlanRoute(method, path string) bool {
-	return isToolRoute(method, path) || isDomainRoute(method, path) ||
+	return isToolRoute(method, path) || isDomainRoute(method, path) || isTransactionRoute(method, path) ||
 		(method == http.MethodGet && path == "/api/plan") ||
 		(method == http.MethodPut && path == "/api/plan/profile") ||
 		(method == http.MethodPost && path == "/api/plan/preview") ||
