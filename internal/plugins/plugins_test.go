@@ -95,6 +95,9 @@ func runFakePlugin() {
 			})
 		case "forum_posts":
 			reply([]map[string]any{{"id": 1, "title": "hello", "symbol": symbol}})
+		case "domain":
+			input, _ := req.Params["input"].(map[string]any)
+			reply(map[string]any{"operation": req.Params["operation"], "year": input["year"], "stray": input["stray"]})
 		case "tool":
 			input, _ := req.Params["input"].(map[string]any)
 			if req.Params["tool"] == "broken" {
@@ -615,18 +618,87 @@ func TestManifestToolsAreValidated(t *testing.T) {
 	}
 }
 
-func TestTaxCapabilityDoesNotMakeAPluginAProvider(t *testing.T) {
-	m := toolsManifest("1.0.0")
-	m.Provider.Capabilities = []string{CapTax}
-	if err := m.Validate(); err != nil {
+func taxManifest(version string) Manifest {
+	return Manifest{Protocol: 1, ID: "setax", Name: "Swedish tax", Version: version, Description: "d", Publisher: "Tests",
+		Provider: ProviderInfo{ID: "SE_TAX", Label: "Swedish tax", Type: TypeTax, Capabilities: []string{CapTaxReport, CapTaxEstimate},
+			Operations: []DomainOperation{
+				{Capability: CapTaxReport, Description: "K4 rows", Inputs: []DomainField{
+					{Name: "year", Type: FieldInteger, Description: "Income year", Required: true},
+					{Name: "method", Type: FieldString, Description: "Cost method", Enum: []string{"best", "average"}}}},
+				{Capability: CapTaxEstimate, Description: "Estimate"},
+			}}}
+}
+
+func TestDomainProviderManifestIsValidated(t *testing.T) {
+	good := taxManifest("1.0.0")
+	if err := good.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if m.ProvidesMarketData() {
-		t.Fatal("a tax tools plugin must stay out of market data")
+	if good.ProvidesMarketData() || !good.ProvidesDomain() {
+		t.Fatal("a tax provider is a domain provider, not market data")
 	}
-	m.Tools = nil
-	if err := m.Validate(); err == nil {
-		t.Fatal("tax without a tools tab must be rejected")
+	for name, mutate := range map[string]func(*Manifest){
+		"unknown type":             func(m *Manifest) { m.Provider.Type = "weather" },
+		"market capability on tax": func(m *Manifest) { m.Provider.Capabilities = []string{CapQuote}; m.Provider.Operations = nil },
+		"operation not declared":   func(m *Manifest) { m.Provider.Operations[1].Capability = CapTaxHoldings },
+		"capability without a doc": func(m *Manifest) { m.Provider.Operations = m.Provider.Operations[:1] },
+		"bad input type":           func(m *Manifest) { m.Provider.Operations[0].Inputs[0].Type = "date" },
+		"no provider id":           func(m *Manifest) { m.Provider.ID = "" },
+		"operations on market":     func(m *Manifest) { m.Provider.Type, m.Provider.Capabilities = "", []string{CapQuote} },
+	} {
+		m := taxManifest("1.0.0")
+		mutate(&m)
+		if err := m.Validate(); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestDomainProviderIsListedAndCalledWithCheckedInput(t *testing.T) {
+	store := newFakeStore(t)
+	store.publish(taxManifest("1.0.0"), fakeRelease(t, taxManifest("1.0.0")))
+	store.publish(fakeManifest("1.0.0"), fakeRelease(t, fakeManifest("1.0.0")))
+	key := "k"
+	m := openManager(t, store, t.TempDir(), &key)
+	ctx := context.Background()
+	for _, id := range []string{"setax", "fake"} {
+		if _, err := m.Install(ctx, id, "1.0.0", false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := m.Providers(); len(got) != 1 || got[0].ID != "FAKE" {
+		t.Fatalf("a domain provider must stay out of market data: %+v", got)
+	}
+	list := m.DomainProviders(TypeTax)
+	if len(list) != 1 || list[0].ProviderID != "SE_TAX" || !list[0].Ready || len(list[0].Operations) != 2 {
+		t.Fatalf("%+v", list)
+	}
+	if got := m.DomainProviders("weather"); len(got) != 0 {
+		t.Fatalf("%+v", got)
+	}
+	out, err := m.CallDomain(ctx, "se_tax", CapTaxReport, map[string]any{"year": float64(2025), "method": "best"})
+	if err != nil || !strings.Contains(string(out), `"year":2025`) || !strings.Contains(string(out), CapTaxReport) {
+		t.Fatalf("out=%s err=%v", out, err)
+	}
+	for name, input := range map[string]map[string]any{
+		"missing required": {},
+		"wrong type":       {"year": "2025"},
+		"fraction":         {"year": 2025.5},
+		"bad enum":         {"year": float64(2025), "method": "other"},
+		"undeclared field": {"year": float64(2025), "stray": "x"},
+	} {
+		if _, err := m.CallDomain(ctx, "SE_TAX", CapTaxReport, input); !errors.Is(err, ErrDomainInput) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if _, err := m.CallDomain(ctx, "SE_TAX", CapTaxHoldings, nil); !errors.Is(err, ErrNoSuchDomain) {
+		t.Errorf("an undeclared operation: %v", err)
+	}
+	if _, err := m.CallDomain(ctx, "FAKE", CapTaxReport, nil); !errors.Is(err, ErrNoSuchDomain) {
+		t.Errorf("a market provider has no domain operations: %v", err)
+	}
+	if _, err := m.CallDomain(ctx, "NOPE", CapTaxReport, nil); !errors.Is(err, ErrNoSuchDomain) {
+		t.Errorf("unknown provider: %v", err)
 	}
 }
 

@@ -165,6 +165,21 @@ func conformance(t TB, p sdk.Plugin) {
 			}
 		}
 	}
+	isDomain := p.Manifest.Provider.IsDomain()
+	switch {
+	case isDomain && p.Domain == nil:
+		t.Errorf("domain capabilities are declared but %s has no handler", sdk.MethodDomain)
+	case !isDomain && p.Domain != nil:
+		t.Errorf("%s has a handler but no domain capability is declared, so FloweySales never calls it", sdk.MethodDomain)
+	case !isDomain:
+		if code := errorCode(c.Call(sdk.MethodDomain, map[string]any{}, nil)); code != sdk.CodeUnsupported {
+			t.Errorf("undeclared %s answered %q, want %q", sdk.MethodDomain, code, sdk.CodeUnsupported)
+		}
+	default:
+		if code := errorCode(c.Call(sdk.MethodDomain, sdk.DomainParams{Operation: "not_declared_by_this_plugin"}, nil)); code != sdk.CodeInvalidArgument {
+			t.Errorf("an undeclared operation answered %q, want %q", code, sdk.CodeInvalidArgument)
+		}
+	}
 	hasTools := p.Manifest.Tools != nil
 	switch {
 	case hasTools && p.Tool == nil:

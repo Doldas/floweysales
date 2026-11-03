@@ -629,6 +629,18 @@
       "status": "implemented",
       "surface": "MCP tools/list",
       "note": "Utdelningar, splittar och rapportdatum från provider-plugin"
+    },
+    {
+      "name": "list_domain_providers",
+      "status": "implemented",
+      "surface": "MCP tools/list",
+      "note": "Domänproviders (t.ex. skatt) från plugins, med operationer och indata. Otillgängligt via den fristående MCP-servern"
+    },
+    {
+      "name": "call_domain_provider",
+      "status": "implemented",
+      "surface": "MCP tools/list",
+      "note": "Kör en operation hos en domänprovider, t.ex. tax_report. Indata kontrolleras mot deklarerade fält. Otillgängligt via den fristående MCP-servern"
     }
   ],
   "providers": [

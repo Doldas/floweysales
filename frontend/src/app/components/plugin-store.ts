@@ -7,6 +7,9 @@ export interface PluginEnvVar { name: string; secret?: boolean; required?: boole
 export interface PluginProvider {
   id: string; label: string; official_api: boolean; experimental: boolean; capabilities: string[];
   quote_kind: string; min_poll_seconds: number; cache_ttl_seconds: number; notes: string;
+  /** Empty or 'market' is market data; anything else is a domain provider such as 'tax'. */
+  type?: string;
+  operations?: { capability: string; description: string; inputs?: { name: string; type: string; description: string; required?: boolean }[] }[];
 }
 export interface PluginManifest {
   protocol: number; id: string; name: string; version: string; description: string; publisher: string;
@@ -93,7 +96,9 @@ export function pluginStatus(row: PluginRow): { label: string; tone: PluginTone 
 
 const CAPABILITIES: Record<string, string> = {
   quote: 'Quotes', history: 'Price history', search: 'Symbol search',
-  financials: 'Financial statements', research: 'Research data', forum: 'Community posts', tax: 'Tax',
+  financials: 'Financial statements', research: 'Research data', forum: 'Community posts',
+  news: 'News', events: 'Dividends & earnings',
+  tax_report: 'Tax report', tax_holdings: 'Holdings & cost basis', tax_estimate: 'Tax estimate',
 };
 
 /** Human names of declared capabilities, in a stable order. */
@@ -105,6 +110,11 @@ export function capabilityLabels(capabilities: string[] | null | undefined): str
 /** What a plugin's tools tab offers, as chip labels (K4 report, Holdings, ...). */
 export function toolLabels(manifest: Pick<PluginManifest, 'tools'>): string[] {
   return (manifest.tools?.tools ?? []).map(t => t.label).filter(Boolean);
+}
+
+/** True for a provider of something other than market data, such as tax. */
+export function isDomainProvider(p: Pick<PluginProvider, 'type'> | undefined): boolean {
+  return !!p?.type && p.type !== 'market';
 }
 
 /** Matches a free-text filter against name, id, provider and description. */
