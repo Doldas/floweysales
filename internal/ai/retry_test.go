@@ -131,3 +131,43 @@ func TestEmptyRepliesAreNudgedThenStopWithAnError(t *testing.T) {
 		t.Fatalf("err %v requests %d", err, len(*bodies))
 	}
 }
+
+func TestRetryNoticesAreClassifiedAndRecovered(t *testing.T) {
+	srv, _ := flakyServer(t, [2]string{"400", `{"detail":"error parsing tool call: raw='We need key risks' at ` + "https://secret.example/api/v1" + `"}`})
+	_, events, err := runOnce(t, srv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var retry, recovered *Event
+	for i := range events {
+		switch events[i].Code {
+		case "retry":
+			retry = &events[i]
+		case "recovered":
+			recovered = &events[i]
+		}
+	}
+	if retry == nil || retry.Severity != "info" || retry.Attempt != 2 || retry.MaxAttempts != 3 {
+		t.Fatalf("retry notice = %+v", retry)
+	}
+	if strings.Contains(retry.Content, "http") || strings.Contains(retry.Detail, "secret.example") {
+		t.Fatalf("the endpoint must not reach the user: %+v", retry)
+	}
+	if recovered == nil || recovered.Attempt != 2 {
+		t.Fatalf("a successful retry must say so: %+v", recovered)
+	}
+}
+
+func TestExhaustedRetriesEndWithoutRecoveredNotice(t *testing.T) {
+	bad := [2]string{"400", `{"detail":"error parsing tool call"}`}
+	srv, _ := flakyServer(t, bad, bad, bad)
+	_, events, err := runOnce(t, srv)
+	if err == nil {
+		t.Fatal("three failures must end the run with an error")
+	}
+	for _, e := range events {
+		if e.Code == "recovered" {
+			t.Fatal("no recovery happened")
+		}
+	}
+}

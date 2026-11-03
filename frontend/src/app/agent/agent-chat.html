@@ -75,10 +75,26 @@
       <div class="working" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Using {{ toolLabel(step.name || 'tool') }}…</div>
     }
 
+    @if (session.runStatus(); as status) {
+      <div class="working" role="status">
+        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> {{ status }}
+        @if (session.runStatusDetail(); as detail) { <details class="status-detail"><summary>Details</summary><code>{{ detail }}</code></details> }
+      </div>
+    }
+    @for (n of session.notices(); track n.id) {
+      <div class="alert small d-flex gap-2 align-items-start" [class.alert-warning]="n.tone === 'warning'" [class.alert-info]="n.tone === 'info'" role="status">
+        <i class="bi bi-info-circle mt-1" aria-hidden="true"></i><span class="flex-grow-1">{{ n.text }}</span>
+        <button type="button" class="btn-close" (click)="session.dismissNotice(n.id)" aria-label="Dismiss this notice"></button>
+      </div>
+    }
     @if (session.error()) {
       <div class="alert alert-danger small d-flex gap-2 align-items-start" role="alert">
-        <i class="bi bi-exclamation-octagon mt-1"></i><span>{{ session.error() }}</span>
+        <i class="bi bi-exclamation-octagon mt-1" aria-hidden="true"></i><span class="flex-grow-1">{{ session.error() }}</span>
+        <button type="button" class="btn-close" (click)="session.dismissError()" aria-label="Dismiss this error"></button>
       </div>
+    }
+    @if (!session.streaming() && session.recovery(); as recovered) {
+      <p class="recovered small text-muted mb-0" role="status"><i class="bi bi-check-circle" aria-hidden="true"></i> {{ recovered }}</p>
     }
   </div>
 
