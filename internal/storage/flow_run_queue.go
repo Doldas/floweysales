@@ -22,7 +22,7 @@ const (
 	FlowRunDead      = "DEAD"
 	MaxQueuedRuns    = 200
 	DefaultMaxClaims = 3
-	maxCheckpoint    = 1 << 20
+	maxCheckpoint    = 8 << 20
 )
 
 var (

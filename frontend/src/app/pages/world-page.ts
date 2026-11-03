@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-import { ROLE_ICON, ROLE_LABEL, ageLabel, roleLine, themeLabels, worldPrompt } from '../components/world-view';
+import { ROLE_ICON, ROLE_LABEL, publishedLabel, roleLine, themeLabels, worldPrompt } from '../components/world-view';
 import { WorldImpactComponent } from '../components/world-impact';
 import { AgentSession } from '../core/agent-session';
 import { MarketState } from '../core/market-state';
@@ -63,7 +63,7 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
                 <h2>{{ t.label }} <small>{{ t.count }} headlines</small></h2>
                 <ul class="headlines">
                   @for (h of t.headlines; track h.url) {
-                    <li><a [href]="h.url" target="_blank" rel="noopener noreferrer">{{ h.title }}</a> <small>{{ h.source }} {{ age(h) }}</small></li>
+                    <li><a [href]="h.url" target="_blank" rel="noopener noreferrer">{{ h.title }}</a> <small>{{ h.source }} · {{ published(h) }}</small></li>
                   }
                 </ul>
                 <h3>Who is exposed when {{ t.driver }} rise</h3>
@@ -125,7 +125,7 @@ export class WorldPage {
   readonly labels = (w: WorldView, ids: string[] | undefined) => themeLabels(w, ids).join(', ') || '–';
   readonly prompt = worldPrompt;
   readonly roleLine = roleLine;
-  age(h: WorldHeadline): string { return ageLabel(h, this.now); }
+  published(h: WorldHeadline): string { return publishedLabel(h, this.now); }
 
   constructor() { this.load(false); }
 

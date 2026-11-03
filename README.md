@@ -112,6 +112,22 @@ flow, catch an unconnected node in preflight, wire it with click-to-connect,
 save (checking the exact graph sent), publish, run and inspect the node trace
 with its tool calls. CI runs all three.
 
+## End-to-end tests (Playwright)
+
+`frontend/e2e/` holds browser tests that run against the production build and the same deterministic mock backend as the smoke tests (`smoke-fixtures.mjs`): no database, credentials or provider calls. They run on a desktop and a phone viewport, with en-US locale and UTC time.
+
+```bash
+cd frontend
+npm ci
+npx playwright install chromium   # first time only
+npm run build
+npm run e2e                       # starts the static server itself
+npm run e2e:ui                    # interactive runner
+npm run e2e:report                # open the last HTML report
+```
+
+The `End-to-end tests` workflow runs them when a change is merged into `main`, and on demand (Actions → End-to-end tests → Run workflow). It uploads the HTML report and traces of failures as an artifact. To add a test, import `test` and `expect` from `e2e/fixtures.ts`: every test gets the mock API, and fails on an uncaught page error. Use `role` and `grants` (`test.use({ role: 'USER', grants: [] })`) to change the session. The older `smoke:*` scripts stay in place.
+
 ## Market-data provider plugins
 
 Providers are plugins installed from a plugin store, not part of the
@@ -343,3 +359,7 @@ deployed environment. Invitations do not auto-login the recipient.
 At startup, Floweysales uses `FLOWEYSALES_SECRETS_KEY` if provided (32 random bytes encoded as standard Base64). If it is unset or empty, the server generates a key and stores it in a local file, reusing the same key on subsequent starts. The key is never printed to logs.
 
 The default path for a standalone server is `<user-config-dir>/floweysales/secrets.key`. Set `FLOWEYSALES_SECRETS_KEY_FILE` to use a different persistent path. Both Docker Compose configurations set it to `/secrets/secrets.key` and mount the named `secrets_data` volume; **back up this volume together with the database**. Do not delete the key file or change the explicit environment key after saving integration credentials: previously stored API credentials would become undecryptable. An invalid environment key or a corrupt persisted key makes startup fail rather than silently generating a replacement.
+
+## License
+
+FloweySales is released under the [MIT License](LICENSE). Third-party packages keep their own licenses; the frontend bundle lists them in `3rdpartylicenses.txt`.
