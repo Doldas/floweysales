@@ -52,7 +52,7 @@ to 25 symbols, or, when it is empty, the symbols in their input (a JSON array of
 tickers, rows with a `symbol` field, `{"symbols": [...]}` or comma-separated
 text, for example from an event payload). A symbol that fails becomes an
 `{"symbol", "error"}` row instead of failing the node; the node fails only when
-every symbol fails. Outputs are JSON arrays of rows, at most 16 KB.
+every symbol fails. Outputs are JSON arrays of rows, at most 256 KiB by default. `FLOW_NODE_OUTPUT_MAX_BYTES` raises or lowers the limit (16 KiB to 1 MiB). A node over the limit fails with its size and the limit; it never passes on a cut-off result.
 
 | Node | Output per row | Notes |
 | --- | --- | --- |

@@ -16,6 +16,9 @@ DEFAULT_MARKET_PROVIDER=YAHOO
 PLUGIN_CHECK_INTERVAL_HOURS=0
 # Forwarded only to the Finnhub plugin, which requires it.
 FINNHUB_API_KEY=
+# Flows
+# Largest output one flow node may produce, in bytes (16384 to 1048576).
+#FLOW_NODE_OUTPUT_MAX_BYTES=262144
 # Web UI
 REST_API_HOST=0.0.0.0
 REST_API_PORT=8080

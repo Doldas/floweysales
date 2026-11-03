@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"floweysales/internal/market"
@@ -22,9 +23,8 @@ import (
 // provider plugins and SEC EDGAR, compute every figure in Go and never ask a
 // model for a number. Each row names its provider and the date of the data.
 const (
-	flowMaxSymbols      = 25
-	flowInvestorMaxJSON = 16000
-	flowSymbolFetches   = 4 // concurrent provider calls per node
+	flowMaxSymbols    = 25
+	flowSymbolFetches = 4 // concurrent provider calls per node
 )
 
 var investorNodeTypes = map[string]bool{
@@ -129,13 +129,44 @@ func flowEachSymbol(ctx context.Context, symbols []string, fetch func(ctx contex
 	return rows, nil
 }
 
+// Bounds of the per-node output limit, in bytes. Every output is kept in the
+// run checkpoint (several times over), so the ceiling stays well below the
+// checkpoint cap.
+const (
+	flowNodeOutputMin     = 16 << 10
+	flowNodeOutputMax     = 1 << 20
+	flowNodeOutputDefault = 256 << 10
+)
+
+var flowNodeOutputLimit atomic.Int64
+
+func init() { flowNodeOutputLimit.Store(flowNodeOutputDefault) }
+
+// ConfigureFlowOutputLimit sets the largest output one flow node may produce,
+// clamped to a safe range. It returns the limit in effect.
+func ConfigureFlowOutputLimit(bytes int) int {
+	bytes = max(flowNodeOutputMin, min(bytes, flowNodeOutputMax))
+	flowNodeOutputLimit.Store(int64(bytes))
+	return bytes
+}
+
+// checkFlowOutputSize fails with advice the user can act on when a node's
+// output is larger than the limit. node names what produced it.
+func checkFlowOutputSize(node string, size int) error {
+	limit := int(flowNodeOutputLimit.Load())
+	if size <= limit {
+		return nil
+	}
+	return fmt.Errorf("%s output is %d bytes, above the %d byte flow limit; lower the node's row limit, select fewer columns, or raise FLOW_NODE_OUTPUT_MAX_BYTES", node, size, limit)
+}
+
 func flowRowsJSON(rows any) (string, error) {
 	raw, err := json.Marshal(rows)
 	if err != nil {
 		return "", err
 	}
-	if len(raw) > flowInvestorMaxJSON {
-		return "", fmt.Errorf("output is %d bytes, above the %d byte flow limit; use fewer symbols", len(raw), flowInvestorMaxJSON)
+	if err := checkFlowOutputSize("node", len(raw)); err != nil {
+		return "", err
 	}
 	return string(raw), nil
 }
@@ -795,8 +826,8 @@ func reportTable(input, title, columns string, limit int) (string, error) {
 		}
 		b.WriteString("| " + strings.Join(cells, " | ") + " |\n")
 	}
-	if b.Len() > flowInvestorMaxJSON {
-		return "", errors.New("report table exceeds the flow output limit; select fewer columns or rows")
+	if err := checkFlowOutputSize("report table", b.Len()); err != nil {
+		return "", err
 	}
 	return b.String(), nil
 }
