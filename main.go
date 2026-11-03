@@ -74,6 +74,14 @@ func main() {
 	emailCooldownDuration := time.Duration(parseInt(
 		app.ResolveConfig("EMAIL_COOLDOWN_DURATION_MIN", "10", defaults), 10)) * time.Minute
 
+	if raw := app.ResolveConfig("FLOW_NODE_OUTPUT_MAX_BYTES", "", defaults); raw != "" {
+		if n := parseInt(raw, 0); n > 0 {
+			log.Printf("[CONFIG] Flow node output limit: %d bytes", server.ConfigureFlowOutputLimit(n))
+		} else {
+			log.Printf("[CONFIG] FLOW_NODE_OUTPUT_MAX_BYTES=%q is not a number; using the default.", raw)
+		}
+	}
+
 	sharedConfig := &server.SharedMarketConfig{}
 	sharedConfig.Symbol = app.ResolveConfig("DEFAULT_MARKET_SYMBOL", "GIB", defaults)
 	sharedConfig.Provider = market.ParseProvider(
