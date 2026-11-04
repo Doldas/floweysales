@@ -18,6 +18,7 @@ A mechanical check, per sentence of the final answer:
 | `snippet_only` | A figure that rests on a search result the agent never opened |
 | `figure_mismatch` | A figure that is not in the cited excerpt |
 | `uncited` | A figure that appears in a retrieved source but is stated without a marker. Figures from other tools (prices, a DCF) need no marker |
+| `quote_mismatch` | A passage in quotation marks (five words or more) that is not in the text of the source cited in the same sentence. Case, spacing and curly quotes are ignored; an ellipsis splits the quote and each part of five words or more must be found. Short quotes are treated as terms and skipped. A quote that contains a sentence break is not seen |
 | `not_primary` | A secondary source cited in Primary sources only mode |
 
 A passing answer is "citation checked". It is not "true": the check does not read whether prose supports a claim.
@@ -36,7 +37,7 @@ The prompt in these modes asks the model to say "insufficient verifiable evidenc
 
 ## Not built yet
 
-Quote and reachability checks, claim labels checked by the server, a block option that removes unsupported sentences, evidence mode for agent teams and flow nodes, a recency limit, and saved defaults per user or per saved team.
+Reachability checks (does the link still resolve), claim labels checked by the server, a block option that removes unsupported sentences, evidence mode for agent teams and flow nodes, a recency limit, and saved defaults per user or per saved team.
 
 ## Opening a page (`read_source`)
 

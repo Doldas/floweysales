@@ -11,6 +11,7 @@ const FINDING_LABELS: Record<string, string> = {
   snippet_only: 'Search result not opened',
   figure_mismatch: 'Figure not in the cited text',
   uncited: 'Figure without a citation',
+  quote_mismatch: 'Quote not in the cited text',
 };
 
 export function findingLabel(kind: string): string {
