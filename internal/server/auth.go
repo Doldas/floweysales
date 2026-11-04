@@ -141,12 +141,25 @@ func isTaskRoute(method, path string) bool {
 // data: the wealth plan, the Today briefing and plugin tools (which keep no
 // state between calls).
 func isPlanRoute(method, path string) bool {
-	return isToolRoute(method, path) || isDomainRoute(method, path) || isTransactionRoute(method, path) ||
+	return isTeamStoreRoute(method, path) || (method == http.MethodGet && path == "/api/ai/profiles") ||
+		isToolRoute(method, path) || isDomainRoute(method, path) || isTransactionRoute(method, path) ||
 		(method == http.MethodGet && path == "/api/plan") ||
 		(method == http.MethodPut && path == "/api/plan/profile") ||
 		(method == http.MethodPost && path == "/api/plan/preview") ||
 		(method == http.MethodGet && path == "/api/today") ||
 		isStrategyRoute(method, path)
+}
+
+// isTeamStoreRoute matches a user's saved agent teams: listing, saving,
+// replacing and deleting their own. (Running a team is POST /api/ai/team.)
+func isTeamStoreRoute(method, path string) bool {
+	switch {
+	case path == "/api/ai/teams":
+		return method == http.MethodGet || method == http.MethodPost
+	case strings.HasPrefix(path, "/api/ai/teams/"):
+		return method == http.MethodPut || method == http.MethodDelete
+	}
+	return false
 }
 
 // isStrategyRoute matches the strategy builder: built-in and saved

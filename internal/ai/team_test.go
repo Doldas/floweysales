@@ -169,3 +169,56 @@ func TestTeamSizeIsBounded(t *testing.T) {
 		t.Fatal("an oversized team must be refused")
 	}
 }
+
+func TestTeamMembersUseTheirOwnModelAndToolRules(t *testing.T) {
+	var mu sync.Mutex
+	used := map[string]struct {
+		model, fallback string
+		noTools         bool
+		calls           int
+	}{}
+	run := func(_ context.Context, client *Client, _ DataSource, _ []Message, o AgentOptions, emit func(Event)) error {
+		mu.Lock()
+		used[o.SystemPrompt] = struct {
+			model, fallback string
+			noTools         bool
+			calls           int
+		}{client.Model, client.FallbackModel, o.DisableTools, o.MaxToolCalls}
+		mu.Unlock()
+		emit(Event{Type: "transcript_message", Message: &Message{Role: "assistant", Content: "answer"}})
+		return nil
+	}
+	var starts []Event
+	err := RunTeam(context.Background(), &Client{Model: "team-default"}, nil, TeamOptions{
+		Members: []TeamMember{
+			{ID: "a", Name: "A", SystemPrompt: "pa", Model: "deep", FallbackModel: "cheap", MaxToolCalls: 4},
+			{ID: "b", Name: "B", SystemPrompt: "pb"},
+			{ID: "c", Name: "C", SystemPrompt: "pc", Model: "tiny", DisableTools: true},
+		},
+		Question: "q", Agent: AgentOptions{MaxToolCalls: 16}, Run: run,
+	}, func(e Event) {
+		if e.Type == "member_start" {
+			starts = append(starts, e)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := used["pa"]; got.model != "deep" || got.fallback != "cheap" || got.calls != 4 {
+		t.Errorf("member A: %+v", got)
+	}
+	if got := used["pb"]; got.model != "team-default" || got.calls != 16 {
+		t.Errorf("a member without a profile keeps the team's model and budget: %+v", got)
+	}
+	if got := used["pc"]; got.model != "tiny" || !got.noTools {
+		t.Errorf("member C has no tools: %+v", got)
+	}
+	models := map[string]string{}
+	details := map[string]string{}
+	for _, s := range starts {
+		models[s.Agent], details[s.Agent] = s.Model, s.Detail
+	}
+	if models["a"] != "deep" || models["b"] != "team-default" || !strings.Contains(details["c"], "no tools") {
+		t.Errorf("each member's start event names its model and says when it has no tools: %v %v", models, details)
+	}
+}

@@ -6,6 +6,7 @@ import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { toolLabel } from '../components/agent-tools';
 import { KIND_LABEL, changeLabel, stalenessNote, summaryLine, usdCompact } from '../components/portfolio-view';
 import { STANCE_ICON, STANCE_LABEL, defaultQuestion, shownText, stanceCounts, togglePersona, type MemberState } from '../components/team-view';
+import { defaultOptionLabel, profileOption, profileSummary } from '../components/profile-view';
 import { MarketState } from '../core/market-state';
 import { TeamSession } from '../core/team-session';
 import { renderMarkdown } from '../markdown';
@@ -102,6 +103,42 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
         <p class="muted">Each character runs its strategies with real data before it answers, and cites the trade count and warnings.</p>
       </details>
     }
+    <section class="models" aria-label="Models and saved teams">
+      @if (team.profiles().length && team.chosen().length) {
+        <h3>Model per character</h3>
+        <ul class="model-rows">
+          @for (p of team.chosen(); track p.id) {
+            <li>
+              <label [for]="'mp-' + p.id">{{ p.name }}</label>
+              <select [id]="'mp-' + p.id" class="form-select form-select-sm" [disabled]="team.running()"
+                      (change)="team.setMemberProfile(p.id, $any($event.target).value ? +$any($event.target).value : null)">
+                <option value="" [selected]="!team.profileOf()[p.id]">{{ defaultLabel() }}</option>
+                @for (pr of team.profiles(); track pr.id) { <option [value]="pr.id" [selected]="team.profileOf()[p.id] === pr.id">{{ option(pr) }}</option> }
+              </select>
+              <small class="muted">{{ summaryFor(p.id) }}</small>
+            </li>
+          }
+        </ul>
+      }
+      <h3>Saved teams</h3>
+      <div class="saved-row">
+        @if (team.savedTeams().length) {
+          <label class="visually-hidden" for="saved-pick">Saved team</label>
+          <select id="saved-pick" class="form-select form-select-sm" (change)="picked.set($any($event.target).value ? +$any($event.target).value : null)">
+            <option value="" [selected]="picked() === null">Choose a saved team…</option>
+            @for (t of team.savedTeams(); track t.id) { <option [value]="t.id" [selected]="t.id === picked()">{{ t.name }} ({{ t.members.length }})</option> }
+          </select>
+          <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="picked() === null || team.running()" (click)="loadPicked()">Load</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="picked() === null" (click)="deletePicked()">Delete</button>
+        } @else { <span class="muted">You have no saved teams yet.</span> }
+      </div>
+      <div class="saved-row">
+        <label class="visually-hidden" for="team-name">Name for this team</label>
+        <input id="team-name" class="form-control form-control-sm" maxlength="80" placeholder="Name this team to save it" [value]="team.teamName()" (input)="team.teamName.set($any($event.target).value)" />
+        <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="!team.teamName().trim() || !team.selected().length || team.running()" (click)="team.saveCurrent()">Save team</button>
+      </div>
+      @if (team.teamNotice()) { <p class="muted" role="status">{{ team.teamNotice() }}</p> }
+    </section>
     <label class="q">Question
       <textarea class="form-control" rows="2" maxlength="4000" [value]="team.question()" (input)="team.question.set($any($event.target).value)" [attr.aria-label]="'Question for the team'"></textarea>
     </label>
@@ -133,6 +170,7 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
       @for (m of s.members; track m.id) {
         <article class="card panel" [attr.aria-label]="m.name">
           <h2>{{ m.name }}
+            @if (m.model) { <small class="model-tag" title="The model this character answers with">{{ m.model }}</small> }
             @if (m.stance) { <span [class]="'badge-stance ' + m.stance"><i [class]="'bi ' + icon(m.stance)"></i> {{ stanceLabel(m.stance) }}</span> }
           </h2>
           <ng-container *ngTemplateOutlet="body; context: { m }" />
@@ -148,6 +186,7 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
     <details class="steps"><summary>{{ m.steps.length }} tool {{ m.steps.length === 1 ? 'call' : 'calls' }}</summary>
       <ul>@for (st of m.steps; track $index) { <li [class.run]="st.status === 'running'" [class.bad]="st.status === 'error'">{{ label(st.name) }}</li> }</ul></details>
   }
+  @if (m.note) { <p class="muted">{{ m.note }}</p> }
   @switch (m.status) {
     @case ('waiting') { <p class="muted">Waiting…</p> }
     @case ('error') { <p class="err">{{ m.error || 'No answer.' }}</p> }
@@ -177,6 +216,11 @@ h2 { font-size: 1rem; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; al
 .profile .num { text-align: right; white-space: nowrap; }
 .caveat { font-size: 0.8rem; color: var(--fs-warn); margin: 0.3rem 0 0; }
 .strat { font-size: 0.85rem; summary { cursor: pointer; color: var(--fs-muted); } ul { margin: 0.4rem 0; padding-left: 1.1rem; display: grid; gap: 0.25rem; } }
+.models { display: grid; gap: 0.5rem; h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fs-muted); margin: 0.2rem 0 0; } }
+.model-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; li { display: grid; grid-template-columns: 8rem minmax(0, 14rem) minmax(0, 1fr); gap: 0.5rem; align-items: center; font-size: 0.82rem; } small { overflow-wrap: anywhere; } }
+@media (max-width: 700px) { .model-rows li { grid-template-columns: minmax(0, 1fr); } }
+.saved-row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; select, input { max-width: 18rem; min-width: 0; } }
+.model-tag { font-family: var(--bs-font-monospace); }
 .q { display: grid; gap: 0.25rem; font-size: 0.8rem; color: var(--fs-muted); }
 .run-bar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
 .check { display: flex; gap: 0.4rem; align-items: center; font-size: 0.85rem; }
@@ -195,6 +239,16 @@ h2 { font-size: 1rem; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; al
   `],
 })
 export class TeamPage {
+  readonly picked = signal<number | null>(null);
+  readonly option = profileOption;
+  defaultLabel = (): string => defaultOptionLabel(this.team.profiles());
+  summaryFor = (persona: string): string => {
+    const id = this.team.profileOf()[persona];
+    const p = this.team.profiles().find(x => x.id === id) ?? (id ? undefined : this.team.profiles().find(x => x.is_default));
+    return p ? (p.description ? p.description + ' ' : '') + profileSummary(p) : '';
+  };
+  loadPicked(): void { const t = this.team.savedTeams().find(x => x.id === this.picked()); if (t) this.team.loadTeam(t); }
+  deletePicked(): void { const id = this.picked(); if (id !== null) { this.team.deleteSaved(id); this.picked.set(null); } }
   readonly team = inject(TeamSession);
   readonly market = inject(MarketState);
   private readonly sanitizer = inject(DomSanitizer);

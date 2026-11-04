@@ -14,6 +14,10 @@ export interface MemberStep { name: string; status: 'running' | 'ok' | 'error' }
 export interface MemberState {
   id: string; name: string; status: 'waiting' | 'running' | 'done' | 'error';
   streamed: string; final: string; stance?: Stance; steps: MemberStep[]; error: string;
+  /** The model this member answers with, from the server; it changes if a fallback takes over. */
+  model?: string;
+  /** Why the member has no tools, when that is so. */
+  note?: string;
 }
 export interface TeamState { members: MemberState[]; chair: MemberState | null; finished: boolean; error: string }
 
@@ -34,7 +38,9 @@ export function applyTeamEvent(s: TeamState, ev: TeamEvent): TeamState {
   const agent = ev.agent ?? '';
   switch (ev.type) {
     case 'member_start':
-      return patch(s, agent, m => ({ ...m, status: 'running' }));
+      return patch(s, agent, m => ({ ...m, status: 'running', model: ev.model || m.model, note: ev.detail || m.note }));
+    case 'run_start':
+      return ev.model ? patch(s, agent, m => ({ ...m, model: ev.model })) : s;
     case 'delta':
       return patch(s, agent, m => ({ ...m, streamed: m.streamed + (ev.content ?? '') }));
     case 'tool_start':

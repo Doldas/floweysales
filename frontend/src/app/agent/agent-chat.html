@@ -116,6 +116,16 @@
         </select>
       </div>
     }
+    @if (session.profiles().length) {
+      <div class="persona-row">
+        <label for="profile-pick">Model</label>
+        <select id="profile-pick" class="form-select form-select-sm" (change)="session.setProfile($any($event.target).value ? +$any($event.target).value : null)" [disabled]="session.streaming()">
+          <option value="" [selected]="session.profileId() === null">{{ defaultOptionLabel(session.profiles()) }}</option>
+          @for (p of session.profiles(); track p.id) { <option [value]="p.id" [selected]="p.id === session.profileId()">{{ profileOption(p) }}</option> }
+        </select>
+      </div>
+      @if (chosenProfile(); as p) { <div class="profile-note">{{ p.description }} {{ profileSummary(p) }}</div> }
+    }
     <div class="composer-box">
       <textarea #composer rows="1" [value]="draft()" (input)="onInput($any($event.target).value)" (keydown)="onKeydown($event)"
                 [placeholder]="session.configured() || !session.configLoaded() ? 'Ask a research question…' : 'AI model not configured'"

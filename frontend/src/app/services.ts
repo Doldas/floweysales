@@ -15,6 +15,9 @@ import {
   CompanyWorld,
   EventsResponse,
   PersonaCatalog,
+  ModelProfile,
+  SavedTeam,
+  SavedTeamMember,
   SavedStrategy,
   StrategyCatalog,
   StrategyDef,
@@ -104,6 +107,19 @@ export class MarketService {
 
   /** The investor characters an agent can answer as. */
   getPersonas(): Observable<PersonaCatalog> { return this.http.get<PersonaCatalog>('/api/ai/personas'); }
+  /** Model profiles an administrator prepared (enabled ones only). */
+  getProfiles(): Observable<{ profiles: ModelProfile[] }> { return this.http.get<{ profiles: ModelProfile[] }>('/api/ai/profiles'); }
+  getAdminProfiles(): Observable<{ profiles: ModelProfile[]; max: number }> { return this.http.get<{ profiles: ModelProfile[]; max: number }>('/api/admin/ai/profiles'); }
+  saveAdminProfile(p: Partial<ModelProfile>): Observable<{ id: number }> {
+    return p.id ? this.http.put<{ id: number }>(`/api/admin/ai/profiles/${p.id}`, p) : this.http.post<{ id: number }>('/api/admin/ai/profiles', p);
+  }
+  deleteAdminProfile(id: number): Observable<unknown> { return this.http.delete(`/api/admin/ai/profiles/${id}`); }
+  /** The user's saved agent teams. */
+  getSavedTeams(): Observable<{ teams: SavedTeam[]; max: number }> { return this.http.get<{ teams: SavedTeam[]; max: number }>('/api/ai/teams'); }
+  saveTeam(t: { id?: number; name: string; chair: boolean; members: SavedTeamMember[] }): Observable<{ id: number }> {
+    return t.id ? this.http.put<{ id: number }>(`/api/ai/teams/${t.id}`, t) : this.http.post<{ id: number }>('/api/ai/teams', t);
+  }
+  deleteTeam(id: number): Observable<unknown> { return this.http.delete(`/api/ai/teams/${id}`); }
   /** Built-in Fibonacci strategies and the user's saved ones. */
   getStrategies(): Observable<StrategyCatalog> { return this.http.get<StrategyCatalog>('/api/strategies'); }
   createStrategy(def: StrategyDef): Observable<SavedStrategy> { return this.http.post<SavedStrategy>('/api/strategies', def); }

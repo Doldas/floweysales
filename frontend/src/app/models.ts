@@ -544,6 +544,7 @@ export interface Persona {
 export interface PersonaCatalog { personas: Persona[]; stances: Stance[]; max_team: number }
 /** One event of a team run, as streamed by POST /api/ai/team. */
 export interface TeamEvent {
+  model?: string; detail?: string; code?: string;
   type: 'member_start' | 'member_done' | 'delta' | 'tool_start' | 'tool_result' | 'notice' | 'error' | 'done' | string;
   agent?: string; name?: string; content?: string; result?: string; tool_error?: string; error?: string; stance?: string;
 }
@@ -598,3 +599,14 @@ export interface CompanyWorld {
   symbol: string; sector?: string; sector_source?: 'chosen' | 'config' | 'built-in'; generated_at: string;
   themes: CompanyWorldTheme[]; news: WorldHeadline[]; notes?: string[];
 }
+
+/** A model choice an administrator prepared. Unknown capabilities and costs are null, and shown as unknown. */
+export interface ModelProfile {
+  id: number; name: string; description: string; model: string; fallback_model?: string;
+  supports_tools: boolean | null; context_window: number | null;
+  cost_input_per_mtok: number | null; cost_output_per_mtok: number | null;
+  max_steps?: number | null; max_tool_calls?: number | null;
+  enabled?: boolean; is_default: boolean; position?: number;
+}
+export interface SavedTeamMember { persona: string; profile_id: number | null }
+export interface SavedTeam { id: number; name: string; chair: boolean; members: SavedTeamMember[]; updated_at?: string }

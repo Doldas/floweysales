@@ -121,6 +121,11 @@ const pluginOverview = {
   trackers: { yahoo: ['NVDA'], finnhub: [] },
 };
 
+const mockProfiles = [
+  { id: 1, name: 'Fast and cheap', description: 'Quick answers.', model: 'small-model', supports_tools: true, context_window: 32000, cost_input_per_mtok: 0.15, cost_output_per_mtok: 0.6, is_default: true },
+  { id: 2, name: 'Deep research', description: 'Slow and careful.', model: 'big-model', supports_tools: true, context_window: null, cost_input_per_mtok: null, cost_output_per_mtok: null, is_default: false },
+];
+
 const boardUniverses = [
   { id: 'us_mega', label: 'US mega caps', description: 'The 25 largest US-listed companies across sectors.' },
   { id: 'us_tech', label: 'US technology', description: 'Large US software, semiconductor and internet companies.' },
@@ -293,6 +298,9 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     '/api/admin/roles': { roles: [{ name: 'SYS_ADMIN', permissions: [] }, { name: 'USER', permissions: ['research.read', 'ai.chat'] }], permissions: ['research.read', 'ai.chat', 'flows.read', 'flows.write', 'flows.run'] },
     '/api/admin/settings/smtp': { configuration: {}, has_password: false },
     '/api/admin/updates': { current: { commit: 'abc123def456', image: 'ghcr.io/doldas/floweysales', tag: 'latest' }, can_apply: false, status: { state: 'idle' } },
+    '/api/ai/profiles': { profiles: mockProfiles },
+    '/api/admin/ai/profiles': { profiles: mockProfiles.map(p => ({ ...p, enabled: true, position: 0 })), max: 20 },
+    '/api/ai/teams': { teams: [{ id: 3, name: 'Value panel', chair: true, members: [{ persona: 'owner', profile_id: 2 }, { persona: 'teacher', profile_id: null }] }], max: 20 },
     '/api/providers': ['YAHOO', 'BINANCE', 'AVANZA'].map(id => provider(id)),
     '/api/admin/plugins': pluginOverview,
     '/api/admin/plugins/check': pluginOverview,

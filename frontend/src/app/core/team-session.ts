@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
-import type { Persona, TeamEvent } from '../models';
+import type { ModelProfile, Persona, SavedTeam, TeamEvent } from '../models';
+import { missingProfiles, savedMembers, teamMembersBody } from '../components/profile-view';
 import { MarketService } from '../services';
 import { MarketState } from './market-state';
 import { DEFAULT_TEAM, applyTeamEvent, startTeam, type TeamState } from '../components/team-view';
@@ -23,11 +24,20 @@ export class TeamSession {
   readonly error = signal('');
   readonly question = signal('');
   readonly chair = signal(true);
+  /** Model profiles to choose from, the profile of each chosen character (null: the default), and the saved teams. */
+  readonly profiles = signal<ModelProfile[]>([]);
+  readonly profileOf = signal<Record<string, number | null>>({});
+  readonly savedTeams = signal<SavedTeam[]>([]);
+  readonly maxSaved = signal(20);
+  readonly teamName = signal('');
+  readonly savedId = signal<number | null>(null);
+  readonly teamNotice = signal('');
   private abort: AbortController | null = null;
 
   readonly chosen = computed(() => this.personas().filter(p => this.selected().includes(p.id)));
 
   load(): void {
+    this.loadChoices();
     if (this.personas().length) return;
     this.api.getPersonas().subscribe({
       next: c => {
@@ -36,6 +46,44 @@ export class TeamSession {
         if (!this.selected().length) this.selected.set(DEFAULT_TEAM.filter(id => c.personas.some(p => p.id === id)));
       },
       error: () => this.error.set('The persona list could not be loaded.'),
+    });
+  }
+
+  loadChoices(): void {
+    this.api.getProfiles().subscribe({ next: r => this.profiles.set(r.profiles), error: () => this.profiles.set([]) });
+    this.api.getSavedTeams().subscribe({ next: r => { this.savedTeams.set(r.teams); this.maxSaved.set(r.max); }, error: () => this.savedTeams.set([]) });
+  }
+
+  setMemberProfile(persona: string, id: number | null): void {
+    this.profileOf.update(m => ({ ...m, [persona]: id }));
+  }
+
+  /** Puts a saved team's characters and profiles on the page. A profile that is gone is dropped and said so. */
+  loadTeam(team: SavedTeam): void {
+    const ids = team.members.map(m => m.persona).filter(id => this.personas().some(p => p.id === id));
+    this.selected.set(ids);
+    this.chair.set(team.chair);
+    const gone = missingProfiles(team, this.profiles());
+    this.profileOf.set(Object.fromEntries(team.members.map(m => [m.persona, m.profile_id !== null && gone.includes(m.profile_id) ? null : m.profile_id])));
+    this.teamName.set(team.name);
+    this.savedId.set(team.id);
+    this.teamNotice.set(gone.length ? 'A model profile of this team is no longer offered; those members use the default.' : '');
+  }
+
+  saveCurrent(): void {
+    const name = this.teamName().trim();
+    if (!name || !this.selected().length) return;
+    const existing = this.savedTeams().find(t => t.name === name);
+    this.api.saveTeam({ id: existing?.id, name, chair: this.chair(), members: savedMembers(this.selected(), this.profileOf()) }).subscribe({
+      next: r => { this.savedId.set(r.id); this.teamNotice.set(existing ? 'Team updated.' : 'Team saved.'); this.loadChoices(); },
+      error: err => this.teamNotice.set(err?.error?.error ?? 'The team could not be saved.'),
+    });
+  }
+
+  deleteSaved(id: number): void {
+    this.api.deleteTeam(id).subscribe({
+      next: () => { if (this.savedId() === id) { this.savedId.set(null); } this.teamNotice.set('Team deleted.'); this.loadChoices(); },
+      error: err => this.teamNotice.set(err?.error?.error ?? 'The team could not be deleted.'),
     });
   }
 
@@ -56,7 +104,7 @@ export class TeamSession {
       const res = await fetch('/api/ai/team', {
         method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
         body: JSON.stringify({
-          question, personas: members.map(m => m.id), chair: withChair,
+          question, members: teamMembersBody(members.map(m => m.id), this.profileOf()), chair: withChair,
           symbol: this.market.trackedSymbol(), provider: this.market.provider(), range: this.market.historyRange(), price: price > 0 ? price.toFixed(4) : '',
         }),
       });
