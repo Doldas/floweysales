@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, computed, inject, input, output, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Subject, debounceTime, switchMap, tap } from 'rxjs';
 
 import { MarketState } from '../core/market-state';
+import { isFavorite } from '../core/recent-instruments';
 import type { ProviderId, SymbolInfo } from '../models';
 
 let nextId = 0;
@@ -33,8 +34,8 @@ let nextId = 0;
       </select>
     </div>
     @if (open()) {
-      <ul class="results" role="listbox" [id]="id + '-list'" [attr.aria-label]="showingRecent() ? 'Recent instruments' : 'Ticker results'">
-        @if (showingRecent()) { <li class="group" role="presentation">Recent</li> }
+      <ul class="results" role="listbox" [id]="id + '-list'" [attr.aria-label]="showingRecent() ? 'Favorite and recent instruments' : 'Ticker results'">
+        @if (showingRecent()) { <li class="group" role="presentation">Favorites and recent</li> }
         @for (r of results(); track r.symbol + r.exchange; let i = $index) {
           <li role="option" [id]="id + '-opt-' + i" [attr.aria-selected]="i === active()" [class.active]="i === active()"
               (mousedown)="$event.preventDefault()" (click)="choose(r)" (mouseenter)="active.set(i)">
@@ -90,6 +91,8 @@ export class SymbolSearchComponent {
   readonly compact = input(false);
   /** Navigate to Markets after choosing, unless already on an instrument page. */
   readonly navigate = input(true);
+  /** Emitted after an instrument was chosen, so a full-screen picker can close. */
+  readonly chosen = output<void>();
 
   readonly id = `fs-symbol-search-${nextId++}`;
   readonly query = signal('');
@@ -130,15 +133,20 @@ export class SymbolSearchComponent {
       this.open.set(true);
       return;
     }
-    const recent = this.market.recent();
-    if (!recent.length) return;
-    this.results.set(recent.map(r => ({ symbol: r.symbol, name: r.name ?? '', type: 'Recent', exchange: r.exchange ?? '' })));
+    const favorites = this.market.favorites();
+    const recent = this.market.recent().filter(r => !isFavorite(favorites, r));
+    if (!favorites.length && !recent.length) return;
+    this.results.set([
+      ...favorites.map(r => ({ symbol: r.symbol, name: r.name ?? '', type: 'Favorite', exchange: r.exchange ?? '' })),
+      ...recent.map(r => ({ symbol: r.symbol, name: r.name ?? '', type: 'Recent', exchange: r.exchange ?? '' })),
+    ]);
     this.active.set(0);
     this.open.set(true);
   }
 
   recentProvider(info: SymbolInfo): string {
-    return this.market.recent().find(r => r.symbol === info.symbol && (r.exchange ?? '') === info.exchange)?.provider ?? '';
+    const pool = info.type === 'Favorite' ? this.market.favorites() : this.market.recent();
+    return pool.find(r => r.symbol === info.symbol && (r.exchange ?? '') === info.exchange)?.provider ?? '';
   }
 
   onInput(value: string): void {
@@ -185,16 +193,17 @@ export class SymbolSearchComponent {
       const provider = this.recentProvider(info);
       if (provider && provider !== this.market.provider()) this.market.setProvider(provider as ProviderId);
     }
-    this.market.track(info);
+    this.market.select(info);
     this.done();
   }
 
   private submit(symbol: string): void {
-    this.market.track(symbol);
+    this.market.select(symbol);
     this.done();
   }
 
   private done(): void {
+    this.chosen.emit();
     this.open.set(false);
     this.query.set('');
     this.results.set([]);

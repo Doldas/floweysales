@@ -101,13 +101,22 @@
       <div class="topbar-title" aria-live="polite">{{ pageTitle() }}</div>
 
       @if (market.trackedSymbol()) {
-        <a routerLink="/markets" class="instrument-chip" [title]="instrumentTitle()">
+        <a routerLink="/markets" class="instrument-chip" [class.is-ignored]="instrumentUse() === 'ignored'" [title]="instrumentTitle()">
           <span class="chip-sym">{{ market.trackedSymbol() }}</span>
           @if (market.trackedName()) { <span class="chip-name">{{ market.trackedName() }}</span> }
           <span class="chip-meta">{{ market.trackedExchange() ? market.trackedExchange() + ' · ' : '' }}{{ market.trackedProvider() }}</span>
+          @if (instrumentUse() === 'ignored') { <span class="chip-note">Not used on this page</span> }
         </a>
+        <button type="button" class="btn btn-ghost btn-icon star-btn" (click)="market.toggleFavoriteSelected()"
+                [attr.aria-pressed]="market.selectedFavorite()"
+                [attr.aria-label]="market.selectedFavorite() ? 'Remove ' + market.trackedSymbol() + ' from favorites' : 'Add ' + market.trackedSymbol() + ' to favorites'">
+          <i class="bi" [class.bi-star-fill]="market.selectedFavorite()" [class.bi-star]="!market.selectedFavorite()" aria-hidden="true"></i>
+        </button>
       }
       <fs-symbol-search class="topbar-search" />
+      <button type="button" class="btn btn-ghost btn-icon picker-open" (click)="openPicker()" aria-label="Choose instrument">
+        <i class="bi bi-search" aria-hidden="true"></i>
+      </button>
 
       <div class="topbar-actions">
         <fs-feed-status class="topbar-status" />
@@ -151,6 +160,20 @@
         <div class="topbar-progress" role="progressbar" aria-label="Loading market data"></div>
       }
     </header>
+
+    <!-- Outside the topbar: its backdrop filter would otherwise confine a fixed overlay. -->
+    @if (pickerOpen()) {
+      <div class="picker-sheet" role="dialog" aria-modal="true" aria-label="Choose instrument">
+        <div class="picker-head">
+          <span class="picker-title">Choose instrument</span>
+          <button type="button" class="btn btn-ghost btn-icon" (click)="pickerOpen.set(false)" aria-label="Close">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
+          </button>
+        </div>
+        @if (instrumentUse() === 'ignored') { <p class="picker-note">The current page does not use the selected instrument.</p> }
+        <fs-symbol-search (chosen)="pickerOpen.set(false)" />
+      </div>
+    }
 
     <main id="main-content" class="fs-content" tabindex="-1">
       <router-outlet />

@@ -484,13 +484,13 @@ func (h *sseHub) broadcastFor(symbol, provider string, data []byte) {
 	}
 }
 
-// BroadcastTick is invoked by the database insert callback.
-func (e *Engine) BroadcastTick(record storage.TradingRecord) {
-	// Settle resting orders against the new tick before it is published.
-	e.matchOrders(record.Symbol, record.Price)
-
+// tickPayload is the SSE body of one tick. timestamp (also sent as poll_time) is
+// when we polled the provider; quote_time is the provider's own time. quote_time,
+// delay_seconds and market_state are left out when unknown.
+func tickPayload(record storage.TradingRecord) map[string]any {
 	payload := map[string]any{
 		"timestamp":  record.Timestamp,
+		"poll_time":  record.Timestamp,
 		"symbol":     record.Symbol,
 		"provider":   record.Provider,
 		"price":      record.Price,
@@ -501,6 +501,27 @@ func (e *Engine) BroadcastTick(record storage.TradingRecord) {
 		"status":     record.Status,
 		"marketData": json.RawMessage(record.RawMarketJSON),
 	}
+	if record.QuoteTime > 0 {
+		payload["quote_time"] = record.QuoteTime
+	}
+	if record.DelaySeconds != nil {
+		payload["delay_seconds"] = *record.DelaySeconds
+	}
+	if record.MarketState != "" {
+		payload["market_state"] = record.MarketState
+		if record.MarketBasis != "" {
+			payload["market_basis"] = record.MarketBasis
+		}
+	}
+	return payload
+}
+
+// BroadcastTick is invoked by the database insert callback.
+func (e *Engine) BroadcastTick(record storage.TradingRecord) {
+	// Settle resting orders against the new tick before it is published.
+	e.matchOrders(record.Symbol, record.Price)
+
+	payload := tickPayload(record)
 
 	data, err := json.Marshal(payload)
 	if err != nil {

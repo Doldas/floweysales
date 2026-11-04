@@ -67,6 +67,15 @@ export interface TradingRecord {
   currency: string;
   status: string;
   marketData?: MarketData;
+  /** When the server polled the provider (Unix seconds). */
+  poll_time?: number;
+  /** The provider's own time of the quote (Unix seconds); absent when it did not say. */
+  quote_time?: number;
+  /** How far behind the market the provider says the quote is; absent when unknown. */
+  delay_seconds?: number;
+  market_state?: 'open' | 'closed' | 'unknown';
+  /** `provider`, or `regular_hours` (computed from the exchange's weekday hours; holidays unknown). */
+  market_basis?: string;
 }
 
 export type OrderSide = 'BUY' | 'SELL';

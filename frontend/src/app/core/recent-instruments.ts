@@ -51,3 +51,32 @@ export function parseRecent(raw: string | null, max = MAX_RECENT): RecentInstrum
   }
   return out.slice(0, max);
 }
+
+// ---- Favorites: instruments a user starred. Same shape and identity (provider plus symbol).
+
+export type FavoriteInstrument = RecentInstrument;
+
+export const MAX_FAVORITES = 30;
+
+const sameInstrument = (a: Pick<RecentInstrument, 'symbol' | 'provider'>, b: Pick<RecentInstrument, 'symbol' | 'provider'>): boolean =>
+  a.symbol.toUpperCase() === b.symbol.toUpperCase() && a.provider.toUpperCase() === b.provider.toUpperCase();
+
+export function isFavorite(list: readonly FavoriteInstrument[], ref: Pick<RecentInstrument, 'symbol' | 'provider'>): boolean {
+  return list.some(f => sameInstrument(f, ref));
+}
+
+/** Adds the instrument (newest first) or removes it when already starred. A full list refuses a new entry. */
+export function toggleFavorite(list: readonly FavoriteInstrument[], ref: FavoriteInstrument, max = MAX_FAVORITES): FavoriteInstrument[] {
+  const symbol = ref.symbol.trim().toUpperCase();
+  const provider = ref.provider.trim().toUpperCase();
+  if (!symbol || !provider) return [...list];
+  if (isFavorite(list, { symbol, provider })) return list.filter(f => !sameInstrument(f, { symbol, provider }));
+  if (list.length >= max) return [...list];
+  const entry: FavoriteInstrument = { symbol, provider };
+  if (ref.name) entry.name = ref.name;
+  if (ref.exchange) entry.exchange = ref.exchange;
+  return [entry, ...list];
+}
+
+/** Reads stored JSON; anything malformed is dropped. Never throws. */
+export const parseFavorites = (raw: string | null): FavoriteInstrument[] => parseRecent(raw, MAX_FAVORITES);

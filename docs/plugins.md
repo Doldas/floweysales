@@ -292,6 +292,14 @@ same provider id. Run `my-plugin --manifest` to print the embedded manifest.
 Try a plugin locally with `floweysales_backend plugins install --file`, or
 build a local store (below).
 
+### Telling the price feed what a quote means
+
+A `quote` result's `data` object may state, only when the provider really knows:
+`quoteTimeUnix` (the quote's own time, Unix seconds), `delaySeconds` (how far behind the market it is) and `marketState` (`open` or `closed`).
+Leave a key out when unknown; never send `0` for unknown. The feed status shows "Delayed 15 min", the quote time and "Market closed" from these,
+and says "Real time" only when `quote_kind` is `realtime`. Without `marketState`, the server falls back to the exchange's regular weekday hours for
+known tickers (suffix such as `.ST`, `.L`, `.T`, or a US exchange code in `data.exchange`); that fallback does not know holidays and the UI says so.
+
 ### What the SDK gives you
 
 | Package | Use |
