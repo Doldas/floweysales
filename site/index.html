@@ -1,45 +1,61 @@
 <!doctype html>
-<html lang="sv">
+<html lang="en-US">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#0b1424">
-  <meta name="description" content="FloweySales — en öppen, lokal-first plattform för finansiell forskning, verifierbar analys och säkrare investeringsbeslut.">
+  <meta name="description" content="FloweySales is an open source, local-first workspace for investment research: market data, a leaderboard, strategy backtests, an AI research agent that shows its sources, and automations.">
   <title>FloweySales — Research you can verify</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta property="og:title" content="FloweySales — Research you can verify">
+  <meta property="og:description" content="Open source, local-first investment research workspace. A research aid, not investment advice.">
+  <meta property="og:image" content="https://doldas.github.io/floweysales/icons/icon-512.png">
+  <meta property="og:type" content="website">
+  <meta name="theme-color" content="#5b5ff0">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="site.css">
+  <script>try{var t=localStorage.getItem('fs.theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
 </head>
 <body>
-  <a class="skip" href="#main">Hoppa till innehållet</a>
+  <a class="skip" href="#main">Skip to content</a>
   <header class="topbar wrap">
-    <a class="brand" href="./" aria-label="FloweySales startsida"><span class="mark">F<span class="dot">.</span></span> FloweySales</a>
-    <nav aria-label="Huvudnavigation"><a href="#platform">Plattform</a><a href="api.html">API-hjälp</a><a href="#roadmap">Roadmap</a><a href="https://github.com/Doldas/floweysales">GitHub ↗</a></nav>
+    <a class="brand" href="./" aria-label="FloweySales home"><img src="icons/icon.svg" alt="" width="32" height="32"> FloweySales</a>
+    <nav aria-label="Main"><a href="guide/">User guide</a><a href="api.html">API explorer</a><a href="https://github.com/Doldas/floweysales">GitHub</a><button type="button" id="theme" class="theme-toggle" aria-label="Switch between light and dark">Theme</button></nav>
   </header>
   <main id="main">
     <section class="hero wrap">
-      <div class="eyebrow"><span class="pulse"></span> OPEN SOURCE · LOCAL-FIRST · EVIDENCE-DRIVEN</div>
-      <h1>Financial intelligence,<br><em>under your control.</em></h1>
-      <p class="lead">FloweySales förenar marknadsdata, portföljverktyg och en lokalt körbar AI-agent. Målet är research med spårbara källor, transparenta beräkningar och mänskliga beslut.</p>
-      <div class="actions"><a class="primary" href="https://github.com/Doldas/floweysales">Utforska koden <span aria-hidden="true">↗</span></a><a class="secondary" href="api.html">Utforska API:er →</a></div>
-      <p class="fine">Under aktiv utveckling · Ej finansiell rådgivning · Inga autonoma affärer i den här versionen</p>
+      <img class="hero-mark" src="icons/icon.svg" alt="FloweySales icon" width="88" height="88">
+      <div class="eyebrow">Open source · local-first · evidence-driven</div>
+      <h1>Investment research,<br><em>with the work shown.</em></h1>
+      <p class="lead">FloweySales brings market data, a transparent company leaderboard, strategy backtests, an AI research agent and repeatable automations into one workspace. Every answer shows where it came from, and nothing trades.</p>
+      <div class="actions"><a class="primary" href="guide/getting-started.html">Get started</a><a class="secondary" href="guide/">Read the user guide</a><a class="secondary" href="https://github.com/Doldas/floweysales">View the code</a></div>
+      <p class="fine">A research aid, not investment advice. Live trading is not supported. All times are UTC.</p>
     </section>
-    <section id="platform" class="wrap section">
-      <div class="section-head"><div class="eyebrow">BUILDING BLOCKS</div><h2>Från data till förklarbara beslut.</h2></div>
+    <section class="wrap section" id="available">
+      <div class="eyebrow">Available now</div>
+      <h2>What you can do today.</h2>
       <div class="cards">
-        <article class="card"><span class="num">01 / DATA</span><h3>Flera datakällor</h3><p>Yahoo, Finnhub, Avanza och Binance som installerbara plugin från en plugin-butik, i ett gemensamt gränssnitt med tydlig provenance och källkritik.</p></article>
-        <article class="card"><span class="num">02 / INTELLIGENCE</span><h3>Lokal AI &amp; MCP</h3><p>OpenAI-kompatibla lokala modeller, verktygsanrop och beräkningsstöd — med spårbar historik.</p></article>
-        <article class="card"><span class="num">03 / TRUST</span><h3>Research före execution</h3><p>Verifierade rapporter, scenarioanalyser, riskramar och manuell godkännandekedja för framtida automatisering.</p></article>
+        <article class="card"><h3><a href="guide/markets.html">Markets</a></h3><p>A price chart with indicators, a watchlist, fundamentals, quarterly financials and a World view of news themes. The feed badge says how fresh the prices are.</p><span class="status">Available</span></article>
+        <article class="card"><h3><a href="guide/leaderboard.html">Leaderboard</a></h3><p>Ranks a list of companies on value, quality, growth, momentum, timing and risk. The method, the data and the reasons behind each rank are open to inspection.</p><span class="status">Available</span></article>
+        <article class="card"><h3><a href="guide/strategies.html">Strategies and backtests</a></h3><p>Replay rules over past daily prices, or backtest a leaderboard strategy against an index. Check it across markets, periods and settings, then save and export the result.</p><span class="status">Available</span></article>
+        <article class="card"><h3><a href="guide/agents.html">Research Agent and teams</a></h3><p>Ask questions and watch every tool call. Put several fictional investor characters on one question. Evidence modes hold an answer until its citations check out.</p><span class="status">Available</span></article>
+        <article class="card"><h3><a href="guide/flows.html">Flow Studio</a></h3><p>Chain data steps, agents and approvals into repeatable work that runs by hand, on a schedule or on an event. Flows are read-only research.</p><span class="status">Available</span></article>
+        <article class="card"><h3><a href="guide/provenance.html">Provenance</a></h3><p>Sources, publication dates and the method behind a figure are shown where you see it. Missing data is shown as missing, never as zero.</p><span class="status">Partly covered</span></article>
       </div>
     </section>
-    <section id="roadmap" class="wrap section roadmap">
-      <div class="section-head"><div class="eyebrow">NORTH STAR</div><h2>Ett agentdrivet investeringssystem — steg för steg.</h2></div>
-      <div class="timeline">
-        <div><b>NOW</b><h3>Trusted foundation</h3><p>CI, tester, lokala modeller, tydliga perioder, verktygshistorik och reproducerbara beräkningar.</p></div>
-        <div><b>NEXT</b><h3>Analysis &amp; ranking</h3><p>Filings, DCF, research med källor, faktorranking, backtesting och investeringshypoteser.</p></div>
-        <div><b>LATER</b><h3>Human-supervised agents</h3><p>Bevakning, riskregler, portföljsimulation och kontrollerade förslag; automatisk handel kräver separat säkerhetsgranskning.</p></div>
-      </div>
-      <a class="inline" href="https://github.com/Doldas/floweysales/issues">Följ arbetet i GitHub Issues ↗</a>
+    <section class="wrap section" id="limits">
+      <div class="eyebrow">Limits</div>
+      <h2>What to keep in mind.</h2>
+      <ul class="limits">
+        <li>FloweySales does research. It gives no personal advice and places no real orders.</li>
+        <li>An AI answer can be wrong. A citation check confirms that figures and quotes appear in the cited source; it does not confirm that the source is right.</li>
+        <li>Backtests replay the past with stated biases. Past results do not predict future ones.</li>
+        <li>Coverage depends on the market-data providers installed. The guide says what each area can and cannot do.</li>
+      </ul>
+      <p><a href="https://github.com/Doldas/floweysales/blob/main/docs/roadmap.md">Roadmap</a> · <a href="https://github.com/Doldas/floweysales/issues">Open issues</a> · <a href="https://github.com/Doldas/floweysales/releases">Releases</a></p>
     </section>
   </main>
-  <footer class="wrap"><span>© FloweySales contributors · Open source</span><span>Research should be reproducible.</span></footer>
+  <footer class="wrap"><span>MIT licensed · FloweySales contributors</span><span>Research should be reproducible.</span></footer>
+  <script src="guide.js" defer></script>
 </body>
 </html>

@@ -3,7 +3,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
 
-import { DOCS_URL, HELP_TOPICS, searchHelp, topicById } from '../help/help-topics';
+import { DOCS_URL, HELP_TOPICS, guideUrl, searchHelp, topicById } from '../help/help-topics';
 import { renderMarkdown } from '../markdown';
 
 /** In-app help: searchable articles, the glossary and a link to the documentation site. */
@@ -14,10 +14,13 @@ import { renderMarkdown } from '../markdown';
   template: `
 <div class="fs-page">
   <header class="fs-page-header">
-    <div>
-      <div class="fs-eyebrow">Help</div>
-      <h1>Help</h1>
-      <p>Written documentation for FloweySales. Answers from the Research Agent are AI-generated and separate from this.</p>
+    <div class="d-flex align-items-center gap-3">
+      <img src="icons/icon.svg" alt="" width="56" height="56" class="help-icon">
+      <div>
+        <div class="fs-eyebrow">Help</div>
+        <h1>Help</h1>
+        <p>Written documentation for FloweySales. Answers from the Research Agent are AI-generated and separate from this.</p>
+      </div>
     </div>
     <a class="btn btn-outline-secondary" [href]="docsUrl" target="_blank" rel="noopener noreferrer">
       <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>Full documentation
@@ -48,6 +51,7 @@ import { renderMarkdown } from '../markdown';
         <div class="fs-eyebrow">{{ current().area }}</div>
         <h2 id="help-title">{{ current().title }}</h2>
         <div class="chat-markdown" [innerHTML]="html()"></div>
+        <p class="mt-3 mb-0"><a [href]="guide()" target="_blank" rel="noopener noreferrer">Read more in the user guide <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a></p>
       </div>
     </article>
   </div>
@@ -61,6 +65,7 @@ import { renderMarkdown } from '../markdown';
     .help-nav a.active { background: var(--fs-accent-soft); border-color: var(--fs-accent); }
     .help-nav small { color: var(--fs-muted); }
     .help-nav .empty { color: var(--fs-muted); padding: .5rem; }
+    .help-icon { border-radius: .9rem; flex: none; }
     .help-article h2 { font-size: 1.25rem; margin-bottom: .75rem; }
     @media (max-width: 767.98px) { .help-layout { grid-template-columns: 1fr; } }
   `],
@@ -72,5 +77,6 @@ export class HelpPage {
   private readonly topicId = toSignal(this.route.queryParamMap.pipe(map(p => p.get('topic'))), { initialValue: null });
   readonly results = computed(() => searchHelp(this.query()));
   readonly current = computed(() => topicById(this.topicId()) ?? HELP_TOPICS[0]);
+  readonly guide = computed(() => guideUrl(this.current()));
   readonly html = computed(() => renderMarkdown(this.current().body));
 }

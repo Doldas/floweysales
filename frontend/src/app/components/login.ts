@@ -10,7 +10,7 @@ import { AuthState } from '../auth.service';
   <main class="auth-page">
     <section class="auth-hero" aria-hidden="true">
       <div class="hero-inner">
-        <span class="brand-mark"><i class="bi bi-activity"></i></span>
+        <img class="brand-mark" src="icons/icon.svg" alt="" width="48" height="48">
         <h2>Research that shows its work.</h2>
         <p>Agentic research flows, market analysis and a private workspace. Every figure traced to the tool and filing it came from.</p>
         <ul>
@@ -22,7 +22,7 @@ import { AuthState } from '../auth.service';
     </section>
     <section class="auth-panel">
       <div class="auth-card">
-        <div class="auth-brand"><span class="brand-mark sm"><i class="bi bi-activity"></i></span><strong>FloweySales</strong></div>
+        <div class="auth-brand"><img class="brand-mark sm" src="icons/icon.svg" alt="" width="34" height="34"><strong>FloweySales</strong></div>
         @if(inviteToken()){
           <h1>Activate your account</h1>
           <p class="auth-caption">Choose a password to activate your FloweySales account.</p>
@@ -75,8 +75,8 @@ import { AuthState } from '../auth.service';
     .hero-inner ul{list-style:none;padding:0;margin:.5rem 0 0;display:grid;gap:.8rem}
     .hero-inner li{display:flex;gap:.7rem;align-items:flex-start;color:#cbd5e1}
     .hero-inner li .bi{color:#a5b4fc;font-size:1.1rem}
-    .brand-mark{display:grid;place-items:center;width:3rem;height:3rem;border-radius:.9rem;background:var(--fs-agent-gradient);color:#fff;font-size:1.5rem;box-shadow:0 10px 30px rgba(99,102,241,.45)}
-    .brand-mark.sm{width:2.1rem;height:2.1rem;border-radius:.6rem;font-size:1.05rem;box-shadow:none}
+    .brand-mark{display:block;width:3rem;height:3rem;border-radius:.9rem;box-shadow:0 10px 30px rgba(99,102,241,.45)}
+    .brand-mark.sm{width:2.1rem;height:2.1rem;border-radius:.6rem;box-shadow:none}
     .auth-panel{display:grid;place-items:center;padding:max(1.5rem,env(safe-area-inset-top)) max(1rem,env(safe-area-inset-right)) max(1.5rem,env(safe-area-inset-bottom)) max(1rem,env(safe-area-inset-left))}
     .auth-card{width:min(100%,400px);min-width:0;overflow-wrap:anywhere}
     .auth-brand{display:flex;align-items:center;gap:.6rem;margin-bottom:2rem;font-size:1.05rem}

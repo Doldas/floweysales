@@ -6,6 +6,10 @@ on:
     paths:
       - 'site/**'
       - 'docs/**'
+      - 'scripts/build-docs.mjs'
+      - 'scripts/sync-brand.mjs'
+      - 'frontend/public/icons/**'
+      - 'frontend/src/styles/_tokens.scss'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -24,15 +28,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Validate static site
+      - name: Check brand copies match the app
+        run: node scripts/sync-brand.mjs --check
+      - name: Build the site and check links
         run: |
-          test -s site/index.html
-          test -s site/styles.css
-          grep -q 'FloweySales' site/index.html
+          node scripts/build-docs.mjs --check
+          node scripts/build-docs.mjs --out _site
+          test -s _site/index.html
+          test -s _site/guide/index.html
+          grep -q 'FloweySales' _site/index.html
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: site
+          path: _site
   deploy:
     name: pages-deploy
     if: github.ref == 'refs/heads/main'
