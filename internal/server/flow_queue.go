@@ -38,6 +38,9 @@ type flowCheckpointState struct {
 	Results        []map[string]string `json:"results"`
 	WorkspaceOwner int64               `json:"workspace_owner,omitempty"`
 	V2             *flowV2State        `json:"v2,omitempty"`
+	// Compact marks a checkpoint whose large outputs are references into
+	// NodeResults (see flow_checkpoint_compact.go).
+	Compact bool `json:"compact,omitempty"`
 }
 
 // flowCheckpointer persists checkpoints for a top-level run and carries the
@@ -50,7 +53,7 @@ type flowCheckpointer struct {
 // save persists state. Losing the lease stops the run; other storage errors
 // are logged and the run continues without that checkpoint.
 func (c *flowCheckpointer) save(ctx context.Context, nextIndex int, state flowCheckpointState) error {
-	raw, err := json.Marshal(state)
+	raw, err := json.Marshal(compactCheckpoint(state))
 	if err != nil {
 		return err
 	}
@@ -73,6 +76,9 @@ func restoreFlowCheckpoint(cp *storage.FlowRunCheckpoint, order []string, v2 boo
 	}
 	if err := json.Unmarshal(cp.State, &s); err != nil {
 		return s, fmt.Errorf("checkpoint is unreadable: %w", err)
+	}
+	if !expandCheckpoint(&s) {
+		return s, fmt.Errorf("checkpoint refers to an output it does not hold")
 	}
 	if s.NextNode != order[cp.NextIndex] {
 		return s, fmt.Errorf("checkpoint does not match the run's graph")
