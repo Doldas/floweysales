@@ -135,6 +135,8 @@ func annotateDiscovery(universe leaderboardUniverse, provider string, ranked []m
 			why = "You supplied this symbol."
 		}
 		row["discovery"] = map[string]any{"why": why, "source": universe.Source.Name, "kind": universe.Source.Kind, "url": universe.Source.URL, "as_of": universe.Source.AsOf}
-		row["metrics_source"] = map[string]any{"provider": provider, "price_as_of": row["as_of"], "fundamentals_through": row["ttm_through"]}
+		priceAsOf, _ := row["as_of"].(string)
+		row["metrics_source"] = map[string]any{"provider": provider, "price_as_of": row["as_of"], "fundamentals_through": row["ttm_through"],
+			"record_url": providerRecordURL(provider, symbol), "fact": metricsFact(provider, symbol, priceAsOf)}
 	}
 }

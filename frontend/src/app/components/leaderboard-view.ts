@@ -2,7 +2,7 @@
  * Display helpers for the Markets leaderboard. Pure functions so they run
  * under node --test; the scoring itself lives in the server (leaderboard.go).
  */
-import type { LeaderboardBreakdown, LeaderboardMethodology, LeaderboardRow, LeaderboardSelection } from '../models';
+import type { LeaderboardBreakdown, LeaderboardMethodology, LeaderboardRow, LeaderboardSelection, RankingPreferences } from '../models';
 
 export const FACTOR_LABELS: Record<string, string> = {
   value: 'Value', quality: 'Quality', growth: 'Growth', momentum: 'Momentum', timing: 'Entry timing', risk: 'Low risk',
@@ -132,9 +132,9 @@ function csvCell(v: unknown): string {
 
 /** The ranked companies with their listing, discovery source and metric sources, for export. */
 export function universeCsv(rows: LeaderboardRow[]): string {
-  const head = ['rank', 'symbol', 'exchange', 'mic', 'country', 'why_on_list', 'list_source', 'list_source_kind', 'list_source_url', 'list_as_of', 'provider', 'price_as_of', 'fundamentals_through'];
+  const head = ['rank', 'symbol', 'exchange', 'mic', 'country', 'why_on_list', 'list_source', 'list_source_kind', 'list_source_url', 'list_as_of', 'provider', 'price_as_of', 'fundamentals_through', 'provider_record_url'];
   const lines = rows.map(r => [r.rank, r.symbol, r.listing?.exchange, r.listing?.mic, r.listing?.country, r.discovery?.why, r.discovery?.source, r.discovery?.kind,
-    r.discovery?.url, r.discovery?.as_of, r.metrics_source?.provider, r.metrics_source?.price_as_of, r.metrics_source?.fundamentals_through].map(csvCell).join(','));
+    r.discovery?.url, r.discovery?.as_of, r.metrics_source?.provider, r.metrics_source?.price_as_of, r.metrics_source?.fundamentals_through, recordLink(r.metrics_source?.record_url)].map(csvCell).join(','));
   return [head.join(','), ...lines].join('\n') + '\n';
 }
 
@@ -156,4 +156,50 @@ export function regionCoverage(universes: readonly { label: string; region?: str
     const countries = [...new Set(inRegion.flatMap(u => u.countries ?? []))].sort();
     return { ...r, universes: inRegion.map(u => u.label), countries };
   });
+}
+
+/** The address of a safe, followable record: only http(s) links are shown. */
+export function recordLink(url: string | null | undefined): string | null {
+  return url && /^https?:\/\//i.test(url) ? url : null;
+}
+
+export const OBJECTIVE_OPTIONS: readonly { id: string; label: string }[] = [
+  { id: '', label: 'None: use the strategy as it is' },
+  { id: 'preserve', label: 'Protect capital: more weight on low risk, quality and value' },
+  { id: 'growth', label: 'Grow capital: more weight on growth and momentum' },
+];
+
+/** What the preferences form holds, as typed. */
+export interface PreferencesForm { objective: string; maxVolatility: string; excludeUnprofitable: boolean; requireFundamentals: boolean; excludeSymbols: string }
+
+export function preferencesToForm(p: RankingPreferences | undefined): PreferencesForm {
+  return {
+    objective: p?.objective === 'balanced' ? '' : p?.objective ?? '',
+    maxVolatility: p?.max_volatility_pct ? String(p.max_volatility_pct) : '',
+    excludeUnprofitable: !!p?.exclude_unprofitable, requireFundamentals: !!p?.require_fundamentals,
+    excludeSymbols: (p?.exclude_symbols ?? []).join(', '),
+  };
+}
+
+/** Turns the form into preferences for the server, or says what is wrong. The server checks the symbols again. */
+export function formToPreferences(f: PreferencesForm): { prefs?: RankingPreferences; error?: string } {
+  const prefs: RankingPreferences = { objective: f.objective };
+  const vol = f.maxVolatility.trim();
+  if (vol) {
+    const n = Number(vol);
+    if (!Number.isFinite(n) || n <= 0 || n > 200) return { error: 'The volatility limit is a percentage between 1 and 200, or empty for no limit.' };
+    prefs.max_volatility_pct = n;
+  }
+  if (f.excludeUnprofitable) prefs.exclude_unprofitable = true;
+  if (f.requireFundamentals) prefs.require_fundamentals = true;
+  const symbols = [...new Set(f.excludeSymbols.split(/[\s,;]+/).map(s => s.trim().toUpperCase()).filter(Boolean))];
+  if (symbols.length > 50) return { error: 'At most 50 symbols can be excluded.' };
+  if (symbols.some(s => !/^[A-Z0-9._:/-]{1,40}$/.test(s))) return { error: 'Symbols may contain letters, digits and . - _ : / only.' };
+  if (symbols.length) prefs.exclude_symbols = symbols;
+  return { prefs };
+}
+
+/** True when the ranking mixes data ages, or its newest price or list review is old: the statements are then shown as a warning. */
+export function dataAgeIsWarning(age: { mixed: boolean; list_stale?: boolean; newest_price_age_days?: number } | undefined): boolean {
+  return !!age && (age.mixed || !!age.list_stale || (age.newest_price_age_days ?? 0) > 5);
 }

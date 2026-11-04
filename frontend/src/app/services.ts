@@ -9,6 +9,8 @@ import {
   BacktestParams,
   BacktestResult, BatchResult, SensitivityResult, SavedBacktest, BacktestSummary,
   LeaderboardResponse,
+  RankingPreferences,
+  RankingPreferencesResponse,
   MarketData,
   Order,
   OrderRequest,
@@ -95,11 +97,21 @@ export class MarketService {
   }
 
   /** Ranks a preset universe, or up to 25 symbols, for a strategy. */
-  getLeaderboard(universe: string, strategy: string, symbols: string[] = []): Observable<LeaderboardResponse> {
+  getLeaderboard(universe: string, strategy: string, symbols: string[] = [], ignorePreferences = false): Observable<LeaderboardResponse> {
     const params: Record<string, string> = { strategy, explain: '1' };
+    if (ignorePreferences) params['preferences'] = 'off';
     if (symbols.length) params['symbols'] = symbols.join(',');
     else params['universe'] = universe;
     return this.http.get<LeaderboardResponse>('/api/market/leaderboard', { params });
+  }
+
+  /** The signed-in user's saved leaderboard objective and constraints. */
+  getRankingPreferences(): Observable<RankingPreferencesResponse> {
+    return this.http.get<RankingPreferencesResponse>('/api/market/leaderboard/preferences');
+  }
+
+  saveRankingPreferences(prefs: RankingPreferences): Observable<RankingPreferencesResponse> {
+    return this.http.put<RankingPreferencesResponse>('/api/market/leaderboard/preferences', prefs);
   }
 
   /** Replays a leaderboard strategy over past prices; slow on a cold cache. */

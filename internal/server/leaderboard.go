@@ -793,17 +793,34 @@ func (e *Engine) registerLeaderboardRoutes() {
 		if !found {
 			info = customUniverse(symbols)
 		}
-		scored := scoreLeaderboardDetailed(rows, strategy, q.Get("explain") == "1")
+		// The signed-in user's own objective and constraints, unless the
+		// request turns them off. Flow nodes and the agent never apply them.
+		var prefs rankingPreferences
+		if q.Get("preferences") != "off" {
+			prefs = e.loadRankingPreferences(r)
+		}
+		effective := tiltedStrategy(strategy, prefs)
+		now := time.Now().UTC()
+		scored := scoreLeaderboardDetailed(rows, effective, q.Get("explain") == "1")
+		scored, removed := constrain(prefs, scored)
 		annotateDiscovery(info, provider.String(), scored)
+		selection := buildSelection(info, symbols, rows, scored)
+		addConstraintStep(&selection, removed)
 		listed := info
 		listed.Symbols = nil // the list itself is in "universes"; here only its description
+		prov := leaderboardProvenanceFor(effective, prefs, universe, symbols, rows)
+		prov["fact"] = rankingFact(effective, prefs, provider.String(), universe, asOf, now, fmt.Sprint(prov["inputs_hash"]))
+		prov["universe_fact"] = universeFact(info)
+		prov["data_age"] = leaderboardDataAge(info, rows, now)
+		prov["bias"] = leaderboardBias(info, symbols, rows, scored)
 		writeJSON(w, http.StatusOK, map[string]any{
 			"universe": universe, "strategy": strategy.ID, "provider": provider.String(), "as_of": asOf,
-			"generated_at":  time.Now().UTC().Format(time.RFC3339),
-			"universe_info": listed, "selection": buildSelection(info, symbols, rows, scored),
+			"generated_at":  now.Format(time.RFC3339),
+			"universe_info": listed, "selection": selection,
 			"rows": scored, "unranked": splitLeaderboardRows(rows),
 			"universes": leaderboardUniverses, "strategies": leaderboardStrategies,
-			"provenance": leaderboardProvenance(strategy, universe, symbols, rows),
+			"preferences": map[string]any{"applied": prefs.active(), "values": prefs, "summary": prefs.describe(), "effective_weights": effective.Weights},
+			"provenance":  prov,
 		})
 	})
 }
