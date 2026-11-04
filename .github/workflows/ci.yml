@@ -25,6 +25,12 @@ jobs:
         run: bash scripts/test-pr-policy.sh
       - name: Test repository gate audit
         run: node --test scripts/audit-repository-gates.test.mjs
+      - name: Test documentation build and brand sync
+        run: node --test scripts/build-docs.test.mjs
+      - name: Check brand copies, build the user guide and check its links
+        run: |
+          node scripts/sync-brand.mjs --check
+          node scripts/build-docs.mjs --check
       - name: Check branch naming and linked issue
         env:
           HEAD_BRANCH: ${{ github.head_ref }}

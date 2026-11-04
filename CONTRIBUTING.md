@@ -33,6 +33,16 @@ Market-data providers are plugins, developed and released in [Doldas/floweysales
 
 `npm run build` creates the Angular bundle; the GitHub Pages site in `site/` is **static documentation**, not a hosted trading engine.
 
+Documentation: the user guide is Markdown in `docs/guide/` (each page has `title`, `order`, `summary` and `last-reviewed` front matter) and is built into the Pages site by `scripts/build-docs.mjs`. Change it in the same PR as the behavior it describes, and describe only what exists. The site's icons and colors are copies of the app's, kept in step by `node scripts/sync-brand.mjs`. Before a PR that touches docs, `site/` or the app icons, run:
+
+```sh
+node --test scripts/build-docs.test.mjs
+node scripts/sync-brand.mjs --check
+node scripts/build-docs.mjs --check   # builds the guide and fails on a broken internal link
+```
+
+CI runs the same three commands in the `policy` job. Links to other sites are listed but not fetched, so an outside site cannot block a merge.
+
 ## License
 
 By contributing you agree that your contribution is released under the [MIT License](LICENSE). User-facing text is US English, and every displayed date and time is UTC.
