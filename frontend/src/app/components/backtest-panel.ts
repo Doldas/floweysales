@@ -3,9 +3,9 @@ import { FormsModule } from '@angular/forms';
 import type { Subscription } from 'rxjs';
 
 import { MarketService, describeHttpError } from '../services';
-import type { BacktestParams, BacktestResult, BatchResult, SensitivityResult } from '../models';
+import type { BacktestParams, BacktestResult, BatchResult, SavedBacktest, SensitivityResult } from '../models';
 import { periodError } from '../core/strategy-period';
-import { batchHeadline, batchRows, sensitivityHeadline, sensitivityRows, chartSummary, curvePath, metricTiles, warningText } from './backtest-view';
+import { batchHeadline, batchParams, batchRows, exportUrl, savedLabel, sensitivityHeadline, sensitivityParams, sensitivityRows, singleParams, chartSummary, curvePath, metricTiles, warningText } from './backtest-view';
 
 const CHART_W = 640;
 const CHART_H = 220;
@@ -120,7 +120,7 @@ const CHART_H = 220;
     }
   }
 
-  <details class="bt-robust" [open]="robustOpen()" (toggle)="robustOpen.set($any($event.target).open)">
+  <details class="bt-robust" [open]="robustOpen()" (toggle)="toggleRobust($any($event.target).open)">
     <summary>Test across markets and periods</summary>
     <p class="bt-note">Runs this strategy once for each market and period you tick, with the same holdings and rebalance settings, and shows the spread. At most {{ maxCells }} backtests per run; each is a full replay, so a cold run takes a while.</p>
     <fieldset class="bt-pick"><legend>Markets</legend>
@@ -191,6 +191,33 @@ const CHART_H = 220;
         </div>
       }
     </div>
+
+    <div class="bt-saved">
+      <h4 class="h6 mb-1">Saved results</h4>
+      <p class="bt-note">Saving stores the question and the server's answer, so you can reopen it or download it with its parameters. Dates are UTC.</p>
+      <div class="bt-batch-actions">
+        <input class="form-control form-control-sm bt-name" type="text" maxlength="80" placeholder="Name this result" aria-label="Name for the saved result" [ngModel]="saveName()" (ngModelChange)="saveName.set($event)" name="save-name">
+        <button type="button" class="btn btn-sm btn-outline-secondary" (click)="save('single')" [disabled]="!canSave('single')">Save backtest</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" (click)="save('batch')" [disabled]="!canSave('batch')">Save markets and periods</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" (click)="save('sensitivity')" [disabled]="!canSave('sensitivity')">Save settings check</button>
+      </div>
+      @if (savedError(); as err) { <p class="text-danger small" role="alert">{{ err }}</p> }
+      @if (saved().length) {
+        <ul class="bt-saved-list">
+          @for (r of saved(); track r.id) {
+            <li>
+              <span>{{ label(r) }}</span>
+              <span class="bt-saved-actions">
+                <button type="button" class="btn btn-sm btn-link p-0" (click)="openSaved(r)">Open</button>
+                <a class="btn btn-sm btn-link p-0" [href]="exportHref(r.id, 'csv')" download>CSV</a>
+                <a class="btn btn-sm btn-link p-0" [href]="exportHref(r.id, 'json')" download>JSON</a>
+                <button type="button" class="btn btn-sm btn-link text-danger p-0" (click)="removeSaved(r)" [attr.aria-label]="'Delete ' + r.name">Delete</button>
+              </span>
+            </li>
+          }
+        </ul>
+      } @else { <p class="bt-note">Nothing saved yet.</p> }
+    </div>
   </details>
 </section>
   `,
@@ -218,6 +245,10 @@ const CHART_H = 220;
 .bt-batch-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-bottom: 0.5rem; }
 .bt-batch p { font-size: 0.85rem; }
 .bt-sens { border-top: 1px solid var(--fs-border); margin-top: 0.75rem; padding-top: 0.75rem; }
+.bt-saved { border-top: 1px solid var(--fs-border); margin-top: 0.75rem; padding-top: 0.75rem; }
+.bt-name { max-width: 16rem; }
+.bt-saved-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.35rem; li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.4rem; font-size: 0.85rem; } }
+.bt-saved-actions { display: inline-flex; gap: 0.75rem; }
 .bt-limits { color: var(--fs-muted); padding-left: 1.1rem; margin: 0; }
 td[data-tone='pos'] { color: var(--fs-pos); } td[data-tone='neg'] { color: var(--fs-neg); }
 .num { text-align: right; white-space: nowrap; }
@@ -267,6 +298,14 @@ export class BacktestPanelComponent {
   readonly sensLoading = signal(false);
   readonly sensError = signal('');
   private sensRequest?: Subscription;
+  // What each result was asked for, so saving stores exactly that question.
+  private lastParams: { single?: Record<string, string>; batch?: Record<string, string>; sensitivity?: Record<string, string> } = {};
+  savedLoaded = false;
+  readonly saved = signal<SavedBacktest[]>([]);
+  readonly saveName = signal('');
+  readonly savedError = signal('');
+  readonly label = savedLabel;
+  readonly exportHref = exportUrl;
   readonly sensRows = computed(() => sensitivityRows(this.sens()?.variants ?? []));
   readonly sensHeadline = computed(() => (this.sens() ? sensitivityHeadline(this.sens()!) : []));
   /** The current universe first, then the other leaderboard universes. */
@@ -315,15 +354,61 @@ export class BacktestPanelComponent {
     this.pickedPeriods.update(l => (l.includes(p) ? l.filter(x => x !== p) : [...l, p]));
   }
 
+  toggleRobust(open: boolean): void {
+    this.robustOpen.set(open);
+    if (open && !this.savedLoaded) { this.savedLoaded = true; this.loadSaved(); }
+  }
+
+  /** Whether the result of this kind is on screen and a name is given. */
+  canSave(kind: SavedBacktest['kind']): boolean {
+    const have = kind === 'single' ? this.result() : kind === 'batch' ? this.batch() : this.sens();
+    return !!have && !!this.lastParams[kind] && !!this.saveName().trim();
+  }
+
+  save(kind: SavedBacktest['kind']): void {
+    const params = this.lastParams[kind];
+    if (!params || !this.canSave(kind)) return;
+    this.savedError.set('');
+    this.api.saveBacktestRun(this.saveName().trim(), kind, params).subscribe({
+      next: () => { this.saveName.set(''); this.loadSaved(); },
+      error: err => this.savedError.set(describeHttpError(err)),
+    });
+  }
+
+  loadSaved(): void {
+    this.api.listBacktestRuns().subscribe({
+      next: res => this.saved.set(res.runs),
+      error: () => this.saved.set([]),
+    });
+  }
+
+  openSaved(r: SavedBacktest): void {
+    this.savedError.set('');
+    this.api.getBacktestRun(r.id).subscribe({
+      next: full => {
+        if (full.kind === 'batch') this.batch.set(full.result as BatchResult);
+        else if (full.kind === 'sensitivity') this.sens.set(full.result as SensitivityResult);
+        else { this.result.set(full.result as BacktestResult); this.error.set(''); }
+      },
+      error: err => this.savedError.set(describeHttpError(err)),
+    });
+  }
+
+  removeSaved(r: SavedBacktest): void {
+    this.api.deleteBacktestRun(r.id).subscribe({
+      next: () => this.saved.update(list => list.filter(x => x.id !== r.id)),
+      error: err => this.savedError.set(describeHttpError(err)),
+    });
+  }
+
   runBatch(): void {
     if (!this.batchCells() || this.batchCells() > this.maxCells) return;
     this.batchRequest?.unsubscribe();
     this.batchLoading.set(true);
     this.batchError.set('');
-    this.batchRequest = this.api.backtestBatch({
-      universes: this.pickedMarkets(), periods: this.pickedPeriods(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(),
-    }).subscribe({
-      next: res => { this.batch.set(res); this.batchLoading.set(false); },
+    const params = batchParams({ universes: this.pickedMarkets(), periods: this.pickedPeriods(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance() });
+    this.batchRequest = this.api.backtestBatch(params).subscribe({
+      next: res => { this.lastParams.batch = params; this.batch.set(res); this.batchLoading.set(false); },
       error: err => { this.batchError.set(describeHttpError(err)); this.batchLoading.set(false); },
     });
   }
@@ -333,10 +418,9 @@ export class BacktestPanelComponent {
     this.sensRequest?.unsubscribe();
     this.sensLoading.set(true);
     this.sensError.set('');
-    this.sensRequest = this.api.backtestSensitivity({
-      universe: this.universe(), symbols: this.symbols(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(), years: this.years(),
-    }).subscribe({
-      next: res => { this.sens.set(res); this.sensLoading.set(false); },
+    const params = sensitivityParams({ universe: this.universe(), symbols: this.symbols(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(), years: this.years() });
+    this.sensRequest = this.api.backtestSensitivity(params).subscribe({
+      next: res => { this.lastParams.sensitivity = params; this.sens.set(res); this.sensLoading.set(false); },
       error: err => { this.sensError.set(describeHttpError(err)); this.sensLoading.set(false); },
     });
   }
@@ -351,12 +435,13 @@ export class BacktestPanelComponent {
     this.request?.unsubscribe();
     this.loading.set(true);
     this.error.set('');
-    this.request = this.api.backtest({
+    const params = singleParams({
       universe: this.universe(), strategy: this.strategy(), symbols: this.symbols(),
       top: this.top(), rebalance: this.rebalance(), years: this.years(),
       ...(this.years() === 0 ? { from: this.from(), to: this.to() || undefined } : {}),
-    }).subscribe({
-      next: res => { this.result.set(res); this.loading.set(false); },
+    });
+    this.request = this.api.backtest(params).subscribe({
+      next: res => { this.lastParams.single = params; this.result.set(res); this.loading.set(false); },
       error: err => { this.error.set(describeHttpError(err)); this.result.set(null); this.loading.set(false); },
     });
   }

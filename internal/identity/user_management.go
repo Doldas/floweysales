@@ -194,6 +194,12 @@ func (s *Service) DeleteUser(ctx context.Context, id int64) error {
 	if _, err = tx.ExecContext(ctx, "DELETE FROM user_transaction_files WHERE user_id=?", id); err != nil {
 		return err
 	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM agent_teams WHERE user_id=?", id); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM backtest_runs WHERE user_id=?", id); err != nil {
+		return err
+	}
 	if _, err = tx.ExecContext(ctx, "DELETE FROM auth_users WHERE id=?", id); err != nil {
 		return err
 	}

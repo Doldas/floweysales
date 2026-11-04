@@ -2,7 +2,7 @@
  * Display helpers for the strategy backtest panel. Pure functions so they run
  * under node --test; the replay itself lives in the server (internal/backtest).
  */
-import type { BacktestMetrics, BacktestPoint, BacktestResult, BatchCell, BatchSpread, BatchSummary, SensitivityResult, SensitivityVariant } from '../models';
+import type { BacktestParams, BacktestMetrics, BacktestPoint, BacktestResult, BatchCell, BatchSpread, BatchSummary, SensitivityResult, SensitivityVariant } from '../models';
 
 export type Tone = 'pos' | 'neg' | 'mid';
 
@@ -129,4 +129,33 @@ export function sensitivityHeadline(r: Pick<SensitivityResult, 'summary'>): stri
   if (s.with_benchmark) lines.push(`Excess return stayed positive in ${s.positive_excess} of ${s.with_benchmark} variants.`);
   if (s.cost_break_even_bps !== undefined) lines.push(`At ${s.cost_break_even_bps} bps per side the excess return was zero or negative.`);
   return lines;
+}
+
+/** Query parameters of a single backtest; a custom range replaces the preset length. */
+export function singleParams(p: BacktestParams): Record<string, string> {
+  const params: Record<string, string> = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance };
+  if (p.from) { params['from'] = p.from; if (p.to) params['to'] = p.to; } else params['years'] = String(p.years || 5);
+  if (p.symbols?.length) params['symbols'] = p.symbols.join(',');
+  else params['universe'] = p.universe;
+  return params;
+}
+
+export function batchParams(p: { universes: string[]; periods: string[]; strategy: string; top: number; rebalance: string }): Record<string, string> {
+  return { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance, universes: p.universes.join(','), periods: p.periods.join(',') };
+}
+
+export function sensitivityParams(p: BacktestParams): Record<string, string> {
+  const { from: _from, to: _to, ...preset } = p;
+  return singleParams(preset);
+}
+
+/** Download addresses of a saved run. */
+export function exportUrl(id: number, format: 'csv' | 'json'): string {
+  return `/api/market/backtest/runs/${id}/export${format === 'csv' ? '?format=csv' : ''}`;
+}
+
+/** "Momentum spread" with its kind and UTC date, for the saved list. */
+export function savedLabel(r: { name: string; kind: string; created_at: string }): string {
+  const kind = r.kind === 'batch' ? 'markets and periods' : r.kind === 'sensitivity' ? 'settings' : 'single run';
+  return `${r.name} · ${kind} · ${r.created_at.slice(0, 10)}`;
 }

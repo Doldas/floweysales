@@ -218,11 +218,11 @@ func decodeBody(w http.ResponseWriter, r *http.Request, max int64, dst any) bool
 
 func storeStatus(err error) int {
 	switch {
-	case errors.Is(err, storage.ErrProfileNotFound), errors.Is(err, storage.ErrTeamNotFound):
+	case errors.Is(err, storage.ErrProfileNotFound), errors.Is(err, storage.ErrTeamNotFound), errors.Is(err, storage.ErrBacktestRunNotFound):
 		return http.StatusNotFound
 	case errors.Is(err, storage.ErrProfileNameTaken), errors.Is(err, storage.ErrTeamNameTaken):
 		return http.StatusConflict
-	case errors.Is(err, storage.ErrProfileLimit), errors.Is(err, storage.ErrTeamLimit):
+	case errors.Is(err, storage.ErrProfileLimit), errors.Is(err, storage.ErrTeamLimit), errors.Is(err, storage.ErrBacktestRunLimit), errors.Is(err, storage.ErrBacktestRunTooLarge):
 		return http.StatusUnprocessableEntity
 	}
 	return http.StatusServiceUnavailable

@@ -7,7 +7,7 @@ import {
   FinancialsResponse,
   HistorySeries,
   BacktestParams,
-  BacktestResult, BatchResult, SensitivityResult,
+  BacktestResult, BatchResult, SensitivityResult, SavedBacktest,
   LeaderboardResponse,
   MarketData,
   Order,
@@ -103,26 +103,33 @@ export class MarketService {
   }
 
   /** Replays a leaderboard strategy over past prices; slow on a cold cache. */
-  backtest(p: BacktestParams): Observable<BacktestResult> {
-    const params: Record<string, string> = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance };
-    if (p.from) { params['from'] = p.from; if (p.to) params['to'] = p.to; } else params['years'] = String(p.years || 5);
-    if (p.symbols?.length) params['symbols'] = p.symbols.join(',');
-    else params['universe'] = p.universe;
+  backtest(params: Record<string, string>): Observable<BacktestResult> {
     return this.http.get<BacktestResult>('/api/market/backtest', { params });
   }
 
   /** One strategy over several universes and periods; each cell is an ordinary backtest. */
-  backtestBatch(p: { universes: string[]; periods: string[]; strategy: string; top: number; rebalance: string }): Observable<BatchResult> {
-    const params = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance, universes: p.universes.join(','), periods: p.periods.join(',') };
+  backtestBatch(params: Record<string, string>): Observable<BatchResult> {
     return this.http.get<BatchResult>('/api/market/backtest/batch', { params });
   }
 
   /** One setting at a time (trading cost, holdings, rebalance) around a base backtest. */
-  backtestSensitivity(p: { universe: string; symbols?: string[]; strategy: string; top: number; rebalance: string; years: number }): Observable<SensitivityResult> {
-    const params: Record<string, string> = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance, years: String(p.years || 5) };
-    if (p.symbols?.length) params['symbols'] = p.symbols.join(',');
-    else params['universe'] = p.universe;
+  backtestSensitivity(params: Record<string, string>): Observable<SensitivityResult> {
     return this.http.get<SensitivityResult>('/api/market/backtest/sensitivity', { params });
+  }
+
+  /** The user's saved backtests (without their results). */
+  listBacktestRuns(): Observable<{ runs: SavedBacktest[]; max: number }> {
+    return this.http.get<{ runs: SavedBacktest[]; max: number }>('/api/market/backtest/runs');
+  }
+  /** Saves a run; the server runs the query itself and stores its own answer. */
+  saveBacktestRun(name: string, kind: SavedBacktest['kind'], params: Record<string, string>): Observable<{ id: number }> {
+    return this.http.post<{ id: number }>('/api/market/backtest/runs', { name, kind, query: new URLSearchParams(params).toString() });
+  }
+  getBacktestRun(id: number): Observable<SavedBacktest & { result: unknown }> {
+    return this.http.get<SavedBacktest & { result: unknown }>(`/api/market/backtest/runs/${id}`);
+  }
+  deleteBacktestRun(id: number): Observable<{ deleted: boolean }> {
+    return this.http.delete<{ deleted: boolean }>(`/api/market/backtest/runs/${id}`);
   }
 
   /** The investor characters an agent can answer as. */
