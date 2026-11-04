@@ -161,6 +161,8 @@ type Engine struct {
 	leaderboardCache map[string]leaderboardCacheEntry
 	leaderboardCalls map[string]*leaderboardCall
 
+	runProgress *runProgressTable
+
 	backtestMu    sync.Mutex
 	backtestCache map[string]backtestCacheEntry
 	backtestCalls map[string]*backtestCall
@@ -244,6 +246,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 
 		leaderboardCache: make(map[string]leaderboardCacheEntry),
 		leaderboardCalls: make(map[string]*leaderboardCall),
+		runProgress:      newRunProgressTable(),
 		backtestCache:    make(map[string]backtestCacheEntry),
 		backtestCalls:    make(map[string]*backtestCall),
 	}
@@ -252,6 +255,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerLeaderboardRoutes()
 	e.registerBacktestRoutes()
 	e.registerBacktestBatchRoutes()
+	e.registerRunProgressRoutes()
 	e.registerBacktestSensitivityRoutes()
 	e.registerBacktestRunRoutes()
 	e.registerBacktestSummaryRoute()

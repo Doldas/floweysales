@@ -153,7 +153,7 @@ func isPlanRoute(method, path string) bool {
 // isBacktestReadPath matches the backtest and its two robustness checks, which
 // replay public prices and keep nothing.
 func isBacktestReadPath(path string) bool {
-	return path == "/api/market/backtest" || path == "/api/market/backtest/batch" || path == "/api/market/backtest/sensitivity"
+	return path == "/api/market/backtest" || path == "/api/market/backtest/batch" || path == "/api/market/backtest/progress" || path == "/api/market/backtest/sensitivity"
 }
 
 // isBacktestRunRoute matches a user's saved backtests: listing, saving,
