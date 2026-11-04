@@ -7,7 +7,7 @@ import {
   FinancialsResponse,
   HistorySeries,
   BacktestParams,
-  BacktestResult,
+  BacktestResult, BatchResult,
   LeaderboardResponse,
   MarketData,
   Order,
@@ -109,6 +109,12 @@ export class MarketService {
     if (p.symbols?.length) params['symbols'] = p.symbols.join(',');
     else params['universe'] = p.universe;
     return this.http.get<BacktestResult>('/api/market/backtest', { params });
+  }
+
+  /** One strategy over several universes and periods; each cell is an ordinary backtest. */
+  backtestBatch(p: { universes: string[]; periods: string[]; strategy: string; top: number; rebalance: string }): Observable<BatchResult> {
+    const params = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance, universes: p.universes.join(','), periods: p.periods.join(',') };
+    return this.http.get<BatchResult>('/api/market/backtest/batch', { params });
   }
 
   /** The investor characters an agent can answer as. */

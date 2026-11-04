@@ -2,7 +2,7 @@
  * Display helpers for the strategy backtest panel. Pure functions so they run
  * under node --test; the replay itself lives in the server (internal/backtest).
  */
-import type { BacktestMetrics, BacktestPoint, BacktestResult } from '../models';
+import type { BacktestMetrics, BacktestPoint, BacktestResult, BatchCell, BatchSpread, BatchSummary } from '../models';
 
 export type Tone = 'pos' | 'neg' | 'mid';
 
@@ -65,4 +65,38 @@ export function chartSummary(r: Pick<BacktestResult, 'curve' | 'metrics' | 'benc
   const first = r.curve[0], last = r.curve[r.curve.length - 1];
   const bench = r.benchmark && last.benchmark !== undefined ? ` against ${r.benchmark} at ${last.benchmark.toFixed(0)}` : '';
   return `100 invested on ${first.date} grew to ${last.equity.toFixed(0)} by ${last.date}${bench}; worst fall ${r.metrics.max_drawdown_pct.toFixed(0)}%.`;
+}
+
+/** "3" becomes "3 years"; a date range is shown as written. */
+export function periodLabel(period: string): string {
+  return /^\d+$/.test(period) ? `${period} years` : period.replace('..', ' to ').replace(/ to $/, ' to today');
+}
+
+export interface BatchRow { key: string; universe: string; period: string; cagr: string; excess: string; drawdown: string; sharpe: string; tone: Tone; error?: string; notice?: string }
+
+/** One table row per cell. A failed cell keeps its place and shows why, so a gap is never hidden. */
+export function batchRows(cells: readonly BatchCell[], labelOf: (universe: string) => string = u => u): BatchRow[] {
+  return cells.map(c => {
+    const base = { key: `${c.universe}|${c.period}`, universe: labelOf(c.universe), period: periodLabel(c.period) };
+    if (!c.metrics) return { ...base, cagr: '–', excess: '–', drawdown: '–', sharpe: '–', tone: 'mid' as Tone, error: c.error || 'No result' };
+    const m = c.metrics;
+    return { ...base, cagr: signed(m.cagr_pct, '%'), excess: signed(m.excess_cagr_pct, ' pts'), drawdown: signed(m.max_drawdown_pct, '%'),
+      sharpe: Number.isFinite(m.sharpe) ? m.sharpe.toFixed(2) : '–', tone: (m.cagr_pct > 0 ? 'pos' : m.cagr_pct < 0 ? 'neg' : 'mid') as Tone, notice: c.notice };
+  });
+}
+
+function range(s: BatchSpread | undefined, unit: string): string {
+  return s ? `${signed(s.min, unit)} to ${signed(s.max, unit)}, median ${signed(s.median, unit)}` : 'not available';
+}
+
+/** The lines above the table: how many ran, the spread, and what the spread cannot show. */
+export function batchHeadline(s: BatchSummary): string[] {
+  if (!s.completed) return [`None of the ${s.cells} backtests completed.`];
+  const lines = [
+    `${s.completed} of ${s.cells} backtests completed. Return per year: ${range(s.cagr_pct, '%')}.`,
+    `Worst fall: ${range(s.max_drawdown_pct, '%')}.`,
+  ];
+  if (s.with_benchmark) lines.push(`Beat the benchmark in ${s.beat_benchmark} of ${s.with_benchmark}; lost money in ${s.negative_return} of ${s.completed}.`);
+  else lines.push(`Lost money in ${s.negative_return} of ${s.completed}; no benchmark was available.`);
+  return lines;
 }

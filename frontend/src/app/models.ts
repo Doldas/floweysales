@@ -415,6 +415,21 @@ export interface BacktestResult {
   warnings: string[];
 }
 
+/** One universe and period of GET /api/market/backtest/batch. A failed cell has an error and no metrics. */
+export interface BatchCell {
+  universe: string; period: string; from?: string; to?: string; data_start?: string; data_end?: string; notice?: string;
+  rebalances?: number; metrics?: BacktestMetrics; warnings?: string[]; error?: string;
+}
+export interface BatchSpread { min: number; median: number; max: number }
+export interface BatchSummary {
+  cells: number; completed: number; failed: number;
+  cagr_pct?: BatchSpread; excess_cagr_pct?: BatchSpread; max_drawdown_pct?: BatchSpread; sharpe?: BatchSpread;
+  beat_benchmark: number; with_benchmark: number; negative_return: number; weakest?: string; strongest?: string; limitations: string[];
+}
+export interface BatchResult {
+  strategy: string; generated_at: string; universes: string[]; periods: string[]; cells: BatchCell[]; summary: BatchSummary;
+}
+
 export interface BacktestParams {
   universe: string;
   strategy: string;

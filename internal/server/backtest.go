@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -73,7 +74,10 @@ type backtestCall struct {
 type badRequest struct{ error }
 
 func (e *Engine) parseBacktestRequest(r *http.Request) (backtestRequest, error) {
-	q := r.URL.Query()
+	return e.parseBacktestQuery(r.URL.Query())
+}
+
+func (e *Engine) parseBacktestQuery(q url.Values) (backtestRequest, error) {
 	req := backtestRequest{top: 10, rebalance: 21, rebalLabel: "monthly", costBps: 10, years: 3}
 	universe := q.Get("universe")
 	if strings.TrimSpace(q.Get("symbols")) != "" {

@@ -295,7 +295,7 @@ const STORE_KEY = 'fs.leaderboard';
     @if (showBacktest()) {
       <div id="board-backtest">
         <fs-backtest-panel [universe]="universe() === watchlist ? 'custom' : universe()" [strategy]="strategy()" [strategyLabel]="strategyInfo()?.label ?? strategy()"
-          [symbols]="universe() === watchlist ? watchlistSymbols() : []" />
+          [symbols]="universe() === watchlist ? watchlistSymbols() : []" [markets]="universes()" />
       </div>
     }
   }
