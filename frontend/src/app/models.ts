@@ -430,6 +430,14 @@ export interface BatchResult {
   strategy: string; generated_at: string; universes: string[]; periods: string[]; cells: BatchCell[]; summary: BatchSummary;
 }
 
+/** One setting changed in GET /api/market/backtest/sensitivity. */
+export interface SensitivityVariant { parameter: string; value: string; base?: boolean; metrics?: BacktestMetrics; error?: string }
+export interface SensitivityResult {
+  universe: string; strategy: string; period: string; generated_at: string; base: Record<string, string>;
+  variants: SensitivityVariant[];
+  summary: { completed: number; failed: number; cagr_pct?: BatchSpread; excess_cagr_pct?: BatchSpread; positive_excess: number; with_benchmark: number; cost_break_even_bps?: number; notes: string[] };
+}
+
 export interface BacktestParams {
   universe: string;
   strategy: string;

@@ -2,7 +2,7 @@
  * Display helpers for the strategy backtest panel. Pure functions so they run
  * under node --test; the replay itself lives in the server (internal/backtest).
  */
-import type { BacktestMetrics, BacktestPoint, BacktestResult, BatchCell, BatchSpread, BatchSummary } from '../models';
+import type { BacktestMetrics, BacktestPoint, BacktestResult, BatchCell, BatchSpread, BatchSummary, SensitivityResult, SensitivityVariant } from '../models';
 
 export type Tone = 'pos' | 'neg' | 'mid';
 
@@ -98,5 +98,35 @@ export function batchHeadline(s: BatchSummary): string[] {
   ];
   if (s.with_benchmark) lines.push(`Beat the benchmark in ${s.beat_benchmark} of ${s.with_benchmark}; lost money in ${s.negative_return} of ${s.completed}.`);
   else lines.push(`Lost money in ${s.negative_return} of ${s.completed}; no benchmark was available.`);
+  return lines;
+}
+
+export interface SensitivityRow { key: string; setting: string; cagr: string; excess: string; drawdown: string; base: boolean; tone: Tone; error?: string }
+
+const SETTING_LABELS: Record<string, string> = { cost_bps: 'Trading cost', top: 'Holdings', rebalance: 'Rebalance' };
+
+/** "cost_bps", "50" reads "Trading cost 50 bps". */
+export function settingLabel(v: Pick<SensitivityVariant, 'parameter' | 'value' | 'base'>): string {
+  if (v.base || v.parameter === 'base') return 'As asked';
+  const unit = v.parameter === 'cost_bps' ? ' bps per side' : v.parameter === 'top' ? ' companies' : '';
+  return `${SETTING_LABELS[v.parameter] ?? v.parameter} ${v.value}${unit}`;
+}
+
+export function sensitivityRows(variants: readonly SensitivityVariant[]): SensitivityRow[] {
+  return variants.map(v => {
+    const base = { key: `${v.parameter}|${v.value}`, setting: settingLabel(v), base: !!v.base };
+    if (!v.metrics) return { ...base, cagr: '–', excess: '–', drawdown: '–', tone: 'mid' as Tone, error: v.error || 'No result' };
+    const m = v.metrics;
+    return { ...base, cagr: signed(m.cagr_pct, '%'), excess: signed(m.excess_cagr_pct, ' pts'), drawdown: signed(m.max_drawdown_pct, '%'), tone: (m.cagr_pct > 0 ? 'pos' : m.cagr_pct < 0 ? 'neg' : 'mid') as Tone };
+  });
+}
+
+/** Lines above the sensitivity table. The break-even is the lowest tested cost with no edge, not a forecast. */
+export function sensitivityHeadline(r: Pick<SensitivityResult, 'summary'>): string[] {
+  const s = r.summary;
+  if (!s.completed) return ['None of the variants completed.'];
+  const lines = [`${s.completed} variants completed. Return per year: ${range(s.cagr_pct, '%')}.`];
+  if (s.with_benchmark) lines.push(`Excess return stayed positive in ${s.positive_excess} of ${s.with_benchmark} variants.`);
+  if (s.cost_break_even_bps !== undefined) lines.push(`At ${s.cost_break_even_bps} bps per side the excess return was zero or negative.`);
   return lines;
 }

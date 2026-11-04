@@ -7,7 +7,7 @@ import {
   FinancialsResponse,
   HistorySeries,
   BacktestParams,
-  BacktestResult, BatchResult,
+  BacktestResult, BatchResult, SensitivityResult,
   LeaderboardResponse,
   MarketData,
   Order,
@@ -115,6 +115,14 @@ export class MarketService {
   backtestBatch(p: { universes: string[]; periods: string[]; strategy: string; top: number; rebalance: string }): Observable<BatchResult> {
     const params = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance, universes: p.universes.join(','), periods: p.periods.join(',') };
     return this.http.get<BatchResult>('/api/market/backtest/batch', { params });
+  }
+
+  /** One setting at a time (trading cost, holdings, rebalance) around a base backtest. */
+  backtestSensitivity(p: { universe: string; symbols?: string[]; strategy: string; top: number; rebalance: string; years: number }): Observable<SensitivityResult> {
+    const params: Record<string, string> = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance, years: String(p.years || 5) };
+    if (p.symbols?.length) params['symbols'] = p.symbols.join(',');
+    else params['universe'] = p.universe;
+    return this.http.get<SensitivityResult>('/api/market/backtest/sensitivity', { params });
   }
 
   /** The investor characters an agent can answer as. */
