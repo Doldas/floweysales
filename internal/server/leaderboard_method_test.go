@@ -1,6 +1,7 @@
 package server
 
 import (
+	"math"
 	"strings"
 	"testing"
 )
@@ -73,5 +74,61 @@ func TestProvenanceNamesDisclaimerAndDates(t *testing.T) {
 	}
 	if !strings.Contains(p["disclaimer"].(string), "not personalized financial advice") || p["inputs_hash"] == "" || p["universe_hash"] == "" {
 		t.Fatalf("provenance = %v", p)
+	}
+}
+
+func TestEveryLeaderboardMetricAndFactorIsDescribed(t *testing.T) {
+	for _, f := range leaderboardFactors {
+		if leaderboardFactorInfo[f].Label == "" || leaderboardFactorInfo[f].Question == "" {
+			t.Errorf("factor %q has no description", f)
+		}
+		for _, m := range leaderboardFactorMetrics[f] {
+			if info := leaderboardMetricInfo[m.field]; info.Label == "" || info.Note == "" {
+				t.Errorf("metric %q has no label and note", m.field)
+			}
+		}
+	}
+}
+
+func TestBreakdownAddsUpToTheScoreAndExplainsCaps(t *testing.T) {
+	best, _ := findLeaderboardStrategy("best")
+	rows := []map[string]any{
+		{"symbol": "AAA", "earnings_yield_pct": 8.0, "peg": 1.0, "net_margin_pct": 20.0, "revenue_growth_pct": 10.0, "momentum_12_1_pct": 30.0, "rsi14": 80.0, "above_sma200": false, "eps_ttm": 2.0},
+		{"symbol": "BBB", "earnings_yield_pct": 2.0, "peg": 3.0, "net_margin_pct": 5.0, "revenue_growth_pct": 2.0, "momentum_12_1_pct": -5.0, "rsi14": 50.0, "above_sma200": true, "eps_ttm": 1.0},
+		{"symbol": "CCC", "earnings_yield_pct": 4.0},
+	}
+	plain := scoreLeaderboard(rows, best)
+	detailed := scoreLeaderboardDetailed(rows, best, true)
+	for i := range plain {
+		if plain[i]["score"] != detailed[i]["score"] || plain[i]["symbol"] != detailed[i]["symbol"] {
+			t.Fatalf("explaining must not change the ranking: %v vs %v", plain[i], detailed[i])
+		}
+		if _, has := plain[i]["breakdown"]; has {
+			t.Fatal("the breakdown is only attached on request")
+		}
+	}
+	for _, entry := range detailed {
+		bd := entry["breakdown"].(map[string]any)
+		sum := 0.0
+		for _, f := range bd["factors"].([]map[string]any) {
+			sum += f["contribution"].(float64)
+		}
+		if math.Abs(sum-entry["score"].(float64)) > 0.35 { // six contributions are each rounded to a tenth
+			t.Errorf("%v: contributions add up to %.1f, score is %v", entry["symbol"], sum, entry["score"])
+		}
+	}
+	for _, entry := range detailed {
+		if entry["symbol"] != "AAA" {
+			continue
+		}
+		capped := map[string]string{}
+		for _, f := range entry["breakdown"].(map[string]any)["factors"].([]map[string]any) {
+			if reason, ok := f["cap_reason"].(string); ok {
+				capped[f["factor"].(string)] = reason
+			}
+		}
+		if capped["momentum"] == "" {
+			t.Errorf("AAA is below its 200-day average, so momentum is capped and says why: %v", capped)
+		}
 	}
 }

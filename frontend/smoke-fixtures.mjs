@@ -137,6 +137,9 @@ const boardStrategies = [
   { id: 'dip', label: 'Quality on a dip', description: 'Profitable companies that pulled back while the trend holds.' },
 ];
 /** Same shape as GET /api/market/leaderboard; the order shifts with the strategy. */
+const methodWeights = { value: 0.22, quality: 0.2, growth: 0.2, momentum: 0.18, timing: 0.12, risk: 0.08 };
+const methodMetric = { value: 'earnings_yield_pct', quality: 'net_margin_pct', growth: 'revenue_growth_pct', momentum: 'momentum_12_1_pct', timing: 'pullback_fit', risk: 'volatility_pct' };
+const methodMetricLabel = { value: 'Value', quality: 'Quality', growth: 'Growth', momentum: 'Momentum', timing: 'Entry timing', risk: 'Low risk' };
 function leaderboard(universe, strategy) {
   const base = [
     ['GOOGL', 84, 'A', [82, 88, 74, 79, 70, 66], 172.4, 21.3, 14, 31, -6, 52, 'value: P/E 21.3, PEG 1.1; quality: net margin 28%, FCF margin 22%; momentum: 12-1M +31%, above 200-day', ''],
@@ -158,10 +161,27 @@ function leaderboard(universe, strategy) {
     const row = { symbol, score: s, grade, coverage_pct: 100, price, currency: 'USD', as_of: '2026-10-28', pe_ttm: pe, revenue_growth_pct: rev,
       momentum_12_1_pct: mom, from_high_pct: high, rsi14: rsi, above_sma200: !flags.includes('below_sma200'), reasons, flags, ttm_through: '2026-09-30' };
     factors.forEach((k, i) => { row[k] = f[i]; });
+    // The server adds this when asked to explain the score (?explain=1).
+    row.listing = { exchange: 'US listing (exchange not recorded)', country: 'US', known: false };
+    row.discovery = { why: 'On the hand-picked US mega caps list; the maintainers chose it and no external record backs the choice.', source: 'Curated by the FloweySales maintainers', kind: 'curated', url: null, as_of: null };
+    row.metrics_source = { provider: 'YAHOO', price_as_of: '2026-10-28', fundamentals_through: '2026-09-30' };
+    row.breakdown = { missing_factor_score: 40, total: s, factors: factors.map((k, i) => ({
+      factor: k, weight: methodWeights[k] ?? 0, missing: false, score: f[i], contribution: Math.round(f[i] * (methodWeights[k] ?? 0) * 10) / 10,
+      metrics: [{ field: methodMetric[k], label: methodMetricLabel[k], value: 12.5, percentile: f[i], weight: 1, higher_is_better: true }] })) };
     return row;
   }).sort((a, b) => b.score - a.score).map((r, i) => ({ ...r, rank: i + 1 }));
   return { universe, strategy, provider: 'YAHOO', as_of: '2026-10-28', generated_at: '2026-10-28T15:30:00Z', rows,
-    unranked: [{ symbol: 'BRK-B', error: 'fewer than four reported quarters' }], universes: boardUniverses, strategies: boardStrategies };
+    unranked: [{ symbol: 'BRK-B', error: 'fewer than four reported quarters' }], universes: boardUniverses, strategies: boardStrategies,
+    universe_info: { id: universe, label: 'US mega caps', description: '25 large US-listed companies across sectors, picked by hand.', source: { kind: 'curated', name: 'Curated by the FloweySales maintainers', url: null, as_of: null,
+      rule: 'Hand-picked from among the largest US-listed companies when the list was written.', limitations: 'Not an official index and not re-checked against one.' } },
+    selection: { initial: rows.length + 1, ranked: rows.length, excluded: [{ symbol: 'BRK-B', reason: 'fewer than four reported quarters' }], countries: { US: rows.length }, exchanges: { 'US listing (exchange not recorded)': rows.length },
+      steps: [{ step: 'On the list', count: rows.length + 1 }, { step: 'No usable data', count: -1 }, { step: 'Ranked', count: rows.length }] },
+    provenance: { universe_id: universe, universe_hash: 'u1', inputs_hash: 'd1', price_dates: { newest: '2026-10-28', oldest: '2026-10-27' },
+      disclaimer: 'Research suggestion, not personalized financial advice. Scores are percentiles within this list from provider data, not predictions.',
+      methodology: { version: '2026-11-1', hash: 'm1', strategy, weights: methodWeights, factors,
+        factor_info: Object.fromEntries(factors.map(k => [k, { label: methodMetricLabel[k], question: `Question about ${k}?` }])),
+        metrics: Object.fromEntries(factors.map(k => [k, [{ field: methodMetric[k], label: methodMetricLabel[k], note: `How ${k} is measured.`, higher_is_better: true, weight: 1 }]])),
+        caps: ['momentum is capped at 35 when the price is below its 200-day average'], missing_factor_score: 40 } } };
 }
 
 /** Same shape as GET /api/market/backtest: a strategy curve and a flatter benchmark. */

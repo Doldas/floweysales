@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,30 +30,49 @@ const (
 	leaderboardMissingFactor = 40.0
 )
 
+// universeSource says where a list of companies comes from. A source the
+// code cannot back with a name, date or link says so instead of inventing one.
+type universeSource struct {
+	Kind        string  `json:"kind"` // curated | disclosure | custom
+	Name        string  `json:"name"`
+	URL         *string `json:"url"`   // the original record, when there is one
+	AsOf        *string `json:"as_of"` // the date the list is as of, when known
+	Rule        string  `json:"rule"`  // how companies were chosen
+	Limitations string  `json:"limitations"`
+}
+
 type leaderboardUniverse struct {
-	ID          string   `json:"id"`
-	Label       string   `json:"label"`
-	Description string   `json:"description"`
-	Benchmark   string   `json:"benchmark"` // index or ETF the backtest compares with
-	Symbols     []string `json:"symbols"`
+	ID          string         `json:"id"`
+	Label       string         `json:"label"`
+	Description string         `json:"description"`
+	Benchmark   string         `json:"benchmark"` // index or ETF the backtest compares with
+	Region      string         `json:"region,omitempty"`
+	Countries   []string       `json:"countries,omitempty"`
+	Source      universeSource `json:"source"`
+	Symbols     []string       `json:"symbols"`
 	// Persona and AsOf mark a universe built from a character's reference
 	// portfolio, and the date of the disclosure it comes from.
 	Persona string `json:"persona,omitempty"`
 	AsOf    string `json:"as_of,omitempty"`
 }
 
-// Universes use Yahoo-style tickers, the default provider's format.
-var leaderboardUniverses = []leaderboardUniverse{
-	{ID: "us_mega", Label: "US mega caps", Description: "The 25 largest US-listed companies across sectors.",
-		Benchmark: "SPY", Symbols: []string{"AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "AVGO", "TSLA", "BRK-B", "JPM", "LLY", "V", "MA", "UNH", "XOM", "COST", "WMT", "HD", "PG", "JNJ", "NFLX", "ABBV", "ORCL", "CRM", "AMD"}},
-	{ID: "us_tech", Label: "US technology", Description: "Large US software, semiconductor and internet companies.",
-		Benchmark: "SPY", Symbols: []string{"AAPL", "MSFT", "NVDA", "AVGO", "ORCL", "CRM", "AMD", "ADBE", "INTU", "QCOM", "TXN", "NOW", "AMAT", "MU", "PANW", "ANET", "KLAC", "LRCX", "SNPS", "CDNS", "ADI", "CSCO", "IBM", "UBER", "SHOP"}},
-	{ID: "us_dividend", Label: "US dividend & value", Description: "Established US dividend payers in staples, energy, health care, telecom, industrials and banks.",
-		Benchmark: "SPY", Symbols: []string{"JNJ", "PG", "KO", "PEP", "XOM", "CVX", "ABBV", "MRK", "PFE", "VZ", "T", "MO", "PM", "MMM", "IBM", "CSCO", "HD", "MCD", "LOW", "TXN", "UPS", "CAT", "JPM", "BAC", "WFC"}},
-	{ID: "se_large", Label: "Sweden large caps", Description: "Stockholm large caps in the style of OMXS30.",
-		Benchmark: "^OMX", Symbols: []string{"ABB.ST", "ALFA.ST", "ASSA-B.ST", "AZN.ST", "ATCO-A.ST", "BOL.ST", "EPI-A.ST", "EQT.ST", "ERIC-B.ST", "ESSITY-B.ST", "EVO.ST", "GETI-B.ST", "HEXA-B.ST", "HM-B.ST", "INVE-B.ST", "NDA-SE.ST", "NIBE-B.ST", "SAAB-B.ST", "SAND.ST", "SCA-B.ST", "SEB-A.ST", "SHB-A.ST", "SKF-B.ST", "SWED-A.ST", "TEL2-B.ST", "TELIA.ST", "VOLV-B.ST", "ELUX-B.ST", "KINV-B.ST", "SINCH.ST"}},
-	{ID: "eu_leaders", Label: "European leaders", Description: "Large companies listed in Amsterdam, Frankfurt, Paris, Zurich, Copenhagen, Madrid and London.",
-		Benchmark: "^STOXX50E", Symbols: []string{"ASML.AS", "SAP.DE", "NOVO-B.CO", "MC.PA", "NESN.SW", "ROG.SW", "NOVN.SW", "AZN.L", "SHEL.L", "OR.PA", "SIE.DE", "TTE.PA", "ALV.DE", "SU.PA", "AIR.PA", "ULVR.L", "HSBA.L", "BNP.PA", "SAN.PA", "IBE.MC", "DTE.DE", "RMS.PA", "ABBN.SW", "ADYEN.AS", "INGA.AS"}},
+//go:embed universes.json
+var universesJSON []byte
+
+// Universes use Yahoo-style tickers, the default provider's format. The
+// curated lists live in universes.json so they can be reviewed and versioned
+// like data, with their source stated beside the symbols.
+var leaderboardUniverses = loadCuratedUniverses()
+
+func loadCuratedUniverses() []leaderboardUniverse {
+	var file struct {
+		Version   string                `json:"version"`
+		Universes []leaderboardUniverse `json:"universes"`
+	}
+	if err := json.Unmarshal(universesJSON, &file); err != nil {
+		panic("universes.json: " + err.Error())
+	}
+	return file.Universes
 }
 
 func init() {
@@ -81,7 +101,10 @@ func referenceUniverses() []leaderboardUniverse {
 		out = append(out, leaderboardUniverse{
 			ID: "ref_" + p.ID, Label: labels[p.ID],
 			Description: fmt.Sprintf("The largest positions in the public disclosure of %s as of %s. Today's holdings only: a backtest on this list looks back through companies someone chose to hold, so it flatters the past.", ref.Filer, ref.Period),
-			Benchmark:   "SPY", Symbols: symbols, Persona: p.ID, AsOf: ref.Period,
+			Benchmark:   "SPY", Symbols: symbols, Persona: p.ID, AsOf: ref.Period, Region: "north_america", Countries: []string{"US"},
+			Source: universeSource{Kind: "disclosure", Name: ref.Filer + disclosureForm(ref.Form), URL: stringPtr(ref.SourceURL), AsOf: stringPtr(ref.Period),
+				Rule:        "The largest positions with a ticker in the filer's public disclosure, up to 25.",
+				Limitations: "Today's holdings only: a disclosure lists what was held on one date, so a backtest on it looks back through companies someone chose to hold."},
 		})
 	}
 	return out
@@ -325,6 +348,14 @@ func leaderboardGrade(score float64) string {
 // scoreLeaderboard ranks metric rows for a strategy. Rows with an error are
 // left out; the caller reports them separately.
 func scoreLeaderboard(rows []map[string]any, strategy leaderboardStrategy) []map[string]any {
+	return scoreLeaderboardDetailed(rows, strategy, false)
+}
+
+// scoreLeaderboardDetailed also attaches a "breakdown" to every entry when
+// explain is set: per factor its weight, score, caps and contribution to the
+// total, and per metric its value, percentile and weight. Scores are the same
+// either way.
+func scoreLeaderboardDetailed(rows []map[string]any, strategy leaderboardStrategy, explain bool) []map[string]any {
 	ranked := []map[string]any{}
 	for _, row := range rows {
 		if _, failed := row["error"]; !failed {
@@ -335,12 +366,22 @@ func scoreLeaderboard(rows []map[string]any, strategy leaderboardStrategy) []map
 	for i := range ranked {
 		factorScores[i] = map[string]float64{}
 	}
+	metricDetail := make([]map[string][]map[string]any, len(ranked))
+	for i := range ranked {
+		metricDetail[i] = map[string][]map[string]any{}
+	}
 	for _, factor := range leaderboardFactors {
 		sums, weights := make([]float64, len(ranked)), make([]float64, len(ranked))
 		for _, m := range leaderboardFactorMetrics[factor] {
 			for i, p := range percentiles(ranked, m.field, m.higher) {
 				sums[i] += p * m.weight
 				weights[i] += m.weight
+				if explain {
+					metricDetail[i][factor] = append(metricDetail[i][factor], map[string]any{
+						"field": m.field, "label": leaderboardMetricInfo[m.field].Label, "value": ranked[i][m.field],
+						"percentile": math.Round(p), "weight": m.weight, "higher_is_better": m.higher,
+					})
+				}
 			}
 		}
 		for i := range ranked {
@@ -353,20 +394,29 @@ func scoreLeaderboard(rows []map[string]any, strategy leaderboardStrategy) []map
 	for i, row := range ranked {
 		fs := factorScores[i]
 		// Hard caps keep a relative ranking honest about absolute problems.
-		capFactor := func(factor string, max float64) {
+		type capNote struct {
+			from, to float64
+			reason   string
+		}
+		caps := map[string]capNote{}
+		capFactor := func(factor string, max float64, reason string) {
 			if v, ok := fs[factor]; ok {
 				fs[factor] = math.Min(v, max)
+				if v > max {
+					caps[factor] = capNote{from: v, to: max, reason: reason}
+				}
 			}
 		}
 		if eps, ok := row["eps_ttm"].(float64); ok && eps <= 0 {
-			capFactor("value", 15)
+			capFactor("value", 15, leaderboardCapRules[0])
 		}
 		if rsi, ok := row["rsi14"].(float64); ok && rsi >= 75 {
-			capFactor("timing", 20)
+			capFactor("timing", 20, leaderboardCapRules[1])
 		}
 		if above, ok := row["above_sma200"].(bool); ok && !above {
-			capFactor("momentum", 35)
+			capFactor("momentum", 35, leaderboardCapRules[2])
 		}
+		factorsOut := []map[string]any{}
 		score, present := 0.0, 0
 		entry := map[string]any{"symbol": row["symbol"]}
 		for _, factor := range leaderboardFactors {
@@ -378,6 +428,17 @@ func scoreLeaderboard(rows []map[string]any, strategy leaderboardStrategy) []map
 				v = leaderboardMissingFactor
 			}
 			score += v * strategy.Weights[factor]
+			if explain {
+				f := map[string]any{"factor": factor, "weight": strategy.Weights[factor], "missing": !ok, "score": math.Round(v),
+					"contribution": math.Round(v*strategy.Weights[factor]*10) / 10, "metrics": metricDetail[i][factor]}
+				if c, capped := caps[factor]; capped {
+					f["capped_from"], f["cap_reason"] = math.Round(c.from), c.reason
+				}
+				factorsOut = append(factorsOut, f)
+			}
+		}
+		if explain {
+			entry["breakdown"] = map[string]any{"factors": factorsOut, "missing_factor_score": leaderboardMissingFactor, "total": math.Round(score*10) / 10}
 		}
 		score = math.Round(score*10) / 10
 		entry["score"] = score
@@ -728,10 +789,19 @@ func (e *Engine) registerLeaderboardRoutes() {
 				asOf = d
 			}
 		}
+		info, found := findLeaderboardUniverse(universe)
+		if !found {
+			info = customUniverse(symbols)
+		}
+		scored := scoreLeaderboardDetailed(rows, strategy, q.Get("explain") == "1")
+		annotateDiscovery(info, provider.String(), scored)
+		listed := info
+		listed.Symbols = nil // the list itself is in "universes"; here only its description
 		writeJSON(w, http.StatusOK, map[string]any{
 			"universe": universe, "strategy": strategy.ID, "provider": provider.String(), "as_of": asOf,
-			"generated_at": time.Now().UTC().Format(time.RFC3339),
-			"rows":         scoreLeaderboard(rows, strategy), "unranked": splitLeaderboardRows(rows),
+			"generated_at":  time.Now().UTC().Format(time.RFC3339),
+			"universe_info": listed, "selection": buildSelection(info, symbols, rows, scored),
+			"rows": scored, "unranked": splitLeaderboardRows(rows),
 			"universes": leaderboardUniverses, "strategies": leaderboardStrategies,
 			"provenance": leaderboardProvenance(strategy, universe, symbols, rows),
 		})

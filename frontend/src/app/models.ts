@@ -308,11 +308,47 @@ export interface LeaderboardRow {
   /** Competing explanations, separated by semicolons. */
   alternatives?: string;
   fundamentals_age_days?: number;
+  /** Present when the request asked to explain the score. */
+  breakdown?: LeaderboardBreakdown;
+  /** Why the company is on the list, where its numbers come from, and which listing it is: three separate answers. */
+  discovery?: { why: string; source: string; kind: string; url: string | null; as_of: string | null };
+  metrics_source?: { provider: string; price_as_of?: string; fundamentals_through?: string };
+  listing?: { exchange: string; mic?: string; country?: string; known: boolean };
+}
+
+export interface UniverseSource { kind: 'curated' | 'disclosure' | 'custom' | string; name: string; url: string | null; as_of: string | null; rule: string; limitations: string }
+export interface LeaderboardSelection {
+  initial: number; ranked: number; excluded: { symbol: string; reason: string }[];
+  steps: { step: string; count: number; detail?: string }[];
+  countries: Record<string, number>; exchanges: Record<string, number>;
+}
+
+export interface LeaderboardMetricDetail {
+  field: string; label: string; value?: number | boolean | string; percentile: number; weight: number; higher_is_better: boolean;
+}
+export interface LeaderboardFactorDetail {
+  factor: string; weight: number; missing: boolean; score: number; contribution: number;
+  capped_from?: number; cap_reason?: string; metrics?: LeaderboardMetricDetail[];
+}
+export interface LeaderboardBreakdown { factors: LeaderboardFactorDetail[]; missing_factor_score: number; total: number }
+
+/** How a ranking is computed, as the server describes it. */
+export interface LeaderboardMethodMetric { field: string; label: string; note: string; higher_is_better: boolean; weight: number }
+export interface LeaderboardMethodology {
+  version: string; hash: string; strategy?: string;
+  weights?: Record<string, number>;
+  factors?: string[];
+  factor_info?: Record<string, { label: string; question: string }>;
+  metrics?: Record<string, LeaderboardMethodMetric[]>;
+  caps?: string[];
+  missing_factor_score?: number;
+  scale?: string;
+  missing_data?: string;
 }
 
 /** What a ranking was computed with, so it can be reproduced and judged. */
 export interface LeaderboardProvenance {
-  methodology: { version: string; hash: string };
+  methodology: LeaderboardMethodology;
   universe_id: string;
   universe_hash: string;
   inputs_hash: string;
@@ -320,7 +356,7 @@ export interface LeaderboardProvenance {
   disclaimer: string;
 }
 
-export interface LeaderboardOption { id: string; label: string; description: string; benchmark?: string }
+export interface LeaderboardOption { id: string; label: string; description: string; benchmark?: string; source?: UniverseSource; region?: string; countries?: string[] }
 
 export interface LeaderboardResponse {
   universe: string;
@@ -330,6 +366,9 @@ export interface LeaderboardResponse {
   generated_at: string;
   rows: LeaderboardRow[];
   unranked: { symbol: string; error: string }[];
+  /** The list that was ranked, with its source; absent from older servers. */
+  universe_info?: LeaderboardOption;
+  selection?: LeaderboardSelection;
   universes: LeaderboardOption[];
   strategies: LeaderboardOption[];
   provenance?: LeaderboardProvenance;

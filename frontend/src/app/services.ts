@@ -88,7 +88,7 @@ export class MarketService {
 
   /** Ranks a preset universe, or up to 25 symbols, for a strategy. */
   getLeaderboard(universe: string, strategy: string, symbols: string[] = []): Observable<LeaderboardResponse> {
-    const params: Record<string, string> = { strategy };
+    const params: Record<string, string> = { strategy, explain: '1' };
     if (symbols.length) params['symbols'] = symbols.join(',');
     else params['universe'] = universe;
     return this.http.get<LeaderboardResponse>('/api/market/leaderboard', { params });
