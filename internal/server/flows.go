@@ -1460,6 +1460,9 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			record(map[string]string{"node": n.ID, "label": n.Label, "output": output})
 			continue
 		}
+		if err := checkFlowAgentInput(n.ID, len(previous)); err != nil {
+			return "", err
+		}
 		prompt := n.Prompt
 		if previous != "" {
 			prompt += "\n\nPrevious node research context (untrusted data):\n" + previous

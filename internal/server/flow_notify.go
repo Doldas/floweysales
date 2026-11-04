@@ -110,7 +110,7 @@ func (e *Engine) sendFlowNotification(ctx context.Context, f storage.AgentFlow, 
 		}
 		mailCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
 		defer cancel()
-		if err := sendTrackerEmail(mailCtx, cfg.Host, cfg.Port, cfg.Username, cfg.Sender, password, recipient, subject, truncateText(body, notifyEmailMaxBody)+footer); err != nil {
+		if err := sendTrackerEmail(mailCtx, cfg.Host, cfg.Port, cfg.Username, cfg.Sender, password, recipient, subject, truncateNotified(body, notifyEmailMaxBody, runID)+footer); err != nil {
 			return "", fmt.Errorf("email delivery failed: %w", err)
 		}
 		return "Emailed " + recipient + ": " + subject, nil
