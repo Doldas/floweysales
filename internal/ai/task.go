@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"floweysales/internal/sources"
 )
 
 // A task is a run with a checklist of required deliverables, an evidence
@@ -69,7 +71,17 @@ type Checkpoint struct {
 	// NoTools records that the run had tools disabled, so a resume keeps the
 	// same rules for what counts as evidence.
 	NoTools bool `json:"no_tools,omitempty"`
+	// Sources, Audit and Removed are what the run retrieved and what the
+	// citation check found in the answer so far; Evidence is the policy it ran
+	// under. A resume restores them, so [S3] keeps its meaning.
+	Sources  []sources.Source  `json:"sources,omitempty"`
+	Audit    []sources.Finding `json:"audit,omitempty"`
+	Removed  []sources.Finding `json:"removed,omitempty"`
+	Evidence *EvidencePolicy   `json:"evidence,omitempty"`
 }
+
+// maxCheckpointSources bounds the sources a checkpoint keeps.
+const maxCheckpointSources = 60
 
 // NewDeliverables builds a pending checklist from titles, dropping blanks and
 // duplicates and capping its length.
