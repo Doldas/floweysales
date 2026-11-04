@@ -45,9 +45,13 @@ The badge in the top bar describes four separate things, and you can open it for
 - **The connection:** whether the app is connected to the price stream.
 - **Freshness:** how long ago the last update arrived.
 - **Data kind:** what the provider delivers, such as real-time quotes or bar closes.
-- **Market session:** shown as unknown unless a provider reports it.
+- **Market session:** open or closed. If the provider states it, that is used. Otherwise it is computed from regular trading hours for exchanges whose ticker suffix is known (for example .ST, .L, .DE, .HK, .T), which does not know holidays or early closes: "closed" on a weekend or outside hours is reliable, "open" is not a promise. Bare tickers and unknown suffixes show unknown.
 
-The wording is deliberate. **Live prices** appears only when the provider says its quotes are real time and an update arrived recently. **Last update 14:32 UTC** means prices are arriving but are not confirmed real time. **No new prices since …** means the connection is open but nothing recent came in; the market may simply be closed. Use Reconnect in the badge if the stream seems stuck.
+The wording is deliberate. **Live prices** appears only when the provider says its quotes are real time and an update arrived recently. **Last update 14:32 UTC** means prices are arriving but are not confirmed real time. **No new prices since …** means the connection is open but nothing recent came in; the market may simply be closed. When a provider states the time of the last quote, the badge reads **Last quote 14:32 UTC**; a stated delay reads **Delayed 15 min** and overrides any real-time claim. A closed market reads **Market closed · last 21:00 UTC** instead of stale, with no Reconnect. Providers that do not send a quote time or delay show those as unknown. Use Reconnect in the badge if the stream seems stuck.
+
+## The selected instrument
+
+The instrument chip in the top bar follows you across pages. Open the search with nothing typed to see your **Favorites** (star the selected instrument) and your **Recent** instruments, each with exchange and provider. Favorites and recent instruments are kept in this browser. On phones, the search button opens a full-screen picker. In live mode, choosing an instrument selects it without starting to track it: the badge says "Not tracked live" and a **Track live** button starts the tracker (up to 16). Pages that do not use the instrument, such as Flows or Settings, mute the chip and say so.
 
 ## Fundamentals
 

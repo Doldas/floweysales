@@ -41,7 +41,7 @@ The curated lists are picked by the maintainers by hand. They are not official i
 
 ## Coverage by region
 
-Open **Coverage by region** to see which of the six world regions have a list. A region is listed as covered only when a list is offered and its prices and reports have been checked. Asia, Africa, South America and Oceania show "No supported market yet". Nothing is filled in for them.
+Open **Coverage by region** to see which of the six world regions have a list. A region is listed as covered only when a list is offered and its prices and reports have been checked. Asia, Africa, South America and Oceania show "No supported market yet". Nothing is filled in for them. A maintainer can run `go run ./cmd/universe-coverage` to check candidate lists against a provider before any region is added (see the repository's `docs/universe-coverage.md`).
 
 ## Reading the table
 
@@ -52,6 +52,8 @@ Each row shows rank, company with a grade, the score, six small factor bars, the
 - **Factors:** Value, Quality, Growth, Momentum, Entry timing and Low risk. Hover over a bar to see its number; a flat bar means no data.
 - **Why it ranks** lists the biggest contributors, warning flags (for example Overbought, Below 200-day, Death cross, Unprofitable, Shrinking revenue, No fundamentals, Stale price, Old fundamentals), a **confidence** level with a note, and **Against**, the strongest competing explanations for the rank.
 - Select a row to open the company in Markets. **Score breakdown** shows every metric, its value, percentile and weight.
+
+When the table mixes data of different ages (some prices older than the newest, companies with no reported quarter, an old newest price, or a list with no review date), a warning above the table says so and the method panel lists the counts.
 
 Companies whose provider gave no usable prices or fewer than four reported quarters are left out, and the origin panel names each one with the reason. If no company has enough data, the screen says so and asks whether a provider plugin is installed.
 
@@ -76,6 +78,14 @@ The panel **Where do these companies come from?** answers three questions separa
 - **Why does it rank where it does?** The score breakdown.
 
 The panel also traces the list to the ranking: how many companies were on it, how many were left out for lack of data, how many were ranked, and where they trade. **Download list as CSV** or **as JSON** saves the table.
+
+## Your objective and constraints
+
+On the Markets page you can save an **objective** (preserve capital or grow) and **constraints** (a volatility limit, leave out companies with non-positive earnings, require fundamentals, a list of symbols never to show). The objective tilts the factor weights by documented multipliers; constraints remove companies after scoring, and each removal is named. Your choices are stored for you only, are part of the method fingerprint, and **Show without them** returns the plain ranking. Flow nodes and the agent's ranking tool never apply them.
+
+## Bias statements
+
+The panel states that the list is today's, not the list of an earlier date, so past rankings and backtests flatter the past. It also gives the share of listed companies dropped for lack of data, the median 12-month change of the top ranks against the whole list (labeled in-sample, with at least six companies), and market concentration. The ranking, the list and each row carry a source badge (method, provider, price date). Where the provider is Yahoo, a row links to the provider's own quote page; other providers get no link.
 
 ## What you can do from here
 

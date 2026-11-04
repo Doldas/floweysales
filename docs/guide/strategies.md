@@ -45,6 +45,9 @@ The "In words" section reads the whole strategy back. **Save strategy**, **Save 
 - A line states the period, the data provider and the cost used, followed by a line on what the latest bar says: whether an entry signal is present and whether the strategy would be in a position.
 - Tiles show Strategy return, Buy and hold, Worst fall, Trades, Win rate, Profit factor, Average R and Time in market.
 - The price chart marks entries and exits and draws the Fibonacci levels of the latest swing. A second chart compares the strategy's equity with buy and hold. Both charts start at 100.
+- **Named stress windows** measure the strategy and the benchmark over three fixed periods, only when the replay fully covers them: the 2008 crisis (2007-10-09 to 2009-03-09), the pandemic crash (2020-02-19 to 2020-03-23) and the 2022 rate-rise bear market (2022-01-03 to 2022-10-12). Each shows total return (not per year), the benchmark's return, the difference and the worst drop. Windows the replay does not cover are listed as not covered; a backtest fetches at most 10 years of prices, so the 2008 window is currently always listed that way. The windows were picked with hindsight.
+- **Results by market regime** (with a benchmark) labels each day as uptrend or downtrend (the benchmark's close against its own 200-day average) and calm or volatile (63-day volatility against a fixed 20% a year), using only data up to the previous close. For each regime it shows the number of days, the share of the period and the return per year of the strategy, the benchmark and the difference. A regime shorter than 63 days gets no yearly figures. The labels describe the past; they predict nothing.
+- **Trade count and best periods:** the number of buys and sells, and the return with the three best rebalance periods removed. Fewer than 30 trades, or a positive result that disappears without a few periods, adds a warning.
 - **Read this before trusting the result** lists the warnings that apply to this run.
 - **Consistency across the period** cuts the history into four consecutive windows and scores the trades by when they were entered. The rules are the same in each window. A result that holds in only one window leans on that stretch.
 - **Show trades** lists every trade with entry, exit, reason, days held, return and R.
@@ -68,9 +71,13 @@ Controls: **Top 5, 10 or 15** holdings, **monthly or quarterly** rebalancing, an
 - **Read this before trusting the result** lists the stated biases, for example survivorship bias (the list is today's, so companies that dropped out are missing), a benchmark without dividends, few reported quarters in the early years, or fewer than 24 rebalances.
 - **Show rebalances** lists the holdings picked at each rebalance, the turnover and the share of holdings with fundamentals.
 
+### Walk-forward testing
+
+True walk-forward testing (fit on one period, test on the next) is not offered for these strategies. The factor rankings have no fitted parameters, so there is nothing to fit, and a split would only repeat the consecutive parts under another name. The result says so.
+
 ### Test across markets and periods
 
-Under **Test across markets and periods**, tick up to four lists and any of 3, 5 and 10 years, then run. At most 12 backtests run at once. The result is a table by list and period, with the spread (smallest, median and largest) of each figure and a list of limitations. Failed cells show their error and are left out of the spread.
+Under **Test across markets and periods**, tick up to four lists and any of 3, 5 and 10 years, then run. At most 12 backtests run at once. The result is a table by list and period, with the spread (smallest, median and largest) of each figure and a list of limitations. Failed cells show their error and are left out of the spread. While the run is going, the panel shows how many backtests have finished (for example "Backtesting · 3 of 12"). With three or more results the limitations also warn that comparing many variants and choosing the best one is a way to fool yourself.
 
 ### How much do the settings matter?
 

@@ -49,7 +49,7 @@ The agent can open a search hit by its id. It cannot be made to fetch an address
 
 ### Evidence mode
 
-The **Evidence** selector in the chat sets how strictly the agent is held to its citations. It is your own choice, saved in your browser, and administrators have no say in it.
+The **Evidence** selector in the chat sets how strictly the agent is held to its citations. It is your own choice, and administrators have no say in it. **Save as my default** stores your settings on the server, so new chats and team runs start from them; **Remove default** goes back to Standard. A choice made in the chat itself always wins over the saved default.
 
 | Mode | What happens |
 | --- | --- |
@@ -57,7 +57,14 @@ The **Evidence** selector in the chat sets how strictly the agent is held to its
 | **Evidence only** | The answer is held until the check passes. A draft that fails goes back to the model with its findings, at most twice. If problems remain, you see the last draft with a warning that the flagged sentences are unverified. The agent is asked to say "insufficient verifiable evidence" instead of filling gaps from memory. |
 | **Primary sources only** | As Evidence only, and only primary filings, such as SEC filings the agent opened, count as support. A web page does not. |
 
-Evidence mode applies to the Research Agent. It is not yet available for agent teams or flow nodes.
+Optional limits apply to the two strict modes:
+
+- **If a draft still fails:** show it with a warning (the default) or **block** it. Blocking removes the sentences that still fail after the corrections and says how many were removed and why; if nothing is left, the answer is "Insufficient verifiable evidence".
+- **Newest source age:** a source older than the limit, or with no publication date, does not count as support. Web search results carry no machine-readable date today, so under an age limit only filings can support a sentence.
+- **Source types:** allow or deny primary filings and web pages. Deny wins.
+- **Reachability:** a source the answer cites but the agent never opened is checked with a short request. A dead link is flagged and the answer goes back for correction. A link the safety checks refuse is not requested. Links that answer with a login or rate-limit status count as reachable.
+
+Evidence mode also applies to agent teams (every member answers under it; a chair's summary has no sources and is not checked), to teams the Research Agent delegates to, and to flow agent nodes (a failing node attempt is retried, or the failing sentences are blocked). The check finds unsupported figures, links and quotes. It does not judge whether a claim follows from its source, and the labels the model puts on claims are not verified.
 
 ## Agent team
 
@@ -72,6 +79,10 @@ The Agent team page puts several fictional investor characters on one question. 
 
 Each character sees only your question and its own tool results, never another character's answer.
 
+### Budget
+
+Set optional ceilings for a run: tokens, cost in US dollars and tool calls, counted across all characters and the chair. A run that reaches one stops and names it; finished answers are kept and the page shows what the run used. Cost comes from the prices an administrator entered in the model profiles. If a model has no prices, or the endpoint does not report token usage, cost is shown as unknown rather than zero, and the token and cost ceilings cannot be enforced (the tool-call ceiling and time limits still hold, and you are told). A ceiling is checked before each model round, so a run can end one round past it. Ceilings are saved with a saved team.
+
 ### Saved teams
 
 Name a team and press **Save team** to keep the characters, the chair setting and each character's model profile. You can keep up to 20 saved teams. Load or delete one from the list. If a profile has since been disabled or deleted, the team shows which character lost it, and that character uses the default.
@@ -79,7 +90,15 @@ Name a team and press **Save team** to keep the characters, the chair setting an
 ## Limits
 
 - Models are served from one endpoint set up by the administrator. A profile chooses among the models that endpoint offers.
-- Costs of profiles are shown, not enforced.
-- The citation check covers web search and SEC section sources. Teams, flows and other tools are not registered in the source list yet.
-- There is no reachability check: a cited link may have changed since the agent read it.
+- Cost ceilings need prices in the model profile and a usage report from the endpoint; without them only the tool-call ceiling is enforced.
+- The citation check covers web search, opened pages and SEC section sources. Other tools are not registered in the source list yet.
+- A link that was reachable when checked may change later, and a page can be reachable and still not say what the answer claims.
 - An answer is a summary of what the tools returned. Check dates, especially for numbers.
+
+## Required parts and saved tasks
+
+In the chat, list **Required parts** (one per line, up to 12) to turn a question into a saved task. A checklist shows each part as done, reported missing or not yet reported, and a task with missing parts is not reported as finished. **Saved tasks** lists your tasks with status, rounds, tool calls and the last update in UTC. **Resume** continues from the server's checkpoint, with the sources gathered so far; the chat shows only the continuation and uses the default model and persona. **Delete** removes a task.
+
+## Teams and profiles in flows
+
+A flow agent node can use one of the model profiles an administrator prepared (instead of a raw model) and can hand its question to one of your own saved teams. A node with a team can only delegate to that team. The team's members get the research tools flows may grant, never your personal data. A disabled or deleted profile fails the node instead of silently switching models. See [Flow Studio](flows.md).
