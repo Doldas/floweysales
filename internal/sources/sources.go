@@ -230,7 +230,8 @@ const (
 	SnippetOnly = "snippet_only" // cites a search hit the agent never read
 	FigureNotIn = "figure_mismatch"
 	Uncited     = "uncited"
-	NotPrimary  = "not_primary" // a secondary source cited where only primary filings count
+	NotPrimary  = "not_primary"    // a secondary source cited where only primary filings count
+	QuoteNotIn  = "quote_mismatch" // a quoted passage that is not in the cited text
 )
 
 // Options tunes an audit.
@@ -261,6 +262,7 @@ var (
 //   - a figure in a sentence citing only unread (listed) sources: snippet_only
 //   - a figure that is not in the cited excerpts: figure_mismatch
 //   - a figure that appears in a retrieved source, stated with no citation: uncited
+//   - a quoted passage (five words or more) that is not in the cited text: quote_mismatch
 //
 // Only sentences with a figure (see grounding.Figures) are held to the
 // figure rules, since prose cannot be checked mechanically.
@@ -314,6 +316,11 @@ func AuditWith(answer string, r *Registry, opts Options) []Finding {
 				out = append(out, Finding{Kind: Fabricated, Sentence: shown, Source: link, Detail: "No tool returned this URL in this run."})
 			}
 		}
+		if len(excerpts) > 0 {
+			for _, q := range missingQuotes(citation.ReplaceAllString(text, ""), excerpts) {
+				out = append(out, Finding{Kind: QuoteNotIn, Sentence: shown, Detail: "The quoted passage “" + q + "” is not in the cited text."})
+			}
+		}
 		figures := grounding.Figures(citation.ReplaceAllString(text, ""))
 		if len(figures) == 0 {
 			continue
@@ -359,4 +366,58 @@ func splitSentences(text string) []string {
 		out = append(out, text[start:])
 	}
 	return out
+}
+
+const minQuoteWords = 5
+
+var (
+	quoted    = regexp.MustCompile(`"([^"]{10,600})"|“([^”]{10,600})”`)
+	quoteGaps = regexp.MustCompile(`\s*(?:\[\s*(?:\.{3}|…)\s*\]|\.{3}|…)\s*`)
+	dashes    = strings.NewReplacer("\u2013", "-", "\u2014", "-", "\u2018", "'", "\u2019", "'", "\u201c", `"`, "\u201d", `"`, "\u00a0", " ")
+)
+
+// foldText lower-cases and collapses whitespace so a quote that differs from
+// the source only in case, spacing or typographic punctuation still matches.
+func foldText(s string) string {
+	return strings.Join(strings.Fields(strings.ToLower(dashes.Replace(s))), " ")
+}
+
+// missingQuotes returns the quoted passages of sentence (five words or more)
+// that none of the excerpts contain. A quote with an ellipsis is split there,
+// and each part of five words or more must be found. Short quotes are skipped:
+// they are names and terms, not claims about what a source said.
+func missingQuotes(sentence string, excerpts []string) []string {
+	var folded []string
+	for _, e := range excerpts {
+		folded = append(folded, foldText(e))
+	}
+	var missing []string
+	for _, m := range quoted.FindAllStringSubmatch(sentence, -1) {
+		q := m[1] + m[2]
+		if len(strings.Fields(q)) < minQuoteWords {
+			continue
+		}
+		found := true
+		for _, part := range quoteGaps.Split(q, -1) {
+			part = strings.Trim(foldText(part), " .,;:")
+			if len(strings.Fields(part)) < minQuoteWords {
+				continue
+			}
+			in := false
+			for _, e := range folded {
+				if strings.Contains(e, part) {
+					in = true
+					break
+				}
+			}
+			if !in {
+				found = false
+				break
+			}
+		}
+		if !found {
+			missing = append(missing, strings.TrimSpace(q))
+		}
+	}
+	return missing
 }

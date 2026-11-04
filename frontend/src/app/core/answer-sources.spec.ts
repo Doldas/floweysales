@@ -22,6 +22,7 @@ test('a clean audit never claims the answer is true', () => {
 
 test('finding labels and links', () => {
   assert.equal(findingLabel('snippet_only'), 'Search result not opened');
+  assert.equal(findingLabel('quote_mismatch'), 'Quote not in the cited text');
   assert.equal(findingLabel('new_kind'), 'new kind');
   assert.equal(safeUrl('https://sec.gov/x'), 'https://sec.gov/x');
   assert.equal(safeUrl('javascript:alert(1)'), '');
