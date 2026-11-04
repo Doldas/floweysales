@@ -11,7 +11,7 @@ Which surfaces describe the origin of what they show, using the contract in
 | Quotes and feed status | Planned | `QuoteSnapshot` already has source, as-of and fetched time. |
 | Saved backtest runs | Partial | `provenance` on a saved run and in its JSON export: method id and version, production time, provider and last price date where recorded; `partial` for batch and settings checks, which do not record a provider. Shown with `fs-source`. Live (unsaved) backtests and the Strategies page are not yet covered. |
 | Strategy results | Planned | Calculated; needs method ids. |
-| Agent answers (chat) | Partial | See [agent-evidence.md](agent-evidence.md). Source registry and citation check for `search_web` and `get_sec_section` (`internal/sources`). Teams, flows and other tools are not yet registered. |
+| Agent answers (chat) | Partial | See [agent-evidence.md](agent-evidence.md). Source registry and citation check for `search_web`, `read_source` and `get_sec_section` (`internal/sources`), in chat, agent teams and flow agent nodes. Sources are stored with task runs (checkpoint) and flow agent steps (run history). Other tools are not yet registered; a team chair's summary is not checked. |
 | Financial statements | Planned | |
 
 States: **Covered** (API and UI), **Planned** (not started).

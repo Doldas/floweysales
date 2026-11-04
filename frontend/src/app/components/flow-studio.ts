@@ -20,13 +20,15 @@ import { FlowNotifyChannelsComponent } from './flow-notify-channels';
 import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES, SCREEN_FIELDS, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 import { formatUtcDateTime } from '../ui/datetime';
+import { findingLabel, patchNodeEvidence, removedSummary, settingsFromPolicy, settingsSummary, type AnswerFinding, type AnswerSource, type EvidencePolicy } from '../core/answer-sources';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'|'watchlist_quotes'|'technical_scan'|'fundamentals'|'sec_filings'|'news'|'leaderboard'|'screen'|'only_new'|'report_table'|'notify'|'insider_activity'|'macro_regime'|'portfolio_check'|'corporate_events'|'wealth_plan'|'backtest'; label:string; symbols?:string; universe?:string; strategy?:string; provider?:string; rule?:string; sort_by?:string; limit?:number; columns?:string; title?:string; key_fields?:string; cooldown_hours?:number; lookback_days?:number; forms?:string; kinds?:string; years?:number; channel?:'email'|'webhook'; subject?:string; skip_empty?:boolean; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number;persona?:string;require_grounding?:boolean; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'|'watchlist_quotes'|'technical_scan'|'fundamentals'|'sec_filings'|'news'|'leaderboard'|'screen'|'only_new'|'report_table'|'notify'|'insider_activity'|'macro_regime'|'portfolio_check'|'corporate_events'|'wealth_plan'|'backtest'; label:string; symbols?:string; universe?:string; strategy?:string; provider?:string; rule?:string; sort_by?:string; limit?:number; columns?:string; title?:string; key_fields?:string; cooldown_hours?:number; lookback_days?:number; forms?:string; kinds?:string; years?:number; channel?:'email'|'webhook'; subject?:string; skip_empty?:boolean; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number;persona?:string;require_grounding?:boolean;evidence?:EvidencePolicy; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FunctionDef { id:number; name:string; graph?:unknown }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow extends PublishState { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
-interface FlowRunStep {id:number;node:string;label:string;status:string;input?:string;output:string;output_bytes?:number;output_truncated?:boolean;output_stored?:boolean;error?:string;started_at?:string;created_at?:string;duration_ms?:number|null;attempts?:number|null;worker_attempt?:number|null;tool_calls?:ToolCall[]}
+interface FlowRunStep {id:number;node:string;label:string;status:string;input?:string;output:string;output_bytes?:number;output_truncated?:boolean;output_stored?:boolean;error?:string;started_at?:string;created_at?:string;duration_ms?:number|null;attempts?:number|null;worker_attempt?:number|null;tool_calls?:ToolCall[];sources?:StepSources}
+interface StepSources {attempt?:number;policy?:EvidencePolicy;sources:AnswerSource[];audit?:AnswerFinding[];removed?:AnswerFinding[]}
 interface FlowRun { id:number; parent_run_id?:number|null; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null; failed_node?:string|null; flow_revision?:number|null; attempts?:number; max_attempts?:number; queued_at?:string|null }
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
@@ -190,6 +192,14 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
         }
         <label class="checkbox-row"><input type="checkbox" [checked]="!!n.require_grounding" (change)="setGrounding(n.id,$any($event.target).checked)"> Require grounded figures</label>
         <p class="muted">Every figure in the answer must appear in {{n.tools?.length?'this attempt\'s tool results or ':''}}the node input, for example rows from a Watchlist or Fundamentals node. Otherwise the attempt fails and lists the unsupported figures.</p>
+        @if(n.output_mode!=='json'){
+          <label>Evidence mode <select [ngModel]="n.evidence?.mode||''" (ngModelChange)="setEvidence(n.id,{mode:$event})"><option value="">Off</option><option value="evidence_only">Evidence only</option><option value="primary_only">Primary sources only</option></select></label>
+          @if(n.evidence){
+            <label class="checkbox-row"><input type="checkbox" [checked]="n.evidence.on_failure==='block'" (change)="setEvidence(n.id,{block:$any($event.target).checked})"> Remove statements that fail the citation check</label>
+            <label>Only sources from the last (days, 0 = any age) <input type="number" min="0" max="3650" step="1" [ngModel]="n.evidence.max_age_days||0" (ngModelChange)="setEvidence(n.id,{maxAgeDays:+$event})"></label>
+            <p class="muted">{{evidenceSummary(n.evidence)}} The answer is held until its citations are checked, with up to two corrections. {{n.evidence.on_failure==='block'?'What still fails is removed.':'If a statement still fails, this node fails and its retries apply.'}} This checks citations, not whether the claims are true. The setting belongs to this flow.</p>
+          }
+        }
         @if(n.output_mode==='json'){
           <label>JSON output contract <textarea rows="8" spellcheck="false" [ngModel]="n.json_contract||''" (ngModelChange)="updateNodeFor(n.id,'json_contract',$event)" maxlength="3000" placeholder='{"type":"object","required":["symbol"],"properties":{"symbol":{"type":"string"},"score":{"type":"number"}}}'></textarea></label>
           <p class="muted">Optional contract: object properties, required fields and primitive types. Invalid results fail rather than reaching downstream nodes.</p>
@@ -553,6 +563,13 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
                   @if(step.worker_attempt!=null){<dt>Worker attempt</dt><dd>{{step.worker_attempt}}</dd>}
                 </dl>
                 @if(step.tool_calls?.length){<section class="tool-calls"><h5>Tool calls ({{step.tool_calls!.length}})</h5><ul>@for(call of step.tool_calls!;track $index){<li [class.tool-failed]="!call.ok" [title]="call.sha256?'Retrieved '+call.retrieved_at+' · SHA-256 '+call.sha256:''">{{describeToolCall(call)}}@if(call.sources?.length){<span class="tool-sources">Sources: {{call.sources!.join(', ')}}</span>}</li>}</ul></section>}
+                @if(step.sources?.sources?.length||step.sources?.removed?.length){<section class="tool-calls"><h5>Sources ({{step.sources!.sources.length}})</h5>
+                  @if(step.sources!.policy){<p class="muted">Evidence mode: {{step.sources!.policy!.mode==='primary_only'?'primary sources only':'evidence only'}}. {{evidenceSummary(step.sources!.policy!)}}</p>}
+                  <ul>@for(s of step.sources!.sources;track s.id){<li><span class="muted">[{{s.id}}]</span> {{s.title||s.url||s.tool}} · {{s.access==='read'?'read by the agent':'search result only'}}@if(s.published_at){ · published {{s.published_at}}}@if(s.document_id){ · {{s.document_id}}}</li>}</ul>
+                  @for(f of step.sources!.audit||[];track $index){<p class="tool-failed"><strong>{{findingLabel(f.kind)}}.</strong> {{f.detail}}</p>}
+                  @if(removedSummary(step.sources!.removed||[]);as removed){<p class="tool-failed">{{removed}}</p>}
+                  @for(f of step.sources!.removed||[];track $index){<p class="muted"><strong>{{findingLabel(f.kind)}}.</strong> {{f.detail}}</p>}
+                </section>}
                 @if(step.error){<div class="exec-error-hint" role="alert"><strong>Error</strong><pre>{{step.error}}</pre></div>}
                 <div class="debug-io">
                   <section><h5>Input</h5>@if(step.input){<pre>{{step.input}}</pre>}@else{<p class="muted">{{step.status==='SKIPPED'?'Skipped: no active input branch.':'No input recorded (start node or a run recorded before input capture).'}}</p>}</section>
@@ -1448,6 +1465,12 @@ export class FlowStudioComponent {
    if(!next){this.message.set('An agent can be granted at most '+this.toolLimits().max_tools+' tools');return}
    this.graph.update(g=>({...g,nodes:g.nodes.map(x=>{if(x.id!==id)return x;const {tools:_t,max_tool_calls:_m,require_grounding:_g,...rest}=x;return next.length?{...rest,tools:next,...(_m?{max_tool_calls:_m}:{}),...(_g?{require_grounding:true}:{})}:{...rest,...(_g?{require_grounding:true}:{})}})}));
  }
+ setEvidence(id:string,patch:{mode?:string;block?:boolean;maxAgeDays?:number}){
+   this.graph.update(g=>({...g,nodes:g.nodes.map(x=>{if(x.id!==id)return x;const {evidence:_e,...rest}=x;const next=patchNodeEvidence(x.evidence,patch);return next?{...rest,evidence:next}:rest})}));
+ }
+ evidenceSummary(p:EvidencePolicy){return settingsSummary(settingsFromPolicy(p))}
+ findingLabel=findingLabel;
+ removedSummary=removedSummary;
  setGrounding(id:string,on:boolean){
    this.graph.update(g=>({...g,nodes:g.nodes.map(x=>{if(x.id!==id)return x;const {require_grounding:_g,...rest}=x;return on?{...rest,require_grounding:true}:rest})}));
  }

@@ -5,6 +5,7 @@ import { missingProfiles, savedMembers, teamMembersBody } from '../components/pr
 import { MarketService } from '../services';
 import { MarketState } from './market-state';
 import { DEFAULT_TEAM, applyTeamEvent, startTeam, type TeamState } from '../components/team-view';
+import type { EvidenceMode } from './answer-sources';
 
 /**
  * Runs a team of persona agents on one question and keeps the streamed
@@ -24,6 +25,11 @@ export class TeamSession {
   readonly error = signal('');
   readonly question = signal('');
   readonly chair = signal(true);
+  /**
+   * The evidence mode of the run: the user's saved default, or a mode picked here
+   * (which brings none of the default's limits).
+   */
+  readonly evidence = signal<'default' | EvidenceMode>('default');
   /** Model profiles to choose from, the profile of each chosen character (null: the default), and the saved teams. */
   readonly profiles = signal<ModelProfile[]>([]);
   readonly profileOf = signal<Record<string, number | null>>({});
@@ -105,6 +111,7 @@ export class TeamSession {
         method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
         body: JSON.stringify({
           question, members: teamMembersBody(members.map(m => m.id), this.profileOf()), chair: withChair,
+          evidence_mode: this.evidence() === 'default' ? undefined : this.evidence(),
           symbol: this.market.trackedSymbol(), provider: this.market.provider(), range: this.market.historyRange(), price: price > 0 ? price.toFixed(4) : '',
         }),
       });

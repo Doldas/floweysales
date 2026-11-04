@@ -75,10 +75,16 @@
         <button type="button" class="btn-close" (click)="session.dismissError()" aria-label="Dismiss this error"></button>
       </div>
     }
-    @if (!session.streaming() && session.answerSources().length) {
+    @if (!session.streaming() && (session.answerSources().length || session.answerRemoved().length)) {
       <details class="sources small">
         <summary><i class="bi bi-journal-text" aria-hidden="true"></i> Sources ({{ session.answerSources().length }})</summary>
         <p class="mb-1" [class.text-danger]="session.answerAudit().length" role="status">{{ auditText() }}</p>
+        @if (removedText(); as removed) {
+          <p class="mb-1 text-danger" role="status">{{ removed }}</p>
+          @for (f of session.answerRemoved(); track $index) {
+            <p class="finding mb-1"><strong>{{ findingLabel(f.kind) }}.</strong> {{ f.detail }} <em>Removed: “{{ f.sentence }}”</em></p>
+          }
+        }
         @for (f of session.answerAudit(); track $index) {
           <p class="finding mb-1"><strong>{{ findingLabel(f.kind) }}.</strong> {{ f.detail }} <em>“{{ f.sentence }}”</em></p>
         }
@@ -122,6 +128,32 @@
       </select>
     </div>
     @if (evidenceHint(); as hint) { <div class="profile-note">{{ hint }}</div> }
+    @if (session.evidenceMode() !== 'standard') {
+      <details class="evidence-settings small">
+        <summary>Evidence settings</summary>
+        <div class="evidence-grid">
+          <label for="evidence-failure">A statement that still fails the check</label>
+          <select id="evidence-failure" class="form-select form-select-sm" [disabled]="session.streaming()" (change)="session.updateEvidence({ block: $any($event.target).value === 'block' })">
+            <option value="flag" [selected]="!session.evidenceSettings().block">Stays, with a warning</option>
+            <option value="block" [selected]="session.evidenceSettings().block">Is removed from the answer</option>
+          </select>
+          <label for="evidence-age">Only sources from the last (days, 0 = any age)</label>
+          <input id="evidence-age" type="number" min="0" max="3650" step="1" class="form-control form-control-sm" [disabled]="session.streaming()" [value]="session.evidenceSettings().maxAgeDays" (change)="session.updateEvidence({ maxAgeDays: +$any($event.target).value })">
+          <span id="evidence-types-label">Source types that count</span>
+          <div role="group" aria-labelledby="evidence-types-label">
+            <label class="form-check-inline"><input type="checkbox" [disabled]="session.streaming()" [checked]="session.evidenceSettings().filings" (change)="session.updateEvidence({ filings: $any($event.target).checked })"> Filings</label>
+            <label class="form-check-inline"><input type="checkbox" [disabled]="session.streaming()" [checked]="session.evidenceSettings().webPages" (change)="session.updateEvidence({ webPages: $any($event.target).checked })"> Web pages</label>
+          </div>
+        </div>
+        @if (session.evidenceProblem(); as problem) { <p class="text-danger mb-1" role="alert">{{ problem }}</p> }
+        @if (evidenceSummary(); as line) { <p class="mb-1 text-muted">{{ line }}</p> }
+        <div class="evidence-actions">
+          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="session.saveEvidenceDefault(true)" [disabled]="session.streaming() || !!session.evidenceProblem()">Save as my default</button>
+          @if (session.evidenceHasDefault()) { <button type="button" class="btn btn-sm btn-outline-secondary" (click)="session.saveEvidenceDefault(false)" [disabled]="session.streaming()">Remove my default</button> }
+        </div>
+      </details>
+    }
+    @if (session.evidenceNote(); as note) { <p class="small text-muted mb-1" role="status">{{ note }}</p> }
     @if (session.profiles().length) {
       <div class="persona-row">
         <label for="profile-pick">Model</label>

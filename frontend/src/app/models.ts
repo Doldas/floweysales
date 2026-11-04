@@ -1,4 +1,5 @@
 import type { Provenance } from './core/provenance';
+import type { AnswerFinding, AnswerSource } from './core/answer-sources';
 export interface MarketData {
   assetDataProvider?: string;
   type?: string;
@@ -595,6 +596,8 @@ export interface TeamEvent {
   agent?: string; name?: string; content?: string; result?: string; tool_error?: string; error?: string; stance?: string;
   arguments?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean;
   severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string;
+  /** With a `sources` event: what the member retrieved and what the citation check found in its answer. */
+  sources?: AnswerSource[]; audit?: AnswerFinding[]; removed?: AnswerFinding[];
 }
 export type StrategyOperandType = 'price' | 'const' | 'ema' | 'sma' | 'rsi' | 'atr' | 'highest' | 'lowest' | 'fib_retr' | 'fib_ext' | 'swing_high' | 'swing_low';
 export interface StrategyOperand { type: StrategyOperandType; field?: string; period?: number; ratio?: number; value?: number }

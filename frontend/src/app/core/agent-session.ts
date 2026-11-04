@@ -2,7 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 
 import type { Message, ModelProfile, Persona } from '../models';
 import { MarketState } from './market-state';
-import { delegationProgress, parseEvidenceMode, type AnswerFinding, type AnswerSource, type EvidenceMode } from './answer-sources';
+import { defaultTypes, delegationProgress, parseEvidenceMode, policyFromSettings, settingsFromPolicy, settingsProblem, type AnswerFinding, type AnswerSource, type EvidenceMode, type EvidencePolicy, type EvidenceSettings } from './answer-sources';
 import { EMPTY_NOTICES, applyNotice, dismissNotice, finishNotices, recoveryLine, type NoticeState } from './agent-notices';
 
 export interface AiPreset {
@@ -28,8 +28,13 @@ interface AiConfig {
 const PROFILE_KEY = 'fs.profile';
 const EVIDENCE_KEY = 'fs.evidenceMode';
 
-function readStoredEvidenceMode(): EvidenceMode {
-  try { return parseEvidenceMode(localStorage.getItem(EVIDENCE_KEY)); } catch { return 'standard'; }
+/** The settings kept in this browser: a policy object, or the plain mode an older version stored. */
+function readStoredEvidence(): EvidenceSettings {
+  try {
+    const raw = localStorage.getItem(EVIDENCE_KEY);
+    if (raw?.startsWith('{')) return settingsFromPolicy(JSON.parse(raw));
+    return settingsFromPolicy({ mode: parseEvidenceMode(raw) });
+  } catch { return settingsFromPolicy(null); }
 }
 
 function readStoredProfile(): number | null {
@@ -91,6 +96,8 @@ export class AgentSession {
   /** What the latest run retrieved, and what the citation check found in its answer. */
   readonly answerSources = signal<AnswerSource[]>([]);
   readonly answerAudit = signal<AnswerFinding[]>([]);
+  /** Statements the block option took out of the latest answer. */
+  readonly answerRemoved = signal<AnswerFinding[]>([]);
   readonly runStatus = computed(() => this.noticeState().status);
   readonly runStatusDetail = computed(() => this.noticeState().statusDetail);
   readonly notices = computed(() => this.noticeState().notices);
@@ -108,11 +115,64 @@ export class AgentSession {
   readonly catalog = signal<{ id: number; model: string; label: string }[]>([]);
   /** The investor character answering, or '' for the plain analyst. */
   readonly persona = signal('');
-  /** How strictly answers must be backed by retrieved sources; kept in this browser. */
-  readonly evidenceMode = signal<EvidenceMode>(readStoredEvidenceMode());
+  /**
+   * How strictly answers must be backed by retrieved sources, and the limits under
+   * the mode. Kept in this browser; the user's saved default (on the server) fills
+   * it in when the chat opens.
+   */
+  readonly evidenceSettings = signal<EvidenceSettings>(readStoredEvidence());
+  readonly evidenceMode = computed<EvidenceMode>(() => this.evidenceSettings().mode);
+  readonly evidenceProblem = computed(() => settingsProblem(this.evidenceSettings()));
+  /** Whether the user has a saved default, and the outcome of the last save or reset. */
+  readonly evidenceHasDefault = signal(false);
+  readonly evidenceNote = signal('');
   setEvidenceMode(mode: EvidenceMode): void {
-    this.evidenceMode.set(mode);
-    try { localStorage.setItem(EVIDENCE_KEY, mode); } catch { /* ignore */ }
+    // The source types a mode counts differ, so a change of mode starts from its own.
+    this.updateEvidence({ mode, ...defaultTypes(mode), ...(mode === 'standard' ? { block: false } : {}) });
+  }
+  updateEvidence(patch: Partial<EvidenceSettings>): void {
+    this.evidenceSettings.update(s => ({ ...s, ...patch }));
+    this.evidenceNote.set('');
+    try { localStorage.setItem(EVIDENCE_KEY, JSON.stringify(policyFromSettings(this.evidenceSettings()))); } catch { /* ignore */ }
+  }
+
+  private evidenceLoaded = false;
+  /** Fills the settings from the saved default once per page load, so a later change in the chat is not overwritten. */
+  async loadEvidenceDefault(): Promise<void> {
+    if (this.evidenceLoaded) return;
+    this.evidenceLoaded = true;
+    try {
+      const res = await fetch('/api/ai/evidence-default', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const saved: EvidencePolicy | null = (await res.json()).policy;
+      this.evidenceHasDefault.set(!!saved);
+      if (saved) {
+        this.evidenceSettings.set(settingsFromPolicy(saved));
+        try { localStorage.setItem(EVIDENCE_KEY, JSON.stringify(saved)); } catch { /* ignore */ }
+      }
+    } catch { /* The browser's own choice stays. */ }
+  }
+
+  /** Saves the current settings as the user's default, or removes the default. */
+  async saveEvidenceDefault(save: boolean): Promise<void> {
+    if (save && this.evidenceProblem()) { this.evidenceNote.set(this.evidenceProblem()); return; }
+    try {
+      const res = await fetch('/api/ai/evidence-default', {
+        method: save ? 'PUT' : 'DELETE', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: save ? JSON.stringify(policyFromSettings(this.evidenceSettings())) : undefined,
+      });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try { detail = (await res.json())?.error || detail; } catch { /* keep the status */ }
+        this.evidenceNote.set(`Could not ${save ? 'save' : 'reset'} the default: ${detail}`);
+        return;
+      }
+      this.evidenceHasDefault.set(save);
+      this.evidenceNote.set(save ? 'Saved as your default for chat and team runs.' : 'Your default was removed; new chats start from Standard.');
+    } catch {
+      this.evidenceNote.set(`Could not ${save ? 'save' : 'reset'} the default.`);
+    }
   }
   readonly personas = signal<Persona[]>([]);
   /** Model profiles the administrator prepared, and the one chosen (null: the default). */
@@ -227,6 +287,7 @@ export class AgentSession {
     this.noticeState.set(EMPTY_NOTICES);
     this.answerSources.set([]);
     this.answerAudit.set([]);
+    this.answerRemoved.set([]);
     this.assistantId = -1;
   }
 
@@ -247,10 +308,15 @@ export class AgentSession {
       return;
     }
 
+    if (this.evidenceProblem()) {
+      this.error.set(`Evidence settings: ${this.evidenceProblem()}`);
+      return;
+    }
     this.error.set('');
     this.noticeState.set(EMPTY_NOTICES);
     this.answerSources.set([]);
     this.answerAudit.set([]);
+    this.answerRemoved.set([]);
     this.push({ role: 'user', content });
     this.wire.push({ role: 'user', content });
     this.streaming.set(true);
@@ -271,7 +337,8 @@ export class AgentSession {
           model: this.canConfigure() ? this.chatModel() : undefined,
           persona: this.persona() || undefined,
           profile_id: this.profileId() || undefined,
-          evidence_mode: this.evidenceMode() === 'standard' ? undefined : this.evidenceMode(),
+          // Always sent, so a choice of Standard is not replaced by the saved default.
+          evidence: policyFromSettings(this.evidenceSettings()),
           symbol: ctx.symbol,
           provider: ctx.provider,
           range: ctx.range,
@@ -335,7 +402,7 @@ export class AgentSession {
       if (!line.startsWith('data:')) continue;
       const payload = line.slice(5).trim();
       if (!payload) continue;
-      let ev: { model?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean; type?: string; severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string; content?: string; name?: string; arguments?: string; result?: string; tool_error?: string; error?: string; message?: Message; sources?: AnswerSource[]; audit?: AnswerFinding[]; parent_call_id?: string; agent?: string; stance?: string };
+      let ev: { model?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean; type?: string; severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string; content?: string; name?: string; arguments?: string; result?: string; tool_error?: string; error?: string; message?: Message; sources?: AnswerSource[]; audit?: AnswerFinding[]; removed?: AnswerFinding[]; parent_call_id?: string; agent?: string; stance?: string };
       try {
         ev = JSON.parse(payload);
       } catch {
@@ -368,6 +435,7 @@ export class AgentSession {
         case 'sources':
           this.answerSources.set(ev.sources ?? []);
           this.answerAudit.set(ev.audit ?? []);
+          this.answerRemoved.set(ev.removed ?? []);
           break;
         case 'error':
           this.error.set(ev.error || 'AI error');
