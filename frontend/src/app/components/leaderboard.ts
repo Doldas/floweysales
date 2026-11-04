@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { HelpButtonComponent } from '../ui/help-button';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import type { Subscription } from 'rxjs';
@@ -25,12 +26,12 @@ const STORE_KEY = 'fs.leaderboard';
 @Component({
   selector: 'fs-leaderboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, RouterLink, BacktestPanelComponent, ProgressStatusComponent, SkeletonComponent],
+  imports: [HelpButtonComponent, DecimalPipe, RouterLink, BacktestPanelComponent, ProgressStatusComponent, SkeletonComponent],
   template: `
 <section class="card board" aria-labelledby="board-title">
   <div class="card-header board-head">
     <div class="me-auto">
-      <h2 class="card-title" id="board-title"><i class="bi bi-trophy me-2 text-primary" aria-hidden="true"></i>Leaderboard: worth a look now</h2>
+      <h2 class="card-title" id="board-title"><i class="bi bi-trophy me-2 text-primary" aria-hidden="true"></i>Leaderboard: worth a look now <fs-help-button topic="leaderboard" /></h2>
       <div class="board-sub">{{ strategyInfo()?.description }}</div>
     </div>
     <div class="board-actions">

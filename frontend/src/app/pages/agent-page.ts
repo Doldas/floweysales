@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { HelpButtonComponent } from '../ui/help-button';
 import { RouterLink } from '@angular/router';
 
 import { AgentChatComponent } from '../agent/agent-chat';
@@ -10,14 +11,14 @@ import { toolLabel } from '../components/agent-tools';
 @Component({
   selector: 'fs-agent-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AgentChatComponent, RouterLink],
+  imports: [HelpButtonComponent, AgentChatComponent, RouterLink],
   template: `
     <div class="agent-page">
       <section class="agent-main" aria-label="Research agent conversation">
         <header class="agent-head">
           <span class="fs-agent-orb" aria-hidden="true"><i class="bi bi-stars"></i></span>
           <div class="min-w-0">
-            <h1>Research Agent</h1>
+            <h1>Research Agent <fs-help-button topic="research-agent" /></h1>
             <p>{{ session.model() || 'Model not configured' }} · up to {{ session.maxSteps() }} reasoning rounds and {{ session.maxToolCalls() }} tool calls</p>
           </div>
           <div class="ms-auto d-flex gap-2">

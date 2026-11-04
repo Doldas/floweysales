@@ -4,7 +4,7 @@
     <div class="quote-id">
       <div class="fs-eyebrow">{{ market.provider() }}@if (market.mode() === 'research') { · research mode }</div>
       <h1>
-        {{ market.trackedSymbol() || 'Markets' }}
+        {{ market.trackedSymbol() || 'Markets' }} <fs-help-button topic="markets" />
         @if (market.trackedName()) { <span class="quote-name">{{ market.trackedName() }}</span> }
       </h1>
       @if (market.trackedSymbol()) {

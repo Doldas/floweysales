@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"floweysales/internal/app"
 	"floweysales/internal/identity"
 	"floweysales/internal/market"
 	"floweysales/internal/plugins"
@@ -264,6 +265,9 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("ok"))
+	})
+	e.mux.HandleFunc("GET /api/about", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, aboutInfo(app.BuildCommit, app.BuildTime))
 	})
 	e.mux.HandleFunc("GET /api/admin/runtime", func(w http.ResponseWriter, r *http.Request) {
 		var stats runtime.MemStats

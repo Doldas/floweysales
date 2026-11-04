@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
+import { HelpButtonComponent } from '../ui/help-button';
 import { ActivatedRoute } from '@angular/router';
 import type { Subscription } from 'rxjs';
 
@@ -24,13 +25,13 @@ const H_EQUITY = 160;
 @Component({
   selector: 'fs-strategies-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SymbolSearchComponent, StrategyBuilderComponent],
+  imports: [HelpButtonComponent, SymbolSearchComponent, StrategyBuilderComponent],
   template: `
 <div class="fs-page research-container">
   <header class="fs-page-header">
     <div>
       <div class="fs-eyebrow">Research</div>
-      <h1>Strategies @if (market.trackedSymbol()) { <span class="text-muted fw-normal">· {{ market.trackedSymbol() }}</span> }</h1>
+      <h1>Strategies <fs-help-button topic="strategies" /> @if (market.trackedSymbol()) { <span class="text-muted fw-normal">· {{ market.trackedSymbol() }}</span> }</h1>
       <p>Fibonacci strategies and your own rules, replayed over past daily prices. A test of an idea, not a forecast, and nothing is ordered.</p>
     </div>
     <fs-symbol-search class="page-search" [navigate]="false" placeholder="Test on a company or index…" />

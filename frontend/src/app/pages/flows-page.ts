@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, untracked, viewChild } from '@angular/core';
+import { HelpButtonComponent } from '../ui/help-button';
 import { Router, RouterLink } from '@angular/router';
 
 import { FlowStudioComponent } from '../components/flow-studio';
@@ -12,13 +13,13 @@ import { ActivityStore } from '../core/activity';
 @Component({
   selector: 'fs-flows-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FlowStudioComponent, RouterLink],
+  imports: [HelpButtonComponent, FlowStudioComponent, RouterLink],
   template: `
     <div class="fs-page">
       <header class="fs-page-header">
         <div>
           <div class="fs-eyebrow">Automation</div>
-          <h1>Agent flows</h1>
+          <h1>Agent flows <fs-help-button topic="flows" /></h1>
           <p>Chain research agents, data steps and approvals into repeatable workflows. Read-only research, so no flow can place live trades.</p>
         </div>
         @if (activity.inboxCount()) {

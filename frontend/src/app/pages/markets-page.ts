@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { HelpButtonComponent } from '../ui/help-button';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 
@@ -19,7 +20,7 @@ interface Kpi { label: string; value: string; sub?: string; tone?: 'pos' | 'neg'
 @Component({
   selector: 'fs-markets-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, SymbolSearchComponent],
+  imports: [HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, SymbolSearchComponent],
   templateUrl: './markets-page.html',
   styleUrl: './markets-page.scss',
 })
