@@ -192,6 +192,7 @@ type Engine struct {
 	secFilings    func(ctx context.Context, ticker string, limit int) (sec.Filings, error)
 	flowState     flowNodeStateStore
 	profiles      investorProfileStore
+	rankingPrefs  rankingPreferencesStore // leaderboard objective and constraints per user; tests replace the database
 	strategies    strategyStore
 	modelProfiles modelProfileStore // model profiles; tests replace the database
 	teams         teamStore         // saved agent teams
@@ -250,6 +251,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 
 	e.registerMarketRoutes()
 	e.registerLeaderboardRoutes()
+	e.registerRankingPreferenceRoutes()
 	e.registerBacktestRoutes()
 	e.registerBacktestBatchRoutes()
 	e.registerBacktestSensitivityRoutes()
