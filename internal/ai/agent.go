@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"floweysales/internal/sources"
 	"fmt"
 	"io"
 	"net"
@@ -53,6 +54,10 @@ type Event struct {
 	Truncated     bool   `json:"truncated,omitempty"`
 	OriginalBytes int    `json:"original_bytes,omitempty"`
 	Redacted      bool   `json:"redacted,omitempty"`
+	// Sources and Audit accompany a "sources" event: what the run retrieved
+	// and what the mechanical citation check found in the final answer.
+	Sources []sources.Source  `json:"sources,omitempty"`
+	Audit   []sources.Finding `json:"audit,omitempty"`
 }
 
 // AgentOptions tunes a run.
@@ -105,6 +110,7 @@ Rules:
 - State clearly when required capabilities or financial data are unavailable. Never fabricate SEC filings, financial ratios, tools, or investment recommendations.
 - For multi-step requests, track the requested deliverables and make clear which are finished, missing or estimated.
 - Be clear and concise; cite the date/range/provider used.
+- Tool results from search_web and get_sec_section carry a source_id such as S3. When a sentence states a figure or fact taken from one, end it with that marker, for example [S3]; never write a marker or URL a tool did not return. A search result you did not open is only a snippet: say so instead of presenting it as the page's content.
 - If a tool returns no data, say so and suggest an alternative provider or symbol.
 - If the user explicitly mentions a ticker/symbol in their question that differs from the UI context, ALWAYS use the symbol from the user's question. The UI context is only a fallback when the user doesn't specify a symbol.`
 
@@ -138,6 +144,14 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	isTask := len(opts.Deliverables) > 0 || opts.Resume != nil
 	deliverables := append([]Deliverable(nil), opts.Deliverables...)
 	var ledger []LedgerEntry
+	registry := sources.NewRegistry()
+	// reportSources runs the citation check on the final answer and tells the UI.
+	reportSources := func(answer string) {
+		found := sources.Audit(answer, registry)
+		if all := registry.All(); len(all) > 0 || len(found) > 0 {
+			emit(Event{Type: "sources", Sources: all, Audit: found})
+		}
+	}
 	messages := make([]Message, 0, len(transcript)+2)
 	toolCalls, stepsBefore := 0, 0
 	if opts.Resume != nil {
@@ -243,6 +257,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 
 		if len(assistant.ToolCalls) == 0 {
 			if len(deliverables) == 0 {
+				reportSources(assistant.Content)
 				emit(Event{Type: "done", Steps: step})
 				return nil
 			}
@@ -265,6 +280,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 				emit(Event{Type: "notice", Severity: "warning", Code: "task_incomplete", Content: "The task is incomplete. Missing: " + strings.Join(append(missing, noEvidence(ledger, tools != nil)...), "; ")})
 			}
 			checkpoint(step, status)
+			reportSources(assistant.Content)
 			emit(Event{Type: "done", Steps: stepsBefore + step})
 			return nil
 		}
@@ -313,6 +329,14 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 					result = string(payload)
 				} else {
 					result = fmt.Sprintf(`{"error":%q}`, err.Error())
+				}
+			}
+			if err == nil {
+				// The model sees each source's id so it can cite it as [S3].
+				var added []sources.Source
+				result, added = registry.Register(tc.Function.Name, callID, tc.Function.Arguments, result)
+				for _, src := range added {
+					emit(Event{Type: "source", Sources: []sources.Source{src}, CallID: callID})
 				}
 			}
 			if len(result) > opts.MaxToolResultBytes {

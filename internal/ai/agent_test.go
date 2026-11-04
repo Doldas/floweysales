@@ -271,3 +271,39 @@ func TestLastRoundOfAnAnsweringAgentIsOfferedNoTools(t *testing.T) {
 		t.Fatalf("only the last round may be offered no tools: %d rounds", len(*bodies))
 	}
 }
+
+func TestRunRegistersSourcesAndAuditsTheAnswer(t *testing.T) {
+	search := `{"query":"q","retrieved_at_utc":"2026-11-03T10:00:00Z","results":[{"title":"Acme Q3","url":"https://news.example/acme","snippet":"Revenue 4,200 million."}]}`
+	srv, bodies := scriptedOpenAI(t,
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"search_web","arguments":"{\"query\":\"acme revenue\"}"}}]},"finish_reason":"tool_calls"}]}`,
+		`{"choices":[{"delta":{"content":"Revenue was 4,200 million [S1]. Margin improved [S7]."},"finish_reason":"stop"}]}`)
+	var sourceEvents, summary []Event
+	err := Run(context.Background(), NewClient(srv.URL, "", "test"), fakeDS{}, []Message{{Role: "user", Content: "x"}},
+		AgentOptions{Execute: func(context.Context, string, string) (string, error) { return search, nil }}, func(e Event) {
+			switch e.Type {
+			case "source":
+				sourceEvents = append(sourceEvents, e)
+			case "sources":
+				summary = append(summary, e)
+			}
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sourceEvents) != 1 || sourceEvents[0].Sources[0].ID != "S1" {
+		t.Fatalf("source events: %+v", sourceEvents)
+	}
+	if !strings.Contains((*bodies)[1], `source_id`) {
+		t.Fatalf("the model must receive the source id: %s", (*bodies)[1])
+	}
+	if len(summary) != 1 {
+		t.Fatalf("want one sources event: %+v", summary)
+	}
+	kinds := map[string]bool{}
+	for _, f := range summary[0].Audit {
+		kinds[f.Kind] = true
+	}
+	if !kinds["snippet_only"] || !kinds["fabricated"] {
+		t.Fatalf("audit: %+v", summary[0].Audit)
+	}
+}

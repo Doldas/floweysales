@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
+import { auditSummary, findingLabel, safeUrl, splitSources } from '../core/answer-sources';
 import { AgentSession, type ChatEntry } from '../core/agent-session';
 import { renderMarkdown } from '../markdown';
 import { toolLabel } from '../components/agent-tools';
@@ -25,6 +26,10 @@ type Block = { kind: 'user' | 'assistant'; entry: ChatEntry } | { kind: 'steps';
 })
 export class AgentChatComponent {
   readonly session = inject(AgentSession);
+  readonly findingLabel = findingLabel;
+  readonly groups = computed(() => splitSources(this.session.answerSources()));
+  readonly auditText = computed(() => auditSummary(this.session.answerAudit()));
+  link(url: string | undefined): string { return safeUrl(url); }
   private readonly sanitizer = inject(DomSanitizer);
   private readonly scroller = viewChild<ElementRef<HTMLElement>>('scroller');
   private readonly composer = viewChild<ElementRef<HTMLTextAreaElement>>('composer');
