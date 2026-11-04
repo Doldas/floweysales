@@ -310,6 +310,17 @@ export interface LeaderboardRow {
   fundamentals_age_days?: number;
   /** Present when the request asked to explain the score. */
   breakdown?: LeaderboardBreakdown;
+  /** Why the company is on the list, where its numbers come from, and which listing it is: three separate answers. */
+  discovery?: { why: string; source: string; kind: string; url: string | null; as_of: string | null };
+  metrics_source?: { provider: string; price_as_of?: string; fundamentals_through?: string };
+  listing?: { exchange: string; mic?: string; country?: string; known: boolean };
+}
+
+export interface UniverseSource { kind: 'curated' | 'disclosure' | 'custom' | string; name: string; url: string | null; as_of: string | null; rule: string; limitations: string }
+export interface LeaderboardSelection {
+  initial: number; ranked: number; excluded: { symbol: string; reason: string }[];
+  steps: { step: string; count: number; detail?: string }[];
+  countries: Record<string, number>; exchanges: Record<string, number>;
 }
 
 export interface LeaderboardMetricDetail {
@@ -345,7 +356,7 @@ export interface LeaderboardProvenance {
   disclaimer: string;
 }
 
-export interface LeaderboardOption { id: string; label: string; description: string; benchmark?: string }
+export interface LeaderboardOption { id: string; label: string; description: string; benchmark?: string; source?: UniverseSource; region?: string; countries?: string[] }
 
 export interface LeaderboardResponse {
   universe: string;
@@ -355,6 +366,9 @@ export interface LeaderboardResponse {
   generated_at: string;
   rows: LeaderboardRow[];
   unranked: { symbol: string; error: string }[];
+  /** The list that was ranked, with its source; absent from older servers. */
+  universe_info?: LeaderboardOption;
+  selection?: LeaderboardSelection;
   universes: LeaderboardOption[];
   strategies: LeaderboardOption[];
   provenance?: LeaderboardProvenance;

@@ -2,7 +2,7 @@
  * Display helpers for the Markets leaderboard. Pure functions so they run
  * under node --test; the scoring itself lives in the server (leaderboard.go).
  */
-import type { LeaderboardBreakdown, LeaderboardMethodology, LeaderboardRow } from '../models';
+import type { LeaderboardBreakdown, LeaderboardMethodology, LeaderboardRow, LeaderboardSelection } from '../models';
 
 export const FACTOR_LABELS: Record<string, string> = {
   value: 'Value', quality: 'Quality', growth: 'Growth', momentum: 'Momentum', timing: 'Entry timing', risk: 'Low risk',
@@ -102,4 +102,38 @@ export function coverageSummary(rows: Pick<LeaderboardRow, 'coverage_pct'>[], un
   const avg = Math.round(rows.reduce((s, r) => s + r.coverage_pct, 0) / rows.length);
   const full = rows.filter(r => r.coverage_pct >= 100).length;
   return `${rows.length} ranked${unranked ? `, ${unranked} left out for lack of data` : ''}; ${full} have data for all six factors, and the average company has ${avg}% of them.`;
+}
+
+export const SOURCE_KIND_LABEL: Record<string, string> = {
+  curated: 'Hand-picked by the maintainers', disclosure: 'Public disclosure', custom: 'Supplied by you',
+};
+
+export function sourceKindLabel(kind: string | undefined): string {
+  return kind ? SOURCE_KIND_LABEL[kind] ?? kind : 'Source unknown';
+}
+
+/** The pipeline from the list to the ranking, one line per step: "30 on the list", "-2 no usable data", "28 ranked". */
+export function selectionLines(sel: LeaderboardSelection | undefined): string[] {
+  if (!sel) return [];
+  return sel.steps.map(s => `${s.count > 0 ? '' : '−'}${Math.abs(s.count)} ${s.step.toLowerCase()}`);
+}
+
+/** Counts per country or exchange as "SE 28, US 2", largest first. */
+export function coverageBreakdown(counts: Record<string, number> | undefined): string {
+  return Object.entries(counts ?? {}).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k, n]) => `${k} ${n}`).join(', ');
+}
+
+function csvCell(v: unknown): string {
+  const s = v === undefined || v === null ? '' : String(v);
+  // A cell starting with = + - @ would be run as a formula by spreadsheets.
+  const safe = /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+  return /[",\n]/.test(safe) ? '"' + safe.replace(/"/g, '""') + '"' : safe;
+}
+
+/** The ranked companies with their listing, discovery source and metric sources, for export. */
+export function universeCsv(rows: LeaderboardRow[]): string {
+  const head = ['rank', 'symbol', 'exchange', 'mic', 'country', 'why_on_list', 'list_source', 'list_source_kind', 'list_source_url', 'list_as_of', 'provider', 'price_as_of', 'fundamentals_through'];
+  const lines = rows.map(r => [r.rank, r.symbol, r.listing?.exchange, r.listing?.mic, r.listing?.country, r.discovery?.why, r.discovery?.source, r.discovery?.kind,
+    r.discovery?.url, r.discovery?.as_of, r.metrics_source?.provider, r.metrics_source?.price_as_of, r.metrics_source?.fundamentals_through].map(csvCell).join(','));
+  return [head.join(','), ...lines].join('\n') + '\n';
 }
