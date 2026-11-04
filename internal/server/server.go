@@ -194,6 +194,7 @@ type Engine struct {
 	strategies    strategyStore
 	modelProfiles modelProfileStore // model profiles; tests replace the database
 	teams         teamStore         // saved agent teams
+	backtestRuns  backtestRunStore  // saved backtest results
 	transactions  transactionStore
 	agentTasks    agentTaskStore
 	// strategyHistory replaces the provider history read in tests.
@@ -249,6 +250,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerBacktestRoutes()
 	e.registerBacktestBatchRoutes()
 	e.registerBacktestSensitivityRoutes()
+	e.registerBacktestRunRoutes()
 	e.registerPlanRoutes()
 	e.registerPortfolioAnalyticsRoutes()
 	e.registerPositionSizingRoutes()

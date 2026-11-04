@@ -41,4 +41,5 @@
   <include file="037-user-transaction-files.xml" relativeToChangelogFile="true"/>
   <include file="038-ai-model-profiles-and-teams.xml" relativeToChangelogFile="true"/>
   <include file="039-flow-run-step-outputs.xml" relativeToChangelogFile="true"/>
+  <include file="040-backtest-runs.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

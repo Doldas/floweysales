@@ -438,6 +438,9 @@ export interface SensitivityResult {
   summary: { completed: number; failed: number; cagr_pct?: BatchSpread; excess_cagr_pct?: BatchSpread; positive_excess: number; with_benchmark: number; cost_break_even_bps?: number; notes: string[] };
 }
 
+/** A saved backtest as listed; GET /api/market/backtest/runs/{id} adds its result. */
+export interface SavedBacktest { id: number; name: string; kind: 'single' | 'batch' | 'sensitivity'; query: string; created_at: string }
+
 export interface BacktestParams {
   universe: string;
   strategy: string;

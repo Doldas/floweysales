@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="040-backtest-runs" author="floweysales" dbms="mysql">
+  <!-- No foreign key to auth_users: with authentication disabled the single user is id 0.
+       Deleting an account removes its rows in Service.DeleteUser. -->
+  <createTable tableName="backtest_runs" remarks="A user's saved backtest result: the query that produced it and the result as the server returned it">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_backtest_runs"/></column>
+   <column name="user_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="name" type="VARCHAR(80)"><constraints nullable="false"/></column>
+   <column name="kind" type="VARCHAR(16)"><constraints nullable="false"/></column>
+   <column name="query_string" type="VARCHAR(1000)"><constraints nullable="false"/></column>
+   <column name="result_json" type="MEDIUMTEXT"><constraints nullable="false"/></column>
+   <column name="created_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <createIndex tableName="backtest_runs" indexName="ix_backtest_runs_user"><column name="user_id"/><column name="id"/></createIndex>
+  <rollback><dropTable tableName="backtest_runs"/></rollback>
+ </changeSet>
+</databaseChangeLog>

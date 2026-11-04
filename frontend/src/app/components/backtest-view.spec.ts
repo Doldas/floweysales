@@ -2,7 +2,7 @@
 //   node --test src/app/components/backtest-view.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sensitivityHeadline, sensitivityRows, settingLabel, batchHeadline, batchRows, chartSummary, curvePath, metricTiles, periodLabel, warningText } from './backtest-view.ts';
+import { batchParams, exportUrl, savedLabel, sensitivityParams, singleParams, sensitivityHeadline, sensitivityRows, settingLabel, batchHeadline, batchRows, chartSummary, curvePath, metricTiles, periodLabel, warningText } from './backtest-view.ts';
 import type { BacktestMetrics } from '../models';
 
 const metrics: BacktestMetrics = { cagr_pct: 12.4, volatility_pct: 18, sharpe: 0.9, sortino: 1.2, max_drawdown_pct: -22.5, calmar: 0.5,
@@ -91,4 +91,20 @@ test('sensitivityRows keep a failed variant and sensitivityHeadline states the b
   const lines = sensitivityHeadline({ summary: { completed: 5, failed: 0, cagr_pct: { min: 2, median: 6, max: 9 }, positive_excess: 3, with_benchmark: 5, cost_break_even_bps: 50, notes: [] } });
   assert.deepEqual(lines, ['5 variants completed. Return per year: +2.0% to +9.0%, median +6.0%.', 'Excess return stayed positive in 3 of 5 variants.', 'At 50 bps per side the excess return was zero or negative.']);
   assert.deepEqual(sensitivityHeadline({ summary: { completed: 0, failed: 2, positive_excess: 0, with_benchmark: 0, notes: [] } }), ['None of the variants completed.']);
+});
+
+test('query builders ask for exactly what is on screen', () => {
+  const base = { universe: 'us_large_cap', strategy: 'momentum', top: 10, rebalance: 'monthly' as const, years: 5 as const };
+  assert.deepEqual(singleParams(base), { strategy: 'momentum', top: '10', rebalance: 'monthly', years: '5', universe: 'us_large_cap' });
+  assert.deepEqual(singleParams({ ...base, years: 0, from: '2020-01-01', to: '2022-12-31', symbols: ['A', 'B'] }),
+    { strategy: 'momentum', top: '10', rebalance: 'monthly', from: '2020-01-01', to: '2022-12-31', symbols: 'A,B' });
+  assert.equal(sensitivityParams({ ...base, years: 0, from: '2020-01-01' }).from, undefined);
+  assert.deepEqual(batchParams({ universes: ['a', 'b'], periods: ['3', '10'], strategy: 'quality', top: 5, rebalance: 'quarterly' }),
+    { strategy: 'quality', top: '5', rebalance: 'quarterly', universes: 'a,b', periods: '3,10' });
+});
+
+test('saved runs have download addresses and a readable label', () => {
+  assert.equal(exportUrl(7, 'csv'), '/api/market/backtest/runs/7/export?format=csv');
+  assert.equal(exportUrl(7, 'json'), '/api/market/backtest/runs/7/export');
+  assert.equal(savedLabel({ name: 'Momentum spread', kind: 'batch', created_at: '2026-11-04T17:00:00Z' }), 'Momentum spread · markets and periods · 2026-11-04');
 });
