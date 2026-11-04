@@ -439,6 +439,7 @@ export interface SensitivityResult {
 }
 
 /** A saved backtest as listed; GET /api/market/backtest/runs/{id} adds its result. */
+export interface BacktestSummary { run_id: number; verified: boolean; summary?: string; facts: string; notes: string[]; reason?: string; attempts: number; citations: string }
 export interface SavedBacktest { id: number; name: string; kind: 'single' | 'batch' | 'sensitivity'; query: string; created_at: string }
 
 export interface BacktestParams {

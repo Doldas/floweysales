@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import type { Subscription } from 'rxjs';
 
 import { MarketService, describeHttpError } from '../services';
-import type { BacktestParams, BacktestResult, BatchResult, SavedBacktest, SensitivityResult } from '../models';
+import type { BacktestParams, BacktestResult, BacktestSummary, BatchResult, SavedBacktest, SensitivityResult } from '../models';
 import { periodError } from '../core/strategy-period';
 import { batchHeadline, batchParams, batchRows, exportUrl, savedLabel, sensitivityHeadline, sensitivityParams, sensitivityRows, singleParams, chartSummary, curvePath, metricTiles, warningText } from './backtest-view';
 
@@ -209,6 +209,7 @@ const CHART_H = 220;
               <span>{{ label(r) }}</span>
               <span class="bt-saved-actions">
                 <button type="button" class="btn btn-sm btn-link p-0" (click)="openSaved(r)">Open</button>
+                <button type="button" class="btn btn-sm btn-link p-0" (click)="summarize(r)" [disabled]="summaryLoading() === r.id">{{ summaryLoading() === r.id ? 'Summarizing…' : 'Summarize' }}</button>
                 <a class="btn btn-sm btn-link p-0" [href]="exportHref(r.id, 'csv')" download>CSV</a>
                 <a class="btn btn-sm btn-link p-0" [href]="exportHref(r.id, 'json')" download>JSON</a>
                 <button type="button" class="btn btn-sm btn-link text-danger p-0" (click)="removeSaved(r)" [attr.aria-label]="'Delete ' + r.name">Delete</button>
@@ -217,6 +218,19 @@ const CHART_H = 220;
           }
         </ul>
       } @else { <p class="bt-note">Nothing saved yet.</p> }
+      @if (aiSummary(); as s) {
+        <div class="bt-summary" aria-live="polite">
+          <h5 class="h6 mb-1">Summary of “{{ summaryName() }}”</h5>
+          @if (s.verified) {
+            <p class="bt-note">Every figure below was found in the recorded results ({{ s.citations }}). The check is mechanical; it does not judge the wording.</p>
+            <p class="bt-summary-text">{{ s.summary }}</p>
+          } @else {
+            <p class="text-warning small" role="status">{{ s.reason }}</p>
+            <pre class="bt-summary-facts">{{ s.facts }}</pre>
+          }
+          @for (n of s.notes; track n) { <p class="bt-note">{{ n }}</p> }
+        </div>
+      }
     </div>
   </details>
 </section>
@@ -248,6 +262,9 @@ const CHART_H = 220;
 .bt-saved { border-top: 1px solid var(--fs-border); margin-top: 0.75rem; padding-top: 0.75rem; }
 .bt-name { max-width: 16rem; }
 .bt-saved-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.35rem; li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.4rem; font-size: 0.85rem; } }
+.bt-summary { margin-top: 0.75rem; }
+.bt-summary-text { white-space: pre-wrap; font-size: 0.9rem; }
+.bt-summary-facts { white-space: pre-wrap; font-size: 0.8rem; max-height: 16rem; overflow: auto; }
 .bt-saved-actions { display: inline-flex; gap: 0.75rem; }
 .bt-limits { color: var(--fs-muted); padding-left: 1.1rem; margin: 0; }
 td[data-tone='pos'] { color: var(--fs-pos); } td[data-tone='neg'] { color: var(--fs-neg); }
@@ -304,6 +321,9 @@ export class BacktestPanelComponent {
   readonly saved = signal<SavedBacktest[]>([]);
   readonly saveName = signal('');
   readonly savedError = signal('');
+  readonly aiSummary = signal<BacktestSummary | null>(null);
+  readonly summaryName = signal('');
+  readonly summaryLoading = signal<number | null>(null);
   readonly label = savedLabel;
   readonly exportHref = exportUrl;
   readonly sensRows = computed(() => sensitivityRows(this.sens()?.variants ?? []));
@@ -391,6 +411,15 @@ export class BacktestPanelComponent {
         else { this.result.set(full.result as BacktestResult); this.error.set(''); }
       },
       error: err => this.savedError.set(describeHttpError(err)),
+    });
+  }
+
+  summarize(r: SavedBacktest): void {
+    this.savedError.set('');
+    this.summaryLoading.set(r.id);
+    this.api.summarizeBacktestRun(r.id).subscribe({
+      next: res => { this.aiSummary.set(res); this.summaryName.set(r.name); this.summaryLoading.set(null); },
+      error: err => { this.savedError.set(describeHttpError(err)); this.summaryLoading.set(null); },
     });
   }
 
