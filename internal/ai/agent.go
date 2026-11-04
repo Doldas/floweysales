@@ -26,6 +26,9 @@ type Event struct {
 	ToolError string   `json:"tool_error,omitempty"`
 	Steps     int      `json:"steps,omitempty"`
 	Error     string   `json:"error,omitempty"`
+	// ParentCallID is set on events of delegated work (a team the run called
+	// with delegate_to_team) and names the tool call that started it.
+	ParentCallID string `json:"parent_call_id,omitempty"`
 	// Agent names the team member (or "chair") an event of a team run belongs to.
 	Agent string `json:"agent,omitempty"`
 	// Stance is set on member_done: the persona's closing STANCE value, if it gave one.
@@ -95,6 +98,7 @@ const DefaultSystemPrompt = `You are FloweySales Analyst, a financial research a
 
 You have tools that query the FloweySales backend for real market data:
 - search_web: source-backed current web search; cite real URLs and published dates, and distinguish search snippets from primary filings
+- delegate_to_team: hand a goal to one of the user's saved agent teams and receive each member's answer; use it once, when several investor viewpoints are asked for
 - read_source: open one search result of this run by its source_id (for example S3) and read the page; only then is it more than a snippet
 - search_symbols: find tickers
 - get_price_history: OHLC history + stop-loss trajectory
@@ -146,6 +150,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		system = DefaultSystemPrompt
 	}
 
+	ctx = withRunState(ctx, client)
 	var noTools bool // set once the tool catalogue is known
 	isTask := len(opts.Deliverables) > 0 || opts.Resume != nil
 	deliverables := append([]Deliverable(nil), opts.Deliverables...)
@@ -362,9 +367,9 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 			} else if callArgs, err = readSourceArgs(registry, tc.Function.Name, callArgs); err != nil {
 				// A read_source call names a search hit; the address comes from the registry.
 			} else if opts.Execute != nil {
-				result, err = opts.Execute(ctx, tc.Function.Name, callArgs)
+				result, err = opts.Execute(withToolSink(ctx, callID, emit), tc.Function.Name, callArgs)
 			} else {
-				result, err = Execute(ctx, src, tc.Function.Name, callArgs)
+				result, err = Execute(withToolSink(ctx, callID, emit), src, tc.Function.Name, callArgs)
 			}
 			ev := Event{Type: "tool_result", Name: tc.Function.Name, CallID: callID, Seq: toolCalls}
 			if err != nil {

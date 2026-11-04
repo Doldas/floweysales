@@ -2,7 +2,7 @@
 //   node --test src/app/core/answer-sources.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EVIDENCE_MODES, auditSummary, parseEvidenceMode, findingLabel, safeUrl, splitSources } from './answer-sources.ts';
+import { EVIDENCE_MODES, auditSummary, delegationProgress, parseEvidenceMode, findingLabel, safeUrl, splitSources } from './answer-sources.ts';
 
 test('sources split by whether the agent opened them', () => {
   const { read, listed } = splitSources([
@@ -33,4 +33,11 @@ test('an unknown stored evidence mode falls back to standard', () => {
   assert.equal(parseEvidenceMode('strict'), 'standard');
   assert.equal(parseEvidenceMode(null), 'standard');
   assert.deepEqual(EVIDENCE_MODES.map(m => m.id), ['standard', 'evidence_only', 'primary_only']);
+});
+
+test('delegationProgress names the member and its stance', () => {
+  assert.equal(delegationProgress({ type: 'member_start', name: 'Walter Ashgrove' }), 'Walter Ashgrove is working');
+  assert.equal(delegationProgress({ type: 'member_done', name: 'Walter Ashgrove', stance: 'does_not_fit' }), 'Walter Ashgrove answered (does not fit)');
+  assert.equal(delegationProgress({ type: 'member_done', agent: 'quant', error: 'timeout' }), 'quant failed: timeout');
+  assert.equal(delegationProgress({ type: 'delta' }), '');
 });

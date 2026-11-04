@@ -2,7 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 
 import type { Message, ModelProfile, Persona } from '../models';
 import { MarketState } from './market-state';
-import { parseEvidenceMode, type AnswerFinding, type AnswerSource, type EvidenceMode } from './answer-sources';
+import { delegationProgress, parseEvidenceMode, type AnswerFinding, type AnswerSource, type EvidenceMode } from './answer-sources';
 import { EMPTY_NOTICES, applyNotice, dismissNotice, finishNotices, recoveryLine, type NoticeState } from './agent-notices';
 
 export interface AiPreset {
@@ -61,6 +61,8 @@ export interface ChatEntry {
   durationMs?: number;
   /** The character that wrote an assistant message, when one was chosen. */
   persona?: string;
+  /** Latest progress line of work the step delegated, such as a team member answering. */
+  progress?: string;
 }
 
 /** Conversation context the agent receives alongside the transcript. */
@@ -333,7 +335,7 @@ export class AgentSession {
       if (!line.startsWith('data:')) continue;
       const payload = line.slice(5).trim();
       if (!payload) continue;
-      let ev: { model?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean; type?: string; severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string; content?: string; name?: string; arguments?: string; result?: string; tool_error?: string; error?: string; message?: Message; sources?: AnswerSource[]; audit?: AnswerFinding[] };
+      let ev: { model?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean; type?: string; severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string; content?: string; name?: string; arguments?: string; result?: string; tool_error?: string; error?: string; message?: Message; sources?: AnswerSource[]; audit?: AnswerFinding[]; parent_call_id?: string; agent?: string; stance?: string };
       try {
         ev = JSON.parse(payload);
       } catch {
@@ -358,6 +360,11 @@ export class AgentSession {
           this.finishStep(ev);
           this.assistantId = -1;
           break;
+        case 'member_start':
+        case 'member_done':
+          // Work of a team the agent delegated to; shown on the delegating step.
+          if (ev.parent_call_id) this.setProgress(ev.parent_call_id, delegationProgress(ev));
+          break;
         case 'sources':
           this.answerSources.set(ev.sources ?? []);
           this.answerAudit.set(ev.audit ?? []);
@@ -373,6 +380,10 @@ export class AgentSession {
           break;
       }
     }
+  }
+
+  private setProgress(callId: string, progress: string): void {
+    this.entries.update(list => list.map(e => (e.role === 'tool' && e.callId === callId ? { ...e, progress } : e)));
   }
 
   /** A failed model call may have streamed part of a reply; the retry starts it over. */

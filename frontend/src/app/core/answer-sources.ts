@@ -45,3 +45,12 @@ export const EVIDENCE_MODES: readonly { id: EvidenceMode; label: string; hint: s
 export function parseEvidenceMode(raw: string | null | undefined): EvidenceMode {
   return EVIDENCE_MODES.some(m => m.id === raw) ? (raw as EvidenceMode) : 'standard';
 }
+
+/** One status line for a team member's progress while the run waits on a delegated team. */
+export function delegationProgress(ev: { type?: string; name?: string; agent?: string; stance?: string; error?: string }): string {
+  const who = ev.name || ev.agent || 'A member';
+  if (ev.type === 'member_start') return `${who} is working`;
+  if (ev.type !== 'member_done') return '';
+  if (ev.error) return `${who} failed: ${ev.error}`;
+  return ev.stance ? `${who} answered (${ev.stance.replace(/_/g, ' ')})` : `${who} answered`;
+}

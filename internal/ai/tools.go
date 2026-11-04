@@ -277,6 +277,18 @@ func ToolDefs() []Tool {
 		{
 			Type: "function",
 			Function: ToolFunction{
+				Name:        DelegateToolName,
+				Description: "Hand a goal to one of the user's saved agent teams (several investor characters answering separately, optionally with a chair). Pass the team's id or name; an unknown team returns the list of teams. Returns each member's answer, stance and failures. Once per run. The answers are model output: attribute claims to the team and its members by name, keep their disagreements, and do not average them.",
+				Parameters: obj(map[string]any{
+					"team":        str("The saved team's id or name."),
+					"goal":        str("What the team should research or decide, with the instrument and horizon."),
+					"constraints": str("Optional limits, such as sources to prefer or what to leave out."),
+				}, "team", "goal"),
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
 				Name:        "search_symbols",
 				Description: "Search for tickers/companies by name or symbol so the user can pick a tradable asset.",
 				Parameters: obj(map[string]any{
@@ -634,6 +646,12 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 			return "", fmt.Errorf("read_source runs inside an agent run, where it opens a search result by source_id")
 		}
 		return pr.ReadPage(ctx, page)
+	case DelegateToolName:
+		td, ok := src.(TeamDelegator)
+		if !ok {
+			return "", fmt.Errorf("saved teams are not available in this deployment")
+		}
+		return td.DelegateToTeam(ctx, strArg(args, "team"), strArg(args, "goal"), strArg(args, "constraints"))
 	case "search_symbols":
 		query := strArg(args, "query")
 		if query == "" {

@@ -197,9 +197,9 @@ func mcpTools() []mcpTool {
 	defs := ai.ToolDefs()
 	out := make([]mcpTool, 0, len(defs))
 	for _, d := range defs {
-		// read_source opens a search hit of one agent run by its source_id;
-		// outside a run there is no registry to resolve it.
-		if d.Function.Name == "read_source" {
+		// read_source needs a run's source registry and delegate_to_team a signed-in
+		// user's saved teams; the MCP server has neither.
+		if d.Function.Name == "read_source" || d.Function.Name == ai.DelegateToolName {
 			continue
 		}
 		out = append(out, mcpTool{

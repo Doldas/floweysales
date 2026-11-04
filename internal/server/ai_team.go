@@ -131,28 +131,10 @@ func (e *Engine) registerTeamRoutes() {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": problem})
 			return
 		}
-		ids := make([]string, len(specs))
-		for i, s := range specs {
-			ids[i] = s.Persona
-		}
-		members, problem := teamMembers(ids)
+		members, problem := e.buildTeamMembers(r.Context(), specs)
 		if problem != "" {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": problem})
 			return
-		}
-		for i, s := range specs {
-			profile, err := e.profileFor(r.Context(), s.ProfileID)
-			if err != nil {
-				writeJSON(w, http.StatusBadRequest, map[string]any{"error": "A model profile of this team is not available. Choose another."})
-				return
-			}
-			if profile != nil {
-				members[i].Model, members[i].FallbackModel = profile.Model, profile.FallbackModel
-				members[i].DisableTools = profile.SupportsTools != nil && !*profile.SupportsTools
-				if profile.MaxToolCalls != nil {
-					members[i].MaxToolCalls = *profile.MaxToolCalls
-				}
-			}
 		}
 		baseURL, apiKey, model, ok := e.resolveChatEndpoint(w, r, "", "", req.Model, "")
 		if !ok {
@@ -180,6 +162,33 @@ func (e *Engine) registerTeamRoutes() {
 			Agent: agent, Chair: chair,
 		}, send)
 	})
+}
+
+// buildTeamMembers turns member specs into team members: the persona's
+// prompt, and the model, fallback and tool limits of its profile.
+func (e *Engine) buildTeamMembers(ctx context.Context, specs []teamMemberRequest) ([]ai.TeamMember, string) {
+	ids := make([]string, len(specs))
+	for i, s := range specs {
+		ids[i] = s.Persona
+	}
+	members, problem := teamMembers(ids)
+	if problem != "" {
+		return nil, problem
+	}
+	for i, s := range specs {
+		profile, err := e.profileFor(ctx, s.ProfileID)
+		if err != nil {
+			return nil, "A model profile of this team is not available. Choose another."
+		}
+		if profile != nil {
+			members[i].Model, members[i].FallbackModel = profile.Model, profile.FallbackModel
+			members[i].DisableTools = profile.SupportsTools != nil && !*profile.SupportsTools
+			if profile.MaxToolCalls != nil {
+				members[i].MaxToolCalls = *profile.MaxToolCalls
+			}
+		}
+	}
+	return members, ""
 }
 
 // teamSpecs works out who is on the team: a saved team, members with their

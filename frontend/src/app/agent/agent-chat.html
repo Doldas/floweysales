@@ -54,7 +54,7 @@
         <div class="bubble"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> Planning the next step…</div>
       </div>
     } @else if (currentStep(); as step) {
-      <div class="working" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Using {{ toolLabel(step.name || 'tool') }}…</div>
+      <div class="working" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Using {{ toolLabel(step.name || 'tool') }}…@if (step.progress) { <span class="text-muted">{{ step.progress }}</span> }</div>
     }
 
     @if (session.runStatus(); as status) {
