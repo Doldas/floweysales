@@ -226,7 +226,7 @@ func (e *Engine) registerAIRoutes() {
 				if role == identity.RoleSysAdmin {
 					return ai.ToolNames()
 				}
-				return []string{}
+				return userAgentTools()
 			}(),
 			"presets": func() []map[string]any {
 				if role == identity.RoleSysAdmin {
@@ -368,10 +368,12 @@ func (e *Engine) chatAgentOptions(r *http.Request, systemPrompt, personaID strin
 	}
 	if e.authService != nil {
 		u, ok := e.currentUser(r)
-		if !ok || u.Role != identity.RoleSysAdmin {
-			// Engine config, local ticks and orders are currently shared.
-			// Disable all LLM tools until a USER-safe, scoped catalog exists.
+		if !ok {
 			opts.DisableTools = true
+		} else {
+			// Engine config, ticks and the paper book are shared, so ordinary
+			// users get only the tools in userAgentTools.
+			e.scopeAgentTools(&opts, u, true)
 		}
 	}
 	return opts

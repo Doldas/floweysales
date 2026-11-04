@@ -20,8 +20,22 @@ A chat becomes a **task** when `POST /api/ai/chat` carries `deliverables`, a lis
 | `POST /api/ai/tasks/{id}/resume` | Continues from the checkpoint; body `{"message": "..."}` is optional. Refused (409) for a `complete` task |
 | `DELETE /api/ai/tasks/{id}` | Removes a task |
 
-Statuses: `running`, `complete`, `incomplete`, `failed`, `cancelled`. A user keeps at most 100 tasks, each checkpoint at most 4 MiB. Tasks follow the same tool rules as chat: accounts other than SYS_ADMIN get no tools.
+Statuses: `running`, `complete`, `incomplete`, `failed`, `cancelled`. A user keeps at most 100 tasks, each checkpoint at most 4 MiB. Tasks follow the same tool rules as chat (see below).
 
 ## Not covered yet
 
 The web UI does not show tasks, and the local-model VRAM benchmark from #5 is not built. `cmd/agent-eval` ([agent evaluation](agent-evaluation.md)) is its base.
+
+## Agent tools by role
+
+Every account can use the agent's tools; what differs is which tools.
+
+| Class | Tools | Who |
+| --- | --- | --- |
+| Public data | Quotes, history, technicals, financials, SEC filings and sections, provider research, calculators (DCF, WACC, ROIC, ratios), web search, leaderboard, backtests, rule strategies, insider activity, macro regime, corporate events, reference portfolios | Everyone |
+| Your own data | Wealth plan, domain providers (they read your saved files) | Everyone; each run reads only the caller's data |
+| Server state | Engine config, recorded ticks, market stats, the paper portfolio | `SYS_ADMIN` only: they show the server's trackers and stop levels, which are shared |
+
+Tools that spend something shared (web search, provider and SEC calls, backtests) are limited to 60 calls a minute per ordinary account; the agent is told when the budget is used up. Administrators are not limited.
+
+Every tool in the catalogue has an explicit class in `internal/server/ai_tool_scope.go`, and a test fails when a tool is added without one. `GET /api/ai/config` lists the tools the caller can use.
