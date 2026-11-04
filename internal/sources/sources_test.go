@@ -137,3 +137,38 @@ func TestRegisterReadKeepsTheIDAndStoresThePageText(t *testing.T) {
 		t.Error("a page already read is not opened twice")
 	}
 }
+
+func TestAuditChecksQuotedPassagesAgainstTheCitedText(t *testing.T) {
+	r := registry(t)
+	if got := Audit(`Management said "net income was 910.5 million" [S3].`, r); len(got) != 0 {
+		t.Fatalf("a quote found in the source must pass: %+v", got)
+	}
+	// Case, spacing and curly quotes do not matter.
+	if got := Audit("Management said \u201cNet  income WAS 910.5 million\u201d [S3].", r); len(got) != 0 {
+		t.Fatalf("typography must not matter: %+v", got)
+	}
+	if got := Audit(`Management said "net income rose sharply on strong demand" [S3].`, r); kinds(got) != "quote_mismatch" {
+		t.Fatalf("invented quote: %s", kinds(got))
+	}
+	// A quote from another cited source than the one that says it is not enough.
+	if got := Audit(`Acme said "net income was 910.5 million" [S2].`, r); !strings.Contains(kinds(got), "quote_mismatch") {
+		t.Fatalf("wrong source: %s", kinds(got))
+	}
+}
+
+func TestQuoteCheckLeavesShortQuotesAndEllipsesAlone(t *testing.T) {
+	r := registry(t)
+	if got := Audit(`The filing calls it "net income" [S3].`, r); len(got) != 0 {
+		t.Fatalf("a short quote is a term, not a claim: %+v", got)
+	}
+	if got := Audit(`It said "net income was ... 910.5 million" [S3].`, r); len(got) != 0 {
+		t.Fatalf("parts of fewer than five words are skipped: %+v", got)
+	}
+	if got := Audit(`It said "Net income was 910.5 million [...] and costs fell sharply every quarter" [S3].`, r); kinds(got) != "quote_mismatch" {
+		t.Fatalf("each part of five words must be found: %s", kinds(got))
+	}
+	// Without a citation there is nothing to check a quote against.
+	if got := Audit(`He said "net income rose sharply on strong demand".`, r); len(got) != 0 {
+		t.Fatalf("uncited quote: %+v", got)
+	}
+}
