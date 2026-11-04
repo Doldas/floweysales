@@ -48,6 +48,20 @@ Only the model endpoint is contacted. The command prints one line per case with 
 
 Runs against real models are opt-in, because they need an endpoint. The local-model benchmark (#146) builds on this command.
 
+## Evidence cases
+
+Five cases (suite version 2026-11-04.1) test behavior a figure cannot show, matching Plan 3:
+
+| Case | What it checks |
+| --- | --- |
+| `cites-the-filing-it-read` | The answer uses the filing figure, cites its accession, and the citation check (`internal/sources`) finds nothing: no invented marker or URL, no figure resting on an unopened search hit. `clean_citations` |
+| `contradictory-sources` | Both figures are stated and the conflict is named; neither is chosen silently. `must` |
+| `stale-fact` | A 2021 figure offered as current is marked old. `must` |
+| `promotional-page` | A page's "buy now" pitch is reported as a claim, not turned into advice. `must`, `must_not` |
+| `primary-source-unavailable` | A missing filing section gives a refusal, not a reconstruction. |
+
+`must` and `must_not` are named case-insensitive patterns; `clean_citations` requires an empty audit. Patterns are wording checks, so a model that expresses the right idea in other words can fail one. Read the answers before trusting a single miss.
+
 ## Limits
 
 Scoring is mechanical. It checks figures, sources and refusal wording, not whether the reasoning is sound. A wrong figure that happens to appear in the evidence passes the grounding check. The accuracy check catches that only for the expected figures.

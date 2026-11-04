@@ -44,8 +44,23 @@ type Case struct {
 	Sources []string `json:"sources,omitempty"`
 	// ExpectRefusal marks questions the fixtures cannot answer.
 	ExpectRefusal bool `json:"expect_refusal,omitempty"`
+	// Must and MustNot are patterns the answer has to match or avoid, for
+	// behavior a figure cannot show: naming a conflict between sources, saying a
+	// fact is old, or not turning a page's sales pitch into advice.
+	Must    []Pattern `json:"must,omitempty"`
+	MustNot []Pattern `json:"must_not,omitempty"`
+	// CleanCitations requires the citation check (internal/sources) to find
+	// nothing in the answer: no invented marker or URL, no figure resting on an
+	// unopened search result.
+	CleanCitations bool `json:"clean_citations,omitempty"`
 	// Reference, for calculator cases, recomputes Expected[0].
 	Reference *Reference `json:"reference,omitempty"`
+}
+
+// Pattern is a case-insensitive regular expression with a name for reports.
+type Pattern struct {
+	Label string `json:"label"`
+	Regex string `json:"regex"`
 }
 
 // Reference pins a calculator case's expected figure to the calculator
@@ -86,6 +101,11 @@ func ParseSuite(raw []byte) (Suite, error) {
 		case c.ExpectRefusal == (len(c.Expected) > 0):
 			return s, fmt.Errorf("case %s must either expect figures or a refusal", c.ID)
 		}
+		for _, p := range append(append([]Pattern(nil), c.Must...), c.MustNot...) {
+			if _, err := regexp.Compile("(?i)" + p.Regex); err != nil || p.Label == "" {
+				return s, fmt.Errorf("case %s has a pattern %q that is unnamed or does not compile", c.ID, p.Label)
+			}
+		}
 		seen[c.ID] = true
 	}
 	return s, nil
@@ -93,20 +113,22 @@ func ParseSuite(raw []byte) (Suite, error) {
 
 // Result scores one case.
 type Result struct {
-	ID         string   `json:"id"`
-	Category   string   `json:"category"`
-	Passed     bool     `json:"passed"`
-	Accuracy   float64  `json:"accuracy"`
-	Grounded   bool     `json:"grounded"`
-	Cited      bool     `json:"cited"`
-	Refused    *bool    `json:"refused,omitempty"`
-	Missing    []string `json:"missing,omitempty"`
-	Problems   []string `json:"problems,omitempty"`
-	ToolCalls  int      `json:"tool_calls"`
-	ToolErrors int      `json:"tool_errors"`
-	DurationMS int64    `json:"duration_ms"`
-	Answer     string   `json:"answer"`
-	Error      string   `json:"error,omitempty"`
+	ID       string   `json:"id"`
+	Category string   `json:"category"`
+	Passed   bool     `json:"passed"`
+	Accuracy float64  `json:"accuracy"`
+	Grounded bool     `json:"grounded"`
+	Cited    bool     `json:"cited"`
+	Refused  *bool    `json:"refused,omitempty"`
+	Missing  []string `json:"missing,omitempty"`
+	// CitationFindings are the problems the citation check found in the answer.
+	CitationFindings []string `json:"citation_findings,omitempty"`
+	Problems         []string `json:"problems,omitempty"`
+	ToolCalls        int      `json:"tool_calls"`
+	ToolErrors       int      `json:"tool_errors"`
+	DurationMS       int64    `json:"duration_ms"`
+	Answer           string   `json:"answer"`
+	Error            string   `json:"error,omitempty"`
 }
 
 // Report is a scored run of a suite.
@@ -167,6 +189,7 @@ func runCase(ctx context.Context, client *ai.Client, c Case, opts Options) Resul
 	defer cancel()
 	var mu sync.Mutex
 	var answer, evidence strings.Builder
+	var findings []string
 	calls, toolErrors := 0, 0
 	execute := func(ctx context.Context, name, args string) (string, error) {
 		out, err := fixtureResult(ctx, c, name, args)
@@ -189,6 +212,10 @@ func runCase(ctx context.Context, client *ai.Client, c Case, opts Options) Resul
 			if answer.Len() < 12000 {
 				answer.WriteString(ev.Content)
 			}
+		case "sources":
+			for _, f := range ev.Audit {
+				findings = append(findings, f.Kind+": "+f.Detail)
+			}
 		case "tool_result":
 			calls++
 			if ev.ToolError != "" {
@@ -197,6 +224,11 @@ func runCase(ctx context.Context, client *ai.Client, c Case, opts Options) Resul
 		}
 	})
 	r := Score(c, answer.String(), evidence.String())
+	r.CitationFindings = findings
+	if c.CleanCitations && len(findings) > 0 {
+		r.Problems = append(r.Problems, fmt.Sprintf("citation check found %d problem(s): %s", len(findings), findings[0]))
+		r.Passed = false
+	}
 	r.ToolCalls, r.ToolErrors, r.DurationMS = calls, toolErrors, time.Since(started).Milliseconds()
 	if calls == 0 {
 		// Even a refusal must come from looking at the data.
@@ -257,6 +289,16 @@ func Score(c Case, answer, evidence string) Result {
 		if !strings.Contains(lower, strings.ToLower(s)) {
 			r.Cited = false
 			r.Problems = append(r.Problems, "does not cite "+s)
+		}
+	}
+	for _, p := range c.Must {
+		if !regexp.MustCompile("(?i)" + p.Regex).MatchString(answer) {
+			r.Problems = append(r.Problems, "does not "+p.Label)
+		}
+	}
+	for _, p := range c.MustNot {
+		if regexp.MustCompile("(?i)" + p.Regex).MatchString(answer) {
+			r.Problems = append(r.Problems, "must not "+p.Label)
 		}
 	}
 	if c.ExpectRefusal {

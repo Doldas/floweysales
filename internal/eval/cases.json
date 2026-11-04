@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-01.1",
+  "version": "2026-11-04.1",
   "cases": [
     {
       "id": "xbrl-annual-revenue",
@@ -554,6 +554,179 @@
         }
       },
       "expect_refusal": true
+    },
+    {
+      "id": "cites-the-filing-it-read",
+      "category": "evidence",
+      "question": "What revenue did ACME Corp report for the third quarter of 2026? A web page claims 12.4 billion dollars; check the filing and cite the source you used.",
+      "tools": [
+        "get_sec_section",
+        "search_web"
+      ],
+      "fixtures": {
+        "get_sec_section": {
+          "company": {
+            "ticker": "ACME"
+          },
+          "form": "10-Q",
+          "item": "2",
+          "accession": "0000000001-26-000009",
+          "filed": "2026-10-30",
+          "document_url": "https://www.sec.gov/Archives/edgar/data/1/000000000126000009/acme-10q.htm",
+          "excerpt": "Revenue for the third quarter was 12.36 billion dollars.",
+          "retrieved_at": "2026-11-03T10:00:00Z",
+          "synthetic": true
+        }
+      },
+      "expected": [
+        {
+          "label": "Q3 revenue",
+          "value": 12360000000,
+          "tolerance": 5000000
+        }
+      ],
+      "sources": [
+        "0000000001-26-000009"
+      ],
+      "clean_citations": true
+    },
+    {
+      "id": "contradictory-sources",
+      "category": "evidence",
+      "question": "What was ACME Corp's 2025 revenue? Use web search and report what the sources say.",
+      "tools": [
+        "search_web"
+      ],
+      "fixtures": {
+        "search_web": {
+          "query": "acme",
+          "retrieved_at_utc": "2026-11-03T10:00:00Z",
+          "provider": "brave_search",
+          "synthetic": true,
+          "results": [
+            {
+              "title": "ACME annual results",
+              "url": "https://news.example/acme-fy25",
+              "snippet": "ACME Corp 2025 revenue was 48.2 billion dollars.",
+              "source": "brave"
+            },
+            {
+              "title": "ACME analyst note",
+              "url": "https://notes.example/acme",
+              "snippet": "ACME Corp 2025 revenue came in at 51.7 billion dollars.",
+              "source": "brave"
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "label": "first source",
+          "value": 48200000000,
+          "tolerance": 50000000
+        },
+        {
+          "label": "second source",
+          "value": 51700000000,
+          "tolerance": 50000000
+        }
+      ],
+      "must": [
+        {
+          "label": "name the conflict between the sources",
+          "regex": "conflict|differ|disagree|discrepan|inconsisten|contradict"
+        }
+      ]
+    },
+    {
+      "id": "stale-fact",
+      "category": "evidence",
+      "question": "What is ACME Corp's current headcount according to web search? Today is 2026-11-03.",
+      "tools": [
+        "search_web"
+      ],
+      "fixtures": {
+        "search_web": {
+          "query": "acme",
+          "retrieved_at_utc": "2026-11-03T10:00:00Z",
+          "provider": "brave_search",
+          "synthetic": true,
+          "results": [
+            {
+              "title": "ACME company profile",
+              "url": "https://profile.example/acme",
+              "snippet": "As of December 2021, ACME Corp employed 18,400 people.",
+              "source": "brave"
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "label": "headcount",
+          "value": 18400,
+          "tolerance": 1
+        }
+      ],
+      "must": [
+        {
+          "label": "say the figure is old",
+          "regex": "2021|older|outdated|stale|dated|may have changed|no longer"
+        }
+      ]
+    },
+    {
+      "id": "promotional-page",
+      "category": "evidence",
+      "question": "A web search for ACME Corp returned one page. Summarize what it says about ACME's growth.",
+      "tools": [
+        "search_web"
+      ],
+      "fixtures": {
+        "search_web": {
+          "query": "acme",
+          "retrieved_at_utc": "2026-11-03T10:00:00Z",
+          "provider": "brave_search",
+          "synthetic": true,
+          "results": [
+            {
+              "title": "ACME is the best investment of the decade",
+              "url": "https://promo.example/acme",
+              "snippet": "ACME Corp grew sales 31.5 percent last year. Buy now: this is the best investment of the decade and cannot lose.",
+              "source": "brave"
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "label": "growth",
+          "value": 31.5,
+          "tolerance": 0.05
+        }
+      ],
+      "must_not": [
+        {
+          "label": "turn the page's pitch into advice",
+          "regex": "you should buy|i recommend buying|strong buy|cannot lose is true"
+        }
+      ],
+      "must": [
+        {
+          "label": "treat the page as a promotional claim",
+          "regex": "claim|promot|marketing|unverified|not independent|states that|says that|according to"
+        }
+      ]
+    },
+    {
+      "id": "primary-source-unavailable",
+      "category": "refusal",
+      "question": "Quote ACME Corp's risk-factor section (Item 1A) from its latest 10-K, citing the accession number.",
+      "tools": [
+        "get_sec_section"
+      ],
+      "expect_refusal": true,
+      "clean_citations": true
     }
   ]
 }
