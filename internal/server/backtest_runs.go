@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"floweysales/internal/provenance"
 	"floweysales/internal/storage"
 )
 
@@ -66,7 +67,8 @@ func (e *Engine) computeBacktestRun(ctx context.Context, kind string, q url.Valu
 // savedBacktest is what a saved run returns: the run, its query and the result.
 type savedBacktest struct {
 	storage.BacktestRun
-	Result json.RawMessage `json:"result"`
+	Result     json.RawMessage `json:"result"`
+	Provenance provenance.Fact `json:"provenance"`
 }
 
 func (e *Engine) registerBacktestRunRoutes() {
@@ -157,7 +159,7 @@ func (e *Engine) registerBacktestRunRoutes() {
 			writeJSON(w, storeStatus(err), map[string]string{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusOK, savedBacktest{BacktestRun: run, Result: json.RawMessage(run.Result)})
+		writeJSON(w, http.StatusOK, savedBacktest{BacktestRun: run, Result: json.RawMessage(run.Result), Provenance: backtestRunProvenance(run)})
 	})
 
 	e.mux.HandleFunc("DELETE /api/market/backtest/runs/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -200,8 +202,9 @@ func (e *Engine) registerBacktestRunRoutes() {
 		w.Header().Set("Content-Disposition", `attachment; filename="`+name+`.json"`)
 		writeJSON(w, http.StatusOK, map[string]any{
 			"name": run.Name, "kind": run.Kind, "query": run.Query, "saved_at": run.CreatedAt.UTC().Format(time.RFC3339),
-			"note":   "The result is the server's answer when the run was saved. Dates are UTC. Re-running the query later may give a different result as prices and reports change.",
-			"result": json.RawMessage(run.Result),
+			"note":       "The result is the server's answer when the run was saved. Dates are UTC. Re-running the query later may give a different result as prices and reports change.",
+			"provenance": backtestRunProvenance(run),
+			"result":     json.RawMessage(run.Result),
 		})
 	})
 }
