@@ -50,3 +50,15 @@ The rule strategies appear on the Strategies page under their character, where t
 - `POST /api/ai/team` takes `{question, personas: [...], chair?, symbol?, provider?, range?, price?}` and streams events tagged with `agent` (`member_start`, `delta`, `tool_start`, `tool_result`, `member_done` with `stance`, then the chair's, then `done`). It is rate limited to 4 runs a minute, gives each member at most 16 tool calls, and follows the same rules as chat about who may use tools (see [Agent tools by role](agent-tasks.md#agent-tools-by-role)).
 
 Each character of a team can use its own model profile, and teams can be saved: see [Model profiles and saved teams](model-profiles.md).
+
+## Delegating to a saved team
+
+In chat, the research agent has a `delegate_to_team` tool that hands a goal to one of the signed-in user's saved teams. The agent passes the team's id or name; an unknown name returns the list of the user's teams so it can try again. The team runs on the same model endpoint as the chat, with each member's own profile, and the chair summary is included when the saved team has a chair.
+
+- **One delegation per run, and no recursion.** A second call in the same run is refused. Members are started with a tool list that does not include `delegate_to_team`, and a nested run also refuses to claim a delegation, so a wrong tool list cannot make a team call a team.
+- **Cancellation and budget.** The team stops when the chat is cancelled or times out (5 minutes at most). The call counts as one tool call of the parent and is metered like other shared tools; the members' own tool calls count against the same per-minute budget of the user.
+- **What comes back.** Each member's name, stance, answer, failure and the web pages it read; the chair summary; a count of failures. A member that fails leaves a partial result; if no member answers, the call is an error. The result carries a note telling the agent that the answers are model output, to attribute claims to the team and member by name, and to pass disagreement on rather than average it.
+- **What the chat shows.** While the team works, the delegating step shows which member is working or has answered. Events of delegated work carry `parent_call_id`, and only member start and finish are forwarded.
+- Not available through the MCP server, and not in flow agent nodes (they have no signed-in user's teams).
+
+Sources a member read are listed by address only; they are not added to the chat's source registry, so the agent cannot cite them as `[Sn]` and the citation check will flag a figure it repeats without its own source.
