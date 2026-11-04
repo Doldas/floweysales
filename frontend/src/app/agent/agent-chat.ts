@@ -2,8 +2,11 @@ import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed,
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 import { AgentSession, type ChatEntry } from '../core/agent-session';
-import { formatToolOutput, renderMarkdown } from '../markdown';
+import { renderMarkdown } from '../markdown';
 import { toolLabel } from '../components/agent-tools';
+import { defaultOptionLabel, profileOption, profileSummary } from '../components/profile-view';
+import { ToolCallComponent } from '../components/tool-call';
+import type { ToolCall } from '../components/tool-call-view';
 
 /** Consecutive tool calls are rendered together as one block of agent steps. */
 type Block = { kind: 'user' | 'assistant'; entry: ChatEntry } | { kind: 'steps'; steps: ChatEntry[]; key: number };
@@ -16,6 +19,7 @@ type Block = { kind: 'user' | 'assistant'; entry: ChatEntry } | { kind: 'steps';
 @Component({
   selector: 'fs-agent-chat',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [ToolCallComponent],
   templateUrl: './agent-chat.html',
   styleUrl: './agent-chat.scss',
 })
@@ -67,10 +71,17 @@ export class AgentChatComponent {
   });
 
   readonly toolLabel = toolLabel;
+  readonly profileOption = profileOption;
+  readonly defaultOptionLabel = defaultOptionLabel;
+  readonly profileSummary = profileSummary;
+
+  /** The profile chosen now, for the line under the select. */
+  readonly chosenProfile = computed(() => this.session.profiles().find(p => p.id === this.session.profileId()) ?? this.session.profiles().find(p => p.is_default));
 
   constructor() {
     void this.session.loadConfig();
     void this.session.loadPersonas();
+    void this.session.loadProfiles();
     // Keep the newest message in view while the agent streams.
     effect(() => {
       this.session.entries();
@@ -124,8 +135,13 @@ export class AgentChatComponent {
     return html;
   }
 
-  toolOutput(content: string): string {
-    return formatToolOutput(content);
+  /** A chat step as the shared tool call view takes it. */
+  callOf(step: ChatEntry): ToolCall {
+    return {
+      callId: step.callId ?? `entry-${step.id}`, seq: step.seq, name: step.name ?? 'tool', args: step.args, result: step.content || undefined,
+      error: step.toolError, status: step.status ?? 'ok', startedAt: step.startedAt, durationMs: step.durationMs,
+      truncated: step.truncated, originalBytes: step.originalBytes, redacted: step.redacted,
+    };
   }
 
   args(raw?: string): string {

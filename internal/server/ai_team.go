@@ -25,11 +25,24 @@ const (
 	teamMemberToolCall = 16
 )
 
+// teamMemberRequest is one member of a run: a character and, optionally, the
+// model profile it uses.
+type teamMemberRequest struct {
+	Persona   string `json:"persona"`
+	ProfileID int64  `json:"profile_id,omitempty"`
+}
+
 type teamRequestBody struct {
 	Question string   `json:"question"`
 	Personas []string `json:"personas"`
-	Chair    *bool    `json:"chair"`
-	Model    string   `json:"model"`
+	// Members replaces Personas when each member has its own profile; TeamID
+	// runs one of the caller's saved teams; ProfileID is the profile of every
+	// member that has none of its own.
+	Members   []teamMemberRequest `json:"members,omitempty"`
+	TeamID    int64               `json:"team_id,omitempty"`
+	ProfileID int64               `json:"profile_id,omitempty"`
+	Chair     *bool               `json:"chair"`
+	Model     string              `json:"model"`
 	// Optional UI context, as for chat.
 	Symbol   string `json:"symbol,omitempty"`
 	Provider string `json:"provider,omitempty"`
@@ -98,12 +111,6 @@ func (e *Engine) registerTeamRoutes() {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Ask a question of 1 to 4000 characters."})
 			return
 		}
-		members, problem := teamMembers(req.Personas)
-		if problem != "" {
-			writeJSON(w, http.StatusBadRequest, map[string]any{"error": problem})
-			return
-		}
-
 		var user identity.User
 		if e.authService != nil {
 			u, ok := e.currentUser(r)
@@ -119,6 +126,34 @@ func (e *Engine) registerTeamRoutes() {
 			return
 		}
 
+		specs, chairWanted, problem := e.teamSpecs(r.Context(), user.ID, &req)
+		if problem != "" {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": problem})
+			return
+		}
+		ids := make([]string, len(specs))
+		for i, s := range specs {
+			ids[i] = s.Persona
+		}
+		members, problem := teamMembers(ids)
+		if problem != "" {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": problem})
+			return
+		}
+		for i, s := range specs {
+			profile, err := e.profileFor(r.Context(), s.ProfileID)
+			if err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]any{"error": "A model profile of this team is not available. Choose another."})
+				return
+			}
+			if profile != nil {
+				members[i].Model, members[i].FallbackModel = profile.Model, profile.FallbackModel
+				members[i].DisableTools = profile.SupportsTools != nil && !*profile.SupportsTools
+				if profile.MaxToolCalls != nil {
+					members[i].MaxToolCalls = *profile.MaxToolCalls
+				}
+			}
+		}
 		baseURL, apiKey, model, ok := e.resolveChatEndpoint(w, r, "", "", req.Model, "")
 		if !ok {
 			return
@@ -139,10 +174,53 @@ func (e *Engine) registerTeamRoutes() {
 		runCtx, cancel := context.WithTimeout(runCtx, 10*time.Minute)
 		defer cancel()
 
-		chair := len(members) > 1 && (req.Chair == nil || *req.Chair)
+		chair := len(members) > 1 && chairWanted
 		_ = ai.RunTeam(runCtx, ai.NewClient(baseURL, apiKey, model), engineSource{e: e}, ai.TeamOptions{
 			Members: members, Question: req.Question, Context: uiContextLine(req.Symbol, req.Provider, req.Range, req.Price),
 			Agent: agent, Chair: chair,
 		}, send)
 	})
+}
+
+// teamSpecs works out who is on the team: a saved team, members with their
+// own profiles, or plain characters. It also says whether the chair runs.
+func (e *Engine) teamSpecs(ctx context.Context, userID int64, req *teamRequestBody) ([]teamMemberRequest, bool, string) {
+	chair := req.Chair == nil || *req.Chair
+	switch {
+	case req.TeamID != 0:
+		store := e.teamStore()
+		if store == nil {
+			return nil, false, "Saved teams are unavailable."
+		}
+		saved, err := store.GetSavedTeam(ctx, userID, req.TeamID)
+		if err != nil {
+			return nil, false, "That saved team was not found."
+		}
+		out := make([]teamMemberRequest, 0, len(saved.Members))
+		for _, m := range saved.Members {
+			s := teamMemberRequest{Persona: m.Persona, ProfileID: req.ProfileID}
+			if m.ProfileID != nil {
+				s.ProfileID = *m.ProfileID
+			}
+			out = append(out, s)
+		}
+		if req.Chair == nil {
+			chair = saved.Chair
+		}
+		return out, chair, ""
+	case len(req.Members) > 0:
+		out := make([]teamMemberRequest, 0, len(req.Members))
+		for _, m := range req.Members {
+			if m.ProfileID == 0 {
+				m.ProfileID = req.ProfileID
+			}
+			out = append(out, m)
+		}
+		return out, chair, ""
+	}
+	out := make([]teamMemberRequest, 0, len(req.Personas))
+	for _, id := range req.Personas {
+		out = append(out, teamMemberRequest{Persona: id, ProfileID: req.ProfileID})
+	}
+	return out, chair, ""
 }

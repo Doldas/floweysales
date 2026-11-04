@@ -4,16 +4,22 @@
  * state the page renders. Pure, tested with node --test.
  */
 import type { Persona, Stance, TeamEvent } from '../models';
+import { finishCall, startCall, type ToolCall } from '#app/components/tool-call-view';
 
 export const STANCE_LABEL: Record<Stance, string> = {
   fits: 'Fits', partly: 'Partly fits', does_not_fit: 'Does not fit', insufficient_data: 'Not enough data',
 };
 export const STANCE_ICON: Record<Stance, string> = { fits: 'bi-check-circle-fill', partly: 'bi-dash-circle-fill', does_not_fit: 'bi-x-circle-fill', insufficient_data: 'bi-question-circle-fill' };
 
-export interface MemberStep { name: string; status: 'running' | 'ok' | 'error' }
+/** A tool call of a member; the shared tool call view shows it with its input, output and timing. */
+export type MemberStep = ToolCall;
 export interface MemberState {
   id: string; name: string; status: 'waiting' | 'running' | 'done' | 'error';
   streamed: string; final: string; stance?: Stance; steps: MemberStep[]; error: string;
+  /** The model this member answers with, from the server; it changes if a fallback takes over. */
+  model?: string;
+  /** Why the member has no tools, when that is so. */
+  note?: string;
 }
 export interface TeamState { members: MemberState[]; chair: MemberState | null; finished: boolean; error: string }
 
@@ -34,19 +40,15 @@ export function applyTeamEvent(s: TeamState, ev: TeamEvent): TeamState {
   const agent = ev.agent ?? '';
   switch (ev.type) {
     case 'member_start':
-      return patch(s, agent, m => ({ ...m, status: 'running' }));
+      return patch(s, agent, m => ({ ...m, status: 'running', model: ev.model || m.model, note: ev.detail || m.note }));
+    case 'run_start':
+      return ev.model ? patch(s, agent, m => ({ ...m, model: ev.model })) : s;
     case 'delta':
       return patch(s, agent, m => ({ ...m, streamed: m.streamed + (ev.content ?? '') }));
     case 'tool_start':
-      return patch(s, agent, m => ({ ...m, steps: [...m.steps, { name: ev.name ?? 'tool', status: 'running' }] }));
+      return patch(s, agent, m => ({ ...m, steps: startCall(m.steps, ev, Date.now(), m.name) }));
     case 'tool_result':
-      return patch(s, agent, m => {
-        const i = m.steps.map(x => x.status).lastIndexOf('running');
-        if (i < 0) return m;
-        const steps = m.steps.slice();
-        steps[i] = { ...steps[i], status: ev.tool_error ? 'error' : 'ok' };
-        return { ...m, steps };
-      });
+      return patch(s, agent, m => ({ ...m, steps: finishCall(m.steps, ev, Date.now(), m.name) }));
     case 'error':
       return agent ? patch(s, agent, m => ({ ...m, error: ev.error ?? m.error })) : { ...s, error: ev.error ?? 'Team run failed' };
     case 'member_done':

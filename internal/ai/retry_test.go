@@ -171,3 +171,56 @@ func TestExhaustedRetriesEndWithoutRecoveredNotice(t *testing.T) {
 		}
 	}
 }
+
+func TestFallbackModelTakesOverWhenTheModelIsUnavailable(t *testing.T) {
+	srv, bodies := flakyServer(t, [2]string{"404", `{"error":{"message":"model 'big' not found"}}`})
+	client := NewClient(srv.URL, "", "big")
+	client.FallbackModel = "small"
+	var events []Event
+	var answer string
+	err := Run(context.Background(), client, fakeDS{}, []Message{{Role: "user", Content: "x"}}, AgentOptions{}, func(e Event) {
+		events = append(events, e)
+		if e.Type == "delta" {
+			answer += e.Content
+		}
+	})
+	if err != nil || answer != "ok" || len(*bodies) != 2 {
+		t.Fatalf("answer %q err %v requests %d", answer, err, len(*bodies))
+	}
+	if !strings.Contains((*bodies)[0], `"model":"big"`) || !strings.Contains((*bodies)[1], `"model":"small"`) {
+		t.Fatalf("the second request must use the fallback model:\n%s\n%s", (*bodies)[0], (*bodies)[1])
+	}
+	var models []string
+	var notice bool
+	for _, e := range events {
+		if e.Type == "run_start" {
+			models = append(models, e.Model)
+		}
+		notice = notice || e.Code == "fallback"
+	}
+	if strings.Join(models, ",") != "big,small" || !notice {
+		t.Errorf("the run says which model it uses, and announces the switch: %v notice=%v", models, notice)
+	}
+}
+
+func TestNoFallbackMeansAnUnavailableModelStillFails(t *testing.T) {
+	srv, _ := flakyServer(t, [2]string{"404", `{"error":{"message":"model 'big' not found"}}`})
+	_, _, err := runOnce(t, srv)
+	if err == nil {
+		t.Fatal("without a fallback the run ends with the error")
+	}
+}
+
+func TestTheFinalErrorDoesNotShowTheEndpoint(t *testing.T) {
+	bad := [2]string{"401", `{"detail":"unauthorized for https://secret.example/api/v1/chat/completions"}`}
+	srv, _ := flakyServer(t, bad)
+	_, events, err := runOnce(t, srv)
+	if err == nil {
+		t.Fatal("a permanent failure ends the run")
+	}
+	for _, e := range events {
+		if e.Type == "error" && (strings.Contains(e.Error, "secret.example") || strings.Contains(e.Error, "http")) {
+			t.Fatalf("the endpoint address must not reach the user: %q", e.Error)
+		}
+	}
+}

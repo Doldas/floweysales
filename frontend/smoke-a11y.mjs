@@ -124,7 +124,7 @@ try {
   await page.addScriptTag({ content: axeSource });
   await page.fill('#hero-prompt', 'Research brief on NVDA');
   await page.press('#hero-prompt', 'Enter');
-  await page.locator('fs-agent-dock .step').first().waitFor({ state: 'visible', timeout: 5000 });
+  await page.locator('fs-agent-dock fs-tool-call').first().waitFor({ state: 'visible', timeout: 5000 });
   await audit(page, 'Agent dock with tool steps', 'fs-agent-dock');
   await page.keyboard.press('Escape');
   await page.keyboard.press('Control+k');

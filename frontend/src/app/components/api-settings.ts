@@ -3,6 +3,7 @@ import { AdminAccessSettingsComponent } from './admin-access-settings';
 import { UpdateSettingsComponent } from './update-settings';
 import { PluginSettingsComponent } from './plugin-settings';
 import { TradingSettingsComponent } from './trading-settings';
+import { ModelProfilesSettingsComponent } from './model-profiles-settings';
 import { FormsModule } from '@angular/forms';
 
 interface AIConfig {base_url:string;model:string;max_steps:number;max_tool_calls:number;configured:boolean}
@@ -12,7 +13,7 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
 @Component({
  selector:'fse-api-settings', host:{class:'fs-native-forms'},
  standalone:true,
- imports:[FormsModule,AdminAccessSettingsComponent,UpdateSettingsComponent,PluginSettingsComponent,TradingSettingsComponent],
+ imports:[FormsModule,AdminAccessSettingsComponent,UpdateSettingsComponent,PluginSettingsComponent,TradingSettingsComponent,ModelProfilesSettingsComponent],
  template:`
  <div class="api-settings">
   @if(!encryptionReady()){
@@ -21,6 +22,7 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
   @if(message()){<p class="alert alert-info py-2 mb-0" role="status">{{message()}}</p>}
   <nav class="settings-tabs" role="tablist" aria-label="System administration">
     <button type="button" role="tab" [attr.aria-selected]="tab()==='integrations'" [class.active]="tab()==='integrations'" (click)="tab.set('integrations')">API integrations</button>
+    <button type="button" role="tab" [attr.aria-selected]="tab()==='models'" [class.active]="tab()==='models'" (click)="tab.set('models')">Model profiles</button>
     <button type="button" role="tab" [attr.aria-selected]="tab()==='users'" [class.active]="tab()==='users'" (click)="tab.set('users')">User management</button>
     <button type="button" role="tab" [attr.aria-selected]="tab()==='roles'" [class.active]="tab()==='roles'" (click)="tab.set('roles')">Role management</button>
     <button type="button" role="tab" [attr.aria-selected]="tab()==='permissions'" [class.active]="tab()==='permissions'" (click)="tab.set('permissions')">Permission management</button>
@@ -96,6 +98,8 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
     <p class="muted">The SEC requires every client to identify itself with a real contact email. Without it the filing tools (SEC sections, filings, insider activity and the SEC filings flow node) are refused. An address alone is sent as "FloweySales Research your@email". Setting SEC_USER_AGENT on the server also works; a contact saved here takes precedence.</p>
    </div>
   </div>
+  } @else if(tab()==='models'){
+    <fse-model-profiles-settings></fse-model-profiles-settings>
   } @else if(tab()==='trading'){
     <fse-trading-settings></fse-trading-settings>
   } @else if(tab()==='plugins'){

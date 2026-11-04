@@ -85,38 +85,6 @@
 }
 .is-page .steps { width: min(100%, 860px); margin-inline: auto; }
 .steps-head { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--fs-muted); .count { margin-left: auto; font-variant-numeric: tabular-nums; } }
-.step summary {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.3rem 0.35rem;
-  border-radius: var(--bs-border-radius-sm);
-  cursor: pointer;
-  list-style: none;
-  font-size: 0.82rem;
-  min-width: 0;
-  &::-webkit-details-marker { display: none; }
-  &:hover { background: var(--fs-surface-3); }
-}
-.step-icon { flex: 0 0 auto; color: var(--fs-pos); display: inline-flex; .spinner-border { width: 0.85rem; height: 0.85rem; border-width: 2px; color: var(--fs-accent); } }
-.step.is-error .step-icon { color: var(--fs-neg); }
-.step-name { font-weight: 600; white-space: nowrap; }
-.step-args { color: var(--fs-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; font-size: 0.78rem; }
-.step-time { margin-left: auto; color: var(--fs-muted); font-size: 0.72rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.step-body { padding: 0.25rem 0.35rem 0.5rem 1.7rem; display: grid; gap: 0.35rem; }
-.step-meta code { font-size: 0.72rem; }
-.step-pre {
-  margin: 0;
-  max-height: 220px;
-  overflow: auto;
-  font-size: 0.74rem;
-  background: var(--fs-sunken);
-  border: 1px solid var(--fs-border);
-  border-radius: var(--bs-border-radius);
-  padding: 0.5rem 0.6rem;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
 
 // ------------------------------------------------------------ composer
 
@@ -163,3 +131,4 @@
 .working { flex-wrap: wrap; }
 .status-detail { font-size: 0.72rem; summary { cursor: pointer; } code { white-space: pre-wrap; overflow-wrap: anywhere; } }
 .recovered { padding-left: 2.3rem; }
+.profile-note { font-size: 0.72rem; color: var(--fs-muted); margin: -0.2rem 0 0.4rem; overflow-wrap: anywhere; }

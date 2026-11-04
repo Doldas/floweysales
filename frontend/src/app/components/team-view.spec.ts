@@ -18,7 +18,7 @@ test('events fold into per-member state and a chair', () => {
     { type: 'member_done', agent: 'chair', content: 'They disagree on price.' }, { type: 'done' },
   ]);
   assert.equal(s.finished, true);
-  assert.deepEqual(s.members[0].steps, [{ name: 'get_sec_facts', status: 'ok' }]);
+  assert.deepEqual(s.members[0].steps.map(x => [x.name, x.status, x.actor]), [['get_sec_facts', 'ok', 'Alpha']]);
   assert.equal(s.members[0].stance, 'fits');
   assert.equal(s.members[1].stance, 'does_not_fit');
   assert.equal(s.chair?.status, 'done');
@@ -70,4 +70,22 @@ test('members still waiting when the run ends are settled, not left spinning', (
   assert.equal(s.members[0].status, 'error');
   assert.equal(s.members[1].error, 'No answer before the run ended.');
   assert.equal(s.chair?.status, 'error');
+});
+
+test('a member\'s tool calls keep input, output, timing and who made them, matched by call id', () => {
+  const s = run([
+    { type: 'member_start', agent: 'a', name: 'Alpha' }, { type: 'member_start', agent: 'b', name: 'Beta' },
+    { type: 'tool_start', agent: 'a', name: 'search_web', call_id: 'c1', seq: 1, arguments: '{"query":"nvda"}' },
+    { type: 'tool_start', agent: 'a', name: 'search_web', call_id: 'c2', seq: 2, arguments: '{"query":"amd"}' },
+    { type: 'tool_result', agent: 'a', name: 'search_web', call_id: 'c2', result: '[amd]', duration_ms: 30 },
+    { type: 'tool_result', agent: 'a', name: 'search_web', call_id: 'c1', result: '[nvda]', duration_ms: 90, truncated: true, original_bytes: 99000 },
+    { type: 'tool_start', agent: 'b', name: 'get_sec_section', call_id: 'c3', seq: 1 },
+    { type: 'tool_result', agent: 'b', name: 'get_sec_section', call_id: 'c3', tool_error: 'filing not found', result: '{"error":"filing not found"}' },
+  ]);
+  const [first, second] = s.members[0].steps;
+  assert.deepEqual([first.args, first.result, first.durationMs, first.truncated, first.originalBytes], ['{"query":"nvda"}', '[nvda]', 90, true, 99000]);
+  assert.deepEqual([second.args, second.result, second.durationMs], ['{"query":"amd"}', '[amd]', 30]);
+  assert.equal(s.members[1].steps[0].status, 'error');
+  assert.equal(s.members[1].steps[0].error, 'filing not found');
+  assert.equal(s.members[1].steps[0].actor, 'Beta', 'a call is traced to the member that made it');
 });

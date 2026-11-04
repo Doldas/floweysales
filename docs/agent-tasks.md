@@ -39,3 +39,10 @@ Every account can use the agent's tools; what differs is which tools.
 Tools that spend something shared (web search, provider and SEC calls, backtests) are limited to 60 calls a minute per ordinary account; the agent is told when the budget is used up. Administrators are not limited.
 
 Every tool in the catalogue has an explicit class in `internal/server/ai_tool_scope.go`, and a test fails when a tool is added without one. `GET /api/ai/config` lists the tools the caller can use.
+
+## Tool call events
+
+Every `tool_start` and `tool_result` of a chat, task or team run carries `call_id` (it ties a result to its start even when calls overlap), `seq` (the order in the run) and, on the result, `duration_ms`. What the user is shown is bounded and redacted: `arguments` up to 8 KB and `result` up to 64 KB, with `truncated` and `original_bytes` when it was cut and `redacted` when credentials were masked. The model itself receives the full result, up to the run's tool-result limit.
+
+Before a call runs it is checked against the tool's schema (`internal/ai/preflight.go`): an unknown tool, a missing required argument or a value of the wrong kind comes back to the model as a `tool_error` that says what to fix, and the tool does not run. Numbers sent as text are accepted. A run's final `error` event never contains the model endpoint address.
+
