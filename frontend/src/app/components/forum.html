@@ -113,7 +113,7 @@
       } @else if (loading()) {
         <div class="post-list" role="status" aria-label="Loading posts">
           @for (n of [1, 2, 3]; track n) {
-            <div class="card post skeleton" aria-hidden="true"><div class="card-body"><span class="bar w-25"></span><span class="bar w-75"></span><span class="bar"></span><span class="bar w-50"></span></div></div>
+            <div class="card post" aria-hidden="true"><div class="card-body"><fs-skeleton width="25%" /><fs-skeleton width="75%" /><fs-skeleton /><fs-skeleton width="50%" /></div></div>
           }
         </div>
       } @else if (!visible().length) {
