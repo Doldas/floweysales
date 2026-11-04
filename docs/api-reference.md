@@ -71,6 +71,8 @@ används först 60 dagar efter periodens slut) mot ett index och returnerar
 nyckeltal, kurva, ombalanseringar och varningar. Båda läses med
 `research.read`; se [investor automations](investor-automations.md#backtest).
 
+`GET|PUT /api/market/leaderboard/preferences` reads and saves the signed-in user's own leaderboard objective and constraints; see [investor automations](investor-automations.md#your-objective-and-constraints). `GET /api/market/leaderboard?preferences=off` ranks without them.
+
 `GET /api/plan`, `PUT /api/plan/profile` och `POST /api/plan/preview` hanterar
 den inloggade användarens egen förmögenhetsplan (fas, målallokering och
 simulering); se [wealth plan](wealth-plan.md). `GET /api/portfolio/analytics` (SYS_ADMIN)

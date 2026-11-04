@@ -313,7 +313,7 @@ export interface LeaderboardRow {
   breakdown?: LeaderboardBreakdown;
   /** Why the company is on the list, where its numbers come from, and which listing it is: three separate answers. */
   discovery?: { why: string; source: string; kind: string; url: string | null; as_of: string | null };
-  metrics_source?: { provider: string; price_as_of?: string; fundamentals_through?: string };
+  metrics_source?: { provider: string; price_as_of?: string; fundamentals_through?: string; record_url?: string | null; fact?: Provenance };
   listing?: { exchange: string; mic?: string; country?: string; known: boolean };
 }
 
@@ -355,6 +355,43 @@ export interface LeaderboardProvenance {
   inputs_hash: string;
   price_dates: { newest: string; oldest: string };
   disclaimer: string;
+  /** The ranking, the list and the data behind it in the shared provenance format. */
+  fact?: Provenance;
+  universe_fact?: Provenance;
+  data_age?: LeaderboardDataAge;
+  bias?: LeaderboardBias;
+}
+
+/** How old the inputs are and whether they differ in age; `statements` is ready to show. */
+export interface LeaderboardDataAge {
+  mixed: boolean;
+  price_newest: string; price_oldest: string; price_span_days: number;
+  older_than_newest: number; stale_price: number; stale_fundamentals: number; no_fundamentals: number;
+  newest_price_age_days?: number;
+  list_as_of?: string | null; list_age_days?: number; list_stale?: boolean;
+  statements: string[];
+}
+
+/** Selection and survivorship effects measured from the data already fetched. */
+export interface LeaderboardBias {
+  point_in_time: boolean;
+  measures: Record<string, number | string>;
+  statements: string[];
+}
+
+/** A user's own objective and constraints for the leaderboard. */
+export interface RankingPreferences {
+  objective: string;
+  max_volatility_pct?: number;
+  exclude_unprofitable?: boolean;
+  require_fundamentals?: boolean;
+  exclude_symbols?: string[];
+}
+export interface RankingPreferencesResponse {
+  preferences: RankingPreferences;
+  objectives: Record<string, string>;
+  summary: string[];
+  stored: boolean;
 }
 
 export interface LeaderboardOption { id: string; label: string; description: string; benchmark?: string; source?: UniverseSource; region?: string; countries?: string[] }
@@ -370,6 +407,8 @@ export interface LeaderboardResponse {
   /** The list that was ranked, with its source; absent from older servers. */
   universe_info?: LeaderboardOption;
   selection?: LeaderboardSelection;
+  /** The caller's saved preferences and whether they shaped this ranking. */
+  preferences?: { applied: boolean; values: RankingPreferences; summary: string[]; effective_weights: Record<string, number> };
   universes: LeaderboardOption[];
   strategies: LeaderboardOption[];
   provenance?: LeaderboardProvenance;

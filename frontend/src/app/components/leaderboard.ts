@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { HelpButtonComponent } from '../ui/help-button';
 import { DecimalPipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import type { Subscription } from 'rxjs';
 
@@ -8,12 +9,13 @@ import { Access } from '../core/access';
 import { AgentSession } from '../core/agent-session';
 import { MarketState } from '../core/market-state';
 import { MarketService, describeHttpError } from '../services';
-import type { LeaderboardOption, LeaderboardResponse, LeaderboardRow } from '../models';
+import type { LeaderboardOption, LeaderboardResponse, LeaderboardRow, RankingPreferencesResponse } from '../models';
 import { LEADERBOARD_FACTORS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES } from './investor-nodes';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import { SkeletonComponent } from '../ui/skeleton';
+import { SourceComponent } from '../ui/source';
 import { BacktestPanelComponent } from './backtest-panel';
-import { FACTOR_LABELS, regionCoverage, STRATEGY_PLAYBOOK, alternativeList, coverageBreakdown, coverageSummary, flagList, leaderboardPrompt, methodFactors, metricValue, num, pct, reasonList, scoreSum, scoreTone, selectionLines, sourceKindLabel, universeCsv } from './leaderboard-view';
+import { FACTOR_LABELS, OBJECTIVE_OPTIONS, dataAgeIsWarning, formToPreferences, preferencesToForm, recordLink, regionCoverage, STRATEGY_PLAYBOOK, alternativeList, coverageBreakdown, coverageSummary, flagList, leaderboardPrompt, methodFactors, metricValue, num, pct, reasonList, scoreSum, scoreTone, selectionLines, sourceKindLabel, universeCsv } from './leaderboard-view';
 
 const WATCHLIST = 'watchlist';
 const STORE_KEY = 'fs.leaderboard';
@@ -26,7 +28,7 @@ const STORE_KEY = 'fs.leaderboard';
 @Component({
   selector: 'fs-leaderboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HelpButtonComponent, DecimalPipe, RouterLink, BacktestPanelComponent, ProgressStatusComponent, SkeletonComponent],
+  imports: [HelpButtonComponent, DecimalPipe, FormsModule, RouterLink, BacktestPanelComponent, ProgressStatusComponent, SkeletonComponent, SourceComponent],
   template: `
 <section class="card board" aria-labelledby="board-title">
   <div class="card-header board-head">
@@ -67,7 +69,47 @@ const STORE_KEY = 'fs.leaderboard';
         <button type="button" class="fs-chip" [attr.aria-pressed]="strategy() === s.id" (click)="setStrategy(s.id)" [title]="s.description">{{ s.label }}</button>
       }
     </div>
+    <details class="regions prefs" data-testid="leaderboard-preferences">
+      <summary>My objective and constraints@if (prefsSummary().length) { <span class="text-muted"> &ndash; {{ prefsSummary().length }} set</span> }</summary>
+      <p class="method-note">Yours alone, saved with your account. The objective shifts the strategy&rsquo;s weights; constraints remove companies after scoring, and each one removed is named. Flows and the agent do not use them.</p>
+      <div class="prefs-grid">
+        <label>Objective
+          <select [ngModel]="form().objective" (ngModelChange)="patchForm({ objective: $event })" name="objective">
+            @for (o of objectiveOptions; track o.id) { <option [value]="o.id">{{ o.label }}</option> }
+          </select>
+        </label>
+        <label>Highest volatility, % a year
+          <input type="number" min="1" max="200" step="1" inputmode="numeric" placeholder="no limit" [ngModel]="form().maxVolatility" (ngModelChange)="patchForm({ maxVolatility: '' + ($event ?? '') })" name="maxVolatility">
+        </label>
+        <label class="prefs-check"><input type="checkbox" [ngModel]="form().excludeUnprofitable" (ngModelChange)="patchForm({ excludeUnprofitable: $event })" name="excludeUnprofitable"> Leave out companies whose trailing earnings are not positive</label>
+        <label class="prefs-check"><input type="checkbox" [ngModel]="form().requireFundamentals" (ngModelChange)="patchForm({ requireFundamentals: $event })" name="requireFundamentals"> Only companies with reported fundamentals</label>
+        <label class="prefs-wide">Never show these symbols
+          <input type="text" maxlength="400" placeholder="e.g. TSLA, XOM" [ngModel]="form().excludeSymbols" (ngModelChange)="patchForm({ excludeSymbols: $event })" name="excludeSymbols">
+        </label>
+      </div>
+      @if (prefsError()) { <p class="text-neg mb-1" role="alert">{{ prefsError() }}</p> }
+      @if (prefsSaved()) { <p class="method-note" role="status">Saved.</p> }
+      <button type="button" class="btn btn-sm btn-outline-secondary" (click)="savePreferences()" [disabled]="prefsBusy()">Save and re-rank</button>
+    </details>
   </div>
+
+  @if (data(); as d) {
+    @if (d.preferences?.applied) {
+      <p class="method-note px-3 mb-0" role="status" data-testid="leaderboard-prefs-applied">
+        Your preferences shaped this ranking: {{ d.preferences!.summary.join('; ') }}.
+        <button type="button" class="btn btn-sm btn-link explain-btn" (click)="toggleIgnorePrefs()">{{ ignorePrefs() ? 'Apply my preferences' : 'Show it without them' }}</button>
+      </p>
+    } @else if (ignorePrefs()) {
+      <p class="method-note px-3 mb-0" role="status">Showing the ranking without your preferences. <button type="button" class="btn btn-sm btn-link explain-btn" (click)="toggleIgnorePrefs()">Apply my preferences</button></p>
+    }
+    @if (d.provenance?.data_age; as age) {
+      @if (ageWarning(age)) {
+        <div class="age-warn fs-status is-warning no-dot" role="status" data-testid="leaderboard-data-age">
+          <strong>Data age.</strong> @for (st of age.statements; track st) { <span>{{ st }} </span> }
+        </div>
+      }
+    }
+  }
 
   @if (data(); as d) {
     @if (d.universe_info; as u) {
@@ -80,7 +122,8 @@ const STORE_KEY = 'fs.leaderboard';
           <dl class="method-facts">
             <div><dt>List</dt><dd>{{ u.label }} &ndash; {{ u.description }}</dd></div>
             <div><dt>Source</dt><dd><span class="fs-status no-dot is-info kind">{{ kindLabel(u.source?.kind) }}</span> {{ u.source?.name || 'Not recorded' }}
-              @if (u.source?.url) { &middot; <a [href]="u.source!.url!" target="_blank" rel="noopener noreferrer">original record</a> } @else { &middot; no link to an original record is recorded }</dd></div>
+              @if (u.source?.url) { &middot; <a [href]="u.source!.url!" target="_blank" rel="noopener noreferrer">original record</a> } @else { &middot; no link to an original record is recorded }
+              @if (d.provenance?.universe_fact) { &middot; <fs-source [fact]="d.provenance!.universe_fact" /> }</dd></div>
             <div><dt>As of</dt><dd>{{ u.source?.as_of || 'Not recorded' }}</dd></div>
             <div><dt>How chosen</dt><dd>{{ u.source?.rule || 'Not recorded' }}</dd></div>
             <div><dt>Limits</dt><dd>{{ u.source?.limitations || 'Not recorded' }}</dd></div>
@@ -92,6 +135,12 @@ const STORE_KEY = 'fs.leaderboard';
               }
             }
           </dl>
+          @if (d.provenance?.bias; as bias) {
+            <h4>Selection and survivorship</h4>
+            <ul class="bias" data-testid="leaderboard-bias">
+              @for (st of bias.statements; track st) { <li>{{ st }}</li> }
+            </ul>
+          }
           <p class="method-note">Three questions are answered separately: why a company is on the list (here, and under each company), where its numbers come from (the data provider, shown under each company), and why it ranks where it does (the next section).
             <button type="button" class="btn btn-sm btn-link explain-btn" (click)="download('csv')">Download list as CSV</button>
             <button type="button" class="btn btn-sm btn-link explain-btn" (click)="download('json')">as JSON</button></p>
@@ -110,7 +159,11 @@ const STORE_KEY = 'fs.leaderboard';
             <div><dt>List</dt><dd>{{ universeLabel() }}@if (universeInfo()?.description) { &ndash; {{ universeInfo()!.description }} }</dd></div>
             <div><dt>Coverage</dt><dd>{{ coverage(d) }}</dd></div>
             <div><dt>Data</dt><dd>Prices as of {{ d.provenance!.price_dates.newest || 'unknown' }} (oldest {{ d.provenance!.price_dates.oldest || 'unknown' }}), from {{ d.provider || 'the selected provider' }}. Fundamentals are the latest reported quarters from the same provider.</dd></div>
-            <div><dt>Method</dt><dd>Version {{ m.version }} &middot; fingerprint {{ m.hash }}</dd></div>
+            @if (d.provenance!.data_age; as age) {
+              <div><dt>Data age</dt><dd><ul class="plain">@for (st of age.statements; track st) { <li>{{ st }}</li> }</ul></dd></div>
+            }
+            <div><dt>Method</dt><dd>Version {{ m.version }} &middot; fingerprint {{ m.hash }}@if (d.provenance!.fact) { &middot; <fs-source [fact]="d.provenance!.fact" /> }</dd></div>
+            @if (d.preferences?.applied) { <div><dt>Your settings</dt><dd>{{ d.preferences!.summary.join('; ') }} (part of the fingerprint)</dd></div> }
           </dl>
           <h4>What it weighs</h4>
           <ul class="method-factors">
@@ -236,7 +289,9 @@ const STORE_KEY = 'fs.leaderboard';
                       </section>
                       <section>
                         <h5>Where its numbers come from</h5>
-                        <p>Provider: {{ r.metrics_source?.provider || 'unknown' }}. Prices as of {{ r.metrics_source?.price_as_of || 'unknown' }}; fundamentals through {{ r.metrics_source?.fundamentals_through || 'not available' }}.</p>
+                        <p>Provider: {{ r.metrics_source?.provider || 'unknown' }}. Prices as of {{ r.metrics_source?.price_as_of || 'unknown' }}; fundamentals through {{ r.metrics_source?.fundamentals_through || 'not available' }}.
+                          @if (recordLink(r.metrics_source?.record_url); as link) { <a [href]="link" target="_blank" rel="noopener noreferrer">Provider&rsquo;s page for {{ r.symbol }}</a> } @else { No link to the provider&rsquo;s own record is recorded. }
+                          @if (r.metrics_source?.fact) { <fs-source [fact]="r.metrics_source!.fact" /> }</p>
                       </section>
                       <section>
                         <h5>Why it ranks here</h5>
@@ -351,6 +406,10 @@ const STORE_KEY = 'fs.leaderboard';
 .method details { margin-top: 0.25rem; summary { cursor: pointer; color: var(--fs-accent-text); } ul, ol { padding-left: 1.1rem; margin: 0.3rem 0; display: grid; gap: 0.2rem; } }
 .cap { display: block; }
 .kind { white-space: normal; max-width: 100%; }
+.plain { list-style: none; padding: 0 !important; margin: 0 !important; }
+.bias { padding-left: 1.1rem; margin: 0.3rem 0; display: grid; gap: 0.25rem; }
+.age-warn { display: block; white-space: normal; margin: 0.5rem 1.25rem; padding: 0.5rem 0.75rem; font-size: 0.8rem; }
+.prefs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 0.6rem; margin: 0.4rem 0; label { display: grid; gap: 0.2rem; font-size: 0.78rem; color: var(--fs-text-2); } .prefs-check { display: flex; gap: 0.4rem; align-items: center; } .prefs-wide { grid-column: 1 / -1; } }
 .fingerprint { overflow-wrap: anywhere; }
 .explain-btn { padding: 0; font-size: 0.74rem; color: var(--fs-accent-text); text-decoration: underline; }
 .three { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 0.8rem; margin-bottom: 0.6rem; h5 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fs-muted); margin: 0 0 0.25rem; } p { margin: 0 0 0.3rem; font-size: 0.78rem; overflow-wrap: anywhere; } }
@@ -381,6 +440,15 @@ export class LeaderboardComponent {
   readonly methodOpen = signal(true);
   readonly originOpen = signal(true);
   readonly coverageBreakdown = coverageBreakdown;
+  readonly objectiveOptions = OBJECTIVE_OPTIONS;
+  readonly recordLink = recordLink;
+  readonly ageWarning = dataAgeIsWarning;
+  readonly ignorePrefs = signal(false);
+  readonly form = signal(preferencesToForm(undefined));
+  readonly prefsSummary = signal<string[]>([]);
+  readonly prefsError = signal('');
+  readonly prefsSaved = signal(false);
+  readonly prefsBusy = signal(false);
   private readonly explained = signal<ReadonlySet<string>>(new Set());
   readonly metricValue = metricValue;
   private request?: Subscription;
@@ -413,6 +481,7 @@ export class LeaderboardComponent {
       if (saved.originOpen === false) this.originOpen.set(false);
     } catch { /* storage may be unavailable */ }
     inject(DestroyRef).onDestroy(() => this.request?.unsubscribe());
+    this.loadPreferences();
     this.load();
   }
 
@@ -436,10 +505,41 @@ export class LeaderboardComponent {
     this.loading.set(true);
     this.error.set('');
     const symbols = this.universe() === WATCHLIST ? this.watchlistSymbols() : [];
-    this.request = this.api.getLeaderboard(this.universe(), this.strategy(), symbols).subscribe({
+    this.request = this.api.getLeaderboard(this.universe(), this.strategy(), symbols, this.ignorePrefs()).subscribe({
       next: res => { this.data.set(res); this.loading.set(false); },
       error: err => { this.error.set(describeHttpError(err)); this.loading.set(false); },
     });
+  }
+
+  private applyPreferences(res: RankingPreferencesResponse): void {
+    this.form.set(preferencesToForm(res.preferences));
+    this.prefsSummary.set(res.summary ?? []);
+  }
+
+  /** Reads the user's saved preferences; without a session or storage the form simply stays empty. */
+  private loadPreferences(): void {
+    this.api.getRankingPreferences().subscribe({ next: res => this.applyPreferences(res), error: () => { /* none saved or not signed in */ } });
+  }
+
+  patchForm(change: Partial<ReturnType<typeof preferencesToForm>>): void {
+    this.form.update(f => ({ ...f, ...change }));
+    this.prefsSaved.set(false);
+  }
+
+  savePreferences(): void {
+    const { prefs, error } = formToPreferences(this.form());
+    this.prefsError.set(error ?? '');
+    if (!prefs) return;
+    this.prefsBusy.set(true);
+    this.api.saveRankingPreferences(prefs).subscribe({
+      next: res => { this.applyPreferences(res); this.prefsBusy.set(false); this.prefsSaved.set(true); this.ignorePrefs.set(false); this.load(); },
+      error: err => { this.prefsError.set(describeHttpError(err)); this.prefsBusy.set(false); },
+    });
+  }
+
+  toggleIgnorePrefs(): void {
+    this.ignorePrefs.update(v => !v);
+    this.load();
   }
 
   open(row: LeaderboardRow): void {

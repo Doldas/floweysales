@@ -2,7 +2,7 @@
 //   node --test src/app/components/leaderboard-view.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { STRATEGY_PLAYBOOK, alternativeList, flagList, leaderboardPrompt, pct, reasonList, scoreTone } from './leaderboard-view.ts';
+import { STRATEGY_PLAYBOOK, alternativeList, dataAgeIsWarning, flagList, formToPreferences, leaderboardPrompt, pct, preferencesToForm, reasonList, recordLink, scoreTone } from './leaderboard-view.ts';
 import { INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES } from './investor-nodes.ts';
 
 test('tones, flags, reasons and figures', () => {
@@ -95,12 +95,12 @@ test('the export keeps the three sources apart and cannot run as a spreadsheet f
   const csv = universeCsv([{ rank: 1, symbol: 'AZN.ST', score: 80, grade: 'A', coverage_pct: 100, reasons: '', flags: '',
     listing: { exchange: 'Nasdaq Stockholm', mic: 'XSTO', country: 'SE', known: true },
     discovery: { why: 'On the "hand-picked" list, no link', source: '=HYPERLINK("x")', kind: 'curated', url: null, as_of: null },
-    metrics_source: { provider: 'YAHOO', price_as_of: '2026-10-28', fundamentals_through: '2026-09-30' } }]);
+    metrics_source: { provider: 'YAHOO', price_as_of: '2026-10-28', fundamentals_through: '2026-09-30', record_url: 'https://finance.yahoo.com/quote/AZN.ST' } }]);
   const [head, line] = csv.trim().split('\n');
   assert.match(head, /^rank,symbol,exchange,mic,country,why_on_list,list_source,/);
   assert.match(line, /^1,AZN\.ST,Nasdaq Stockholm,XSTO,SE,"On the ""hand-picked"" list, no link",/);
   assert.ok(line.includes(`"'=HYPERLINK(""x"")"`) || line.includes("'=HYPERLINK"), 'a leading = is neutralized');
-  assert.ok(line.endsWith(',YAHOO,2026-10-28,2026-09-30'));
+  assert.ok(line.endsWith(',YAHOO,2026-10-28,2026-09-30,https://finance.yahoo.com/quote/AZN.ST'));
 });
 
 test('regionCoverage keeps regions without a market as empty rows', async () => {
@@ -116,4 +116,34 @@ test('regionCoverage keeps regions without a market as empty rows', async () => 
   assert.deepEqual(by['north_america'].countries, ['US']);
   assert.deepEqual(by['europe'].countries, ['DK', 'SE']);
   for (const id of ['asia', 'africa', 'south_america', 'oceania']) assert.deepEqual(by[id].universes, [], id);
+});
+
+test('record links are followed only when they are http(s) addresses', () => {
+  assert.equal(recordLink('https://finance.yahoo.com/quote/AAPL'), 'https://finance.yahoo.com/quote/AAPL');
+  assert.equal(recordLink('javascript:alert(1)'), null);
+  assert.equal(recordLink(null), null);
+  assert.equal(recordLink(''), null);
+});
+
+test('the preferences form becomes preferences, or says what is wrong', () => {
+  const form = { objective: 'preserve', maxVolatility: '30', excludeUnprofitable: true, requireFundamentals: false, excludeSymbols: 'tsla, xom;TSLA\nbrk-b' };
+  assert.deepEqual(formToPreferences(form).prefs, { objective: 'preserve', max_volatility_pct: 30, exclude_unprofitable: true, exclude_symbols: ['TSLA', 'XOM', 'BRK-B'] });
+  assert.deepEqual(formToPreferences({ ...preferencesToForm(undefined) }).prefs, { objective: '' });
+  for (const bad of ['0', '-5', '250', 'abc']) assert.match(formToPreferences({ ...form, maxVolatility: bad }).error ?? '', /volatility/i, bad);
+  assert.match(formToPreferences({ ...form, excludeSymbols: 'ok, not a symbol!' }).error ?? '', /Symbols may contain/);
+  assert.match(formToPreferences({ ...form, excludeSymbols: Array.from({ length: 51 }, (_, i) => 'S' + i).join(',') }).error ?? '', /At most 50/);
+});
+
+test('saved preferences fill the form; "balanced" and no limit show as empty', () => {
+  assert.deepEqual(preferencesToForm({ objective: 'balanced' }), { objective: '', maxVolatility: '', excludeUnprofitable: false, requireFundamentals: false, excludeSymbols: '' });
+  assert.deepEqual(preferencesToForm({ objective: 'growth', max_volatility_pct: 25, exclude_symbols: ['A', 'B'], require_fundamentals: true }),
+    { objective: 'growth', maxVolatility: '25', excludeUnprofitable: false, requireFundamentals: true, excludeSymbols: 'A, B' });
+});
+
+test('mixed data ages, an old newest price or an old list make the age statement a warning', () => {
+  assert.equal(dataAgeIsWarning(undefined), false);
+  assert.equal(dataAgeIsWarning({ mixed: false, newest_price_age_days: 1 }), false);
+  assert.equal(dataAgeIsWarning({ mixed: true }), true);
+  assert.equal(dataAgeIsWarning({ mixed: false, newest_price_age_days: 9 }), true);
+  assert.equal(dataAgeIsWarning({ mixed: false, list_stale: true }), true);
 });
