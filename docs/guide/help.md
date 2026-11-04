@@ -38,3 +38,5 @@ The About page says what FloweySales is for and shows this build:
 - **Links:** the documentation site, the GitHub repository, the issue tracker and releases.
 
 The build information comes from the server and is shown only to signed-in users.
+
+See also [What's new](whats-new.md) and [Troubleshooting](troubleshooting.md).

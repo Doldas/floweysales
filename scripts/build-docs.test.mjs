@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { buildGuide, checkRepoLinks, checkSitePages, headingIds, parseFrontMatter, renderMarkdown, resolveLink, slugify } from './build-docs.mjs';
+import { buildGuide, checkRepoLinks, checkSitePages, headingIds, parseFrontMatter, renderMarkdown, resolveLink, slugify, stalePages } from './build-docs.mjs';
 import { syncBrand, tokensCss } from './sync-brand.mjs';
 
 /** A throwaway repository layout with the given guide pages. */
@@ -112,4 +112,15 @@ test('entry documents link only to files that exist', () => {
   const errors = checkRepoLinks(['README.md', 'missing.md'], base);
   assert.deepEqual(errors, ['README.md: broken link docs/gone.md', 'missing.md: file is missing']);
   assert.deepEqual(checkRepoLinks(['README.md', 'docs/README.md', 'CONTRIBUTING.md']), []);
+});
+
+test('pages not reviewed for six months are listed, and a bad date is an error', () => {
+  const pages = [
+    { file: 'old.md', meta: { 'last-reviewed': '2026-01-01' } },
+    { file: 'new.md', meta: { 'last-reviewed': '2026-10-01' } },
+  ];
+  assert.deepEqual(stalePages(pages, new Date('2026-11-04')), ['old.md: last reviewed 2026-01-01']);
+  const base = fixture({ 'index.md': '---\ntitle: Home\nlast-reviewed: soon\n---\n\n# Home\n' });
+  const result = buildGuide({ out: mkdtempSync(join(tmpdir(), 'fs-docs-out-')), base });
+  assert.match(result.errors.join('\n'), /not a date/);
 });

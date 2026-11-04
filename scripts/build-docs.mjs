@@ -4,6 +4,7 @@
 //
 //   node scripts/build-docs.mjs --out <dir>   write <dir>/guide/*.html
 //   node scripts/build-docs.mjs --check       build to a temp dir and check links
+//   node scripts/build-docs.mjs --check --external   also fetch every external address (scheduled job, never a merge gate)
 //
 // Internal links are checked on every run: a link to another guide page, a
 // repository file or a heading anchor must resolve, or the build fails. Links
@@ -228,10 +229,11 @@ export function buildGuide({ out, base = root }) {
   for (const p of parsed) {
     if (!p.meta.title) errors.push(`${relative(base, p.file)}: front matter needs a title`);
     if (!p.meta['last-reviewed']) errors.push(`${relative(base, p.file)}: front matter needs last-reviewed`);
+    else if (Number.isNaN(Date.parse(p.meta['last-reviewed']))) errors.push(`${relative(base, p.file)}: last-reviewed is not a date (use YYYY-MM-DD)`);
   }
   const headings = Object.fromEntries(parsed.map(p => [p.slug, headingIds(p.body)]));
   parsed.sort((a, b) => Number(a.meta.order ?? 99) - Number(b.meta.order ?? 99));
-  const pages = parsed.map(p => ({ slug: p.slug, title: p.meta.title ?? p.slug }));
+  const pages = parsed.map(p => ({ slug: p.slug, title: p.meta.title ?? p.slug, meta: p.meta, file: relative(base, p.file) }));
   const links = [];
   const guideOut = join(out, 'guide');
   mkdirSync(guideOut, { recursive: true });
@@ -286,7 +288,28 @@ export function checkRepoLinks(files, base = root) {
   return errors;
 }
 
-function main() {
+/** Pages not reviewed for `days` days (docs/documentation-ownership.md asks for a re-read at six months). */
+export function stalePages(pages, now = new Date(), days = 183) {
+  return pages
+    .filter(p => Date.parse(p.meta['last-reviewed']) < now.getTime() - days * 86400000)
+    .map(p => `${p.file}: last reviewed ${p.meta['last-reviewed']}`);
+}
+
+/** Fetches each external address once and returns the ones that did not answer with a success status. */
+async function checkExternal(urls) {
+  const bad = [];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { method: 'GET', redirect: 'follow', signal: AbortSignal.timeout(15000), headers: { 'user-agent': 'floweysales-docs-link-check' } });
+      if (!res.ok) bad.push(`${url} (HTTP ${res.status})`);
+    } catch (e) {
+      bad.push(`${url} (${e.name === 'TimeoutError' ? 'timed out' : e.message})`);
+    }
+  }
+  return bad;
+}
+
+async function main() {
   const args = process.argv.slice(2);
   const check = args.includes('--check');
   const outArg = args.indexOf('--out');
@@ -299,11 +322,21 @@ function main() {
   errors.push(...checkRepoLinks(['README.md', 'docs/README.md', 'CONTRIBUTING.md']));
   if (tmp) rmSync(tmp, { recursive: true, force: true });
   const external = new Set(links.filter(l => l.external && l.href.startsWith('http')).map(l => l.href));
+  for (const w of stalePages(pages)) console.warn(`Stale: ${w}`);
   if (errors.length) {
     console.error(`Documentation problems (${errors.length}):\n- ${[...new Set(errors)].join('\n- ')}`);
     process.exit(1);
   }
+  if (args.includes('--external')) {
+    const bad = await checkExternal(external);
+    if (bad.length) {
+      console.error(`External links that did not answer (${bad.length} of ${external.size}):\n- ${bad.join('\n- ')}`);
+      process.exit(1);
+    }
+    console.log(`Guide: ${pages.length} pages, ${links.length} links checked; ${external.size} external addresses answered.`);
+    return;
+  }
   console.log(`Guide: ${pages.length} pages, ${links.length} links checked (${external.size} external addresses not fetched).`);
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) await main();

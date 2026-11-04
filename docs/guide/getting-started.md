@@ -50,3 +50,5 @@ When authentication is turned off, a single local user has all the access of an 
 ## What you will not find
 
 FloweySales does not place real orders and does not offer advice. The Paper portfolio uses simulated fills only. Screens that rank or score say so, and say what the score is relative to.
+
+Next: the [tutorial from ranking to backtest](tutorial-research-a-company.md).
