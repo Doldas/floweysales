@@ -612,3 +612,12 @@ export interface ModelProfile {
 }
 export interface SavedTeamMember { persona: string; profile_id: number | null }
 export interface SavedTeam { id: number; name: string; chair: boolean; members: SavedTeamMember[]; updated_at?: string }
+
+export interface AboutInfo {
+  name: string;
+  license: string;
+  development: boolean;
+  commit?: string;
+  /** RFC 3339, UTC. */
+  build_time?: string;
+}

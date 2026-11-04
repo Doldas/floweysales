@@ -97,6 +97,8 @@ export class ShellComponent {
   })));
 
   readonly footerItems: NavItem[] = [
+    { path: '/help', label: 'Help', icon: 'bi-question-circle', visible: () => true },
+    { path: '/about', label: 'About', icon: 'bi-info-circle', visible: () => true },
     { path: '/notifications', label: 'Notifications', icon: 'bi-bell', visible: () => this.access.notifications() },
     { path: '/settings', label: 'Settings', icon: 'bi-gear', visible: () => this.access.settings() },
   ];

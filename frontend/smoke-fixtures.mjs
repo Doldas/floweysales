@@ -301,6 +301,7 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     '/api/ai/profiles': { profiles: mockProfiles },
     '/api/admin/ai/profiles': { profiles: mockProfiles.map(p => ({ ...p, enabled: true, position: 0 })), max: 20 },
     '/api/ai/teams': { teams: [{ id: 3, name: 'Value panel', chair: true, members: [{ persona: 'owner', profile_id: 2 }, { persona: 'teacher', profile_id: null }] }], max: 20 },
+    '/api/about': { name: 'FloweySales', license: 'MIT', development: false, commit: 'abc123def456', build_time: '2026-11-04T11:30:00Z' },
     '/api/providers': ['YAHOO', 'BINANCE', 'AVANZA'].map(id => provider(id)),
     '/api/admin/plugins': pluginOverview,
     '/api/admin/plugins/check': pluginOverview,

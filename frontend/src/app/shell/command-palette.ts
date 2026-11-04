@@ -133,6 +133,8 @@ export class CommandPaletteComponent {
       ['/portfolio', 'Paper portfolio', 'bi-wallet2', this.access.liveMarkets()],
       ['/workspace', 'Workspace files', 'bi-folder2-open', this.access.workspace()],
       ['/community', 'Community', 'bi-chat-square-text', this.access.liveMarkets()],
+      ['/help', 'Help', 'bi-question-circle', true],
+      ['/about', 'About FloweySales', 'bi-info-circle', true],
       ['/notifications', 'Notifications', 'bi-bell', this.access.notifications()],
       ['/settings', 'Settings', 'bi-gear', this.access.settings()],
     ];

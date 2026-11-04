@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, catchError, map, of } from 'rxjs';
 import {
+  AboutInfo,
   ForumPost,
   FinancialsResponse,
   HistorySeries,
@@ -54,6 +55,10 @@ export class MarketService {
   }
   stopTracker(t:TrackedAsset):Observable<{trackers:TrackedAsset[]}>{
     return this.http.delete<{trackers:TrackedAsset[]}>('/api/trackers',{params:{symbol:t.symbol,provider:t.provider}});
+  }
+
+  getAbout(): Observable<AboutInfo> {
+    return this.http.get<AboutInfo>('/api/about');
   }
 
   /** Providers contributed by installed plugins. */

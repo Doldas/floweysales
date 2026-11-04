@@ -1,4 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
+import { HelpButtonComponent } from '../ui/help-button';
 import { RouterLink } from '@angular/router';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
@@ -21,13 +22,13 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
 @Component({
   selector: 'fs-team-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SymbolSearchComponent, NgTemplateOutlet, RouterLink, ToolCallComponent],
+  imports: [HelpButtonComponent, SymbolSearchComponent, NgTemplateOutlet, RouterLink, ToolCallComponent],
   template: `
 <div class="fs-page research-container">
   <header class="fs-page-header">
     <div>
       <div class="fs-eyebrow">Research agent</div>
-      <h1>Agent team @if (market.trackedSymbol()) { <span class="text-muted fw-normal">· {{ market.trackedSymbol() }}</span> }</h1>
+      <h1>Agent team <fs-help-button topic="agent-team" /> @if (market.trackedSymbol()) { <span class="text-muted fw-normal">· {{ market.trackedSymbol() }}</span> }</h1>
       <p>Pick investor characters, ask one question, and read how each of them would look at it. They are fictional and work from real data; they give research, not advice.</p>
     </div>
     <fs-symbol-search class="page-search" [navigate]="false" placeholder="Ask about a company…" />

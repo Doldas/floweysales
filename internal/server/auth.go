@@ -182,6 +182,10 @@ func (e *Engine) allowedUserAPI(r *http.Request, u identity.User) bool {
 		return true
 	}
 	method, path := r.Method, r.URL.Path
+	// The About page is for every signed-in user.
+	if method == http.MethodGet && path == "/api/about" {
+		return true
+	}
 	if isPlanRoute(method, path) {
 		return true
 	}
