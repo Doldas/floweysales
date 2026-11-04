@@ -2,7 +2,7 @@
 //   node --test src/app/components/backtest-view.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { batchHeadline, batchRows, chartSummary, curvePath, metricTiles, periodLabel, warningText } from './backtest-view.ts';
+import { sensitivityHeadline, sensitivityRows, settingLabel, batchHeadline, batchRows, chartSummary, curvePath, metricTiles, periodLabel, warningText } from './backtest-view.ts';
 import type { BacktestMetrics } from '../models';
 
 const metrics: BacktestMetrics = { cagr_pct: 12.4, volatility_pct: 18, sharpe: 0.9, sortino: 1.2, max_drawdown_pct: -22.5, calmar: 0.5,
@@ -75,4 +75,20 @@ test('batchHeadline states the spread and never calls an empty batch a result', 
   assert.equal(lines[0], '2 of 3 backtests completed. Return per year: -3.0% to +8.2%, median +5.0%.');
   assert.match(lines[2], /Beat the benchmark in 1 of 2; lost money in 1 of 2/);
   assert.deepEqual(batchHeadline({ cells: 4, completed: 0, failed: 4, beat_benchmark: 0, with_benchmark: 0, negative_return: 0, limitations: [] }), ['None of the 4 backtests completed.']);
+});
+
+test('settingLabel reads each changed setting with its unit', () => {
+  assert.equal(settingLabel({ parameter: 'base', value: 'as asked', base: true }), 'As asked');
+  assert.equal(settingLabel({ parameter: 'cost_bps', value: '50' }), 'Trading cost 50 bps per side');
+  assert.equal(settingLabel({ parameter: 'top', value: '5' }), 'Holdings 5 companies');
+  assert.equal(settingLabel({ parameter: 'rebalance', value: 'quarterly' }), 'Rebalance quarterly');
+});
+
+test('sensitivityRows keep a failed variant and sensitivityHeadline states the break-even', () => {
+  const rows = sensitivityRows([{ parameter: 'base', value: 'as asked', base: true, metrics }, { parameter: 'top', value: '15', error: 'too few' }]);
+  assert.deepEqual(rows.map(r => [r.setting, r.cagr, r.base]), [['As asked', '+12.4%', true], ['Holdings 15 companies', '–', false]]);
+  assert.equal(rows[1].error, 'too few');
+  const lines = sensitivityHeadline({ summary: { completed: 5, failed: 0, cagr_pct: { min: 2, median: 6, max: 9 }, positive_excess: 3, with_benchmark: 5, cost_break_even_bps: 50, notes: [] } });
+  assert.deepEqual(lines, ['5 variants completed. Return per year: +2.0% to +9.0%, median +6.0%.', 'Excess return stayed positive in 3 of 5 variants.', 'At 50 bps per side the excess return was zero or negative.']);
+  assert.deepEqual(sensitivityHeadline({ summary: { completed: 0, failed: 2, positive_excess: 0, with_benchmark: 0, notes: [] } }), ['None of the variants completed.']);
 });

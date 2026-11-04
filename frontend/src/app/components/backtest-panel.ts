@@ -3,9 +3,9 @@ import { FormsModule } from '@angular/forms';
 import type { Subscription } from 'rxjs';
 
 import { MarketService, describeHttpError } from '../services';
-import type { BacktestParams, BacktestResult, BatchResult } from '../models';
+import type { BacktestParams, BacktestResult, BatchResult, SensitivityResult } from '../models';
 import { periodError } from '../core/strategy-period';
-import { batchHeadline, batchRows, chartSummary, curvePath, metricTiles, warningText } from './backtest-view';
+import { batchHeadline, batchRows, sensitivityHeadline, sensitivityRows, chartSummary, curvePath, metricTiles, warningText } from './backtest-view';
 
 const CHART_W = 640;
 const CHART_H = 220;
@@ -163,6 +163,34 @@ const CHART_H = 220;
         </ul>
       </div>
     }
+    <div class="bt-sens">
+      <h4 class="h6 mb-1">How much do the settings matter?</h4>
+      <p class="bt-note">Changes one setting at a time around this backtest: trading cost, number of holdings and rebalance interval.</p>
+      <button type="button" class="btn btn-sm btn-outline-primary" (click)="runSensitivity()" [disabled]="sensLoading() || years() === 0">{{ sensLoading() ? 'Running…' : 'Run sensitivity' }}</button>
+      @if (years() === 0) { <span class="small text-muted ms-2">Choose 3Y, 5Y or 10Y to run this.</span> }
+      @if (sensError(); as err) { <p class="text-danger small mt-2" role="alert">{{ err }}</p> }
+      @if (sens(); as s) {
+        <div class="mt-2" aria-live="polite">
+          @for (line of sensHeadline(); track line) { <p class="mb-1 small">{{ line }}</p> }
+          <div class="fs-scroll-x">
+            <table class="table table-sm align-middle mb-2">
+              <caption class="visually-hidden">Backtest results with one setting changed</caption>
+              <thead><tr><th scope="col">Setting</th><th scope="col" class="num">Return / yr</th><th scope="col" class="num">Vs benchmark</th><th scope="col" class="num">Worst fall</th></tr></thead>
+              <tbody>
+                @for (r of sensRows(); track r.key) {
+                  <tr [class.fw-semibold]="r.base">
+                    <th scope="row">{{ r.setting }}</th>
+                    @if (r.error) { <td colspan="3" class="text-danger small">{{ r.error }}</td> }
+                    @else { <td class="num" [attr.data-tone]="r.tone">{{ r.cagr }}</td><td class="num">{{ r.excess }}</td><td class="num">{{ r.drawdown }}</td> }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <ul class="bt-limits small">@for (n of s.summary.notes; track n) { <li>{{ n }}</li> }</ul>
+        </div>
+      }
+    </div>
   </details>
 </section>
   `,
@@ -189,6 +217,7 @@ const CHART_H = 220;
 .bt-pick { border: 0; padding: 0; margin: 0.5rem 0; display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; legend { font-size: 0.75rem; color: var(--fs-muted); float: none; width: auto; margin: 0; } label { font-size: 0.85rem; display: inline-flex; gap: 0.35rem; align-items: center; } }
 .bt-batch-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-bottom: 0.5rem; }
 .bt-batch p { font-size: 0.85rem; }
+.bt-sens { border-top: 1px solid var(--fs-border); margin-top: 0.75rem; padding-top: 0.75rem; }
 .bt-limits { color: var(--fs-muted); padding-left: 1.1rem; margin: 0; }
 td[data-tone='pos'] { color: var(--fs-pos); } td[data-tone='neg'] { color: var(--fs-neg); }
 .num { text-align: right; white-space: nowrap; }
@@ -234,6 +263,12 @@ export class BacktestPanelComponent {
   readonly batchLoading = signal(false);
   readonly batchError = signal('');
   private batchRequest?: Subscription;
+  readonly sens = signal<SensitivityResult | null>(null);
+  readonly sensLoading = signal(false);
+  readonly sensError = signal('');
+  private sensRequest?: Subscription;
+  readonly sensRows = computed(() => sensitivityRows(this.sens()?.variants ?? []));
+  readonly sensHeadline = computed(() => (this.sens() ? sensitivityHeadline(this.sens()!) : []));
   /** The current universe first, then the other leaderboard universes. */
   readonly marketChoices = computed(() => {
     const list = this.markets();
@@ -250,11 +285,11 @@ export class BacktestPanelComponent {
   readonly summary = computed(() => (this.result() ? chartSummary(this.result()!) : ''));
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => { this.request?.unsubscribe(); this.batchRequest?.unsubscribe(); });
+    inject(DestroyRef).onDestroy(() => { this.request?.unsubscribe(); this.batchRequest?.unsubscribe(); this.sensRequest?.unsubscribe(); });
     // The market being viewed is ticked by default; a switch resets the batch.
     effect(() => {
       const u = this.universe();
-      untracked(() => { this.pickedMarkets.set(u === 'custom' ? [] : [u]); this.batch.set(null); this.batchError.set(''); });
+      untracked(() => { this.pickedMarkets.set(u === 'custom' ? [] : [u]); this.batch.set(null); this.batchError.set(''); this.sens.set(null); this.sensError.set(''); });
     });
     // Runs once inputs are set, and again when the board switches universe or strategy.
     effect(() => {
@@ -290,6 +325,19 @@ export class BacktestPanelComponent {
     }).subscribe({
       next: res => { this.batch.set(res); this.batchLoading.set(false); },
       error: err => { this.batchError.set(describeHttpError(err)); this.batchLoading.set(false); },
+    });
+  }
+
+  runSensitivity(): void {
+    if (this.years() === 0) return;
+    this.sensRequest?.unsubscribe();
+    this.sensLoading.set(true);
+    this.sensError.set('');
+    this.sensRequest = this.api.backtestSensitivity({
+      universe: this.universe(), symbols: this.symbols(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(), years: this.years(),
+    }).subscribe({
+      next: res => { this.sens.set(res); this.sensLoading.set(false); },
+      error: err => { this.sensError.set(describeHttpError(err)); this.sensLoading.set(false); },
     });
   }
 
