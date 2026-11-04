@@ -160,6 +160,27 @@ func checkFlowOutputSize(node string, size int) error {
 	return fmt.Errorf("%s output is %d bytes, above the %d byte flow limit; lower the node's row limit, select fewer columns, or raise FLOW_NODE_OUTPUT_MAX_BYTES", node, size, limit)
 }
 
+// flowRunOutputBudget bounds the node outputs one run holds at once. A node
+// is held to flowNodeOutputLimit, but a long flow keeps every output for its
+// later nodes, its checkpoints and its history, so the total needs its own cap.
+const flowRunOutputBudget = 32 << 20
+
+// checkFlowRunBudget fails with the per-node figures when the outputs held so
+// far exceed the budget, naming the largest so the user knows what to trim.
+func checkFlowRunBudget(results map[string]string) error {
+	total, biggest, biggestID := 0, 0, ""
+	for id, v := range results {
+		total += len(v)
+		if len(v) > biggest || (len(v) == biggest && id < biggestID) {
+			biggest, biggestID = len(v), id
+		}
+	}
+	if total <= flowRunOutputBudget {
+		return nil
+	}
+	return fmt.Errorf("the node outputs of this run total %d bytes, above the %d byte run budget; the largest is node %s at %d bytes. Select fewer columns or rows in the nodes that feed it, or end the flow earlier", total, flowRunOutputBudget, biggestID, biggest)
+}
+
 func flowRowsJSON(rows any) (string, error) {
 	raw, err := json.Marshal(rows)
 	if err != nil {
