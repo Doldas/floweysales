@@ -147,3 +147,19 @@ export function executedNodeOrder(steps: readonly ComparableStep[]): string[] {
   }
   return order;
 }
+
+/** Formats a byte count as "850 B", "4.0 KB" or "1.2 MB". */
+export function byteSizeLabel(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Says what part of a step's output is on screen, so a preview is never mistaken for the whole.
+ * Returns '' when the whole output is shown.
+ */
+export function outputPreviewLabel(shown: number, total: number | null | undefined): string {
+  if (total == null || total <= shown) return '';
+  return `Showing the first ${byteSizeLabel(shown)} of ${byteSizeLabel(total)}`;
+}

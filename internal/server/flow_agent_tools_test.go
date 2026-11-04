@@ -189,3 +189,38 @@ func TestToolCallTraceIsStoredWithTheStep(t *testing.T) {
 		t.Fatalf("a step without tool calls stores none: %s", steps[1].ToolCalls)
 	}
 }
+
+func TestLongStepOutputIsStoredWhole(t *testing.T) {
+	env, _ := queueEnv(t)
+	ctx := context.Background()
+	f := savedPureFlow(t, env)
+	runID, err := env.engine.enqueueFlow(ctx, f, nil, "manual", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	long := strings.Repeat("row,", 5000) // 20,000 bytes, well past the 4,000 byte preview.
+	if err := env.db.AppendAgentFlowRunStepRecord(ctx, runID, storage.FlowRunStepRecord{Node: "big", Status: "SUCCESS", Output: long}); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.db.AppendAgentFlowRunStepRecord(ctx, runID, storage.FlowRunStepRecord{Node: "small", Status: "SUCCESS", Output: "ok"}); err != nil {
+		t.Fatal(err)
+	}
+	steps, err := env.db.ListAgentFlowRunSteps(ctx, runID)
+	if err != nil || len(steps) < 2 {
+		t.Fatalf("steps=%d err=%v", len(steps), err)
+	}
+	big, small := steps[len(steps)-2], steps[len(steps)-1]
+	if !big.OutputTruncated || !big.OutputStored || big.OutputBytes == nil || *big.OutputBytes != len(long) || len(big.Output) >= len(long) {
+		t.Fatalf("a long output must report its size and a stored whole: %+v", big)
+	}
+	if small.OutputTruncated || small.OutputStored {
+		t.Fatalf("a short output needs no stored copy: %+v", small)
+	}
+	out, found, err := env.db.GetAgentFlowRunStepOutput(ctx, runID, big.ID)
+	if err != nil || !found || out.Content != long || out.Truncated {
+		t.Fatalf("whole output: found=%v err=%v len=%d", found, err, len(out.Content))
+	}
+	if _, found, _ := env.db.GetAgentFlowRunStepOutput(ctx, runID+1, big.ID); found {
+		t.Fatal("a step must not be readable through another run")
+	}
+}
