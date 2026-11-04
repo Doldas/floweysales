@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -305,5 +306,87 @@ func TestRunRegistersSourcesAndAuditsTheAnswer(t *testing.T) {
 	}
 	if !kinds["snippet_only"] || !kinds["fabricated"] {
 		t.Fatalf("audit: %+v", summary[0].Audit)
+	}
+}
+
+func searchCall(id string) string {
+	return `{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"` + id + `","type":"function","function":{"name":"search_web","arguments":"{\"query\":\"acme\"}"}}]},"finish_reason":"tool_calls"}]}`
+}
+
+func answerChunk(text string) string {
+	b, _ := json.Marshal(text)
+	return `{"choices":[{"delta":{"content":` + string(b) + `},"finish_reason":"stop"}]}`
+}
+
+const acmeSearch = `{"retrieved_at_utc":"2026-11-03T10:00:00Z","results":[{"title":"Acme","url":"https://news.example/acme","snippet":"Revenue 4,200 million."}]}`
+
+func runEvidence(t *testing.T, mode string, rounds ...string) (deltas string, notices []Event, bodies *[]string) {
+	t.Helper()
+	srv, bodies := scriptedOpenAI(t, rounds...)
+	err := Run(context.Background(), NewClient(srv.URL, "", "test"), fakeDS{}, []Message{{Role: "user", Content: "x"}},
+		AgentOptions{EvidenceMode: mode, Execute: func(context.Context, string, string) (string, error) { return acmeSearch, nil }}, func(e Event) {
+			switch e.Type {
+			case "delta":
+				deltas += e.Content
+			case "notice":
+				notices = append(notices, e)
+			}
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return deltas, notices, bodies
+}
+
+func TestEvidenceOnlyHoldsADraftThatFailsTheCitationCheck(t *testing.T) {
+	deltas, notices, bodies := runEvidence(t, EvidenceOnly,
+		searchCall("c1"),
+		answerChunk("Revenue was 4,200 million [S9]."),
+		answerChunk("Insufficient verifiable evidence for the revenue figure."))
+	if strings.Contains(deltas, "[S9]") || !strings.Contains(deltas, "Insufficient verifiable evidence") {
+		t.Fatalf("only the corrected answer may reach the reader: %q", deltas)
+	}
+	if len(*bodies) != 3 || !strings.Contains((*bodies)[2], "citation check found problems") {
+		t.Fatalf("the draft must go back with its findings: %d requests", len(*bodies))
+	}
+	if len(notices) != 1 || notices[0].Severity != "info" {
+		t.Fatalf("notices: %+v", notices)
+	}
+}
+
+func TestEvidenceOnlyFlagsWhatItCannotFix(t *testing.T) {
+	bad := answerChunk("Revenue was 4,200 million [S9].")
+	deltas, notices, _ := runEvidence(t, EvidenceOnly, searchCall("c1"), bad, bad, bad)
+	if !strings.Contains(deltas, "[S9]") {
+		t.Fatalf("the last draft is shown, flagged: %q", deltas)
+	}
+	last := notices[len(notices)-1]
+	if last.Severity != "warning" || !strings.Contains(last.Content, "unverified") {
+		t.Fatalf("an unfixed answer needs a warning: %+v", notices)
+	}
+}
+
+func TestStandardModeStreamsAtOnceAndOnlyAudits(t *testing.T) {
+	deltas, notices, bodies := runEvidence(t, "", searchCall("c1"), answerChunk("Revenue was 4,200 million [S9]."))
+	if !strings.Contains(deltas, "[S9]") || len(notices) != 0 || len(*bodies) != 2 {
+		t.Fatalf("standard mode must not hold or retry: %q %v %d", deltas, notices, len(*bodies))
+	}
+}
+
+func TestPrimaryOnlyDoesNotAcceptASearchHit(t *testing.T) {
+	_, notices, bodies := runEvidence(t, PrimaryOnly, searchCall("c1"), answerChunk("Acme reported revenue [S1]."), answerChunk("No primary filing was retrieved, so revenue is unverified."))
+	if len(*bodies) != 3 || !strings.Contains((*bodies)[2], "not_primary") || len(notices) != 1 {
+		t.Fatalf("a search hit must be sent back in primary_only: %d %v", len(*bodies), notices)
+	}
+}
+
+func TestValidEvidenceMode(t *testing.T) {
+	for _, ok := range []string{"", "standard", "evidence_only", "primary_only"} {
+		if !ValidEvidenceMode(ok) {
+			t.Errorf("%q should be valid", ok)
+		}
+	}
+	if ValidEvidenceMode("strict") {
+		t.Error("unknown modes must be rejected")
 	}
 }

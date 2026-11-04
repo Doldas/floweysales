@@ -2,7 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 
 import type { Message, ModelProfile, Persona } from '../models';
 import { MarketState } from './market-state';
-import type { AnswerFinding, AnswerSource } from './answer-sources';
+import { parseEvidenceMode, type AnswerFinding, type AnswerSource, type EvidenceMode } from './answer-sources';
 import { EMPTY_NOTICES, applyNotice, dismissNotice, finishNotices, recoveryLine, type NoticeState } from './agent-notices';
 
 export interface AiPreset {
@@ -26,6 +26,11 @@ interface AiConfig {
 }
 
 const PROFILE_KEY = 'fs.profile';
+const EVIDENCE_KEY = 'fs.evidenceMode';
+
+function readStoredEvidenceMode(): EvidenceMode {
+  try { return parseEvidenceMode(localStorage.getItem(EVIDENCE_KEY)); } catch { return 'standard'; }
+}
 
 function readStoredProfile(): number | null {
   try {
@@ -101,6 +106,12 @@ export class AgentSession {
   readonly catalog = signal<{ id: number; model: string; label: string }[]>([]);
   /** The investor character answering, or '' for the plain analyst. */
   readonly persona = signal('');
+  /** How strictly answers must be backed by retrieved sources; kept in this browser. */
+  readonly evidenceMode = signal<EvidenceMode>(readStoredEvidenceMode());
+  setEvidenceMode(mode: EvidenceMode): void {
+    this.evidenceMode.set(mode);
+    try { localStorage.setItem(EVIDENCE_KEY, mode); } catch { /* ignore */ }
+  }
   readonly personas = signal<Persona[]>([]);
   /** Model profiles the administrator prepared, and the one chosen (null: the default). */
   readonly profiles = signal<ModelProfile[]>([]);
@@ -258,6 +269,7 @@ export class AgentSession {
           model: this.canConfigure() ? this.chatModel() : undefined,
           persona: this.persona() || undefined,
           profile_id: this.profileId() || undefined,
+          evidence_mode: this.evidenceMode() === 'standard' ? undefined : this.evidenceMode(),
           symbol: ctx.symbol,
           provider: ctx.provider,
           range: ctx.range,

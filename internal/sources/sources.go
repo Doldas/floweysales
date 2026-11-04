@@ -159,7 +159,14 @@ const (
 	SnippetOnly = "snippet_only" // cites a search hit the agent never read
 	FigureNotIn = "figure_mismatch"
 	Uncited     = "uncited"
+	NotPrimary  = "not_primary" // a secondary source cited where only primary filings count
 )
+
+// Options tunes an audit.
+type Options struct {
+	// PrimaryOnly flags every citation of a source that is not a primary filing.
+	PrimaryOnly bool
+}
 
 // Finding is one problem the audit found, tied to the sentence it is in.
 type Finding struct {
@@ -186,7 +193,10 @@ var (
 //
 // Only sentences with a figure (see grounding.Figures) are held to the
 // figure rules, since prose cannot be checked mechanically.
-func Audit(answer string, r *Registry) []Finding {
+func Audit(answer string, r *Registry) []Finding { return AuditWith(answer, r, Options{}) }
+
+// AuditWith is Audit with options.
+func AuditWith(answer string, r *Registry, opts Options) []Finding {
 	var out []Finding
 	known := map[string]bool{}
 	var all []string
@@ -220,6 +230,9 @@ func Audit(answer string, r *Registry) []Finding {
 				continue
 			}
 			excerpts = append(excerpts, src.Excerpt)
+			if opts.PrimaryOnly && src.Class != ClassPrimaryFiling {
+				out = append(out, Finding{Kind: NotPrimary, Sentence: shown, Source: id, Detail: id + " is not a primary filing, and this mode accepts primary filings only."})
+			}
 			if src.Access == AccessRead {
 				listedOnly = false
 			}

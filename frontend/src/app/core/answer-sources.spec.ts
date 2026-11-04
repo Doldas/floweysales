@@ -2,7 +2,7 @@
 //   node --test src/app/core/answer-sources.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { auditSummary, findingLabel, safeUrl, splitSources } from './answer-sources.ts';
+import { EVIDENCE_MODES, auditSummary, parseEvidenceMode, findingLabel, safeUrl, splitSources } from './answer-sources.ts';
 
 test('sources split by whether the agent opened them', () => {
   const { read, listed } = splitSources([
@@ -26,4 +26,11 @@ test('finding labels and links', () => {
   assert.equal(safeUrl('https://sec.gov/x'), 'https://sec.gov/x');
   assert.equal(safeUrl('javascript:alert(1)'), '');
   assert.equal(safeUrl(undefined), '');
+});
+
+test('an unknown stored evidence mode falls back to standard', () => {
+  assert.equal(parseEvidenceMode('primary_only'), 'primary_only');
+  assert.equal(parseEvidenceMode('strict'), 'standard');
+  assert.equal(parseEvidenceMode(null), 'standard');
+  assert.deepEqual(EVIDENCE_MODES.map(m => m.id), ['standard', 'evidence_only', 'primary_only']);
 });

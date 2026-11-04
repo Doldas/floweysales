@@ -83,6 +83,11 @@ type AgentOptions struct {
 	// Resume continues from a saved checkpoint: its conversation, evidence
 	// ledger and spent budgets are restored, and transcript is appended.
 	Resume *Checkpoint
+	// EvidenceMode is "" or "standard" (citations are shown and audited after
+	// the answer), "evidence_only" (the answer is held until its citation
+	// check passes, with up to two corrections) or "primary_only" (as
+	// evidence_only, and only primary filings count).
+	EvidenceMode string
 }
 
 // DefaultSystemPrompt instructs the model how to use the market tools.
@@ -146,8 +151,13 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	var ledger []LedgerEntry
 	registry := sources.NewRegistry()
 	// reportSources runs the citation check on the final answer and tells the UI.
+	strict := opts.EvidenceMode == EvidenceOnly || opts.EvidenceMode == PrimaryOnly
+	audit := func(answer string) []sources.Finding {
+		return sources.AuditWith(answer, registry, sources.Options{PrimaryOnly: opts.EvidenceMode == PrimaryOnly})
+	}
+	evidenceRetries := 0
 	reportSources := func(answer string) {
-		found := sources.Audit(answer, registry)
+		found := audit(answer)
 		if all := registry.All(); len(all) > 0 || len(found) > 0 {
 			emit(Event{Type: "sources", Sources: all, Audit: found})
 		}
@@ -164,6 +174,9 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	}
 	if len(deliverables) > 0 {
 		system += reportFormat(deliverables)
+	}
+	if strict {
+		system += evidenceRules(opts.EvidenceMode)
 	}
 	messages = append(messages, Message{Role: "system", Content: system})
 	if opts.Resume != nil {
@@ -216,7 +229,19 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 			tools = nil
 			messages = append(messages, Message{Role: "user", Content: "The research budget is used up. Answer now with the results you have, and say what is missing."})
 		}
-		assistant, err := completeWithRetry(ctx, client, &messages, tools, emit)
+		roundEmit := emit
+		var held strings.Builder
+		if strict {
+			// The reader sees the answer only after its citations are checked.
+			roundEmit = func(ev Event) {
+				if ev.Type == "delta" {
+					held.WriteString(ev.Content)
+					return
+				}
+				emit(ev)
+			}
+		}
+		assistant, err := completeWithRetry(ctx, client, &messages, tools, roundEmit)
 		if err != nil {
 			checkpoint(step-1, TaskFailed)
 			emit(Event{Type: "error", Error: userFacingError(err)})
@@ -231,6 +256,21 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 				badArgs[tc.ID] = a
 				assistant.ToolCalls[i].Function.Arguments = "{}"
 			}
+		}
+
+		if strict && len(assistant.ToolCalls) == 0 && strings.TrimSpace(assistant.Content) != "" {
+			if found := audit(assistant.Content); len(found) > 0 {
+				if evidenceRetries < maxEvidenceRetries && step < opts.MaxSteps {
+					evidenceRetries++
+					messages = append(messages, assistant, Message{Role: "user", Content: evidenceFix(found)})
+					emit(Event{Type: "notice", Severity: "info", Code: "notice", Content: fmt.Sprintf("Checking citations: %d problem(s) found in the draft; the agent is correcting it.", len(found))})
+					continue
+				}
+				emit(Event{Type: "notice", Severity: "warning", Code: "notice", Content: fmt.Sprintf("The citation check still found %d problem(s) after %d correction(s). The flagged sentences are unverified; see Sources.", len(found), evidenceRetries)})
+			}
+		}
+		if held.Len() > 0 {
+			emit(Event{Type: "delta", Content: held.String()})
 		}
 
 		messages = append(messages, assistant)
@@ -540,4 +580,44 @@ func completeWithRetry(ctx context.Context, client *Client, messages *[]Message,
 		return Message{}, last
 	}
 	return Message{}, fmt.Errorf("%w (gave up after %d attempts)", last, maxModelAttempts)
+}
+
+const (
+	EvidenceOnly = "evidence_only"
+	PrimaryOnly  = "primary_only"
+	// maxEvidenceRetries is how often a strict-mode draft goes back to the model.
+	maxEvidenceRetries = 2
+)
+
+// ValidEvidenceMode reports whether mode is one a request may name.
+func ValidEvidenceMode(mode string) bool {
+	return mode == "" || mode == "standard" || mode == EvidenceOnly || mode == PrimaryOnly
+}
+
+func evidenceRules(mode string) string {
+	rules := `
+
+Evidence-only mode:
+- State a factual claim only when a retrieved source supports it, and end that sentence with its [Sn] marker.
+- Label what you cannot support: say "insufficient verifiable evidence" for it, or ask to research further. Do not fill the gap from memory.
+- Keep calculation, inference and opinion apart from reported fact, and say which a sentence is.
+- A citation check runs on your answer. It checks that markers exist, that the source was opened and that figures appear in it. It does not prove a claim is true.`
+	if mode == PrimaryOnly {
+		rules += "\n- Only primary filings (for example get_sec_section) count as support. Search results and web pages are leads, not proof."
+	}
+	return rules
+}
+
+// evidenceFix tells the model what the citation check found in its draft.
+func evidenceFix(found []sources.Finding) string {
+	var b strings.Builder
+	b.WriteString("The citation check found problems in your draft. Fix each one: cite a retrieved source that supports the sentence, open the source with a tool, or remove the claim and say the evidence is insufficient. Then give the corrected answer in full.\n")
+	for i, f := range found {
+		if i == 8 {
+			fmt.Fprintf(&b, "- and %d more\n", len(found)-i)
+			break
+		}
+		fmt.Fprintf(&b, "- %s: %s (\"%s\")\n", f.Kind, f.Detail, f.Sentence)
+	}
+	return b.String()
 }
