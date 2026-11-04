@@ -197,6 +197,11 @@ func mcpTools() []mcpTool {
 	defs := ai.ToolDefs()
 	out := make([]mcpTool, 0, len(defs))
 	for _, d := range defs {
+		// read_source opens a search hit of one agent run by its source_id;
+		// outside a run there is no registry to resolve it.
+		if d.Function.Name == "read_source" {
+			continue
+		}
 		out = append(out, mcpTool{
 			Name:        d.Function.Name,
 			Description: d.Function.Description,

@@ -44,6 +44,13 @@ type WebSearcher interface {
 	WebSearch(ctx context.Context, query string) (string, error)
 }
 
+// PageReader is the optional part of a DataSource that opens a public web
+// page for the read_source tool, with the server's address checks. It returns
+// a JSON object with url, title, text and retrieved_at.
+type PageReader interface {
+	ReadPage(ctx context.Context, url string) (string, error)
+}
+
 // InvestorSource is the optional part of a DataSource behind the investor
 // tools: the leaderboard and its backtest, the signed-in user's wealth plan,
 // the paper portfolio's risk, insider activity, the macro regime and
@@ -257,6 +264,14 @@ func ToolDefs() []Tool {
 				Name:        "search_web",
 				Description: "Search the live public web for company identities, SEC filings, recent financial news, official sources, and dated links. Returns source URLs, titles and short snippets only (not verified financial statements). Cite sources and verify primary filings.",
 				Parameters:  obj(map[string]any{"query": str("Focused search terms, e.g. 'CGI Inc GIB NYSE investor relations Q3 2026 earnings'")}, "query"),
+			},
+		},
+		{
+			Type: "function",
+			Function: ToolFunction{
+				Name:        "read_source",
+				Description: "Open one search_web result of this run and read the page text. Pass the source_id the search returned (for example S3). Public http(s) pages only; PDFs and pages that need a login cannot be read. Cite the page as [S3] only after reading it.",
+				Parameters:  obj(map[string]any{"source_id": str("The source_id of a search_web result, such as S3.")}, "source_id"),
 			},
 		},
 		{
@@ -609,6 +624,16 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 			return ws.WebSearch(ctx, query)
 		}
 		return SearchWeb(ctx, query)
+	case "read_source":
+		pr, ok := src.(PageReader)
+		if !ok {
+			return "", fmt.Errorf("reading web pages is not available in this deployment")
+		}
+		page := strArg(args, "url")
+		if page == "" {
+			return "", fmt.Errorf("read_source runs inside an agent run, where it opens a search result by source_id")
+		}
+		return pr.ReadPage(ctx, page)
 	case "search_symbols":
 		query := strArg(args, "query")
 		if query == "" {

@@ -47,6 +47,7 @@ var agentToolClass = map[string]string{
 	"get_sec_filings":            toolPublic,
 	"get_sec_facts":              toolPublic,
 	"search_web":                 toolPublic,
+	"read_source":                toolPublic,
 	"search_symbols":             toolPublic,
 	"get_price_history":          toolPublic,
 	"get_technical_analysis":     toolPublic,
@@ -63,7 +64,7 @@ var agentToolClass = map[string]string{
 // or a call to an outside service. Ordinary users get a per-minute budget so
 // one account cannot use up what everyone shares.
 var meteredAgentTools = map[string]bool{
-	"search_web": true, "get_provider_research": true, "get_provider_quote": true,
+	"search_web": true, "read_source": true, "get_provider_research": true, "get_provider_quote": true,
 	"get_sec_section": true, "get_sec_filings": true, "get_sec_facts": true,
 	"get_quarterly_financials": true, "get_price_history": true, "get_technical_analysis": true,
 	"run_strategy_backtest": true, "get_leaderboard": true, "run_rule_strategy": true,

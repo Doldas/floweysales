@@ -4,7 +4,7 @@ Issues #197, #201 and #207. Plan: [Plan 3](plans/issues/3-evidence-and-provenanc
 
 ## What the agent records
 
-Each chat run keeps a registry of sources (`internal/sources`). `search_web` hits are **listed**: the agent saw a title and snippet, not the page. `get_sec_section` results are **read** and carry the filing URL and accession. The model receives a `source_id` (S1, S2, ...) with each result and is asked to end a sentence with `[S3]` when the sentence rests on that source.
+Each chat run keeps a registry of sources (`internal/sources`). `search_web` hits are **listed**: the agent saw a title and snippet, not the page. The `read_source` tool opens one hit by its `source_id`; the hit then becomes **read**, keeps its id, and the page text the model received is what the citation check compares figures against. `get_sec_section` results are **read** and carry the filing URL and accession. The model receives a `source_id` (S1, S2, ...) with each result and is asked to end a sentence with `[S3]` when the sentence rests on that source.
 
 The stream carries a `source` event for each source and a final `sources` event with all of them and the audit findings. The chat shows them in a Sources panel: findings first, then sources the agent read, then search results only.
 
@@ -36,4 +36,15 @@ The prompt in these modes asks the model to say "insufficient verifiable evidenc
 
 ## Not built yet
 
-A tool to open web pages (`read_source`), quote and reachability checks, claim labels checked by the server, a block option that removes unsupported sentences, evidence mode for agent teams and flow nodes, a recency limit, and saved defaults per user or per saved team. Evaluation cases for contradictory sources and stale facts belong in `internal/eval`.
+Quote and reachability checks, claim labels checked by the server, a block option that removes unsupported sentences, evidence mode for agent teams and flow nodes, a recency limit, and saved defaults per user or per saved team. Evaluation cases for contradictory sources and stale facts belong in `internal/eval`.
+
+## Opening a page (`read_source`)
+
+`read_source` takes only a `source_id` from a `search_web` result of the same run. The server looks up the address in the run's registry, so the model cannot make it fetch a URL no search returned. The fetch uses the same guards as the flow HTTP and crawler nodes:
+
+- public `http`/`https` hosts only; no credentials, fragments, custom ports, local or private addresses, and the resolved address is pinned for the connection;
+- up to three redirects, each checked again before it is followed;
+- HTML and plain text only; a PDF, a login page or a page that needs JavaScript returns an error the agent sees, and the source stays **listed**;
+- at most 512 KB is read and 12,000 characters of text reach the model; the result says when it was cut.
+
+The tool counts toward the per-minute tool budget of ordinary users. It is not exposed through the MCP server, which has no run to resolve a `source_id` against. Reading a page does not make it a primary source: in Primary sources only mode a web page still does not count.
