@@ -48,3 +48,5 @@ The rule strategies appear on the Strategies page under their character, where t
 - `GET /api/ai/personas` lists the characters.
 - `POST /api/ai/chat` takes an optional `persona` id.
 - `POST /api/ai/team` takes `{question, personas: [...], chair?, symbol?, provider?, range?, price?}` and streams events tagged with `agent` (`member_start`, `delta`, `tool_start`, `tool_result`, `member_done` with `stance`, then the chair's, then `done`). It is rate limited to 4 runs a minute, gives each member at most 16 tool calls, and follows the same rules as chat about who may use tools (see [Agent tools by role](agent-tasks.md#agent-tools-by-role)).
+
+Each character of a team can use its own model profile, and teams can be saved: see [Model profiles and saved teams](model-profiles.md).

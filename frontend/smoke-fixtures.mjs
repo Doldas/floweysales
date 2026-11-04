@@ -121,6 +121,11 @@ const pluginOverview = {
   trackers: { yahoo: ['NVDA'], finnhub: [] },
 };
 
+const mockProfiles = [
+  { id: 1, name: 'Fast and cheap', description: 'Quick answers.', model: 'small-model', supports_tools: true, context_window: 32000, cost_input_per_mtok: 0.15, cost_output_per_mtok: 0.6, is_default: true },
+  { id: 2, name: 'Deep research', description: 'Slow and careful.', model: 'big-model', supports_tools: true, context_window: null, cost_input_per_mtok: null, cost_output_per_mtok: null, is_default: false },
+];
+
 const boardUniverses = [
   { id: 'us_mega', label: 'US mega caps', description: 'The 25 largest US-listed companies across sectors.' },
   { id: 'us_tech', label: 'US technology', description: 'Large US software, semiconductor and internet companies.' },
@@ -293,6 +298,9 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     '/api/admin/roles': { roles: [{ name: 'SYS_ADMIN', permissions: [] }, { name: 'USER', permissions: ['research.read', 'ai.chat'] }], permissions: ['research.read', 'ai.chat', 'flows.read', 'flows.write', 'flows.run'] },
     '/api/admin/settings/smtp': { configuration: {}, has_password: false },
     '/api/admin/updates': { current: { commit: 'abc123def456', image: 'ghcr.io/doldas/floweysales', tag: 'latest' }, can_apply: false, status: { state: 'idle' } },
+    '/api/ai/profiles': { profiles: mockProfiles },
+    '/api/admin/ai/profiles': { profiles: mockProfiles.map(p => ({ ...p, enabled: true, position: 0 })), max: 20 },
+    '/api/ai/teams': { teams: [{ id: 3, name: 'Value panel', chair: true, members: [{ persona: 'owner', profile_id: 2 }, { persona: 'teacher', profile_id: null }] }], max: 20 },
     '/api/providers': ['YAHOO', 'BINANCE', 'AVANZA'].map(id => provider(id)),
     '/api/admin/plugins': pluginOverview,
     '/api/admin/plugins/check': pluginOverview,
@@ -316,6 +324,7 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
 
 /** Server-sent events for one agent answer that calls two tools. */
 export const agentStream = [
+  { type: 'run_start', model: 'small-model' },
   { type: 'tool_start', name: 'get_quote', arguments: '{"symbol":"NVDA","provider":"YAHOO"}' },
   { type: 'tool_result', name: 'get_quote', result: '{"symbol":"NVDA","price":118.16,"change_percent":-1.63}' },
   { type: 'tool_start', name: 'get_sec_facts', arguments: '{"symbol":"NVDA"}' },
@@ -327,7 +336,7 @@ export const agentStream = [
 
 /** Server-sent events of a two-member team run. Calls carry ids, timing and truncation notes like the real stream. */
 export const teamStream = [
-  { type: 'member_start', agent: 'owner', name: 'Ashgrove' }, { type: 'member_start', agent: 'teacher', name: 'Holm' },
+  { type: 'member_start', agent: 'owner', name: 'Ashgrove', model: 'big-model' }, { type: 'member_start', agent: 'teacher', name: 'Holm', model: 'small-model' },
   { type: 'tool_start', agent: 'owner', name: 'search_web', call_id: 'o1', seq: 1, arguments: '{"query":"NVDA moat"}' },
   { type: 'tool_start', agent: 'owner', name: 'search_web', call_id: 'o2', seq: 2, arguments: '{"query":"NVDA margins"}' },
   { type: 'tool_start', agent: 'teacher', name: 'get_sec_section', call_id: 't1', seq: 1, arguments: '{"symbol":"NVDA","form":"10-K","item":"1A"}' },
@@ -351,6 +360,9 @@ export async function installMocks(page, options = {}) {
     if (path === '/api/prices/stream') return route.fulfill({ status: 204, body: '' });
     if (path === '/api/ai/personas') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ personas: mockPersonas, snapshot: '2026-10-30', stances: [], max_team: 6 }) });
+    }
+    if (path === '/api/ai/teams' && route.request().method() === 'POST') {
+      return route.fulfill({ status: 201, contentType: 'application/json', body: '{"id":9}' });
     }
     if (path === '/api/ai/team' && route.request().method() === 'POST') {
       return route.fulfill({ status: 200, contentType: 'text/event-stream', body: teamStream });

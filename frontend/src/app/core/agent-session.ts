@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
-import type { Message, Persona } from '../models';
+import type { Message, ModelProfile, Persona } from '../models';
 import { MarketState } from './market-state';
 import { EMPTY_NOTICES, applyNotice, dismissNotice, finishNotices, recoveryLine, type NoticeState } from './agent-notices';
 
@@ -22,6 +22,15 @@ interface AiConfig {
   can_configure: boolean;
   max_steps: number;
   max_tool_calls: number;
+}
+
+const PROFILE_KEY = 'fs.profile';
+
+function readStoredProfile(): number | null {
+  try {
+    const n = Number(localStorage.getItem(PROFILE_KEY));
+    return Number.isInteger(n) && n > 0 ? n : null;
+  } catch { return null; }
 }
 
 /** One entry in the visible conversation. Tool entries are agent steps. */
@@ -89,6 +98,11 @@ export class AgentSession {
   /** The investor character answering, or '' for the plain analyst. */
   readonly persona = signal('');
   readonly personas = signal<Persona[]>([]);
+  /** Model profiles the administrator prepared, and the one chosen (null: the default). */
+  readonly profiles = signal<ModelProfile[]>([]);
+  readonly profileId = signal<number | null>(readStoredProfile());
+  /** The model the current run uses, from the server (it changes if a fallback takes over). */
+  readonly activeModel = signal('');
   readonly personaName = computed(() => this.personas().find(p => p.id === this.persona())?.name ?? '');
   /** Whether the floating dock is open. */
   readonly dockOpen = signal(false);
@@ -143,6 +157,22 @@ export class AgentSession {
       this.configLoaded.set(true);
       if (cfg.can_configure) void this.loadCatalog();
     } catch {}
+  }
+
+  async loadProfiles(): Promise<void> {
+    try {
+      const res = await fetch('/api/ai/profiles', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const list: ModelProfile[] = (await res.json()).profiles || [];
+      this.profiles.set(list);
+      // A stored choice that was deleted or disabled since is forgotten, not silently replaced.
+      if (this.profileId() !== null && !list.some(p => p.id === this.profileId())) this.setProfile(null);
+    } catch {}
+  }
+
+  setProfile(id: number | null): void {
+    this.profileId.set(id);
+    try { id === null ? localStorage.removeItem(PROFILE_KEY) : localStorage.setItem(PROFILE_KEY, String(id)); } catch {}
   }
 
   async loadPersonas(): Promise<void> {
@@ -219,6 +249,7 @@ export class AgentSession {
           messages: this.wire.map(m => ({ ...m })),
           model: this.canConfigure() ? this.chatModel() : undefined,
           persona: this.persona() || undefined,
+          profile_id: this.profileId() || undefined,
           symbol: ctx.symbol,
           provider: ctx.provider,
           range: ctx.range,
@@ -282,13 +313,16 @@ export class AgentSession {
       if (!line.startsWith('data:')) continue;
       const payload = line.slice(5).trim();
       if (!payload) continue;
-      let ev: { call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean; type?: string; severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string; content?: string; name?: string; arguments?: string; result?: string; tool_error?: string; error?: string; message?: Message };
+      let ev: { model?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean; type?: string; severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string; content?: string; name?: string; arguments?: string; result?: string; tool_error?: string; error?: string; message?: Message };
       try {
         ev = JSON.parse(payload);
       } catch {
         continue;
       }
       switch (ev.type) {
+        case 'run_start':
+          this.activeModel.set(ev.model || '');
+          break;
         case 'transcript_message':
           if (ev.message && (ev.message.role === 'assistant' || ev.message.role === 'tool')) this.wire.push(ev.message);
           break;

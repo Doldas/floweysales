@@ -117,6 +117,9 @@ type chatRequestBody struct {
 	// Persona is the id of a built-in investor lens (see internal/persona).
 	// The server owns the prompt; the client only names the lens.
 	Persona string `json:"persona,omitempty"`
+	// ProfileID is the model profile an administrator prepared; 0 uses the
+	// default profile, if there is one.
+	ProfileID int64 `json:"profile_id,omitempty"`
 	// Optional UI context so the model knows what the user is looking at.
 	Symbol   string `json:"symbol,omitempty"`
 	Provider string `json:"provider,omitempty"`
@@ -332,6 +335,15 @@ func (e *Engine) registerAIRoutes() {
 		if !ok {
 			return
 		}
+		// An administrator's explicit model wins; everyone else picks a profile.
+		var profile *storage.ModelProfile
+		if req.Model == "" {
+			var perr error
+			if profile, perr = e.profileFor(r.Context(), req.ProfileID); perr != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]any{"error": perr.Error()})
+				return
+			}
+		}
 		send, ok := startSSE(w)
 		if !ok {
 			return
@@ -339,6 +351,10 @@ func (e *Engine) registerAIRoutes() {
 
 		client := ai.NewClient(baseURL, apiKey, model)
 		opts := e.chatAgentOptions(r, req.SystemPrompt, req.Persona, req.Tools)
+		if profile != nil {
+			client.Model, client.FallbackModel = profile.Model, profile.FallbackModel
+			applyProfile(&opts, profile)
+		}
 		deliverables := ai.NewDeliverables(req.Deliverables)
 		var rec *taskRecorder
 		if len(deliverables) > 0 {

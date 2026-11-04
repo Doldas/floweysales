@@ -4,6 +4,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { AgentSession, type ChatEntry } from '../core/agent-session';
 import { renderMarkdown } from '../markdown';
 import { toolLabel } from '../components/agent-tools';
+import { defaultOptionLabel, profileOption, profileSummary } from '../components/profile-view';
 import { ToolCallComponent } from '../components/tool-call';
 import type { ToolCall } from '../components/tool-call-view';
 
@@ -70,10 +71,17 @@ export class AgentChatComponent {
   });
 
   readonly toolLabel = toolLabel;
+  readonly profileOption = profileOption;
+  readonly defaultOptionLabel = defaultOptionLabel;
+  readonly profileSummary = profileSummary;
+
+  /** The profile chosen now, for the line under the select. */
+  readonly chosenProfile = computed(() => this.session.profiles().find(p => p.id === this.session.profileId()) ?? this.session.profiles().find(p => p.is_default));
 
   constructor() {
     void this.session.loadConfig();
     void this.session.loadPersonas();
+    void this.session.loadProfiles();
     // Keep the newest message in view while the agent streams.
     effect(() => {
       this.session.entries();

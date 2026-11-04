@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="038-ai-model-profiles-and-teams" author="floweysales" dbms="mysql">
+  <createTable tableName="ai_model_profiles" remarks="Model choices a SYS_ADMIN prepares; users pick a profile, never a raw model or endpoint">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_ai_model_profiles"/></column>
+   <column name="name" type="VARCHAR(60)"><constraints nullable="false" unique="true" uniqueConstraintName="uq_ai_model_profiles_name"/></column>
+   <column name="description" type="VARCHAR(300)"><constraints nullable="false"/></column>
+   <column name="model_name" type="VARCHAR(120)"><constraints nullable="false"/></column>
+   <column name="fallback_model" type="VARCHAR(120)"/>
+   <column name="supports_tools" type="TINYINT(1)"/>
+   <column name="context_window" type="INT"/>
+   <column name="cost_input_per_mtok" type="DECIMAL(12,4)"/>
+   <column name="cost_output_per_mtok" type="DECIMAL(12,4)"/>
+   <column name="max_steps" type="INT"/>
+   <column name="max_tool_calls" type="INT"/>
+   <column name="enabled" type="TINYINT(1)" defaultValueNumeric="1"><constraints nullable="false"/></column>
+   <column name="is_default" type="TINYINT(1)" defaultValueNumeric="0"><constraints nullable="false"/></column>
+   <column name="position" type="INT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+   <column name="created_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+   <column name="updated_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <!-- No foreign key to auth_users: with authentication disabled the single user is id 0.
+       Deleting an account removes its rows in Service.DeleteUser. -->
+  <createTable tableName="agent_teams" remarks="A user's saved agent team: which characters, and which model profile each uses">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_agent_teams"/></column>
+   <column name="user_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="name" type="VARCHAR(80)"><constraints nullable="false"/></column>
+   <column name="chair" type="TINYINT(1)" defaultValueNumeric="1"><constraints nullable="false"/></column>
+   <column name="created_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+   <column name="updated_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <addUniqueConstraint tableName="agent_teams" columnNames="user_id,name" constraintName="uq_agent_teams_user_name"/>
+  <createTable tableName="agent_team_members">
+   <column name="team_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="position" type="INT"><constraints nullable="false"/></column>
+   <column name="persona_id" type="VARCHAR(40)"><constraints nullable="false"/></column>
+   <column name="profile_id" type="BIGINT"/>
+  </createTable>
+  <addPrimaryKey tableName="agent_team_members" columnNames="team_id,position" constraintName="pk_agent_team_members"/>
+  <addForeignKeyConstraint baseTableName="agent_team_members" baseColumnNames="team_id" referencedTableName="agent_teams" referencedColumnNames="id"
+   constraintName="fk_agent_team_members_team" onDelete="CASCADE"/>
+  <addForeignKeyConstraint baseTableName="agent_team_members" baseColumnNames="profile_id" referencedTableName="ai_model_profiles" referencedColumnNames="id"
+   constraintName="fk_agent_team_members_profile" onDelete="SET NULL"/>
+  <rollback>
+   <dropTable tableName="agent_team_members"/>
+   <dropTable tableName="agent_teams"/>
+   <dropTable tableName="ai_model_profiles"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

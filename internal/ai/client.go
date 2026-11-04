@@ -20,7 +20,10 @@ type Client struct {
 	BaseURL string
 	APIKey  string
 	Model   string
-	HTTP    *http.Client
+	// FallbackModel, when set, replaces Model for the rest of a run if the
+	// endpoint says Model is not available.
+	FallbackModel string
+	HTTP          *http.Client
 	// Notice, when set, receives plain-language explanations of problems the
 	// client worked around or could not, such as a full context window.
 	Notice func(string)

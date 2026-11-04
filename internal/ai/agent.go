@@ -29,6 +29,8 @@ type Event struct {
 	Agent string `json:"agent,omitempty"`
 	// Stance is set on member_done: the persona's closing STANCE value, if it gave one.
 	Stance string `json:"stance,omitempty"`
+	// Model is the model a run (run_start) or a team member (member_start) uses.
+	Model string `json:"model,omitempty"`
 	// Checkpoint is set on checkpoint events (task runs): the state a failed
 	// or cancelled run resumes from.
 	Checkpoint *Checkpoint `json:"checkpoint,omitempty"`
@@ -190,6 +192,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	own := *client
 	own.Notice = func(text string) { emit(Event{Type: "notice", Content: text, Severity: "warning", Code: "notice"}) }
 	client = &own
+	emit(Event{Type: "run_start", Model: client.Model})
 
 	emptyReplies, nudges := 0, 0
 	for step := 1; step <= opts.MaxSteps; step++ {
@@ -440,6 +443,26 @@ func classifyFailure(err error) failureKind {
 	return failPermanent
 }
 
+// modelUnavailable reports whether the endpoint says the chosen model itself
+// cannot be used (it does not exist, is not loaded or is down), as opposed to
+// a problem with the request.
+func modelUnavailable(err error) bool {
+	var status *StatusError
+	text := strings.ToLower(err.Error())
+	if errors.As(err, &status) && status.Code == 404 {
+		return true
+	}
+	if !strings.Contains(text, "model") {
+		return false
+	}
+	for _, phrase := range []string{"not found", "does not exist", "not available", "unavailable", "unknown model", "not loaded", "no such model"} {
+		if strings.Contains(text, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
 // completeWithRetry runs one model round. A transient failure is retried
 // after a pause; a reply the endpoint could not parse (a malformed tool call)
 // is retried after telling the model exactly what went wrong. After
@@ -458,6 +481,14 @@ func completeWithRetry(ctx context.Context, client *Client, messages *[]Message,
 		last = err
 		if ctx.Err() != nil {
 			return Message{}, err
+		}
+		if client.FallbackModel != "" && client.FallbackModel != client.Model && modelUnavailable(err) {
+			emit(Event{Type: "notice", Severity: "warning", Code: "fallback", Model: client.FallbackModel,
+				Content: fmt.Sprintf("The model %s is not available; continuing with %s.", client.Model, client.FallbackModel)})
+			client.Model = client.FallbackModel
+			emit(Event{Type: "run_start", Model: client.Model})
+			attempt-- // switching models is not a failed attempt
+			continue
 		}
 		kind := classifyFailure(err)
 		if kind == failPermanent || attempt == maxModelAttempts {

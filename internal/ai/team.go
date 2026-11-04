@@ -36,6 +36,13 @@ type TeamMember struct {
 	SystemPrompt string
 	// AllowedTools limits this member's tools; nil leaves the team's setting.
 	AllowedTools []string
+	// Model and FallbackModel override the team's model for this member; empty
+	// keeps it. DisableTools runs the member without tools (a model that
+	// cannot call them); MaxToolCalls, when above zero, lowers the member's budget.
+	Model         string
+	FallbackModel string
+	DisableTools  bool
+	MaxToolCalls  int
 }
 
 // RunFunc runs one agent. Run is the real one; tests pass a fake.
@@ -122,14 +129,32 @@ func RunTeam(ctx context.Context, client *Client, src DataSource, opts TeamOptio
 }
 
 func runMember(ctx context.Context, client *Client, src DataSource, run RunFunc, m TeamMember, ask string, base AgentOptions, send func(Event)) answerOf {
-	send(Event{Type: "member_start", Agent: m.ID, Name: m.Name})
+	var mc Client // tests run members without a client
+	if client != nil {
+		mc = *client
+	}
+	if m.Model != "" {
+		mc.Model = m.Model
+	}
+	mc.FallbackModel = m.FallbackModel
+	start := Event{Type: "member_start", Agent: m.ID, Name: m.Name, Model: mc.Model}
+	if m.DisableTools {
+		start.Detail = "no tools: the model profile does not support tool calls"
+	}
+	send(start)
 	o := base
 	o.SystemPrompt = m.SystemPrompt
+	if m.DisableTools {
+		o.DisableTools = true
+	}
+	if m.MaxToolCalls > 0 && (o.MaxToolCalls == 0 || m.MaxToolCalls < o.MaxToolCalls) {
+		o.MaxToolCalls = m.MaxToolCalls
+	}
 	if m.AllowedTools != nil {
 		o.AllowedTools = m.AllowedTools
 	}
 	var out answerOf
-	err := run(ctx, client, src, []Message{{Role: "user", Content: ask}}, o, func(ev Event) {
+	err := run(ctx, &mc, src, []Message{{Role: "user", Content: ask}}, o, func(ev Event) {
 		switch ev.Type {
 		case "transcript_message":
 			if ev.Message != nil && ev.Message.Role == "assistant" && len(ev.Message.ToolCalls) == 0 && strings.TrimSpace(ev.Message.Content) != "" {
