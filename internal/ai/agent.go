@@ -180,6 +180,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		}
 	}
 	policy := opts.Policy()
+	ctx = withRunEvidencePolicy(ctx, policy)
 	strict := policy.Strict()
 	checkLink := opts.CheckLink
 	if lc, ok := src.(LinkChecker); ok && checkLink == nil {

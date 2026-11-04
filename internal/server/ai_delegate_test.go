@@ -153,3 +153,28 @@ func TestUnknownTeamListsTheUsersTeams(t *testing.T) {
 		t.Error("another user's teams must not be found")
 	}
 }
+
+func TestDelegatedMembersAnswerUnderTheDelegatingRunsEvidencePolicy(t *testing.T) {
+	var mu sync.Mutex
+	var bodies []string
+	srv := delegateModel(t, &bodies, &mu, false)
+	e := delegationEngine(t)
+	opts := ai.AgentOptions{EvidenceMode: ai.PrimaryOnly}
+	err := ai.Run(context.Background(), ai.NewClient(srv.URL, "", "test"), engineSource{e: e}, []ai.Message{{Role: "user", Content: "Ask the panel"}}, opts, func(ai.Event) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	members := 0
+	for _, b := range bodies {
+		if strings.Contains(b, `"name":"delegate_to_team"`) {
+			continue // the parent's own rounds
+		}
+		members++
+		if !strings.Contains(b, "Evidence-only mode") {
+			t.Errorf("a member ran without the parent's evidence policy: %.200s", b)
+		}
+	}
+	if members == 0 {
+		t.Fatal("no member requests were seen")
+	}
+}
