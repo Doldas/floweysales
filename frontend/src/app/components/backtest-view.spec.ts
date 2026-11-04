@@ -2,7 +2,7 @@
 //   node --test src/app/components/backtest-view.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { batchParams, exportUrl, savedLabel, sensitivityParams, singleParams, sensitivityHeadline, sensitivityRows, settingLabel, batchHeadline, batchRows, chartSummary, curvePath, metricTiles, periodLabel, warningText } from './backtest-view.ts';
+import { batchParams, exportUrl, savedLabel, sensitivityParams, singleParams, sensitivityHeadline, sensitivityRows, settingLabel, batchHeadline, batchRows, chartSummary, curvePath, metricTiles, periodLabel, segmentRows, warningText } from './backtest-view.ts';
 import type { BacktestMetrics } from '../models';
 
 const metrics: BacktestMetrics = { cagr_pct: 12.4, volatility_pct: 18, sharpe: 0.9, sortino: 1.2, max_drawdown_pct: -22.5, calmar: 0.5,
@@ -107,4 +107,16 @@ test('saved runs have download addresses and a readable label', () => {
   assert.equal(exportUrl(7, 'csv'), '/api/market/backtest/runs/7/export?format=csv');
   assert.equal(exportUrl(7, 'json'), '/api/market/backtest/runs/7/export');
   assert.equal(savedLabel({ name: 'Momentum spread', kind: 'batch', created_at: '2026-11-04T17:00:00Z' }), 'Momentum spread · markets and periods · 2026-11-04');
+});
+
+test('segment rows sign the figures and never show a missing benchmark as zero', () => {
+  const rows = segmentRows([
+    { from: '2021-01-04', to: '2022-01-03', days: 252, cagr_pct: 12.34, volatility_pct: 15, max_drawdown_pct: -8.2, sharpe: 0.8, benchmark_cagr_pct: 9, excess_cagr_pct: 3.34 },
+    { from: '2022-01-03', to: '2023-01-02', days: 252, cagr_pct: -4, volatility_pct: 20, max_drawdown_pct: -18, sharpe: -0.2 },
+  ]);
+  assert.deepEqual(rows[0], { period: '2021-01-04 to 2022-01-03', cagr: '+12.3%', benchmark: '+9.0%', excess: '+3.3%', excessTone: 'up', drawdown: '-8.2%' });
+  assert.equal(rows[1].benchmark, 'n/a');
+  assert.equal(rows[1].excessTone, 'none');
+  assert.equal(rows[1].cagr, '-4.0%');
+  assert.deepEqual(segmentRows(undefined), []);
 });

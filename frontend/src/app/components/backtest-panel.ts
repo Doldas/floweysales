@@ -5,7 +5,7 @@ import type { Subscription } from 'rxjs';
 import { MarketService, describeHttpError } from '../services';
 import type { BacktestParams, BacktestResult, BacktestSummary, BatchResult, SavedBacktest, SensitivityResult } from '../models';
 import { periodError } from '../core/strategy-period';
-import { batchHeadline, batchParams, batchRows, exportUrl, savedLabel, sensitivityHeadline, sensitivityParams, sensitivityRows, singleParams, chartSummary, curvePath, metricTiles, warningText } from './backtest-view';
+import { batchHeadline, batchParams, batchRows, exportUrl, savedLabel, sensitivityHeadline, sensitivityParams, sensitivityRows, singleParams, chartSummary, curvePath, metricTiles, segmentRows, warningText } from './backtest-view';
 
 const CHART_W = 640;
 const CHART_H = 220;
@@ -91,6 +91,22 @@ const CHART_H = 220;
     </figure>
 
     @if (r.notice) { <p class="bt-note" role="note"><i class="bi bi-info-circle" aria-hidden="true"></i> {{ r.notice }}</p> }
+
+    @if (segments().length) {
+      <h4 class="h6 mb-1">Consecutive parts of the period</h4>
+      <div class="table-responsive">
+        <table class="table table-sm bt-segments">
+          <thead><tr><th scope="col">Period (UTC)</th><th scope="col" class="text-end">Return / year</th><th scope="col" class="text-end">Benchmark</th><th scope="col" class="text-end">Excess</th><th scope="col" class="text-end">Worst drop</th></tr></thead>
+          <tbody>
+            @for (s of segments(); track s.period) {
+              <tr><td>{{ s.period }}</td><td class="text-end">{{ s.cagr }}</td><td class="text-end">{{ s.benchmark }}</td>
+                <td class="text-end" [class.text-success]="s.excessTone === 'up'" [class.text-danger]="s.excessTone === 'down'">{{ s.excess }}</td><td class="text-end">{{ s.drawdown }}</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="bt-note">{{ r.segment_summary }} {{ r.segment_note }}</p>
+    }
 
     <div class="bt-warnings alert alert-warning" role="note">
       <strong>Read this before trusting the result</strong>
@@ -341,6 +357,7 @@ export class BacktestPanelComponent {
   readonly tiles = computed(() => (this.result() ? metricTiles(this.result()!.metrics) : []));
   readonly strategyPath = computed(() => curvePath(this.result()?.curve ?? [], CHART_W, CHART_H, 'equity'));
   readonly benchPath = computed(() => curvePath(this.result()?.curve ?? [], CHART_W, CHART_H, 'benchmark'));
+  readonly segments = computed(() => segmentRows(this.result()?.segments));
   readonly summary = computed(() => (this.result() ? chartSummary(this.result()!) : ''));
 
   constructor() {

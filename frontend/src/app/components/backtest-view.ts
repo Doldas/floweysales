@@ -2,7 +2,7 @@
  * Display helpers for the strategy backtest panel. Pure functions so they run
  * under node --test; the replay itself lives in the server (internal/backtest).
  */
-import type { BacktestParams, BacktestMetrics, BacktestPoint, BacktestResult, BatchCell, BatchSpread, BatchSummary, SensitivityResult, SensitivityVariant } from '../models';
+import type { BacktestParams, BacktestMetrics, BacktestPoint, BacktestResult, BacktestSegment, BatchCell, BatchSpread, BatchSummary, SensitivityResult, SensitivityVariant } from '../models';
 
 export type Tone = 'pos' | 'neg' | 'mid';
 
@@ -14,6 +14,22 @@ export const WARNING_TEXTS: Record<string, string> = {
   benchmark_unavailable: 'The benchmark could not be loaded, so the strategy is shown without a comparison.',
   symbols_unavailable: 'Some symbols had no price history and were left out of the universe.',
 };
+
+export interface SegmentRow { period: string; cagr: string; benchmark: string; excess: string; excessTone: 'up' | 'down' | 'none'; drawdown: string }
+
+const pct = (v: number | undefined): string => (v === undefined ? 'n/a' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`);
+
+/** Table rows for the consecutive parts of a backtest. A missing benchmark shows n/a, never 0. */
+export function segmentRows(segments: readonly BacktestSegment[] | undefined): SegmentRow[] {
+  return (segments ?? []).map(s => ({
+    period: `${s.from} to ${s.to}`,
+    cagr: pct(s.cagr_pct),
+    benchmark: pct(s.benchmark_cagr_pct),
+    excess: pct(s.excess_cagr_pct),
+    excessTone: s.excess_cagr_pct === undefined ? 'none' : s.excess_cagr_pct > 0 ? 'up' : 'down',
+    drawdown: pct(s.max_drawdown_pct),
+  }));
+}
 
 export function warningText(id: string): string {
   return WARNING_TEXTS[id] ?? id.replace(/_/g, ' ');

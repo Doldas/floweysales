@@ -95,6 +95,10 @@ type Result struct {
 	Curve      []Point     `json:"curve"` // one point per trading day, thinned to ≤ 400 points
 	Rebalances []Rebalance `json:"rebalances"`
 	Warnings   []string    `json:"warnings"`
+	// Segments are consecutive parts of the period measured on their own; empty when the period is too short.
+	Segments       []Segment `json:"segments,omitempty"`
+	SegmentSummary string    `json:"segment_summary,omitempty"`
+	SegmentNote    string    `json:"segment_note,omitempty"`
 }
 
 const dateLayout = "2006-01-02"
@@ -345,8 +349,9 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 	if len(rebalances) > 1 {
 		metrics.AvgTurnoverPct = round2(turnoverSum / float64(len(rebalances)-1))
 	}
+	var benchCurve []float64
 	if benchTable != nil {
-		benchCurve := make([]float64, 0, len(curve))
+		benchCurve = make([]float64, 0, len(curve))
 		for i := first; i < len(cal); i++ {
 			benchCurve = append(benchCurve, benchTable.px[i]/benchTable.px[first]*100)
 		}
@@ -376,7 +381,15 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 	if len(rebalances) < shortHistory {
 		warnings = append(warnings, WarnShortHistory)
 	}
-	return Result{Config: cfg, Metrics: metrics, Curve: thin(curve, maxCurvePoints), Rebalances: rebalances, Warnings: warnings}, nil
+	res := Result{Config: cfg, Metrics: metrics, Curve: thin(curve, maxCurvePoints), Rebalances: rebalances, Warnings: warnings}
+	dates := make([]string, len(curve))
+	for i, p := range curve {
+		dates[i] = p.Date
+	}
+	if res.Segments = splitSegments(dates, curveEquity, benchCurve); res.Segments != nil {
+		res.SegmentSummary, res.SegmentNote = SegmentSummary(res.Segments), SegmentNote
+	}
+	return res, nil
 }
 
 // thin keeps at most max points, evenly spaced, always ending on the last.

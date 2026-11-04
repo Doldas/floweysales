@@ -67,7 +67,14 @@ func backtestFacts(run storage.BacktestRun) (string, int, error) {
 		Universe, Strategy, From, To, Period string
 		Metrics                              json.RawMessage
 		Warnings                             []string
-		Cells                                []struct {
+		Segments                             []struct {
+			From, To       string
+			CAGRPct        *float64 `json:"cagr_pct"`
+			MaxDrawdownPct *float64 `json:"max_drawdown_pct"`
+			ExcessCAGRPct  *float64 `json:"excess_cagr_pct"`
+		}
+		SegmentSummary string `json:"segment_summary"`
+		Cells          []struct {
 			Universe, Period, Error, Notice string
 			Metrics                         json.RawMessage
 			Warnings                        []string
@@ -111,6 +118,22 @@ func backtestFacts(run storage.BacktestRun) (string, int, error) {
 		}
 		sample = len(alt.Rebalances)
 		line("Rebalances: %d.", sample)
+		for i, sg := range doc.Segments {
+			parts := []string{fmt.Sprintf("%s to %s", sg.From, sg.To)}
+			if sg.CAGRPct != nil {
+				parts = append(parts, fmt.Sprintf("CAGR %% %.2f", *sg.CAGRPct))
+			}
+			if sg.ExcessCAGRPct != nil {
+				parts = append(parts, fmt.Sprintf("Excess CAGR %% %.2f", *sg.ExcessCAGRPct))
+			}
+			if sg.MaxDrawdownPct != nil {
+				parts = append(parts, fmt.Sprintf("Max drawdown %% %.2f", *sg.MaxDrawdownPct))
+			}
+			line("Part %d of the period: %s", i+1, strings.Join(parts, "; "))
+		}
+		if doc.SegmentSummary != "" {
+			line("%s", doc.SegmentSummary)
+		}
 		for _, w := range doc.Warnings {
 			line("Warning: %s", w)
 		}
