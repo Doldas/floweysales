@@ -41,8 +41,8 @@ const suggestions = await page.locator('#fs-agent-dock .suggestion').count();
 check('suggestions rendered', suggestions > 0, `${suggestions} cards`);
 
 // 3. Send a message; tool calls render as agent steps.
-await page.locator('#fs-agent-dock textarea').fill('market stats please');
-await page.locator('#fs-agent-dock textarea').press('Enter');
+await page.locator('#fs-agent-dock textarea[aria-label="Message the research agent"]').fill('market stats please');
+await page.locator('#fs-agent-dock textarea[aria-label="Message the research agent"]').press('Enter');
 await page.waitForSelector('#fs-agent-dock fs-tool-call', { timeout: 20000 }).catch(() => {});
 const stepCount = await page.locator('#fs-agent-dock fs-tool-call').count();
 check('tool call rendered as agent step', stepCount >= 1, `${stepCount} step(s)`);

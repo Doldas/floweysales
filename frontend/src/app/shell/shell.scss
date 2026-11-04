@@ -273,4 +273,7 @@
 
 @media (max-width: 419.98px) {
   .agent-label { display: none; }
+  // Room for the star and picker buttons on a 320px phone.
+  .fs-topbar { gap: 0.3rem; }
+  .topbar-title { flex: 0 1 auto; }
 }
