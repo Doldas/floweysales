@@ -65,7 +65,7 @@ Kopplingen tema → sektor/råvara är en fast tabell i `internal/market/world.g
 ## Investeringsanalys
 
 `GET /api/market/leaderboard?universe=…&strategy=…` rankar ett urval bolag på
-sex faktorer. `GET /api/market/backtest?universe=…&strategy=…&top=10&rebalance=monthly|quarterly&cost_bps=10&years=3|5|10` (or `from=YYYY-MM-DD&to=YYYY-MM-DD`, UTC; the response carries `from`, `to`, `data_start`, `data_end` and a `notice` when the data is shorter than asked)
+sex faktorer. `GET /api/market/backtest?universe=…&strategy=…&top=10&rebalance=monthly|quarterly&cost_bps=10&years=3|5|10` (or `from=YYYY-MM-DD&to=YYYY-MM-DD`, UTC; the response carries `from`, `to`, `data_start`, `data_end` and a `notice` when the data is shorter than asked). `GET /api/market/backtest/batch?strategy=…&universes=a,b&periods=3,5,10` runs it over up to 4 universes and 6 periods (12 backtests at most) and adds a spread summary; see investor-automations
 spelar upp samma strategi över historiska kurser och rapporter (rapporter
 används först 60 dagar efter periodens slut) mot ett index och returnerar
 nyckeltal, kurva, ombalanseringar och varningar. Båda läses med

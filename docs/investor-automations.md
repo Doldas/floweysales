@@ -162,6 +162,8 @@ strategy*, or call
 `GET /api/market/backtest?universe=…&strategy=…&top=10&rebalance=monthly|quarterly&cost_bps=10&years=3|5|10` (or `from=YYYY-MM-DD&to=YYYY-MM-DD`, UTC; the response carries `from`, `to`, `data_start`, `data_end` and a `notice` when the data is shorter than asked)
 (or `symbols=` with up to 25 tickers; readable by `research.read`).
 
+**Across markets and periods.** `GET /api/market/backtest/batch?strategy=…&universes=a,b&periods=3,5,10` runs the same strategy once per universe and period (`symbols=` instead of `universes=` tests a custom list). A period is `3`, `5` or `10` years, or a UTC range such as `2019-01-01..2022-12-31` (an open end means today). The same `top`, `rebalance`, `cost_bps` and `benchmark` apply to every cell. At most 4 universes, 6 periods and 12 backtests per call; each cell is an ordinary backtest, cached like one. The response lists each cell's metrics, notice and warnings (a failed cell keeps its place with its error, and curves are left out), and a summary: minimum, median and maximum of return, excess return, worst fall and Sharpe over the cells that completed, how many beat the benchmark or lost money, and the weakest and strongest cell. The summary also states its limits: periods that end today overlap, so cells are not independent samples; every universe is today's list, so survivorship bias applies; and fewer than six completed cells is too few to say much. In the app this is the *Test across markets and periods* section under a backtest.
+
 **Method.** The first rebalance is the first trading day on or after the start
 date once `top` symbols have a year of prices. Every 21 trading days (63 for
 quarterly) the leaderboard scores the universe exactly as it does today, the

@@ -3,9 +3,9 @@ import { FormsModule } from '@angular/forms';
 import type { Subscription } from 'rxjs';
 
 import { MarketService, describeHttpError } from '../services';
-import type { BacktestParams, BacktestResult } from '../models';
+import type { BacktestParams, BacktestResult, BatchResult } from '../models';
 import { periodError } from '../core/strategy-period';
-import { chartSummary, curvePath, metricTiles, warningText } from './backtest-view';
+import { batchHeadline, batchRows, chartSummary, curvePath, metricTiles, warningText } from './backtest-view';
 
 const CHART_W = 640;
 const CHART_H = 220;
@@ -119,6 +119,51 @@ const CHART_H = 220;
       </div>
     }
   }
+
+  <details class="bt-robust" [open]="robustOpen()" (toggle)="robustOpen.set($any($event.target).open)">
+    <summary>Test across markets and periods</summary>
+    <p class="bt-note">Runs this strategy once for each market and period you tick, with the same holdings and rebalance settings, and shows the spread. At most {{ maxCells }} backtests per run; each is a full replay, so a cold run takes a while.</p>
+    <fieldset class="bt-pick"><legend>Markets</legend>
+      @for (u of marketChoices(); track u.id) {
+        <label><input type="checkbox" [checked]="pickedMarkets().includes(u.id)" [disabled]="!pickedMarkets().includes(u.id) && pickedMarkets().length >= 4" (change)="toggleMarket(u.id)"> {{ u.label }}</label>
+      }
+    </fieldset>
+    <fieldset class="bt-pick"><legend>Periods</legend>
+      @for (p of periodChoices; track p) {
+        <label><input type="checkbox" [checked]="pickedPeriods().includes(p)" (change)="togglePeriod(p)"> {{ p }} years</label>
+      }
+    </fieldset>
+    <div class="bt-batch-actions">
+      <button type="button" class="btn btn-sm btn-primary" (click)="runBatch()" [disabled]="batchLoading() || !batchCells()">
+        {{ batchLoading() ? 'Running…' : 'Run ' + batchCells() + ' backtests' }}
+      </button>
+      @if (batchCells() > maxCells) { <span class="text-danger small" role="alert">Too many: pick fewer markets or periods ({{ maxCells }} at most).</span> }
+    </div>
+    @if (batchError(); as err) { <p class="text-danger small" role="alert">{{ err }}</p> }
+    @if (batch(); as b) {
+      <div class="bt-batch" aria-live="polite">
+        @for (line of headline(); track line) { <p class="mb-1">{{ line }}</p> }
+        <div class="fs-scroll-x">
+          <table class="table table-sm align-middle mb-2">
+            <caption class="visually-hidden">Backtest results by market and period</caption>
+            <thead><tr><th scope="col">Market</th><th scope="col">Period</th><th scope="col" class="num">Return / yr</th><th scope="col" class="num">Vs benchmark</th><th scope="col" class="num">Worst fall</th><th scope="col" class="num">Sharpe</th></tr></thead>
+            <tbody>
+              @for (r of rows(); track r.key) {
+                <tr>
+                  <th scope="row">{{ r.universe }}</th><td>{{ r.period }}</td>
+                  @if (r.error) { <td colspan="4" class="text-danger small">{{ r.error }}</td> }
+                  @else { <td class="num" [attr.data-tone]="r.tone">{{ r.cagr }}</td><td class="num">{{ r.excess }}</td><td class="num">{{ r.drawdown }}</td><td class="num">{{ r.sharpe }}</td> }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <ul class="bt-limits small">
+          @for (l of b.summary.limitations; track l) { <li>{{ l }}</li> }
+        </ul>
+      </div>
+    }
+  </details>
 </section>
   `,
   styles: [`
@@ -140,6 +185,12 @@ const CHART_H = 220;
   span { display: inline-flex; align-items: center; gap: 0.4rem; } }
 .bt-warnings { font-size: 0.8rem; margin: 0; ul { padding-left: 1.1rem; margin-top: 0.25rem; } }
 .bt-foot { display: flex; }
+.bt-robust { border-top: 1px solid var(--fs-border); padding-top: 0.75rem; summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; } }
+.bt-pick { border: 0; padding: 0; margin: 0.5rem 0; display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; legend { font-size: 0.75rem; color: var(--fs-muted); float: none; width: auto; margin: 0; } label { font-size: 0.85rem; display: inline-flex; gap: 0.35rem; align-items: center; } }
+.bt-batch-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-bottom: 0.5rem; }
+.bt-batch p { font-size: 0.85rem; }
+.bt-limits { color: var(--fs-muted); padding-left: 1.1rem; margin: 0; }
+td[data-tone='pos'] { color: var(--fs-pos); } td[data-tone='neg'] { color: var(--fs-neg); }
 .num { text-align: right; white-space: nowrap; }
 @media (max-width: 575.98px) { .bt { padding-inline: 1rem; } }
   `],
@@ -150,6 +201,8 @@ export class BacktestPanelComponent {
   readonly strategy = input.required<string>();
   readonly strategyLabel = input<string>('');
   readonly symbols = input<string[]>([]);
+  /** Leaderboard universes the batch can test; the watchlist is not one of them. */
+  readonly markets = input<{ id: string; label: string }[]>([]);
 
   private readonly api = inject(MarketService);
   readonly topOptions = [5, 10, 15] as const;
@@ -171,13 +224,38 @@ export class BacktestPanelComponent {
   readonly showTable = signal(false);
   private request?: Subscription;
 
+  // Batch: the same strategy over several markets and periods.
+  readonly maxCells = 12;
+  readonly periodChoices = ['3', '5', '10'];
+  readonly robustOpen = signal(false);
+  readonly pickedMarkets = signal<string[]>([]);
+  readonly pickedPeriods = signal<string[]>(['3', '5', '10']);
+  readonly batch = signal<BatchResult | null>(null);
+  readonly batchLoading = signal(false);
+  readonly batchError = signal('');
+  private batchRequest?: Subscription;
+  /** The current universe first, then the other leaderboard universes. */
+  readonly marketChoices = computed(() => {
+    const list = this.markets();
+    const current = this.universe();
+    return list.some(m => m.id === current) || current === 'custom' ? list : [{ id: current, label: current }, ...list];
+  });
+  readonly batchCells = computed(() => this.pickedMarkets().length * this.pickedPeriods().length);
+  readonly rows = computed(() => batchRows(this.batch()?.cells ?? [], id => this.markets().find(m => m.id === id)?.label ?? id));
+  readonly headline = computed(() => (this.batch() ? batchHeadline(this.batch()!.summary) : []));
+
   readonly tiles = computed(() => (this.result() ? metricTiles(this.result()!.metrics) : []));
   readonly strategyPath = computed(() => curvePath(this.result()?.curve ?? [], CHART_W, CHART_H, 'equity'));
   readonly benchPath = computed(() => curvePath(this.result()?.curve ?? [], CHART_W, CHART_H, 'benchmark'));
   readonly summary = computed(() => (this.result() ? chartSummary(this.result()!) : ''));
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.request?.unsubscribe());
+    inject(DestroyRef).onDestroy(() => { this.request?.unsubscribe(); this.batchRequest?.unsubscribe(); });
+    // The market being viewed is ticked by default; a switch resets the batch.
+    effect(() => {
+      const u = this.universe();
+      untracked(() => { this.pickedMarkets.set(u === 'custom' ? [] : [u]); this.batch.set(null); this.batchError.set(''); });
+    });
     // Runs once inputs are set, and again when the board switches universe or strategy.
     effect(() => {
       this.universe(); this.strategy(); this.symbols();
@@ -192,6 +270,27 @@ export class BacktestPanelComponent {
     this.customError.set('');
     if (key === 'years' && value === 0) return; // wait for dates
     this.run();
+  }
+
+  toggleMarket(id: string): void {
+    this.pickedMarkets.update(l => (l.includes(id) ? l.filter(x => x !== id) : [...l, id]));
+  }
+
+  togglePeriod(p: string): void {
+    this.pickedPeriods.update(l => (l.includes(p) ? l.filter(x => x !== p) : [...l, p]));
+  }
+
+  runBatch(): void {
+    if (!this.batchCells() || this.batchCells() > this.maxCells) return;
+    this.batchRequest?.unsubscribe();
+    this.batchLoading.set(true);
+    this.batchError.set('');
+    this.batchRequest = this.api.backtestBatch({
+      universes: this.pickedMarkets(), periods: this.pickedPeriods(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(),
+    }).subscribe({
+      next: res => { this.batch.set(res); this.batchLoading.set(false); },
+      error: err => { this.batchError.set(describeHttpError(err)); this.batchLoading.set(false); },
+    });
   }
 
   runCustom(): void {

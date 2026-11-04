@@ -2,7 +2,7 @@
 //   node --test src/app/components/backtest-view.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chartSummary, curvePath, metricTiles, warningText } from './backtest-view.ts';
+import { batchHeadline, batchRows, chartSummary, curvePath, metricTiles, periodLabel, warningText } from './backtest-view.ts';
 import type { BacktestMetrics } from '../models';
 
 const metrics: BacktestMetrics = { cagr_pct: 12.4, volatility_pct: 18, sharpe: 0.9, sortino: 1.2, max_drawdown_pct: -22.5, calmar: 0.5,
@@ -51,4 +51,28 @@ test('chartSummary names the endpoints and the benchmark', () => {
   const curve = [{ date: '2023-01-02', equity: 100, benchmark: 100 }, { date: '2026-01-02', equity: 148.4, benchmark: 121 }];
   assert.match(chartSummary({ curve, metrics, benchmark: 'SPY' }), /100 invested on 2023-01-02 grew to 148 by 2026-01-02 against SPY at 121; worst fall -23%/);
   assert.equal(chartSummary({ curve: [], metrics }), 'No curve to show.');
+});
+
+test('periodLabel reads years and date ranges', () => {
+  assert.equal(periodLabel('5'), '5 years');
+  assert.equal(periodLabel('2019-01-01..2022-12-31'), '2019-01-01 to 2022-12-31');
+  assert.equal(periodLabel('2020-01-01..'), '2020-01-01 to today');
+});
+
+test('batchRows keeps a failed cell in place with its reason', () => {
+  const rows = batchRows([
+    { universe: 'us', period: '3', metrics: { ...metrics, cagr_pct: 8.2 } },
+    { universe: 'eu', period: '5', error: 'too little history' },
+    { universe: 'us', period: '10', metrics: { ...metrics, cagr_pct: -3 } },
+  ], u => u.toUpperCase());
+  assert.deepEqual(rows.map(r => [r.universe, r.period, r.cagr, r.tone]), [['US', '3 years', '+8.2%', 'pos'], ['EU', '5 years', '–', 'mid'], ['US', '10 years', '-3.0%', 'neg']]);
+  assert.equal(rows[1].error, 'too little history');
+});
+
+test('batchHeadline states the spread and never calls an empty batch a result', () => {
+  const spread = { min: -3, median: 5, max: 8.2 };
+  const lines = batchHeadline({ cells: 3, completed: 2, failed: 1, cagr_pct: spread, max_drawdown_pct: { min: -30, median: -22, max: -15 }, beat_benchmark: 1, with_benchmark: 2, negative_return: 1, limitations: [] });
+  assert.equal(lines[0], '2 of 3 backtests completed. Return per year: -3.0% to +8.2%, median +5.0%.');
+  assert.match(lines[2], /Beat the benchmark in 1 of 2; lost money in 1 of 2/);
+  assert.deepEqual(batchHeadline({ cells: 4, completed: 0, failed: 4, beat_benchmark: 0, with_benchmark: 0, negative_return: 0, limitations: [] }), ['None of the 4 backtests completed.']);
 });
