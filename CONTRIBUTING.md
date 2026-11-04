@@ -41,7 +41,7 @@ node scripts/sync-brand.mjs --check
 node scripts/build-docs.mjs --check   # builds the guide and fails on a broken internal link
 ```
 
-CI runs the same three commands in the `policy` job. Links to other sites are listed but not fetched, so an outside site cannot block a merge.
+CI runs the same three commands in the `policy` job. Links to other sites are listed but not fetched, so an outside site cannot block a merge. A weekly workflow fetches them (`node scripts/build-docs.mjs --check --external` runs it by hand). Who updates what, and the checklist for a feature PR, is in `docs/documentation-ownership.md`.
 
 ## License
 

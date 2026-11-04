@@ -11,7 +11,7 @@ Relates to #
 - [ ] `go test -race ./...` and `go vet ./...`
 - [ ] `npm ci --prefix frontend && npm run build --prefix frontend`
 - [ ] Tests added for changed behavior
-- [ ] Updated docs and/or release notes
+- [ ] Updated docs and/or release notes (checklist: `docs/documentation-ownership.md`)
 
 ## Financial-data & agent safety
 
