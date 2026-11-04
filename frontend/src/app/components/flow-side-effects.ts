@@ -2,6 +2,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AuthState } from '../auth.service';
 import { canDecide, decisionProblem, describeAudit, describeCapability, formatBytes, sideEffectStatusLabel, sortForReview, type AuditEntry, type SideEffect } from './side-effects';
+import { formatUtcDateTime } from '../ui/datetime';
 
 /** Side-effect approvals and the audit trail of every workspace write and event emission. */
 @Component({
@@ -110,7 +111,7 @@ export class FlowSideEffectsComponent implements OnInit {
 
  ngOnInit(){this.refresh()}
  canDecide(effect:SideEffect){return canDecide(effect,this.isAdmin())}
- time(value?:string){return value?new Date(value).toLocaleString():''}
+ time(value?:string){return value?formatUtcDateTime(value):''}
  setNote(id:number,note:string){this.notes.update(n=>({...n,[id]:note}))}
 
  async refresh(){

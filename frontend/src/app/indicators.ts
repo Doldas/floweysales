@@ -1,4 +1,5 @@
 import type { HistoryPoint } from './models';
+import { formatNumber } from './ui/datetime';
 
 /** Which analysis studies are rendered on the chart. */
 export interface IndicatorFlags {
@@ -312,7 +313,7 @@ export function computeInsights(points: HistoryPoint[], interval: string): Insig
     label: 'vs EMA 200',
     value: pct(dev),
     tone: dev >= 0 ? 'pos' : 'neg',
-    sub: `EMA 200 = ${e200.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+    sub: `EMA 200 = ${formatNumber(e200, { maximumFractionDigits: 2 })}`,
   });
 
   // --- Annualized volatility ----------------------------------------------

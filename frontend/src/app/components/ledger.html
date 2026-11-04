@@ -301,7 +301,7 @@
                       <td data-label="Quantity" class="num">{{ qtyText(o.quantity) }}</td>
                       <td data-label="Pricing">{{ orderPriceLabel(o) }}</td>
                       <td data-label="Time in force">{{ o.tif }}</td>
-                      <td data-label="Placed">{{ timeOf(o) | date: 'MMM d, HH:mm:ss' }}</td>
+                      <td data-label="Placed">{{ timeOf(o) | date: 'MMM d, HH:mm:ss' }} UTC</td>
                       <td data-label="Action" class="actions-col">
                         <button type="button" class="mini cancel" title="Cancel order"
                                 [disabled]="busy()" (click)="cancel(o)">Cancel</button>
@@ -350,7 +350,7 @@
                       <td data-label="Status">
                         <span class="fs-status" [ngClass]="statusClass(o.status)">{{ o.status }}</span>
                       </td>
-                      <td data-label="Time">{{ timeOf(o) | date: 'MMM d, HH:mm:ss' }}</td>
+                      <td data-label="Time">{{ timeOf(o) | date: 'MMM d, HH:mm:ss' }} UTC</td>
                     </tr>
                   }
                 </tbody>

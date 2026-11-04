@@ -1,6 +1,7 @@
 import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
 import { MarketState } from '../core/market-state';
 import { PluginTools } from '../core/plugin-tools';
+import { formatUtcDateTime } from '../ui/datetime';
 import {
   capabilityLabels, isDomainProvider, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt,
   type PluginOverview, type PluginRow,
@@ -240,7 +241,7 @@ export class PluginSettingsComponent {
 
  when(value: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : formatUtcDateTime(date);
  }
 
  private async api<T>(url: string, init?: RequestInit): Promise<T> {

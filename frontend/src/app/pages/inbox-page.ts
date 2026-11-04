@@ -71,7 +71,7 @@ interface ProposalView {
                     <h2>{{ p.quantity }} {{ p.symbol }} <span class="text-muted fw-normal">· {{ p.type }}@if (p.price) { @ {{ p.price }} }</span></h2>
                     <div class="small text-muted">
                       <code>{{ p.approval.client_order_id }}</code> · requested {{ timeAgo(p.approval.created_at) }}
-                      @if (p.approval.expires_at) { · expires {{ p.approval.expires_at | date: 'MMM d, HH:mm' }} }
+                      @if (p.approval.expires_at) { · expires {{ p.approval.expires_at | date: 'MMM d, HH:mm' }} UTC }
                     </div>
                   </div>
                   <span class="fs-status is-warning ms-auto">Pending</span>

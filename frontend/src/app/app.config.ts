@@ -1,3 +1,4 @@
+import { DATE_PIPE_DEFAULT_OPTIONS } from '@angular/common';
 import { ApplicationConfig, inject, isDevMode, provideAppInitializer, provideBrowserGlobalErrorListeners, provideZonelessChangeDetection } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideServiceWorker } from '@angular/service-worker';
@@ -11,6 +12,8 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideZonelessChangeDetection(),
     provideHttpClient(),
+    // The date pipe shows UTC, like every date in the app (see ui/datetime.ts).
+    { provide: DATE_PIPE_DEFAULT_OPTIONS, useValue: { timezone: 'UTC' } },
     // The session role is resolved before the first navigation so route
     // guards and the navigation can rely on it.
     provideAppInitializer(() => inject(AuthState).check()),

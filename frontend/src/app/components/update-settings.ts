@@ -1,5 +1,6 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { comparisonLabel, isUpdateRunning, shortCommit, stateLabel, stepProgress } from './update-status';
+import { formatUtcDateTime } from '../ui/datetime';
 
 interface ImageInfo { image: string; tag: string; digest: string; commit?: string; created?: string }
 interface Commit { sha: string; title: string; url?: string }
@@ -146,7 +147,7 @@ export class UpdateSettingsComponent {
 
  when(value: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : formatUtcDateTime(date);
  }
 
  private async api(url: string, init?: RequestInit): Promise<Overview & { request?: unknown; overview?: Overview }> {
