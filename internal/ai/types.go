@@ -46,6 +46,21 @@ type ChatRequest struct {
 	ToolChoice  string    `json:"tool_choice,omitempty"`
 	Temperature *float64  `json:"temperature,omitempty"`
 	Stream      bool      `json:"stream"`
+	// StreamOptions asks a streaming endpoint to report token usage in a
+	// final frame (the OpenAI-compatible include_usage option).
+	StreamOptions *StreamOptions `json:"stream_options,omitempty"`
+}
+
+// StreamOptions are the optional streaming settings of a request.
+type StreamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
+}
+
+// Usage is the token count an endpoint reports for one completion. Endpoints
+// that send none leave it absent; a missing count is unknown, never zero.
+type Usage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
 }
 
 // ChatResponse is the non-streaming reply shape (used for error parsing and
@@ -56,6 +71,7 @@ type ChatResponse struct {
 		FinishReason string  `json:"finish_reason"`
 	} `json:"choices"`
 	Error *APIError `json:"error,omitempty"`
+	Usage *Usage    `json:"usage,omitempty"`
 }
 
 // APIError is the OpenAI-compatible error envelope.
@@ -93,4 +109,5 @@ type streamChunk struct {
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
 	Error *APIError `json:"error,omitempty"`
+	Usage *Usage    `json:"usage,omitempty"`
 }

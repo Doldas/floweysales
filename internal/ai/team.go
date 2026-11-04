@@ -124,6 +124,10 @@ func RunTeam(ctx context.Context, client *Client, src DataSource, opts TeamOptio
 	if opts.Chair {
 		runChair(ctx, client, src, run, opts, answers, send)
 	}
+	if b := budgetFrom(ctx); b != nil {
+		sum := b.Summary()
+		send(Event{Type: "budget", Budget: &sum})
+	}
 	send(Event{Type: "done"})
 	return nil
 }
