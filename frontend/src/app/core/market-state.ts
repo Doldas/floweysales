@@ -3,6 +3,7 @@ import { Observable, map, of } from 'rxjs';
 
 import { MarketService, describeHttpError, type TrackedAsset } from '../services';
 import { LiveSseService } from '../live.service';
+import { feedStatus } from './feed-status';
 import { OrdersState } from '../orders-state';
 import { NotifyService } from './notify.service';
 import {
@@ -108,15 +109,29 @@ export class MarketState {
     return points.filter((_, i) => i % step === 0).map(p => p.c);
   });
 
-  readonly statusLabel = computed(() => {
-    if (this.mode() === 'research') return 'Research mode';
-    if (!this.trackedSymbol()) return 'No active tracker';
-    if (!this.attempted()) return 'Connecting…';
-    if (!this.connected()) return 'Disconnected';
-    const status = (this.latestTick()?.status ?? '').toUpperCase();
-    if (status.includes('SELL')) return 'Stopped out';
-    return 'Live';
+  /** Ticks every 30 s so a silent feed turns stale without any new event. */
+  private readonly clock = signal(Date.now());
+  /** Feed health as four separate facts; see feed-status.ts. */
+  readonly feed = computed(() => {
+    const provider = this.providers().find(p => p.id === this.provider());
+    return feedStatus({
+      research: this.mode() === 'research',
+      hasTracker: !!this.trackedSymbol(),
+      connection: this.stream.state(),
+      lastUpdateAt: this.stream.lastUpdateAt(),
+      quoteKind: provider?.quote_kind ?? '',
+      providerLabel: provider?.label ?? this.provider(),
+      officialApi: provider ? provider.official_api : null,
+    }, this.clock());
   });
+  /** Short feed text. A connection alone never reads as "Live". */
+  readonly statusLabel = computed(() => this.feed().headline);
+  /** A tracker's stop-loss signal, kept apart from the feed state. */
+  readonly stoppedOut = computed(() => this.mode() === 'live' && (this.latestTick()?.status ?? '').toUpperCase().includes('SELL'));
+
+  reconnectFeed(): void {
+    this.stream.reconnect();
+  }
 
   private firstTickTimer: ReturnType<typeof setTimeout> | null = null;
   private gotTickForCurrentAsset = false;
@@ -127,7 +142,8 @@ export class MarketState {
       const tick = this.stream.latestTick();
       if (tick) this.handleTick(tick);
     });
-    inject(DestroyRef).onDestroy(() => this.stream.close());
+    const clockTimer = setInterval(() => this.clock.set(Date.now()), 30_000);
+    inject(DestroyRef).onDestroy(() => { clearInterval(clockTimer); this.stream.close(); });
   }
 
   /** Restores the active instrument once the session role is known. */
