@@ -33,3 +33,15 @@ export function auditSummary(findings: readonly AnswerFinding[]): string {
 export function safeUrl(url: string | undefined): string {
   return url && /^https?:\/\//i.test(url) ? url : '';
 }
+
+export type EvidenceMode = 'standard' | 'evidence_only' | 'primary_only';
+export const EVIDENCE_MODES: readonly { id: EvidenceMode; label: string; hint: string }[] = [
+  { id: 'standard', label: 'Standard', hint: 'Answers stream as written. Citations are checked afterward and flagged.' },
+  { id: 'evidence_only', label: 'Evidence only', hint: 'The answer is held until its citations pass the check, with up to two corrections. Claims without support are removed or marked insufficient.' },
+  { id: 'primary_only', label: 'Primary sources only', hint: 'As Evidence only, and only filings the agent opened count as support. Search results are leads, not proof.' },
+];
+
+/** Reads a stored mode, falling back to standard for anything unknown. */
+export function parseEvidenceMode(raw: string | null | undefined): EvidenceMode {
+  return EVIDENCE_MODES.some(m => m.id === raw) ? (raw as EvidenceMode) : 'standard';
+}

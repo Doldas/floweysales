@@ -115,6 +115,13 @@
         </select>
       </div>
     }
+    <div class="persona-row">
+      <label for="evidence-pick">Evidence</label>
+      <select id="evidence-pick" class="form-select form-select-sm" (change)="session.setEvidenceMode($any($event.target).value)" [disabled]="session.streaming()">
+        @for (m of evidenceModes; track m.id) { <option [value]="m.id" [selected]="m.id === session.evidenceMode()">{{ m.label }}</option> }
+      </select>
+    </div>
+    @if (evidenceHint(); as hint) { <div class="profile-note">{{ hint }}</div> }
     @if (session.profiles().length) {
       <div class="persona-row">
         <label for="profile-pick">Model</label>

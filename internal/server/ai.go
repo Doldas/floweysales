@@ -120,6 +120,8 @@ type chatRequestBody struct {
 	// ProfileID is the model profile an administrator prepared; 0 uses the
 	// default profile, if there is one.
 	ProfileID int64 `json:"profile_id,omitempty"`
+	// EvidenceMode is standard, evidence_only or primary_only (see ai.AgentOptions).
+	EvidenceMode string `json:"evidence_mode,omitempty"`
 	// Optional UI context so the model knows what the user is looking at.
 	Symbol   string `json:"symbol,omitempty"`
 	Provider string `json:"provider,omitempty"`
@@ -331,6 +333,10 @@ func (e *Engine) registerAIRoutes() {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Unknown persona"})
 			return
 		}
+		if !ai.ValidEvidenceMode(req.EvidenceMode) {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "evidence_mode must be standard, evidence_only or primary_only"})
+			return
+		}
 		baseURL, apiKey, model, ok := e.resolveChatEndpoint(w, r, req.BaseURL, req.APIKey, req.Model, req.SystemPrompt)
 		if !ok {
 			return
@@ -351,6 +357,7 @@ func (e *Engine) registerAIRoutes() {
 
 		client := ai.NewClient(baseURL, apiKey, model)
 		opts := e.chatAgentOptions(r, req.SystemPrompt, req.Persona, req.Tools)
+		opts.EvidenceMode = req.EvidenceMode
 		if profile != nil {
 			client.Model, client.FallbackModel = profile.Model, profile.FallbackModel
 			applyProfile(&opts, profile)
