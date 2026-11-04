@@ -74,7 +74,33 @@ func backtestFacts(run storage.BacktestRun) (string, int, error) {
 			ExcessCAGRPct  *float64 `json:"excess_cagr_pct"`
 		}
 		SegmentSummary string `json:"segment_summary"`
-		Cells          []struct {
+		Trades         *int   `json:"trades"`
+		Concentration  *struct {
+			Periods, Dropped int
+			TotalPct         float64 `json:"total_return_pct"`
+			WithoutBestPct   float64 `json:"without_best_return_pct"`
+		}
+		Stress []struct {
+			Name, From, To string
+			Days           int
+			ReturnPct      float64  `json:"return_pct"`
+			MaxDrawdownPct float64  `json:"max_drawdown_pct"`
+			BenchReturnPct *float64 `json:"benchmark_return_pct"`
+			ExcessPct      *float64 `json:"excess_pct"`
+		}
+		StressNotCovered []string `json:"stress_not_covered"`
+		StressNote       string   `json:"stress_note"`
+		Regimes          []struct {
+			Name         string
+			Days         int
+			SharePct     float64  `json:"share_pct"`
+			CAGRPct      *float64 `json:"cagr_pct"`
+			BenchCAGRPct *float64 `json:"benchmark_cagr_pct"`
+			ExcessPct    *float64 `json:"excess_cagr_pct"`
+		}
+		RegimeNote      string `json:"regime_note"`
+		WalkForwardNote string `json:"walk_forward_note"`
+		Cells           []struct {
 			Universe, Period, Error, Notice string
 			Metrics                         json.RawMessage
 			Warnings                        []string
@@ -133,6 +159,45 @@ func backtestFacts(run storage.BacktestRun) (string, int, error) {
 		}
 		if doc.SegmentSummary != "" {
 			line("%s", doc.SegmentSummary)
+		}
+		if doc.Trades != nil {
+			line("Trades (buys and sells of single holdings): %d.", *doc.Trades)
+		}
+		if c := doc.Concentration; c != nil {
+			line("Total return %% %.2f over %d rebalance periods; without the best %d periods: Return %% %.2f.", c.TotalPct, c.Periods, c.Dropped, c.WithoutBestPct)
+		}
+		for _, st := range doc.Stress {
+			parts := []string{fmt.Sprintf("%s to %s, %d days", st.From, st.To, st.Days), fmt.Sprintf("Return %% %.2f", st.ReturnPct), fmt.Sprintf("Max drawdown %% %.2f", st.MaxDrawdownPct)}
+			if st.BenchReturnPct != nil {
+				parts = append(parts, fmt.Sprintf("Benchmark return %% %.2f", *st.BenchReturnPct))
+			}
+			if st.ExcessPct != nil {
+				parts = append(parts, fmt.Sprintf("Excess %% %.2f", *st.ExcessPct))
+			}
+			line("Stress window %s: %s", st.Name, strings.Join(parts, "; "))
+		}
+		if len(doc.StressNotCovered) > 0 {
+			line("Stress windows the data does not cover, so not tested: %s.", strings.Join(doc.StressNotCovered, ", "))
+		}
+		for _, rg := range doc.Regimes {
+			parts := []string{fmt.Sprintf("%d days", rg.Days), fmt.Sprintf("Share of labeled days %% %.2f", rg.SharePct)}
+			if rg.CAGRPct != nil {
+				parts = append(parts, fmt.Sprintf("CAGR %% %.2f", *rg.CAGRPct))
+			} else {
+				parts = append(parts, "yearly figures not recorded (too few days)")
+			}
+			if rg.BenchCAGRPct != nil {
+				parts = append(parts, fmt.Sprintf("Benchmark CAGR %% %.2f", *rg.BenchCAGRPct))
+			}
+			if rg.ExcessPct != nil {
+				parts = append(parts, fmt.Sprintf("Excess CAGR %% %.2f", *rg.ExcessPct))
+			}
+			line("Market regime %s: %s", rg.Name, strings.Join(parts, "; "))
+		}
+		for _, n := range []string{doc.StressNote, doc.RegimeNote, doc.WalkForwardNote} {
+			if n != "" {
+				line("Note: %s", n)
+			}
 		}
 		for _, w := range doc.Warnings {
 			line("Warning: %s", w)

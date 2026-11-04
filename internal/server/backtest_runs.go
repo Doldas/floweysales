@@ -235,7 +235,26 @@ func backtestRunCSV(run storage.BacktestRun) ([][]string, error) {
 		Strategy string          `json:"strategy"`
 		From     string          `json:"from"`
 		To       string          `json:"to"`
-		Cells    []struct {
+		Trades   *int            `json:"trades"`
+		Stress   []struct {
+			Name           string   `json:"name"`
+			From           string   `json:"from"`
+			To             string   `json:"to"`
+			Days           int      `json:"days"`
+			ReturnPct      float64  `json:"return_pct"`
+			MaxDrawdownPct float64  `json:"max_drawdown_pct"`
+			BenchReturnPct *float64 `json:"benchmark_return_pct"`
+			ExcessPct      *float64 `json:"excess_pct"`
+		} `json:"stress"`
+		Regimes []struct {
+			Name         string   `json:"name"`
+			Days         int      `json:"days"`
+			SharePct     float64  `json:"share_pct"`
+			CAGRPct      *float64 `json:"cagr_pct"`
+			BenchCAGRPct *float64 `json:"benchmark_cagr_pct"`
+			ExcessPct    *float64 `json:"excess_cagr_pct"`
+		} `json:"regimes"`
+		Cells []struct {
 			Universe string          `json:"universe"`
 			Period   string          `json:"period"`
 			Metrics  json.RawMessage `json:"metrics"`
@@ -253,7 +272,31 @@ func backtestRunCSV(run storage.BacktestRun) ([][]string, error) {
 	}
 	switch run.Kind {
 	case "single":
-		return [][]string{header("universe", "strategy", "from", "to"), append([]string{doc.Universe, doc.Strategy, doc.From, doc.To}, append(cellMetrics(doc.Metrics), "")...)}, nil
+		rows := [][]string{header("universe", "strategy", "from", "to"), append([]string{doc.Universe, doc.Strategy, doc.From, doc.To}, append(cellMetrics(doc.Metrics), "")...)}
+		// Stress windows and regimes follow as their own tables; a missing figure is empty, never zero.
+		opt := func(v *float64) string {
+			if v == nil {
+				return ""
+			}
+			return strconv.FormatFloat(*v, 'f', 2, 64)
+		}
+		if doc.Trades != nil {
+			rows = append(rows, []string{}, []string{"trades", strconv.Itoa(*doc.Trades)})
+		}
+		if len(doc.Stress) > 0 {
+			rows = append(rows, []string{}, []string{"stress_window", "from", "to", "days", "return_pct", "max_drawdown_pct", "benchmark_return_pct", "excess_pct"})
+			for _, st := range doc.Stress {
+				rows = append(rows, []string{st.Name, st.From, st.To, strconv.Itoa(st.Days), strconv.FormatFloat(st.ReturnPct, 'f', 2, 64),
+					strconv.FormatFloat(st.MaxDrawdownPct, 'f', 2, 64), opt(st.BenchReturnPct), opt(st.ExcessPct)})
+			}
+		}
+		if len(doc.Regimes) > 0 {
+			rows = append(rows, []string{}, []string{"regime", "days", "share_pct", "cagr_pct", "benchmark_cagr_pct", "excess_cagr_pct"})
+			for _, rg := range doc.Regimes {
+				rows = append(rows, []string{rg.Name, strconv.Itoa(rg.Days), strconv.FormatFloat(rg.SharePct, 'f', 2, 64), opt(rg.CAGRPct), opt(rg.BenchCAGRPct), opt(rg.ExcessPct)})
+			}
+		}
+		return rows, nil
 	case "batch":
 		rows := [][]string{header("universe", "period")}
 		for _, c := range doc.Cells {
