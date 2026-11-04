@@ -270,7 +270,7 @@ func ToolDefs() []Tool {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "read_source",
-				Description: "Open one search_web result of this run and read the page text. Pass the source_id the search returned (for example S3). Public http(s) pages only; PDFs and pages that need a login cannot be read. Cite the page as [S3] only after reading it.",
+				Description: "Open one search_web result of this run and read the page text. Pass the source_id the search returned (for example S3). Public http(s) HTML, plain text and text-based PDF only; pages that need a login or are scanned images cannot be read. Cite the page as [S3] only after reading it.",
 				Parameters:  obj(map[string]any{"source_id": str("The source_id of a search_web result, such as S3.")}, "source_id"),
 			},
 		},

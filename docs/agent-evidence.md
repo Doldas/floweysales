@@ -44,7 +44,7 @@ Quote and reachability checks, claim labels checked by the server, a block optio
 
 - public `http`/`https` hosts only; no credentials, fragments, custom ports, local or private addresses, and the resolved address is pinned for the connection;
 - up to three redirects, each checked again before it is followed;
-- HTML and plain text only; a PDF, a login page or a page that needs JavaScript returns an error the agent sees, and the source stays **listed**;
-- at most 512 KB is read and 12,000 characters of text reach the model; the result says when it was cut.
+- HTML, plain text and text-based PDF. A PDF is read up to 8 MB and its first 40 pages; a scanned PDF has no text layer and, like a login page or a page that needs JavaScript, returns an error the agent sees while the source stays **listed**;
+- at most 512 KB of HTML is read and 12,000 characters of text reach the model; the result says when it was cut.
 
 The tool counts toward the per-minute tool budget of ordinary users. It is not exposed through the MCP server, which has no run to resolve a `source_id` against. Reading a page does not make it a primary source: in Primary sources only mode a web page still does not count.
