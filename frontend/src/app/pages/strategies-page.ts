@@ -9,10 +9,13 @@ import {
 } from '../components/strategy-view';
 import { AgentSession } from '../core/agent-session';
 import { MarketState } from '../core/market-state';
+import { PERIOD_PRESETS, parseSavedPeriods, periodError, periodRequest, withSavedPeriod, type PeriodChoice, type SavedPeriod } from '../core/strategy-period';
+import { todayUtc } from '../ui/datetime';
 import type { Persona, SavedStrategy, StrategyCatalog, StrategyDef, StrategyRunResult } from '../models';
 import { MarketService, describeHttpError } from '../services';
 import { SymbolSearchComponent } from '../shell/symbol-search';
 
+const PERIODS_KEY = 'fs.strategy.periods';
 const W = 720;
 const H_PRICE = 260;
 const H_EQUITY = 160;
@@ -91,11 +94,31 @@ const H_EQUITY = 160;
           <div class="run-bar">
             <div class="fs-segmented" role="group" aria-label="History">
               @for (r of ranges; track r) { <button type="button" [attr.aria-pressed]="range() === r" (click)="range.set(r)">{{ r }}</button> }
+              <button type="button" [attr.aria-pressed]="range() === 'CUSTOM'" (click)="range.set('CUSTOM')">Custom</button>
             </div>
+            @if (range() === 'CUSTOM') {
+              <div class="custom-period">
+                <label>From (UTC) <input type="date" class="form-control form-control-sm" min="1990-01-01" [max]="today" [value]="from()" (change)="from.set($any($event.target).value)" /></label>
+                <label>To (UTC) <input type="date" class="form-control form-control-sm" min="1990-01-01" [value]="to()" (change)="to.set($any($event.target).value)" /></label>
+                @if (periodProblem()) { <span class="text-danger small" role="alert">{{ periodProblem() }}</span> }
+                @else {
+                  <span class="saved-periods">
+                    <input type="text" class="form-control form-control-sm" maxlength="40" placeholder="Name this period" aria-label="Name for this period" [value]="periodName()" (input)="periodName.set($any($event.target).value)" />
+                    <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="!periodName().trim()" (click)="savePeriod()">Save period</button>
+                  </span>
+                }
+                @for (p of savedPeriods(); track p.name) {
+                  <span class="saved-chip">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" (click)="usePeriod(p)">{{ p.name }}</button>
+                    <button type="button" class="btn btn-sm btn-link text-muted" [attr.aria-label]="'Remove saved period ' + p.name" (click)="removePeriod(p)"><i class="bi bi-x" aria-hidden="true"></i></button>
+                  </span>
+                }
+              </div>
+            }
             <label class="cost">Cost per side
               <input type="number" class="form-control form-control-sm" min="0" max="200" step="1" [value]="cost()" (change)="cost.set(+$any($event.target).value || 0)" /> bps
             </label>
-            <button type="button" class="btn btn-primary" [disabled]="loading() || !market.trackedSymbol() || blocked().length > 0" (click)="run()">
+            <button type="button" class="btn btn-primary" [disabled]="loading() || !market.trackedSymbol() || blocked().length > 0 || !!periodProblem()" (click)="run()">
               <i class="bi bi-play-fill"></i> Run test
             </button>
             @if (!market.trackedSymbol()) { <span class="muted">Pick an instrument first.</span> }
@@ -147,6 +170,7 @@ const H_EQUITY = 160;
             <div class="alert alert-warning" role="note">
               <strong>Read this before trusting the result</strong>
               <ul class="mb-0">
+                @if (r.notice) { <li>{{ r.notice }}</li> }
                 @for (w of r.warnings; track w) { <li>{{ warningText(w) }}</li> }
                 <li>Past results do not predict future ones.</li>
               </ul>
@@ -219,6 +243,8 @@ const H_EQUITY = 160;
 .muted, .readback p { color: var(--fs-muted); font-size: 0.82rem; margin: 0.2rem 0 0; }
 .readback p { color: var(--fs-text-2, var(--fs-text)); font-size: 0.88rem; }
 .notice { font-size: 0.82rem; color: var(--fs-pos); margin: 0; }
+.custom-period { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; align-items: end; width: 100%; label { display: grid; gap: 0.15rem; font-size: 0.8125rem; color: var(--fs-muted); } }
+.saved-periods, .saved-chip { display: inline-flex; gap: 0.35rem; align-items: center; }
 .run-bar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; border-top: 1px solid var(--fs-border); padding-top: 0.8rem; }
 .cost { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--fs-muted); input { width: 5rem; } }
 .now { font-size: 0.88rem; margin: 0; }
@@ -255,7 +281,8 @@ export class StrategiesPage {
   readonly w = W;
   readonly hp = H_PRICE;
   readonly he = H_EQUITY;
-  readonly ranges = ['3Y', '5Y', '10Y'] as const;
+  readonly ranges = PERIOD_PRESETS;
+  readonly today = todayUtc();
   readonly prompt = strategyPrompt;
   readonly now = nowText;
 
@@ -264,7 +291,13 @@ export class StrategiesPage {
   readonly draft = signal<StrategyDef | null>(null);
   /** The id of the strategy shown: a preset id, "custom:<n>", or null for an unsaved one. */
   readonly draftId = signal<string | null>(null);
-  readonly range = signal<'3Y' | '5Y' | '10Y'>('5Y');
+  readonly range = signal<PeriodChoice>('5Y');
+  readonly from = signal('');
+  readonly to = signal('');
+  readonly periodName = signal('');
+  readonly savedPeriods = signal<SavedPeriod[]>(this.loadPeriods());
+  /** Why the custom dates cannot be sent, or ''. */
+  readonly periodProblem = computed(() => this.range() === 'CUSTOM' ? periodError(this.from(), this.to(), this.today) : '');
   readonly cost = signal(10);
   readonly result = signal<StrategyRunResult | null>(null);
   readonly loading = signal(false);
@@ -355,6 +388,25 @@ export class StrategiesPage {
     this.notice.set('This is your own copy. Change the rules, run it, and save it when you like it.');
   }
 
+  private loadPeriods(): SavedPeriod[] {
+    try { return parseSavedPeriods(localStorage.getItem(PERIODS_KEY)); } catch { return []; }
+  }
+
+  private storePeriods(list: SavedPeriod[]): void {
+    this.savedPeriods.set(list);
+    try { localStorage.setItem(PERIODS_KEY, JSON.stringify(list)); } catch { /* Saved periods stay for this visit only. */ }
+  }
+
+  savePeriod(): void {
+    if (this.periodProblem() || !this.periodName().trim()) return;
+    this.storePeriods(withSavedPeriod(this.savedPeriods(), { name: this.periodName(), from: this.from(), to: this.to() }));
+    this.periodName.set('');
+  }
+
+  usePeriod(p: SavedPeriod): void { this.range.set('CUSTOM'); this.from.set(p.from); this.to.set(p.to); }
+
+  removePeriod(p: SavedPeriod): void { this.storePeriods(this.savedPeriods().filter(x => x.name !== p.name)); }
+
   run(): void {
     const d = this.draft();
     const symbol = this.market.trackedSymbol();
@@ -362,7 +414,7 @@ export class StrategiesPage {
     this.request?.unsubscribe();
     this.loading.set(true);
     this.error.set('');
-    const common = { symbol, provider: this.market.provider(), range: this.range(), cost_bps: this.cost() };
+    const common = { symbol, provider: this.market.provider(), ...periodRequest(this.range(), this.from(), this.to()), cost_bps: this.cost() };
     const req = this.isPreset() ? { ...common, strategy_id: this.draftId()! } : { ...common, definition: d };
     this.request = this.api.runStrategy(req).subscribe({
       next: r => { this.result.set(r); this.loading.set(false); },

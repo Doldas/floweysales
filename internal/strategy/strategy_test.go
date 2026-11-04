@@ -406,3 +406,45 @@ func TestWalkForwardCoversEveryTradeOnce(t *testing.T) {
 		t.Fatalf("periods hold %d trades, replay has %d", total, len(res.Trades))
 	}
 }
+
+func TestPeriodBoundsKeepWarmUpButNoEarlyTrades(t *testing.T) {
+	pts := swings(14)
+	def, _ := Preset("fib_golden_pocket")
+	def.MinLegATR = 1
+	full, err := Run(def, pts, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mid := len(pts) / 2
+	from := time.Unix(pts[mid].Timestamp, 0).UTC()
+	to := time.Unix(pts[len(pts)-40].Timestamp, 0).UTC()
+	part, err := Run(def, pts, Config{From: from, To: to})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if part.Curve[0].Date < from.Format(dateLayout) {
+		t.Fatalf("the curve starts %s, before from %s", part.Curve[0].Date, from.Format(dateLayout))
+	}
+	if last := part.Curve[len(part.Curve)-1].Date; last > to.Format(dateLayout) {
+		t.Fatalf("the curve ends %s, after to %s", last, to.Format(dateLayout))
+	}
+	for _, tr := range part.Trades {
+		if tr.EntryDate < from.Format(dateLayout) {
+			t.Fatalf("trade %+v opened before from", tr)
+		}
+	}
+	// Indicators were warmed on the bars before from: a run on only the clipped bars has less to work with.
+	if len(part.Curve) >= len(full.Curve) {
+		t.Fatalf("a bounded period must be shorter: %d vs %d", len(part.Curve), len(full.Curve))
+	}
+}
+
+func TestPeriodWithTooLittleDataIsRefused(t *testing.T) {
+	pts := swings(14)
+	def, _ := Preset("fib_golden_pocket")
+	def.MinLegATR = 1
+	last := time.Unix(pts[len(pts)-1].Timestamp, 0).UTC()
+	if _, err := Run(def, pts, Config{From: last}); err == nil {
+		t.Fatal("a period with no bars left to trade must be refused")
+	}
+}
