@@ -24,3 +24,14 @@ and chart height, the paper portfolio, and the agent dock bounds. A separate USE
 session checks research mode: no paper portfolio, history-based chart, and custom
 financial year ranges. A test on a real Samsung S24 is still recommended,
 especially with the on-screen keyboard open or font scaling enabled.
+
+## Loading states
+
+Use `fs-skeleton`, `fs-progress-status` and the phases in `ui/async-state.ts` instead of one-off spinners.
+
+- Loading shows a shape that matches the content, so nothing jumps when it arrives. A refresh keeps the data it has.
+- A load under 150 ms shows nothing, to prevent flicker.
+- Every spinner has a label. A wait over 8 seconds says it is still working.
+- A progress bar is determinate only when `done` and `total` are measured; the app never shows a percentage it cannot measure.
+- A wait with a known timeout ends in a message and a retry, never a spinner forever.
+- Motion only marks a state change, stays under 200 ms for transitions, and uses opacity and transform. Shimmer stops under `prefers-reduced-motion`.

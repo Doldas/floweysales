@@ -68,9 +68,3 @@ kbd { font-size: 0.7rem; }
   &:hover:not(:disabled) { border-color: var(--fs-accent); color: var(--fs-text); }
   &.is-voted { background: var(--fs-accent-soft); border-color: var(--fs-accent); color: var(--fs-accent-text); font-weight: 600; }
 }
-
-// Loading skeleton
-.skeleton .bar { display: block; height: 0.75rem; margin-bottom: 0.7rem; border-radius: 4px; background: var(--fs-surface-3); animation: pulse 1.4s ease-in-out infinite;
-  &:last-child { margin-bottom: 0; } }
-@keyframes pulse { 50% { opacity: 0.45; } }
-@media (prefers-reduced-motion: reduce) { .skeleton .bar { animation: none; } }

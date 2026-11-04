@@ -9,6 +9,8 @@ import { MarketState } from '../core/market-state';
 import { MarketService, describeHttpError } from '../services';
 import type { LeaderboardOption, LeaderboardResponse, LeaderboardRow } from '../models';
 import { LEADERBOARD_FACTORS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES } from './investor-nodes';
+import { ProgressStatusComponent } from '../ui/progress-status';
+import { SkeletonComponent } from '../ui/skeleton';
 import { BacktestPanelComponent } from './backtest-panel';
 import { FACTOR_LABELS, STRATEGY_PLAYBOOK, alternativeList, coverageBreakdown, coverageSummary, flagList, leaderboardPrompt, methodFactors, metricValue, num, pct, reasonList, scoreSum, scoreTone, selectionLines, sourceKindLabel, universeCsv } from './leaderboard-view';
 
@@ -23,7 +25,7 @@ const STORE_KEY = 'fs.leaderboard';
 @Component({
   selector: 'fs-leaderboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, RouterLink, BacktestPanelComponent],
+  imports: [DecimalPipe, RouterLink, BacktestPanelComponent, ProgressStatusComponent, SkeletonComponent],
   template: `
 <section class="card board" aria-labelledby="board-title">
   <div class="card-header board-head">
@@ -133,8 +135,13 @@ const STORE_KEY = 'fs.leaderboard';
   }
 
   @if (loading()) {
-    <div class="progress rounded-0" style="height: 2px" role="progressbar" aria-label="Scoring companies"><div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div></div>
-    @if (!data()) { <p class="board-note">Scoring {{ universeLabel() }} on quarterly reports and a year of prices. The first load of a universe takes a little while; later switches are instant.</p> }
+    <div class="m-3">
+      <fs-progress-status [stage]="'Scoring ' + universeLabel()" />
+      @if (!data()) {
+        <p class="board-note">Quarterly reports and a year of prices. The first load of a universe takes a little while; later switches are instant.</p>
+        <fs-skeleton shape="rows" [rows]="8" aria-hidden="true" />
+      }
+    </div>
   }
 
   @if (error(); as err) {

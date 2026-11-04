@@ -20,6 +20,7 @@ import { MarketState } from '../core/market-state';
 import { NotifyService } from '../core/notify.service';
 import { ForumPost } from '../models';
 import { formatUtcDateTime } from '../ui/datetime';
+import { SkeletonComponent } from '../ui/skeleton';
 import { timeAgo } from '../ui/format';
 import {
   BODY_MAX,
@@ -56,7 +57,7 @@ function writeStorage(key: string, value: string): void {
 @Component({
   selector: 'fse-forum',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, FormsModule],
+  imports: [DatePipe, FormsModule, SkeletonComponent],
   templateUrl: './forum.html',
   styleUrl: './forum.scss',
 })
