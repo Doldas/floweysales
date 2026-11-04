@@ -163,6 +163,8 @@ func isBacktestRunRoute(method, path string) bool {
 	switch {
 	case path == base:
 		return method == http.MethodGet || method == http.MethodPost
+	case strings.HasPrefix(path, base+"/") && strings.HasSuffix(path, "/summary"):
+		return method == http.MethodPost
 	case strings.HasPrefix(path, base+"/"):
 		return method == http.MethodGet || method == http.MethodDelete
 	}

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"floweysales/internal/ai"
 	"floweysales/internal/app"
 	"floweysales/internal/identity"
 	"floweysales/internal/market"
@@ -195,8 +196,10 @@ type Engine struct {
 	modelProfiles modelProfileStore // model profiles; tests replace the database
 	teams         teamStore         // saved agent teams
 	backtestRuns  backtestRunStore  // saved backtest results
-	transactions  transactionStore
-	agentTasks    agentTaskStore
+	// summarize replaces the model call that writes a backtest summary in tests.
+	summarize    func(ctx context.Context, messages []ai.Message) (string, error)
+	transactions transactionStore
+	agentTasks   agentTaskStore
 	// strategyHistory replaces the provider history read in tests.
 	strategyHistory func(ctx context.Context, symbol string, p market.Provider, rng string) (market.HistorySeries, error)
 	paperState      func() ([]trading.Position, trading.Summary)
@@ -251,6 +254,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerBacktestBatchRoutes()
 	e.registerBacktestSensitivityRoutes()
 	e.registerBacktestRunRoutes()
+	e.registerBacktestSummaryRoute()
 	e.registerPlanRoutes()
 	e.registerPortfolioAnalyticsRoutes()
 	e.registerPositionSizingRoutes()

@@ -7,7 +7,7 @@ import {
   FinancialsResponse,
   HistorySeries,
   BacktestParams,
-  BacktestResult, BatchResult, SensitivityResult, SavedBacktest,
+  BacktestResult, BatchResult, SensitivityResult, SavedBacktest, BacktestSummary,
   LeaderboardResponse,
   MarketData,
   Order,
@@ -127,6 +127,10 @@ export class MarketService {
   }
   getBacktestRun(id: number): Observable<SavedBacktest & { result: unknown }> {
     return this.http.get<SavedBacktest & { result: unknown }>(`/api/market/backtest/runs/${id}`);
+  }
+  /** A model-written summary of a saved run, checked by the server against the stored figures. */
+  summarizeBacktestRun(id: number): Observable<BacktestSummary> {
+    return this.http.post<BacktestSummary>(`/api/market/backtest/runs/${id}/summary`, {});
   }
   deleteBacktestRun(id: number): Observable<{ deleted: boolean }> {
     return this.http.delete<{ deleted: boolean }>(`/api/market/backtest/runs/${id}`);
