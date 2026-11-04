@@ -571,7 +571,7 @@ export interface StrategyTrade {
 export interface StrategyRunMetrics { cagr_pct: number; volatility_pct: number; sharpe: number; sortino: number; max_drawdown_pct: number; calmar: number }
 export interface StrategyRunResult {
   symbol: string; provider: string; range: string; generated_at: string; strategy: StrategyDef;
-  config: { cost_bps: number }; base_price: number; from: string; to: string;
+  config: { cost_bps: number }; base_price: number; from: string; to: string; data_start?: string; data_end?: string; notice?: string;
   metrics: StrategyRunMetrics; buy_hold: StrategyRunMetrics; total_return_pct: number; buy_hold_return_pct: number;
   stats: { trades: number; win_rate_pct: number; avg_win_pct: number; avg_loss_pct: number; profit_factor?: number; expectancy_pct: number; avg_r?: number; avg_bars: number; exposure_pct: number };
   curve: { date: string; close: number; equity: number; in_position?: boolean }[];
@@ -580,7 +580,7 @@ export interface StrategyRunResult {
   latest: { date: string; close: number; in_position: boolean; entry_signal: boolean; exit_signal: boolean; has_leg: boolean;
     leg_low?: number; leg_high?: number; leg_low_date?: string; leg_high_date?: string; levels?: { label: string; ratio: number; price: number }[] };
 }
-export interface StrategyRunRequest { strategy_id?: string; definition?: StrategyDef; symbol: string; provider?: string; range: '3Y' | '5Y' | '10Y'; cost_bps: number }
+export interface StrategyRunRequest { strategy_id?: string; definition?: StrategyDef; symbol: string; provider?: string; range?: '1Y' | '3Y' | '5Y' | '10Y' | 'YTD' | 'MAX'; from?: string; to?: string; cost_bps: number }
 
 export interface ReferencePosition { symbol: string; name: string; weight_pct: number; shares?: number; shares_change_pct?: number }
 export interface ReferencePortfolio {

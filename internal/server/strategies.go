@@ -108,7 +108,9 @@ type strategyBacktestRequest struct {
 	Definition *strategy.Strategy `json:"definition"`  // an unsaved strategy, run as sent
 	Symbol     string             `json:"symbol"`
 	Provider   string             `json:"provider"`
-	Range      string             `json:"range"` // 3Y, 5Y or 10Y
+	Range      string             `json:"range"` // 1Y, 3Y, 5Y, 10Y, YTD or MAX
+	From       string             `json:"from"`  // optional UTC date, YYYY-MM-DD; with To it replaces Range
+	To         string             `json:"to"`    // optional UTC date, YYYY-MM-DD
 	CostBps    *float64           `json:"cost_bps"`
 }
 
@@ -117,7 +119,62 @@ type strategyBacktestResponse struct {
 	Provider    string `json:"provider"`
 	Range       string `json:"range"`
 	GeneratedAt string `json:"generated_at"`
+	// From and To are the dates tested (UTC); DataStart and DataEnd are what the provider returned.
+	From      string `json:"from"`
+	To        string `json:"to"`
+	DataStart string `json:"data_start"`
+	DataEnd   string `json:"data_end"`
+	// Notice says when the data does not cover the period that was asked for.
+	Notice string `json:"notice,omitempty"`
 	strategy.Result
+}
+
+const strategyDateLayout = "2006-01-02"
+
+// strategyPeriod turns a preset or custom dates into the bars to fetch and the tested window.
+// from and to are zero when the whole fetched history is tested.
+func strategyPeriod(rng, fromText, toText string, now time.Time) (label, fetch string, from, to time.Time, err error) {
+	now = now.UTC()
+	if fromText != "" || toText != "" {
+		if fromText != "" {
+			if from, err = time.Parse(strategyDateLayout, fromText); err != nil {
+				return "", "", from, to, errors.New("from must be a UTC date like 2020-01-31")
+			}
+		}
+		if toText != "" {
+			if to, err = time.Parse(strategyDateLayout, toText); err != nil {
+				return "", "", from, to, errors.New("to must be a UTC date like 2020-01-31")
+			}
+		}
+		if !from.IsZero() && from.Year() < 1990 {
+			return "", "", from, to, errors.New("from must be 1990-01-01 or later")
+		}
+		if !to.IsZero() && to.After(now) {
+			to = time.Time{} // Nothing after today exists; test up to the latest bar.
+		}
+		if !from.IsZero() && !to.IsZero() && !from.Before(to) {
+			return "", "", from, to, errors.New("from must be before to")
+		}
+		return "CUSTOM", market.Range10Y, from, to, nil
+	}
+	switch strings.ToUpper(strings.TrimSpace(rng)) {
+	case "":
+		return market.Range5Y, market.Range5Y, from, to, nil
+	case market.Range3Y:
+		return market.Range3Y, market.Range3Y, from, to, nil
+	case market.Range5Y:
+		return market.Range5Y, market.Range5Y, from, to, nil
+	case market.Range10Y:
+		return market.Range10Y, market.Range10Y, from, to, nil
+	case market.Range1Y:
+		// A year is too few bars to warm up on, so fetch more and test from a year ago.
+		return market.Range1Y, market.Range10Y, now.AddDate(-1, 0, 0), to, nil
+	case "YTD":
+		return "YTD", market.Range10Y, time.Date(now.Year(), 1, 1, 0, 0, 0, 0, time.UTC), to, nil
+	case "MAX":
+		return "MAX", market.Range10Y, from, to, nil
+	}
+	return "", "", from, to, errors.New("range must be 1Y, 3Y, 5Y, 10Y, YTD or MAX, or give from and to dates")
 }
 
 func (e *Engine) strategyBars(ctx context.Context, symbol string, p market.Provider, rng string) (market.HistorySeries, error) {
@@ -262,13 +319,9 @@ func (e *Engine) runStrategyBacktest(ctx context.Context, u identity.User, req s
 	if err != nil {
 		return zero, http.StatusBadRequest, errors.New("choose an instrument to test on")
 	}
-	rng := strings.ToUpper(strings.TrimSpace(req.Range))
-	switch rng {
-	case "":
-		rng = market.Range5Y
-	case market.Range3Y, market.Range5Y, market.Range10Y:
-	default:
-		return zero, http.StatusBadRequest, errors.New("range must be 3Y, 5Y or 10Y")
+	rng, fetch, from, to, err := strategyPeriod(req.Range, req.From, req.To, time.Now())
+	if err != nil {
+		return zero, http.StatusBadRequest, err
 	}
 	cost := 10.0
 	if req.CostBps != nil {
@@ -299,14 +352,55 @@ func (e *Engine) runStrategyBacktest(ctx context.Context, u identity.User, req s
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	provider := e.parseProvider(req.Provider)
-	series, err := e.strategyBars(ctx, symbol, provider, rng)
+	series, err := e.strategyBars(ctx, symbol, provider, fetch)
 	if err != nil {
 		return zero, providerErrorStatus(err), err
 	}
-	result, err := strategy.Run(def, series.Points, strategy.Config{CostBps: cost})
+	result, err := strategy.Run(def, series.Points, strategy.Config{CostBps: cost, From: from, To: to})
 	if err != nil {
 		return zero, http.StatusUnprocessableEntity, err
 	}
-	return strategyBacktestResponse{Symbol: symbol, Provider: series.Provider, Range: rng,
-		GeneratedAt: time.Now().UTC().Format(time.RFC3339), Result: result}, http.StatusOK, nil
+	resp := strategyBacktestResponse{Symbol: symbol, Provider: series.Provider, Range: rng,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339), Result: result}
+	if n := len(result.Curve); n > 0 {
+		resp.From, resp.To = result.Curve[0].Date, result.Curve[n-1].Date
+	}
+	resp.DataStart, resp.DataEnd = barDates(series.Points)
+	resp.Notice = strategyCoverageNotice(from, to, resp.DataStart, resp.DataEnd)
+	return resp, http.StatusOK, nil
+}
+
+// barDates returns the first and last bar dates (UTC) of a series.
+func barDates(points []market.HistoryPoint) (first, last string) {
+	var lo, hi int64
+	for _, p := range points {
+		if p.Timestamp <= 0 {
+			continue
+		}
+		if lo == 0 || p.Timestamp < lo {
+			lo = p.Timestamp
+		}
+		if p.Timestamp > hi {
+			hi = p.Timestamp
+		}
+	}
+	if lo == 0 {
+		return "", ""
+	}
+	return time.Unix(lo, 0).UTC().Format(strategyDateLayout), time.Unix(hi, 0).UTC().Format(strategyDateLayout)
+}
+
+// strategyCoverageNotice says so when the provider's data does not reach the requested dates.
+func strategyCoverageNotice(from, to time.Time, dataStart, dataEnd string) string {
+	var parts []string
+	if !from.IsZero() && dataStart != "" && dataStart > from.Format(strategyDateLayout) {
+		parts = append(parts, "you asked from "+from.Format(strategyDateLayout)+"; data starts "+dataStart)
+	}
+	if !to.IsZero() && dataEnd != "" && dataEnd < to.Format(strategyDateLayout) {
+		parts = append(parts, "you asked up to "+to.Format(strategyDateLayout)+"; data ends "+dataEnd)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "The data does not cover the whole period: " + strings.Join(parts, "; ") + "."
 }

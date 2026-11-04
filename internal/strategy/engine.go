@@ -42,6 +42,9 @@ var WarningTexts = map[string]string{
 // Config sets the cost of trading in a replay.
 type Config struct {
 	CostBps float64 `json:"cost_bps"` // per side, on the traded value
+	// From and To (UTC) bound the tested period. Bars before From still warm up the
+	// indicators, but no trade is opened before From; bars after To are ignored.
+	From, To time.Time `json:"-"`
 }
 
 // Trade is one round trip.
@@ -346,6 +349,16 @@ func Run(def Strategy, points []market.HistoryPoint, cfg Config) (Result, error)
 	if cfg.CostBps < 0 || cfg.CostBps > 200 {
 		return Result{}, errors.New("cost must be from 0 to 200 basis points per side")
 	}
+	if !cfg.To.IsZero() {
+		end := cfg.To.UTC().Truncate(24 * time.Hour).Add(24 * time.Hour).Unix()
+		kept := make([]market.HistoryPoint, 0, len(points))
+		for _, p := range points {
+			if p.Timestamp < end {
+				kept = append(kept, p)
+			}
+		}
+		points = kept
+	}
 	s := newSeries(points)
 	n := len(s.close)
 	if n < minBars {
@@ -368,8 +381,14 @@ func Run(def Strategy, points []market.HistoryPoint, cfg Config) (Result, error)
 	if w := warmup(def) + 1; w > first {
 		first = w
 	}
+	if !cfg.From.IsZero() {
+		from := cfg.From.UTC().Truncate(24 * time.Hour)
+		for first < n && s.t[first].Before(from) {
+			first++
+		}
+	}
 	if first >= n-1 {
-		return Result{}, errors.New("not enough history after the warm-up")
+		return Result{}, errors.New("not enough history in the chosen period after the warm-up")
 	}
 
 	cash := 100.0

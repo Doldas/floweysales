@@ -216,3 +216,46 @@ func TestBacktestRejectsBadRequests(t *testing.T) {
 		}
 	}
 }
+
+func TestStrategyPeriod(t *testing.T) {
+	now := time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)
+	label, fetch, from, _, err := strategyPeriod("", "", "", now)
+	if err != nil || label != "5Y" || fetch != "5Y" || !from.IsZero() {
+		t.Fatalf("default: %s %s %v %v", label, fetch, from, err)
+	}
+	label, fetch, from, _, _ = strategyPeriod("ytd", "", "", now)
+	if label != "YTD" || fetch != "10Y" || from.Format("2006-01-02") != "2026-01-01" {
+		t.Fatalf("YTD: %s %s %v", label, fetch, from)
+	}
+	_, _, from, _, _ = strategyPeriod("1Y", "", "", now)
+	if from.Format("2006-01-02") != "2025-11-04" {
+		t.Fatalf("1Y from %v", from)
+	}
+	label, _, from, to, err := strategyPeriod("5Y", "2018-03-01", "2020-12-31", now)
+	if err != nil || label != "CUSTOM" || from.Format("2006-01-02") != "2018-03-01" || to.Format("2006-01-02") != "2020-12-31" {
+		t.Fatalf("custom: %s %v %v %v", label, from, to, err)
+	}
+	for _, bad := range [][2]string{{"2020-12-31", "2020-01-01"}, {"2020-01-01", "2020-01-01"}, {"01/02/2020", ""}, {"1985-01-01", ""}, {"", "soon"}} {
+		if _, _, _, _, err := strategyPeriod("", bad[0], bad[1], now); err == nil {
+			t.Errorf("%v must be refused", bad)
+		}
+	}
+	if _, _, _, _, err := strategyPeriod("2Y", "", "", now); err == nil {
+		t.Error("an unknown preset must be refused")
+	}
+	// A future end date means "up to the latest bar".
+	if _, _, _, to, _ := strategyPeriod("", "2020-01-01", "2030-01-01", now); !to.IsZero() {
+		t.Errorf("a future to must be dropped, got %v", to)
+	}
+}
+
+func TestStrategyCoverageNotice(t *testing.T) {
+	from := time.Date(2005, 1, 1, 0, 0, 0, 0, time.UTC)
+	got := strategyCoverageNotice(from, time.Time{}, "2011-03-02", "2026-11-03")
+	if !strings.Contains(got, "asked from 2005-01-01") || !strings.Contains(got, "data starts 2011-03-02") {
+		t.Fatalf("notice = %q", got)
+	}
+	if strategyCoverageNotice(from, time.Time{}, "2004-05-01", "2026-11-03") != "" {
+		t.Fatal("covered periods need no notice")
+	}
+}
