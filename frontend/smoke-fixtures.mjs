@@ -325,6 +325,23 @@ export const agentStream = [
   { type: 'done' },
 ].map(e => `data: ${JSON.stringify(e)}\n\n`).join('');
 
+/** Server-sent events of a two-member team run. Calls carry ids, timing and truncation notes like the real stream. */
+export const teamStream = [
+  { type: 'member_start', agent: 'owner', name: 'Ashgrove' }, { type: 'member_start', agent: 'teacher', name: 'Holm' },
+  { type: 'tool_start', agent: 'owner', name: 'search_web', call_id: 'o1', seq: 1, arguments: '{"query":"NVDA moat"}' },
+  { type: 'tool_start', agent: 'owner', name: 'search_web', call_id: 'o2', seq: 2, arguments: '{"query":"NVDA margins"}' },
+  { type: 'tool_start', agent: 'teacher', name: 'get_sec_section', call_id: 't1', seq: 1, arguments: '{"symbol":"NVDA","form":"10-K","item":"1A"}' },
+  { type: 'tool_result', agent: 'owner', name: 'search_web', call_id: 'o2', duration_ms: 310, result: '{"results":["margins result"]}' },
+  { type: 'tool_result', agent: 'owner', name: 'search_web', call_id: 'o1', duration_ms: 480, result: '{"results":["moat result"]}', truncated: true, original_bytes: 120000 },
+  { type: 'tool_result', agent: 'teacher', name: 'get_sec_section', call_id: 't1', duration_ms: 95, tool_error: 'filing section not found', result: '{"error":"filing section not found"}' },
+  { type: 'member_done', agent: 'owner', content: 'A durable franchise.\nSTANCE: fits', stance: 'fits' },
+  { type: 'member_done', agent: 'teacher', content: 'Not enough filing data.\nSTANCE: insufficient_data', stance: 'insufficient_data' },
+  { type: 'done' },
+].map(e => `data: ${JSON.stringify(e)}\n\n`).join('');
+
+const mockPersonas = ['owner', 'teacher'].map((id, i) => ({ id, name: ['Ashgrove', 'Holm'][i], archetype: ['The patient owner', 'The teacher'][i], tagline: 'A fictional character', horizon: 'years',
+  process: [], sizing: [], sources: [], strategies: [] }));
+
 /** Installs the mock backend on a Playwright page. Returns the set of unmocked paths. */
 export async function installMocks(page, options = {}) {
   const missing = new Set();
@@ -332,6 +349,12 @@ export async function installMocks(page, options = {}) {
     const url = route.request().url();
     const path = new URL(url).pathname;
     if (path === '/api/prices/stream') return route.fulfill({ status: 204, body: '' });
+    if (path === '/api/ai/personas') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ personas: mockPersonas, snapshot: '2026-10-30', stances: [], max_team: 6 }) });
+    }
+    if (path === '/api/ai/team' && route.request().method() === 'POST') {
+      return route.fulfill({ status: 200, contentType: 'text/event-stream', body: teamStream });
+    }
     if (path === '/api/ai/chat' && route.request().method() === 'POST') {
       return route.fulfill({ status: 200, contentType: 'text/event-stream', body: agentStream });
     }

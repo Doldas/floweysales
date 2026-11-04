@@ -171,3 +171,17 @@ func TestExhaustedRetriesEndWithoutRecoveredNotice(t *testing.T) {
 		}
 	}
 }
+
+func TestTheFinalErrorDoesNotShowTheEndpoint(t *testing.T) {
+	bad := [2]string{"401", `{"detail":"unauthorized for https://secret.example/api/v1/chat/completions"}`}
+	srv, _ := flakyServer(t, bad)
+	_, events, err := runOnce(t, srv)
+	if err == nil {
+		t.Fatal("a permanent failure ends the run")
+	}
+	for _, e := range events {
+		if e.Type == "error" && (strings.Contains(e.Error, "secret.example") || strings.Contains(e.Error, "http")) {
+			t.Fatalf("the endpoint address must not reach the user: %q", e.Error)
+		}
+	}
+}

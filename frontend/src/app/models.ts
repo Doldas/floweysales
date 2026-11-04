@@ -546,6 +546,8 @@ export interface PersonaCatalog { personas: Persona[]; stances: Stance[]; max_te
 export interface TeamEvent {
   type: 'member_start' | 'member_done' | 'delta' | 'tool_start' | 'tool_result' | 'notice' | 'error' | 'done' | string;
   agent?: string; name?: string; content?: string; result?: string; tool_error?: string; error?: string; stance?: string;
+  arguments?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean;
+  severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string;
 }
 export type StrategyOperandType = 'price' | 'const' | 'ema' | 'sma' | 'rsi' | 'atr' | 'highest' | 'lowest' | 'fib_retr' | 'fib_ext' | 'swing_high' | 'swing_low';
 export interface StrategyOperand { type: StrategyOperandType; field?: string; period?: number; ratio?: number; value?: number }

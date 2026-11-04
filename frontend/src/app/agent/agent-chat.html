@@ -31,25 +31,7 @@
             <div class="steps-head"><i class="bi bi-cpu" aria-hidden="true"></i> Agent steps <span class="count">{{ block.steps.length }}</span></div>
             <ol>
               @for (step of block.steps; track step.id) {
-                <li class="step" [class.is-running]="step.status === 'running'" [class.is-error]="step.status === 'error'">
-                  <details>
-                    <summary>
-                      <span class="step-icon" aria-hidden="true">
-                        @if (step.status === 'running') { <span class="spinner-border spinner-border-sm"></span> }
-                        @else if (step.status === 'error') { <i class="bi bi-x-circle-fill"></i> }
-                        @else { <i class="bi bi-check-circle-fill"></i> }
-                      </span>
-                      <span class="step-name">{{ toolLabel(step.name || 'tool') }}</span>
-                      @if (step.args) { <span class="step-args">{{ args(step.args) }}</span> }
-                      <span class="step-time">{{ step.status === 'running' ? 'running…' : duration(step.durationMs) }}</span>
-                    </summary>
-                    <div class="step-body">
-                      <div class="step-meta"><code>{{ step.name }}</code></div>
-                      @if (step.args) { <pre class="step-pre">{{ toolOutput(step.args) }}</pre> }
-                      @if (step.content) { <pre class="step-pre">{{ toolOutput(step.content) }}</pre> }
-                    </div>
-                  </details>
-                </li>
+                <li><fs-tool-call [call]="callOf(step)" /></li>
               }
             </ol>
           </div>

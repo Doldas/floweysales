@@ -43,10 +43,10 @@ check('suggestions rendered', suggestions > 0, `${suggestions} cards`);
 // 3. Send a message; tool calls render as agent steps.
 await page.locator('#fs-agent-dock textarea').fill('market stats please');
 await page.locator('#fs-agent-dock textarea').press('Enter');
-await page.waitForSelector('#fs-agent-dock .step', { timeout: 20000 }).catch(() => {});
-const stepCount = await page.locator('#fs-agent-dock .step').count();
+await page.waitForSelector('#fs-agent-dock fs-tool-call', { timeout: 20000 }).catch(() => {});
+const stepCount = await page.locator('#fs-agent-dock fs-tool-call').count();
 check('tool call rendered as agent step', stepCount >= 1, `${stepCount} step(s)`);
-await page.locator('#fs-agent-dock .step summary').first().click();
+await page.locator('#fs-agent-dock fs-tool-call summary').first().click();
 const toolText = (await page.locator('#fs-agent-dock .step-pre').allTextContents()).join('\n');
 check('tool result has backend data', /record_count|min_price|symbol/.test(toolText), toolText.slice(0, 80).replace(/\n/g, ' '));
 
