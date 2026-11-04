@@ -10,7 +10,7 @@ Which surfaces describe the origin of what they show, using the contract in
 | Leaderboard | Planned | Methodology and input hash exist (`leaderboard_method.go`); not yet in the shared format. |
 | Quotes and feed status | Planned | `QuoteSnapshot` already has source, as-of and fetched time. |
 | Strategy results | Planned | Calculated; needs method ids. |
-| Agent answers | Planned | Needs the source registry (#197). |
+| Agent answers (chat) | Partial | Source registry and citation check for `search_web` and `get_sec_section` (`internal/sources`). Teams, flows and other tools are not yet registered. |
 | Financial statements | Planned | |
 
 States: **Covered** (API and UI), **Planned** (not started).

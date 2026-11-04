@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 
 import type { Message, ModelProfile, Persona } from '../models';
 import { MarketState } from './market-state';
+import type { AnswerFinding, AnswerSource } from './answer-sources';
 import { EMPTY_NOTICES, applyNotice, dismissNotice, finishNotices, recoveryLine, type NoticeState } from './agent-notices';
 
 export interface AiPreset {
@@ -80,6 +81,9 @@ export class AgentSession {
   readonly error = signal('');
   /** Retry status, recoveries and warnings of the current run. */
   readonly noticeState = signal<NoticeState>(EMPTY_NOTICES);
+  /** What the latest run retrieved, and what the citation check found in its answer. */
+  readonly answerSources = signal<AnswerSource[]>([]);
+  readonly answerAudit = signal<AnswerFinding[]>([]);
   readonly runStatus = computed(() => this.noticeState().status);
   readonly runStatusDetail = computed(() => this.noticeState().statusDetail);
   readonly notices = computed(() => this.noticeState().notices);
@@ -208,6 +212,8 @@ export class AgentSession {
     this.entries.set([]);
     this.error.set('');
     this.noticeState.set(EMPTY_NOTICES);
+    this.answerSources.set([]);
+    this.answerAudit.set([]);
     this.assistantId = -1;
   }
 
@@ -230,6 +236,8 @@ export class AgentSession {
 
     this.error.set('');
     this.noticeState.set(EMPTY_NOTICES);
+    this.answerSources.set([]);
+    this.answerAudit.set([]);
     this.push({ role: 'user', content });
     this.wire.push({ role: 'user', content });
     this.streaming.set(true);
@@ -313,7 +321,7 @@ export class AgentSession {
       if (!line.startsWith('data:')) continue;
       const payload = line.slice(5).trim();
       if (!payload) continue;
-      let ev: { model?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean; type?: string; severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string; content?: string; name?: string; arguments?: string; result?: string; tool_error?: string; error?: string; message?: Message };
+      let ev: { model?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean; type?: string; severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string; content?: string; name?: string; arguments?: string; result?: string; tool_error?: string; error?: string; message?: Message; sources?: AnswerSource[]; audit?: AnswerFinding[] };
       try {
         ev = JSON.parse(payload);
       } catch {
@@ -337,6 +345,10 @@ export class AgentSession {
         case 'tool_result':
           this.finishStep(ev);
           this.assistantId = -1;
+          break;
+        case 'sources':
+          this.answerSources.set(ev.sources ?? []);
+          this.answerAudit.set(ev.audit ?? []);
           break;
         case 'error':
           this.error.set(ev.error || 'AI error');

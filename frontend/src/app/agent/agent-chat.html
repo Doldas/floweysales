@@ -75,6 +75,23 @@
         <button type="button" class="btn-close" (click)="session.dismissError()" aria-label="Dismiss this error"></button>
       </div>
     }
+    @if (!session.streaming() && session.answerSources().length) {
+      <details class="sources small">
+        <summary><i class="bi bi-journal-text" aria-hidden="true"></i> Sources ({{ session.answerSources().length }})</summary>
+        <p class="mb-1" [class.text-danger]="session.answerAudit().length" role="status">{{ auditText() }}</p>
+        @for (f of session.answerAudit(); track $index) {
+          <p class="finding mb-1"><strong>{{ findingLabel(f.kind) }}.</strong> {{ f.detail }} <em>“{{ f.sentence }}”</em></p>
+        }
+        @if (groups().read.length) {
+          <h4>Read by the agent</h4>
+          <ul>@for (s of groups().read; track s.id) { <li><span class="sid">[{{ s.id }}]</span> {{ s.title || s.url }} @if (link(s.url); as href) { <a [href]="href" target="_blank" rel="noopener noreferrer">open</a> } @if (s.document_id) { <span class="text-muted">{{ s.document_id }}</span> }</li> }</ul>
+        }
+        @if (groups().listed.length) {
+          <h4>Search results only (title and snippet)</h4>
+          <ul>@for (s of groups().listed; track s.id) { <li><span class="sid">[{{ s.id }}]</span> {{ s.title || s.url }} @if (link(s.url); as href) { <a [href]="href" target="_blank" rel="noopener noreferrer">open</a> }</li> }</ul>
+        }
+      </details>
+    }
     @if (!session.streaming() && session.recovery(); as recovered) {
       <p class="recovered small text-muted mb-0" role="status"><i class="bi bi-check-circle" aria-hidden="true"></i> {{ recovered }}</p>
     }
