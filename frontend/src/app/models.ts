@@ -402,6 +402,13 @@ export interface BacktestResult {
   provider: string;
   symbols: string[];
   generated_at: string;
+  /** Dates asked for and the provider's data bounds, UTC YYYY-MM-DD. */
+  from?: string;
+  to?: string;
+  data_start?: string;
+  data_end?: string;
+  /** Set when the replay does not cover the period that was asked for. */
+  notice?: string;
   metrics: BacktestMetrics;
   curve: BacktestPoint[];
   rebalances: BacktestRebalance[];
@@ -414,7 +421,10 @@ export interface BacktestParams {
   symbols?: string[];
   top: number;
   rebalance: 'monthly' | 'quarterly';
-  years: 3 | 5;
+  /** A preset length, or 0 when from/to are used. */
+  years: 3 | 5 | 10 | 0;
+  from?: string;
+  to?: string;
 }
 
 /** Wealth plan inputs (see internal/planner). */

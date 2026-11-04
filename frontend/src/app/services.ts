@@ -104,7 +104,8 @@ export class MarketService {
 
   /** Replays a leaderboard strategy over past prices; slow on a cold cache. */
   backtest(p: BacktestParams): Observable<BacktestResult> {
-    const params: Record<string, string> = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance, years: String(p.years) };
+    const params: Record<string, string> = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance };
+    if (p.from) { params['from'] = p.from; if (p.to) params['to'] = p.to; } else params['years'] = String(p.years || 5);
     if (p.symbols?.length) params['symbols'] = p.symbols.join(',');
     else params['universe'] = p.universe;
     return this.http.get<BacktestResult>('/api/market/backtest', { params });
