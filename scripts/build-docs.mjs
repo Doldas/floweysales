@@ -229,10 +229,11 @@ export function buildGuide({ out, base = root }) {
   for (const p of parsed) {
     if (!p.meta.title) errors.push(`${relative(base, p.file)}: front matter needs a title`);
     if (!p.meta['last-reviewed']) errors.push(`${relative(base, p.file)}: front matter needs last-reviewed`);
+    else if (Number.isNaN(Date.parse(p.meta['last-reviewed']))) errors.push(`${relative(base, p.file)}: last-reviewed is not a date (use YYYY-MM-DD)`);
   }
   const headings = Object.fromEntries(parsed.map(p => [p.slug, headingIds(p.body)]));
   parsed.sort((a, b) => Number(a.meta.order ?? 99) - Number(b.meta.order ?? 99));
-  const pages = parsed.map(p => ({ slug: p.slug, title: p.meta.title ?? p.slug }));
+  const pages = parsed.map(p => ({ slug: p.slug, title: p.meta.title ?? p.slug, meta: p.meta, file: relative(base, p.file) }));
   const links = [];
   const guideOut = join(out, 'guide');
   mkdirSync(guideOut, { recursive: true });
@@ -287,6 +288,13 @@ export function checkRepoLinks(files, base = root) {
   return errors;
 }
 
+/** Pages not reviewed for `days` days (docs/documentation-ownership.md asks for a re-read at six months). */
+export function stalePages(pages, now = new Date(), days = 183) {
+  return pages
+    .filter(p => Date.parse(p.meta['last-reviewed']) < now.getTime() - days * 86400000)
+    .map(p => `${p.file}: last reviewed ${p.meta['last-reviewed']}`);
+}
+
 /** Fetches each external address once and returns the ones that did not answer with a success status. */
 async function checkExternal(urls) {
   const bad = [];
@@ -314,6 +322,7 @@ async function main() {
   errors.push(...checkRepoLinks(['README.md', 'docs/README.md', 'CONTRIBUTING.md']));
   if (tmp) rmSync(tmp, { recursive: true, force: true });
   const external = new Set(links.filter(l => l.external && l.href.startsWith('http')).map(l => l.href));
+  for (const w of stalePages(pages)) console.warn(`Stale: ${w}`);
   if (errors.length) {
     console.error(`Documentation problems (${errors.length}):\n- ${[...new Set(errors)].join('\n- ')}`);
     process.exit(1);
