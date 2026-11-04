@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"floweysales/internal/provenance"
 	"floweysales/internal/storage"
@@ -29,15 +30,37 @@ func TestSavedRunProvenanceNamesMethodProviderAndDates(t *testing.T) {
 
 func TestSavedRunProvenanceIsPartialWhenTheResultDoesNotRecordAProvider(t *testing.T) {
 	f := backtestRunProvenance(storage.BacktestRun{ID: 1, Kind: "batch", Result: `{"generated_at":"2026-03-02T10:00:00Z"}`})
-	if f.Status != provenance.Partial || f.Provider != "" || f.AsOf != nil || !strings.Contains(f.Note, "provider is not recorded") {
+	if f.Status != provenance.Partial || f.Provider != "" || f.AsOf != nil || !strings.Contains(f.Note, "does not record a provider") {
 		t.Errorf("a missing provider must be disclosed, not invented: %+v", f)
 	}
-	bad := backtestRunProvenance(storage.BacktestRun{ID: 1, Kind: "batch", Result: `not json`})
-	if bad.Status != provenance.Partial || bad.RetrievedAt != nil {
-		t.Errorf("an unreadable result claims nothing: %+v", bad)
+}
+
+func TestSavedRunProvenanceClaimsNothingForUnreadableResultsOrKinds(t *testing.T) {
+	for _, run := range []storage.BacktestRun{
+		{ID: 1, Kind: "batch", Result: `not json`},
+		{ID: 2, Kind: "mystery", Result: `{"provider":"stooq","generated_at":"2026-03-02T10:00:00Z"}`},
+	} {
+		f := backtestRunProvenance(run)
+		if f.Status != provenance.Unknown || f.Method != nil || f.Provider != "" || f.RetrievedAt != nil {
+			t.Errorf("run %d should be unknown: %+v", run.ID, f)
+		}
+		if err := f.Validate(); err != nil {
+			t.Errorf("invalid fact: %v", err)
+		}
 	}
-	if err := bad.Validate(); err != nil {
-		t.Errorf("invalid fact: %v", err)
+}
+
+func TestSavedRunProvenanceDatesAreUTCAndMissingOnesDisclosed(t *testing.T) {
+	f := backtestRunProvenance(storage.BacktestRun{ID: 3, Kind: "single", Result: `{"provider":"stooq","generated_at":"2026-03-02T01:30:00+02:00","data_end":"31/12/2025"}`})
+	if f.RetrievedAt == nil || f.RetrievedAt.Format(time.RFC3339) != "2026-03-01T23:30:00Z" {
+		t.Errorf("an offset time must be converted to UTC: %v", f.RetrievedAt)
+	}
+	if f.AsOf != nil {
+		t.Errorf("a malformed date must not become a date: %v", f.AsOf)
+	}
+	g := backtestRunProvenance(storage.BacktestRun{ID: 4, Kind: "single", Result: `{"provider":"stooq"}`})
+	if g.Status != provenance.Partial || g.RetrievedAt != nil || !strings.Contains(g.Note, "not recorded") {
+		t.Errorf("a missing production time makes the fact partial and says so: %+v", g)
 	}
 }
 
@@ -55,7 +78,7 @@ func TestSavedRunAndItsJSONExportCarryProvenance(t *testing.T) {
 		if err := json.Unmarshal(got.Body.Bytes(), &doc); err != nil {
 			t.Fatalf("%s: %v", path, err)
 		}
-		if doc.Provenance.Method == nil || doc.Provenance.Method.ID != "backtest.single" || doc.Provenance.Provider == "" || doc.Provenance.RunID != "backtest_run:1" {
+		if doc.Provenance.Status != provenance.Known || doc.Provenance.Validate() != nil || doc.Provenance.RetrievedAt == nil || doc.Provenance.Method == nil || doc.Provenance.Method.ID != "backtest.single" || doc.Provenance.Provider == "" || doc.Provenance.RunID != "backtest_run:1" {
 			t.Errorf("%s provenance: %s", path, got.Body)
 		}
 	}

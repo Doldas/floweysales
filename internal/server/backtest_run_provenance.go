@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"floweysales/internal/provenance"
@@ -26,34 +27,41 @@ var backtestMethodFormula = map[string]string{
 // result does not record is left out and the status is "partial", never
 // filled in.
 func backtestRunProvenance(run storage.BacktestRun) provenance.Fact {
+	formula, kindOK := backtestMethodFormula[run.Kind]
 	var doc struct {
 		Provider    string `json:"provider"`
 		GeneratedAt string `json:"generated_at"`
 		DataEnd     string `json:"data_end"`
 	}
-	_ = json.Unmarshal([]byte(run.Result), &doc)
+	if !kindOK || json.Unmarshal([]byte(run.Result), &doc) != nil {
+		return provenance.Unspecified("The saved result cannot be read, so its origin is unknown.")
+	}
 
 	f := provenance.Fact{
 		Kind:   provenance.Calculated,
 		Status: provenance.Known,
-		Method: &provenance.Method{ID: "backtest." + run.Kind, Version: backtestMethodVersion, Formula: backtestMethodFormula[run.Kind]},
+		Method: &provenance.Method{ID: "backtest." + run.Kind, Version: backtestMethodVersion, Formula: formula},
 		RunID:  fmt.Sprintf("backtest_run:%d", run.ID),
-		Note:   "Computed from provider prices and reported quarters as of the time shown. Dividends are not included and the universe is today's list, so survivorship bias applies.",
 	}
+	notes := []string{"Computed from provider prices and reported quarters. Dividends are not included and the universe is today's list, so survivorship bias applies."}
 	if doc.Provider != "" {
 		f.Provider = doc.Provider
 		f.Inputs = []string{"provider:" + doc.Provider}
 	} else {
 		f.Status = provenance.Partial
-		f.Note += " The provider is not recorded for this kind of run."
+		notes = append(notes, "The result does not record a provider.")
 	}
 	if t, err := time.Parse(time.RFC3339, doc.GeneratedAt); err == nil {
 		t = t.UTC()
 		f.RetrievedAt = &t
+	} else {
+		f.Status = provenance.Partial
+		notes = append(notes, "The time the answer was produced is not recorded.")
 	}
 	if t, err := time.Parse("2006-01-02", doc.DataEnd); err == nil {
 		f.AsOf = &t
 	}
+	f.Note = strings.Join(notes, " ")
 	if err := f.Validate(); err != nil {
 		return provenance.Unspecified("provenance could not be built: " + err.Error())
 	}

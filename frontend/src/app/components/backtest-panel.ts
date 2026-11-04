@@ -237,7 +237,7 @@ const CHART_H = 220;
         </ul>
       } @else { <p class="bt-note">Nothing saved yet.</p> }
       @if (openedRun(); as o) {
-        <p class="bt-note">“{{ o.name }}” is open below. Where it came from: <fs-source [fact]="o.provenance" /></p>
+        <div class="bt-note" role="status">“{{ o.name }}” was opened as a {{ kindLabel(o.kind) }}. Where it came from: <fs-source [fact]="o.provenance" /></div>
       }
       @if (aiSummary(); as s) {
         <div class="bt-summary" aria-live="polite">
@@ -345,9 +345,10 @@ export class BacktestPanelComponent {
   readonly aiSummary = signal<BacktestSummary | null>(null);
   readonly summaryName = signal('');
   /** The saved run now shown in the result areas, with how its result was produced. */
-  readonly openedRun = signal<{ name: string; provenance: Provenance } | null>(null);
+  readonly openedRun = signal<{ name: string; kind: SavedBacktest['kind']; provenance: Provenance } | null>(null);
   readonly summaryLoading = signal<number | null>(null);
   readonly label = savedLabel;
+  readonly kindLabel = (k: SavedBacktest['kind']): string => (k === 'batch' ? 'markets-and-periods result' : k === 'sensitivity' ? 'settings check' : 'backtest');
   readonly exportHref = exportUrl;
   readonly sensRows = computed(() => sensitivityRows(this.sens()?.variants ?? []));
   readonly sensHeadline = computed(() => (this.sens() ? sensitivityHeadline(this.sens()!) : []));
@@ -372,7 +373,7 @@ export class BacktestPanelComponent {
     // The market being viewed is ticked by default; a switch resets the batch.
     effect(() => {
       const u = this.universe();
-      untracked(() => { this.pickedMarkets.set(u === 'custom' ? [] : [u]); this.batch.set(null); this.batchError.set(''); this.sens.set(null); this.sensError.set(''); });
+      untracked(() => { this.pickedMarkets.set(u === 'custom' ? [] : [u]); this.batch.set(null); this.batchError.set(''); this.sens.set(null); this.sensError.set(''); this.openedRun.set(null); });
     });
     // Runs once inputs are set, and again when the board switches universe or strategy.
     effect(() => {
@@ -426,11 +427,14 @@ export class BacktestPanelComponent {
     });
   }
 
+  private openRequest?: Subscription;
+
   openSaved(r: SavedBacktest): void {
     this.savedError.set('');
-    this.api.getBacktestRun(r.id).subscribe({
+    this.openRequest?.unsubscribe();
+    this.openRequest = this.api.getBacktestRun(r.id).subscribe({
       next: full => {
-        this.openedRun.set(full.provenance ? { name: full.name, provenance: full.provenance } : null);
+        this.openedRun.set(full.provenance ? { name: full.name, kind: full.kind, provenance: full.provenance } : null);
         if (full.kind === 'batch') this.batch.set(full.result as BatchResult);
         else if (full.kind === 'sensitivity') this.sens.set(full.result as SensitivityResult);
         else { this.result.set(full.result as BacktestResult); this.error.set(''); }
@@ -450,7 +454,7 @@ export class BacktestPanelComponent {
 
   removeSaved(r: SavedBacktest): void {
     this.api.deleteBacktestRun(r.id).subscribe({
-      next: () => this.saved.update(list => list.filter(x => x.id !== r.id)),
+      next: () => { this.saved.update(list => list.filter(x => x.id !== r.id)); if (this.openedRun()?.name === r.name) this.openedRun.set(null); },
       error: err => this.savedError.set(describeHttpError(err)),
     });
   }
@@ -462,7 +466,7 @@ export class BacktestPanelComponent {
     this.batchError.set('');
     const params = batchParams({ universes: this.pickedMarkets(), periods: this.pickedPeriods(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance() });
     this.batchRequest = this.api.backtestBatch(params).subscribe({
-      next: res => { this.lastParams.batch = params; this.batch.set(res); this.batchLoading.set(false); },
+      next: res => { this.lastParams.batch = params; this.openedRun.set(null); this.batch.set(res); this.batchLoading.set(false); },
       error: err => { this.batchError.set(describeHttpError(err)); this.batchLoading.set(false); },
     });
   }
@@ -474,7 +478,7 @@ export class BacktestPanelComponent {
     this.sensError.set('');
     const params = sensitivityParams({ universe: this.universe(), symbols: this.symbols(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(), years: this.years() });
     this.sensRequest = this.api.backtestSensitivity(params).subscribe({
-      next: res => { this.lastParams.sensitivity = params; this.sens.set(res); this.sensLoading.set(false); },
+      next: res => { this.lastParams.sensitivity = params; this.openedRun.set(null); this.sens.set(res); this.sensLoading.set(false); },
       error: err => { this.sensError.set(describeHttpError(err)); this.sensLoading.set(false); },
     });
   }
@@ -495,8 +499,8 @@ export class BacktestPanelComponent {
       ...(this.years() === 0 ? { from: this.from(), to: this.to() || undefined } : {}),
     });
     this.request = this.api.backtest(params).subscribe({
-      next: res => { this.lastParams.single = params; this.result.set(res); this.loading.set(false); },
-      error: err => { this.error.set(describeHttpError(err)); this.result.set(null); this.loading.set(false); },
+      next: res => { this.lastParams.single = params; this.openedRun.set(null); this.result.set(res); this.loading.set(false); },
+      error: err => { this.error.set(describeHttpError(err)); this.result.set(null); this.openedRun.set(null); this.loading.set(false); },
     });
   }
 }
