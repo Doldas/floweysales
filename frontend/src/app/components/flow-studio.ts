@@ -1,4 +1,5 @@
 import { CanvasGestures } from './canvas-gestures';
+import { ProgressStatusComponent } from '../ui/progress-status';
 import { HostListener, Component, ChangeDetectionStrategy, signal, effect } from '@angular/core';
 import { MarkdownRunOutputComponent } from './markdown-run-output';
 import { FlowSideEffectsComponent } from './flow-side-effects';
@@ -32,7 +33,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
 
 @Component({
  selector:'fse-flow-studio', standalone:true,
- imports:[CommonModule,FormsModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,FlowSideEffectsComponent,FlowEventAdaptersComponent,FlowNotifyChannelsComponent],
+ imports:[ProgressStatusComponent,CommonModule,FormsModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,FlowSideEffectsComponent,FlowEventAdaptersComponent,FlowNotifyChannelsComponent],
  host:{class:'fs-native-forms'},
  changeDetection:ChangeDetectionStrategy.Default,
  template:`
@@ -486,7 +487,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
    @if(message()){<p class="flow-message" role="status">{{message()}}</p>}
    @if(!historyFlowId()){<p class="muted">Select a flow above to view its history.</p>}
     @else if(!runs().length&&!historyLoading()){<p class="muted">No executions yet for this flow.</p>}
-    @if(historyLoading()){<p role="status">Loading run history…</p>}
+    @if(historyLoading()){<fs-progress-status stage="Loading run history"/>}
     @if(runs().some(run=>isActiveRun(run.status))){<p class="muted" role="status">Queued or running run detected · history refreshes automatically every 5 seconds while this tab is open.</p>}
     @if(historyFlowId()&&runs().length&&!filteredRuns().length){<p class="muted">No runs match your filters.</p>}
    @for(run of filteredRuns();track run.id){
@@ -568,7 +569,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
           }
         </section>
        } @else if(!traceLoading()&&executionSnapshotUnavailable()){<p class="muted">Graph snapshot unavailable for this run. The trace remains available below.</p>}
-       @if(traceLoading()){<p role="status">Loading node trace…</p>}
+       @if(traceLoading()){<fs-progress-status stage="Loading node trace"/>}
        @else if(!traceSteps().length){<p class="muted">No node trace available for this run. Earlier runs may predate node tracing.</p>}
        @else{
         @if(compareRun()&&compareRun()!==run.id&&comparedSteps().length){

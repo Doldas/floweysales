@@ -4,6 +4,8 @@ import { OrdersState } from '../orders-state';
 import type { PortfolioAnalyticsResponse } from '../models';
 import { MarketService, describeHttpError } from '../services';
 import { formatMoney } from '../ui/format';
+import { SkeletonComponent } from '../ui/skeleton';
+import { ProgressStatusComponent } from '../ui/progress-status';
 import { CLASS_LABELS, alertText, driftRows, driftText, heatStyle, riskBars, riskTiles, ticketFor, type TicketPrefill } from './portfolio-risk';
 
 /**
@@ -15,9 +17,15 @@ import { CLASS_LABELS, alertText, driftRows, driftText, heatStyle, riskBars, ris
 @Component({
   selector: 'fs-portfolio-risk',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [SkeletonComponent, ProgressStatusComponent],
   template: `
 <div class="risk">
-  @if (loading()) { <div class="progress rounded-0" style="height: 2px" role="progressbar" aria-label="Measuring risk"><div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div></div> }
+  @if (loading()) {
+    <div [attr.aria-busy]="true">
+      <fs-progress-status stage="Measuring portfolio risk" />
+      @if (!data()) { <fs-skeleton shape="block" height="8rem" aria-hidden="true" /> }
+    </div>
+  }
   @if (error(); as err) {
     <div class="fs-empty" role="alert"><i class="bi bi-exclamation-triangle"></i><h3>Could not measure risk</h3><p class="mb-0">{{ err }}</p>
       <button type="button" class="btn btn-sm btn-outline-secondary mt-1" (click)="load()">Try again</button></div>

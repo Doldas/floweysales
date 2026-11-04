@@ -1,6 +1,8 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { comparisonLabel, isUpdateRunning, shortCommit, stateLabel, stepProgress } from './update-status';
 import { formatUtcDateTime } from '../ui/datetime';
+import { SkeletonComponent } from '../ui/skeleton';
+import { ProgressStatusComponent } from '../ui/progress-status';
 
 interface ImageInfo { image: string; tag: string; digest: string; commit?: string; created?: string }
 interface Commit { sha: string; title: string; url?: string }
@@ -16,7 +18,7 @@ const POLL_MS = 3000;
 @Component({
  selector: 'fse-update-settings', host:{class:'fs-native-forms'},
  standalone: true,
- imports: [],
+ imports: [SkeletonComponent, ProgressStatusComponent],
  template: `
  @if(overview();as o){
  <div class="cards">
@@ -100,7 +102,7 @@ docker compose -f compose.deploy.yml up -d app</pre>
   @if(o.status.log_tail?.length){<details [open]="o.status.state==='failed'||o.status.state==='rolled_back'"><summary>Updater log</summary><pre>{{o.status.log_tail!.join('\\n')}}</pre></details>}
  </div>
  }
- } @else {<p class="muted">{{error()||'Loading update information…'}}</p>}
+ } @else if(error()){<p class="muted" role="alert">{{error()}}</p>} @else {<div [attr.aria-busy]="true"><fs-progress-status stage="Loading update information" /><fs-skeleton shape="rows" [rows]="2" aria-hidden="true" /></div>}
  @if(message()){<p role="status">{{message()}}</p>}
  `,
  styles: [`

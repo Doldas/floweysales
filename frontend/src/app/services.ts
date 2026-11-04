@@ -108,8 +108,13 @@ export class MarketService {
   }
 
   /** One strategy over several universes and periods; each cell is an ordinary backtest. */
-  backtestBatch(params: Record<string, string>): Observable<BatchResult> {
-    return this.http.get<BatchResult>('/api/market/backtest/batch', { params });
+  backtestBatch(params: Record<string, string>, progressId?: string): Observable<BatchResult> {
+    return this.http.get<BatchResult>('/api/market/backtest/batch', { params: progressId ? { ...params, progress_id: progressId } : params });
+  }
+
+  /** How many backtests of a named batch have finished; 404 until the run starts. */
+  backtestProgress(id: string): Observable<unknown> {
+    return this.http.get<unknown>('/api/market/backtest/progress', { params: { id } });
   }
 
   /** One setting at a time (trading cost, holdings, rebalance) around a base backtest. */

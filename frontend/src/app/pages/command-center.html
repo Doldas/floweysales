@@ -21,7 +21,7 @@
     </div>
     <div class="card-body">
       @if (todayLoading()) {
-        <div class="placeholder-glow" aria-hidden="true"><span class="placeholder col-4 me-2"></span><span class="placeholder col-3 me-2"></span><span class="placeholder col-3"></span></div>
+        <div [attr.aria-busy]="true"><span class="visually-hidden" role="status">Loading today's briefing</span><fs-skeleton aria-hidden="true" width="70%" /></div>
       } @else {
         <div class="today-chips">
           @if (briefing()?.phase; as p) {
@@ -131,7 +131,7 @@
         <section class="card" aria-labelledby="activity-title">
           <div class="card-header">
             <h2 class="card-title me-auto" id="activity-title"><i class="bi bi-activity me-2 text-primary" aria-hidden="true"></i>Agent activity</h2>
-            @if (activity.loading()) { <span class="spinner-border spinner-border-sm text-secondary" aria-label="Refreshing"></span> }
+            @if (activity.loading()) { <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-label="Refreshing agent activity"></span> }
             <a class="btn btn-sm btn-ghost" routerLink="/flows" [queryParams]="{ tab: 'runs' }">All runs <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
           </div>
           @if (recentRuns().length) {

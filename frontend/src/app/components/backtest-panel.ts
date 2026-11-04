@@ -6,6 +6,9 @@ import { MarketService, describeHttpError } from '../services';
 import type { BacktestParams, BacktestResult, BacktestSummary, BatchResult, SavedBacktest, SensitivityResult } from '../models';
 import type { Provenance } from '../core/provenance';
 import { SourceComponent } from '../ui/source';
+import { SkeletonComponent } from '../ui/skeleton';
+import { ProgressStatusComponent } from '../ui/progress-status';
+import { PROGRESS_POLL_MS, newRunId, parseRunProgress, type RunProgress } from '../ui/run-progress';
 import { periodError } from '../core/strategy-period';
 import { batchHeadline, batchParams, batchRows, exportUrl, savedLabel, sensitivityHeadline, sensitivityParams, sensitivityRows, singleParams, chartSummary, curvePath, metricTiles, segmentRows, warningText } from './backtest-view';
 
@@ -19,7 +22,7 @@ const CHART_H = 220;
  */
 @Component({
   selector: 'fs-backtest-panel',
-  imports: [FormsModule, SourceComponent],
+  imports: [FormsModule, SourceComponent, SkeletonComponent, ProgressStatusComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 <section class="bt" aria-labelledby="bt-title">
@@ -52,9 +55,9 @@ const CHART_H = 220;
   }
 
   @if (loading()) {
-    <div class="progress rounded-0" style="height: 2px" role="progressbar" aria-label="Replaying the strategy"><div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div></div>
-    <div class="bt-tiles placeholder-glow" aria-hidden="true">
-      @for (i of skeleton; track i) { <div class="card fs-kpi"><span class="placeholder col-6"></span><span class="placeholder col-9"></span></div> }
+    <fs-progress-status stage="Replaying the strategy" />
+    <div class="bt-tiles" aria-hidden="true">
+      @for (i of skeleton; track i) { <div class="card fs-kpi"><fs-skeleton shape="kpi" /></div> }
     </div>
     <p class="bt-note">Replaying the strategy month by month on prices and quarters as they were known then. The first run of a universe takes a while; repeats are instant.</p>
   }
@@ -155,6 +158,9 @@ const CHART_H = 220;
       <button type="button" class="btn btn-sm btn-primary" (click)="runBatch()" [disabled]="batchLoading() || !batchCells()">
         {{ batchLoading() ? 'Running…' : 'Run ' + batchCells() + ' backtests' }}
       </button>
+      @if (batchLoading()) {
+        <fs-progress-status class="bt-batch-progress" [stage]="batchProgress()?.stage ?? 'Running the batch'" [done]="batchProgress()?.done ?? null" [total]="batchProgress()?.total ?? null" />
+      }
       @if (batchCells() > maxCells) { <span class="text-danger small" role="alert">Too many: pick fewer markets or periods ({{ maxCells }} at most).</span> }
     </div>
     @if (batchError(); as err) { <p class="text-danger small" role="alert">{{ err }}</p> }
@@ -330,8 +336,11 @@ export class BacktestPanelComponent {
   readonly pickedPeriods = signal<string[]>(['3', '5', '10']);
   readonly batch = signal<BatchResult | null>(null);
   readonly batchLoading = signal(false);
+  /** Counts from the server while a batch runs; null until it reports them. */
+  readonly batchProgress = signal<RunProgress | null>(null);
   readonly batchError = signal('');
   private batchRequest?: Subscription;
+  private progressTimer?: ReturnType<typeof setInterval>;
   readonly sens = signal<SensitivityResult | null>(null);
   readonly sensLoading = signal(false);
   readonly sensError = signal('');
@@ -369,7 +378,7 @@ export class BacktestPanelComponent {
   readonly summary = computed(() => (this.result() ? chartSummary(this.result()!) : ''));
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => { this.request?.unsubscribe(); this.batchRequest?.unsubscribe(); this.sensRequest?.unsubscribe(); });
+    inject(DestroyRef).onDestroy(() => { this.request?.unsubscribe(); this.batchRequest?.unsubscribe(); this.sensRequest?.unsubscribe(); this.stopProgress(); });
     // The market being viewed is ticked by default; a switch resets the batch.
     effect(() => {
       const u = this.universe();
@@ -465,10 +474,29 @@ export class BacktestPanelComponent {
     this.batchLoading.set(true);
     this.batchError.set('');
     const params = batchParams({ universes: this.pickedMarkets(), periods: this.pickedPeriods(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance() });
-    this.batchRequest = this.api.backtestBatch(params).subscribe({
-      next: res => { this.lastParams.batch = params; this.openedRun.set(null); this.batch.set(res); this.batchLoading.set(false); },
-      error: err => { this.batchError.set(describeHttpError(err)); this.batchLoading.set(false); },
+    const runId = newRunId();
+    this.startProgress(runId);
+    this.batchRequest = this.api.backtestBatch(params, runId).subscribe({
+      next: res => { this.stopProgress(); this.lastParams.batch = params; this.openedRun.set(null); this.batch.set(res); this.batchLoading.set(false); },
+      error: err => { this.stopProgress(); this.batchError.set(describeHttpError(err)); this.batchLoading.set(false); },
     });
+  }
+
+  /** Asks the server how many backtests of this batch are done; a failed ask just shows no count. */
+  private startProgress(runId: string): void {
+    this.stopProgress();
+    this.progressTimer = setInterval(() => {
+      this.api.backtestProgress(runId).subscribe({
+        next: raw => { if (this.batchLoading()) this.batchProgress.set(parseRunProgress(raw)); },
+        error: () => undefined,
+      });
+    }, PROGRESS_POLL_MS);
+  }
+
+  private stopProgress(): void {
+    clearInterval(this.progressTimer);
+    this.progressTimer = undefined;
+    this.batchProgress.set(null);
   }
 
   runSensitivity(): void {
