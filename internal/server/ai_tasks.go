@@ -65,7 +65,7 @@ func (e *Engine) startTask(r *http.Request, messages []ai.Message, ds []ai.Deliv
 	raw, _ := json.Marshal(ds)
 	id, err := store.CreateAgentTask(r.Context(), u.ID, title, string(raw))
 	if err != nil {
-		send(ai.Event{Type: "notice", Content: "This run is not saved and cannot be resumed: " + err.Error()})
+		send(ai.Event{Type: "notice", Severity: "warning", Code: "notice", Content: "This run is not saved and cannot be resumed: " + err.Error()})
 		return nil
 	}
 	send(ai.Event{Type: "task", Name: strconv.FormatInt(id, 10), Content: ai.TaskRunning})
@@ -86,7 +86,7 @@ func (t *taskRecorder) wrap(send func(ai.Event)) func(ai.Event) {
 		deliverables, _ := json.Marshal(cp.Deliverables)
 		raw, _ := json.Marshal(cp)
 		if err := t.store.SaveAgentTaskCheckpoint(ctx, t.userID, t.id, cp.Status, string(deliverables), string(raw), cp.Steps, cp.ToolCalls); err != nil {
-			send(ai.Event{Type: "notice", Content: "The task checkpoint could not be saved: " + err.Error()})
+			send(ai.Event{Type: "notice", Severity: "warning", Code: "notice", Content: "The task checkpoint could not be saved: " + err.Error()})
 		} else {
 			t.status = cp.Status
 		}

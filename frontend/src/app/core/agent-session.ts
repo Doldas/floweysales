@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 
 import type { Message, Persona } from '../models';
 import { MarketState } from './market-state';
+import { EMPTY_NOTICES, applyNotice, dismissNotice, finishNotices, recoveryLine, type NoticeState } from './agent-notices';
 
 export interface AiPreset {
   label: string;
@@ -58,7 +59,14 @@ export class AgentSession {
 
   readonly entries = signal<ChatEntry[]>([]);
   readonly streaming = signal(false);
+  /** A terminal failure of the last run; the user can dismiss it. */
   readonly error = signal('');
+  /** Retry status, recoveries and warnings of the current run. */
+  readonly noticeState = signal<NoticeState>(EMPTY_NOTICES);
+  readonly runStatus = computed(() => this.noticeState().status);
+  readonly runStatusDetail = computed(() => this.noticeState().statusDetail);
+  readonly notices = computed(() => this.noticeState().notices);
+  readonly recovery = computed(() => recoveryLine(this.noticeState()));
   readonly configLoaded = signal(false);
   readonly configured = signal(false);
   readonly canConfigure = signal(false);
@@ -161,8 +169,12 @@ export class AgentSession {
     this.wire = [];
     this.entries.set([]);
     this.error.set('');
+    this.noticeState.set(EMPTY_NOTICES);
     this.assistantId = -1;
   }
+
+  dismissError(): void { this.error.set(''); }
+  dismissNotice(id: number): void { this.noticeState.update(s => dismissNotice(s, id)); }
 
   stop(): void {
     this.abort?.abort();
@@ -179,6 +191,7 @@ export class AgentSession {
     }
 
     this.error.set('');
+    this.noticeState.set(EMPTY_NOTICES);
     this.push({ role: 'user', content });
     this.wire.push({ role: 'user', content });
     this.streaming.set(true);
@@ -233,6 +246,7 @@ export class AgentSession {
     } finally {
       // Any step still marked running was interrupted.
       this.entries.update(list => list.map(e => (e.status === 'running' ? { ...e, status: 'error', content: e.content || 'Interrupted' } : e)));
+      this.noticeState.update(finishNotices);
       this.streaming.set(false);
       this.abort = null;
     }
@@ -260,7 +274,7 @@ export class AgentSession {
       if (!line.startsWith('data:')) continue;
       const payload = line.slice(5).trim();
       if (!payload) continue;
-      let ev: { type?: string; content?: string; name?: string; arguments?: string; result?: string; tool_error?: string; error?: string; message?: Message };
+      let ev: { type?: string; severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string; content?: string; name?: string; arguments?: string; result?: string; tool_error?: string; error?: string; message?: Message };
       try {
         ev = JSON.parse(payload);
       } catch {
@@ -285,11 +299,21 @@ export class AgentSession {
           this.error.set(ev.error || 'AI error');
           break;
         case 'notice':
-          // The backend explains why a reply was cut off (a full context window, say).
-          if (ev.content) this.error.set(ev.content);
+          // The backend explains retries, recoveries and cut-off replies (a full
+          // context window, say). Only real problems stay on screen.
+          if (ev.code === 'retry') this.discardPartialReply();
+          this.noticeState.update(s => applyNotice(s, ev));
           break;
       }
     }
+  }
+
+  /** A failed model call may have streamed part of a reply; the retry starts it over. */
+  private discardPartialReply(): void {
+    const id = this.assistantId;
+    if (id < 0) return;
+    this.entries.update(list => list.filter(e => e.id !== id));
+    this.assistantId = -1;
   }
 
   private push(entry: Omit<ChatEntry, 'id'>): number {

@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"regexp"
 	"strings"
 	"time"
+
+	"floweysales/internal/redact"
 )
 
 // Event is one step of an agent run, streamed to the UI or logged by tests.
@@ -29,6 +32,14 @@ type Event struct {
 	// Checkpoint is set on checkpoint events (task runs): the state a failed
 	// or cancelled run resumes from.
 	Checkpoint *Checkpoint `json:"checkpoint,omitempty"`
+	// Severity and Code classify a notice so a UI can tell a retry in progress
+	// from a warning worth keeping. Attempt and MaxAttempts accompany the
+	// retry and recovered codes; Detail is the redacted technical reason.
+	Severity    string `json:"severity,omitempty"` // info | warning
+	Code        string `json:"code,omitempty"`     // retry | recovered | task_incomplete | notice
+	Attempt     int    `json:"attempt,omitempty"`
+	MaxAttempts int    `json:"max_attempts,omitempty"`
+	Detail      string `json:"detail,omitempty"`
 }
 
 // AgentOptions tunes a run.
@@ -166,7 +177,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	// Explanations from the client (a full context window, say) reach the UI as
 	// notices; the shared client is copied so concurrent runs do not mix them.
 	own := *client
-	own.Notice = func(text string) { emit(Event{Type: "notice", Content: text}) }
+	own.Notice = func(text string) { emit(Event{Type: "notice", Content: text, Severity: "warning", Code: "notice"}) }
 	client = &own
 
 	emptyReplies, nudges := 0, 0
@@ -237,7 +248,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 			status := TaskComplete
 			if !complete {
 				status = TaskIncomplete
-				emit(Event{Type: "notice", Content: "The task is incomplete. Missing: " + strings.Join(append(missing, noEvidence(ledger, tools != nil)...), "; ")})
+				emit(Event{Type: "notice", Severity: "warning", Code: "task_incomplete", Content: "The task is incomplete. Missing: " + strings.Join(append(missing, noEvidence(ledger, tools != nil)...), "; ")})
 			}
 			checkpoint(step, status)
 			emit(Event{Type: "done", Steps: stepsBefore + step})
@@ -328,6 +339,14 @@ const (
 // retryDelay is the pause before attempt n+1 (a variable so tests can skip it).
 var retryDelay = func(attempt int) time.Duration { return time.Duration(attempt) * 2 * time.Second }
 
+var urlInText = regexp.MustCompile(`https?://\S+`)
+
+// failureDetail is a model error safe to show: secrets masked, endpoint
+// addresses removed, length bounded.
+func failureDetail(err error) string {
+	return redact.Preview(urlInText.ReplaceAllString(err.Error(), "<endpoint>"), 300)
+}
+
 func clip(s string, n int) string {
 	if len(s) <= n {
 		return s
@@ -378,6 +397,10 @@ func completeWithRetry(ctx context.Context, client *Client, messages *[]Message,
 	for attempt := 1; attempt <= maxModelAttempts; attempt++ {
 		msg, err := client.Complete(ctx, *messages, tools, func(d string) { emit(Event{Type: "delta", Content: d}) })
 		if err == nil {
+			if attempt > 1 {
+				emit(Event{Type: "notice", Severity: "info", Code: "recovered", Attempt: attempt, MaxAttempts: maxModelAttempts,
+					Content: fmt.Sprintf("Recovered after %d attempts.", attempt)})
+			}
 			return msg, nil
 		}
 		last = err
@@ -388,7 +411,14 @@ func completeWithRetry(ctx context.Context, client *Client, messages *[]Message,
 		if kind == failPermanent || attempt == maxModelAttempts {
 			break
 		}
-		emit(Event{Type: "notice", Content: fmt.Sprintf("The model call failed (%s). Retrying, attempt %d of %d.", clip(err.Error(), 300), attempt+1, maxModelAttempts)})
+		// The reason is for troubleshooting, so it is redacted and stripped of
+		// the endpoint address; the headline is plain language.
+		headline := "The model call failed."
+		if kind == failModel {
+			headline = "The model's reply could not be processed."
+		}
+		emit(Event{Type: "notice", Severity: "info", Code: "retry", Attempt: attempt + 1, MaxAttempts: maxModelAttempts, Detail: failureDetail(err),
+			Content: fmt.Sprintf("%s Retrying, attempt %d of %d.", headline, attempt+1, maxModelAttempts)})
 		if kind == failModel {
 			*messages = append(*messages, Message{Role: "user", Content: "Your last reply could not be processed: " + clip(err.Error(), 400) +
 				"\nContinue the task. If you call a tool, send one complete, valid JSON object as its arguments (plain ASCII characters in values, for example 10-Q with a normal hyphen), or answer without a tool."})
