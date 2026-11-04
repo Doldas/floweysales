@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"floweysales/internal/market"
+	"floweysales/internal/provenance"
 )
 
 // The world view gathers headlines, sorts them into the themes of
@@ -39,6 +40,8 @@ type WorldHeadline struct {
 	Summary   string   `json:"summary,omitempty"`
 	Via       string   `json:"via"` // "news plugin" or "web search"
 	Themes    []string `json:"themes,omitempty"`
+	// Provenance says where the headline came from; it travels beside the data.
+	Provenance provenance.Fact `json:"provenance"`
 }
 
 // WorldTheme is a theme with the headlines found for it.
@@ -113,8 +116,12 @@ func parseSearchHeadlines(raw string) []WorldHeadline {
 		if summary == "" {
 			summary = r.Snippet
 		}
-		out = append(out, WorldHeadline{Title: trimSearchField(r.Title, 200), URL: r.URL, Summary: trimSearchField(summary, 280),
-			Age: trimSearchField(r.Age, 40), Source: hostOf(r.URL), Via: "web search"})
+		h := WorldHeadline{Title: trimSearchField(r.Title, 200), URL: r.URL, Summary: trimSearchField(summary, 280),
+			Age: trimSearchField(r.Age, 40), Source: hostOf(r.URL), Via: "web search"}
+		// A search result gives only a relative age, so no publication time is claimed.
+		h.Provenance = provenance.FromSource(h.Source, h.URL, "", time.Time{}, time.Now())
+		h.Provenance.Note = "Found by web search; the page itself was not read."
+		out = append(out, h)
 	}
 	return out
 }
@@ -128,8 +135,18 @@ func hostOf(raw string) string {
 }
 
 func fromNews(item market.NewsItem) WorldHeadline {
-	return WorldHeadline{Title: trimSearchField(item.Title, 200), URL: item.URL, Source: trimSearchField(item.Source, 60), Published: item.Published,
+	h := WorldHeadline{Title: trimSearchField(item.Title, 200), URL: item.URL, Source: trimSearchField(item.Source, 60), Published: item.Published,
 		Summary: trimSearchField(item.Summary, 280), Via: "news plugin"}
+	var published time.Time
+	if item.Published > 0 {
+		published = time.Unix(item.Published, 0)
+	}
+	provider := item.Provider
+	if provider == "" {
+		provider = h.Source
+	}
+	h.Provenance = provenance.FromSource(provider, h.URL, "", published, time.Now())
+	return h
 }
 
 // buildWorld collects headlines and groups them by theme.

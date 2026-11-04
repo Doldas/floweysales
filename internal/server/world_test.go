@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"floweysales/internal/market"
+	"floweysales/internal/provenance"
 )
 
 func fakeFetcher() worldFetcher {
@@ -103,5 +104,23 @@ func TestParseSearchHeadlinesReadsBothShapes(t *testing.T) {
 	}
 	if parseSearchHeadlines("not json") != nil {
 		t.Fatal("bad json must yield nothing")
+	}
+}
+
+func TestHeadlinesCarryProvenance(t *testing.T) {
+	news := fromNews(market.NewsItem{Title: "A", URL: "https://a.com/x", Source: "Reuters", Published: 1793716320, Provider: "finnhub"})
+	if news.Provenance.Status != provenance.Known || news.Provenance.PublishedAt == nil || news.Provenance.RetrievedAt == nil || news.Provenance.Provider != "finnhub" {
+		t.Errorf("news provenance = %+v", news.Provenance)
+	}
+	undated := fromNews(market.NewsItem{Title: "B", URL: "https://b.com/y", Source: "B"})
+	if undated.Provenance.PublishedAt != nil {
+		t.Error("an undated headline must not claim a publication time")
+	}
+	search := parseSearchHeadlines(`{"results":[{"title":"C","url":"https://c.com/z","age":"2 days ago"}]}`)
+	if len(search) != 1 || search[0].Provenance.PublishedAt != nil || search[0].Provenance.Note == "" {
+		t.Errorf("a relative age must not become a date: %+v", search)
+	}
+	if err := search[0].Provenance.Validate(); err != nil {
+		t.Error(err)
 	}
 }

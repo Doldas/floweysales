@@ -8,12 +8,13 @@ import { MarketState } from '../core/market-state';
 import type { WorldHeadline, WorldTheme, WorldView } from '../models';
 import { MarketService } from '../services';
 import { SymbolSearchComponent } from '../shell/symbol-search';
+import { SourceComponent } from '../ui/source';
 
 /** What is happening in the world, and which sectors and commodities it touches. */
 @Component({
   selector: 'fs-world-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, SymbolSearchComponent, WorldImpactComponent],
+  imports: [RouterLink, SymbolSearchComponent, WorldImpactComponent, SourceComponent],
   template: `
     <div class="fs-page research-container">
       <header class="fs-page-header">
@@ -63,7 +64,7 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
                 <h2>{{ t.label }} <small>{{ t.count }} headlines</small></h2>
                 <ul class="headlines">
                   @for (h of t.headlines; track h.url) {
-                    <li><a [href]="h.url" target="_blank" rel="noopener noreferrer">{{ h.title }}</a> <small>{{ h.source }} · {{ published(h) }}</small></li>
+                    <li><a [href]="h.url" target="_blank" rel="noopener noreferrer">{{ h.title }}</a> <small>{{ h.source }} · {{ published(h) }}</small> <fs-source [fact]="h.provenance" /></li>
                   }
                 </ul>
                 <h3>Who is exposed when {{ t.driver }} rise</h3>
