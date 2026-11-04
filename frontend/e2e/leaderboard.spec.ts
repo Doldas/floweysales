@@ -62,3 +62,44 @@ test.describe('leaderboard methodology', () => {
     await expect(button).toBeFocused();
   });
 });
+
+test.describe('where the companies come from', () => {
+  test('the list source, limits and what was left out are stated above the results', async ({ page }) => {
+    await open(page, 'markets');
+    const origin = page.getByTestId('leaderboard-origin');
+    await expect(origin.getByRole('heading', { name: 'Where do these companies come from?' })).toBeVisible();
+    await expect(origin).toContainText('Hand-picked by the maintainers');
+    await expect(origin).toContainText('no link to an original record is recorded');
+    await expect(origin).toContainText('Not an official index');
+    await expect(origin).toContainText('BRK-B (fewer than four reported quarters)');
+    await expect(origin).toContainText('−1 no usable data');
+    // Above the methodology, which is above the table.
+    const board = page.getByRole('region', { name: /Leaderboard/ });
+    const order = await board.evaluate(el => {
+      const at = (sel: string) => [...el.querySelectorAll('*')].indexOf(el.querySelector(sel)!);
+      return [at('[data-testid="leaderboard-origin"]'), at('[data-testid="leaderboard-method"]'), at('.board-table')];
+    });
+    expect(order[0]).toBeLessThan(order[1]);
+    expect(order[1]).toBeLessThan(order[2]);
+  });
+
+  test('each company answers why it is here, where its numbers come from and why it ranks', async ({ page }) => {
+    await open(page, 'markets');
+    const board = page.getByRole('region', { name: /Leaderboard/ });
+    await board.locator('.board-row').first().getByRole('button', { name: 'Score breakdown' }).click();
+    const detail = board.locator('.explain-row').first();
+    await expect(detail.getByRole('heading', { name: 'Why it is here' })).toBeVisible();
+    await expect(detail.getByRole('heading', { name: 'Where its numbers come from' })).toBeVisible();
+    await expect(detail.getByRole('heading', { name: 'Why it ranks here' })).toBeVisible();
+    await expect(detail).toContainText('Provider: YAHOO');
+    await expect(detail).toContainText('fundamentals through 2026-09-30');
+  });
+
+  test('the list can be downloaded with its sources', async ({ page }) => {
+    await open(page, 'markets');
+    const download = page.waitForEvent('download');
+    await page.getByTestId('leaderboard-origin').getByRole('button', { name: 'Download list as CSV' }).click();
+    const file = await download;
+    expect(file.suggestedFilename()).toMatch(/^leaderboard-.*\.csv$/);
+  });
+});

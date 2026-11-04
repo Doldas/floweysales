@@ -240,8 +240,13 @@ Every ranking (`GET /api/market/leaderboard`, the `get_leaderboard` agent tool) 
 | `provenance.price_dates` | Newest and oldest price date in the data. |
 | `provenance.disclaimer` | "Research suggestion, not personalized financial advice." Shown under the table. |
 | row `breakdown` | Only with `?explain=1`. Per factor: `weight`, `score`, `contribution` (score x weight; the contributions add up to the row score), `missing`, and `capped_from` with `cap_reason` when a cap applied; per metric: `value`, `percentile`, `weight`, direction. The Markets page always asks for it. |
+| `universe_info` | The list that was ranked, without its symbols: `label`, `description`, `region`, `countries` and `source` (`kind` of `curated`, `disclosure` or `custom`; `name`; `url` and `as_of`, both `null` when not verified; `rule` for how companies were chosen; `limitations`). |
+| `selection` | From list to ranking: `initial`, `ranked`, every company left out with its reason, `steps`, and counts of ranked companies per `countries` and `exchanges`. Initial minus excluded equals ranked. |
+| row `discovery`, `metrics_source`, `listing` | Three separate answers: why the company is on the list (and the list's source), where its numbers come from (provider, price date, fundamentals through), and which listing it is (exchange, MIC and country read from the ticker suffix; a bare US ticker says the exchange is not recorded). |
 | row `confidence`, `confidence_note` | `high`, `medium` or `low` from factor coverage, universe size and input age, with the reason. |
 | row `fundamentals_age_days` | Age of the newest reported quarter at the price date (never the clock). Over 200 days adds the `stale_fundamentals` flag. |
 | row `alternatives` | Up to three competing explanations: a trend that may already be priced in, overbought entry, negative earnings, old fundamentals, and heavily weighted factors that score low or have no data. |
+
+The curated lists live in `internal/server/universes.json`. They are hand-picked, say so, and state no review date or link because none has been verified; they are not index constituents. Reference-portfolio lists name the filer, form, date and SEC link of the disclosure they come from.
 
 The methodology version (`leaderboardMethodologyVersion`) must be bumped when the scoring rules change. Out-of-sample splits and a survivorship-free universe are not provided; the backtest states those biases.

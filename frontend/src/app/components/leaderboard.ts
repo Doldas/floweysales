@@ -10,7 +10,7 @@ import { MarketService, describeHttpError } from '../services';
 import type { LeaderboardOption, LeaderboardResponse, LeaderboardRow } from '../models';
 import { LEADERBOARD_FACTORS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES } from './investor-nodes';
 import { BacktestPanelComponent } from './backtest-panel';
-import { FACTOR_LABELS, STRATEGY_PLAYBOOK, alternativeList, coverageSummary, flagList, leaderboardPrompt, methodFactors, metricValue, num, pct, reasonList, scoreSum, scoreTone } from './leaderboard-view';
+import { FACTOR_LABELS, STRATEGY_PLAYBOOK, alternativeList, coverageBreakdown, coverageSummary, flagList, leaderboardPrompt, methodFactors, metricValue, num, pct, reasonList, scoreSum, scoreTone, selectionLines, sourceKindLabel, universeCsv } from './leaderboard-view';
 
 const WATCHLIST = 'watchlist';
 const STORE_KEY = 'fs.leaderboard';
@@ -56,6 +56,34 @@ const STORE_KEY = 'fs.leaderboard';
   </div>
 
   @if (data(); as d) {
+    @if (d.universe_info; as u) {
+      <section class="method origin" aria-labelledby="origin-title" data-testid="leaderboard-origin">
+        <div class="method-head">
+          <h3 id="origin-title">Where do these companies come from?</h3>
+          <button type="button" class="btn btn-sm btn-ghost" [attr.aria-expanded]="originOpen()" aria-controls="origin-body" (click)="toggleOrigin()">{{ originOpen() ? 'Hide' : 'Show' }}</button>
+        </div>
+        <div id="origin-body" [hidden]="!originOpen()">
+          <dl class="method-facts">
+            <div><dt>List</dt><dd>{{ u.label }} &ndash; {{ u.description }}</dd></div>
+            <div><dt>Source</dt><dd><span class="fs-status no-dot is-info kind">{{ kindLabel(u.source?.kind) }}</span> {{ u.source?.name || 'Not recorded' }}
+              @if (u.source?.url) { &middot; <a [href]="u.source!.url!" target="_blank" rel="noopener noreferrer">original record</a> } @else { &middot; no link to an original record is recorded }</dd></div>
+            <div><dt>As of</dt><dd>{{ u.source?.as_of || 'Not recorded' }}</dd></div>
+            <div><dt>How chosen</dt><dd>{{ u.source?.rule || 'Not recorded' }}</dd></div>
+            <div><dt>Limits</dt><dd>{{ u.source?.limitations || 'Not recorded' }}</dd></div>
+            @if (d.selection; as sel) {
+              <div><dt>From list to ranking</dt><dd>{{ selectionText() }}</dd></div>
+              <div><dt>Where they trade</dt><dd>{{ coverageBreakdown(sel.exchanges) || 'Not known' }}@if (countryText()) { &middot; countries: {{ countryText() }} }</dd></div>
+              @if (sel.excluded.length) {
+                <div><dt>Left out</dt><dd>@for (x of sel.excluded; track x.symbol; let last = $last) { <strong>{{ x.symbol }}</strong> ({{ x.reason }}){{ last ? '' : '; ' }} }</dd></div>
+              }
+            }
+          </dl>
+          <p class="method-note">Three questions are answered separately: why a company is on the list (here, and under each company), where its numbers come from (the data provider, shown under each company), and why it ranks where it does (the next section).
+            <button type="button" class="btn btn-sm btn-link explain-btn" (click)="download('csv')">Download list as CSV</button>
+            <button type="button" class="btn btn-sm btn-link explain-btn" (click)="download('json')">as JSON</button></p>
+        </div>
+      </section>
+    }
     @if (d.provenance?.methodology; as m) {
       <section class="method" aria-labelledby="method-title" data-testid="leaderboard-method">
         <div class="method-head">
@@ -180,7 +208,22 @@ const STORE_KEY = 'fs.leaderboard';
               @if (r.breakdown && isExplained(r.symbol)) {
                 <tr class="explain-row" [id]="'explain-' + r.symbol">
                   <td colspan="11">
-                    <p class="method-note mb-1"><strong>{{ r.symbol }}</strong>: {{ sumLines(r).join('; ') }} &rarr; <strong>{{ r.score }}</strong></p>
+                    <div class="three">
+                      <section>
+                        <h5>Why it is here</h5>
+                        <p>{{ r.discovery?.why || 'No inclusion reason is recorded.' }}</p>
+                        <p>{{ r.listing?.exchange || 'Listing unknown' }}@if (r.listing?.mic) { &middot; MIC {{ r.listing!.mic }} }@if (r.listing?.country) { &middot; {{ r.listing!.country }} }.
+                          @if (r.discovery?.url) { <a [href]="r.discovery!.url!" target="_blank" rel="noopener noreferrer">Original record</a> } @else { No link to an original record is recorded. }</p>
+                      </section>
+                      <section>
+                        <h5>Where its numbers come from</h5>
+                        <p>Provider: {{ r.metrics_source?.provider || 'unknown' }}. Prices as of {{ r.metrics_source?.price_as_of || 'unknown' }}; fundamentals through {{ r.metrics_source?.fundamentals_through || 'not available' }}.</p>
+                      </section>
+                      <section>
+                        <h5>Why it ranks here</h5>
+                        <p>{{ sumLines(r).join('; ') }} &rarr; <strong>{{ r.score }}</strong></p>
+                      </section>
+                    </div>
                     <table class="explain-table">
                       <caption class="visually-hidden">Score breakdown of {{ r.symbol }}</caption>
                       <thead><tr><th scope="col">Factor</th><th scope="col">Metric</th><th scope="col" class="num">Value</th><th scope="col" class="num">Percentile</th><th scope="col" class="num">Weight</th></tr></thead>
@@ -280,15 +323,17 @@ const STORE_KEY = 'fs.leaderboard';
 .method-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; h3 { font-size: 0.95rem; margin: 0; } }
 .method h4 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fs-muted); margin: 0.9rem 0 0.4rem; }
 .method-lead, .method-note { color: var(--fs-text-2); margin: 0.4rem 0; }
-.method-facts { display: grid; gap: 0.25rem; margin: 0.5rem 0 0; div { display: grid; grid-template-columns: 6rem 1fr; gap: 0.5rem; } dt { color: var(--fs-muted); font-weight: 600; } dd { margin: 0; } }
+.method-facts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.25rem; margin: 0.5rem 0 0; div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: 0.5rem; } dt { color: var(--fs-muted); font-weight: 600; } dd { margin: 0; overflow-wrap: anywhere; } }
 .method-factors { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
 .mf-line { display: grid; grid-template-columns: 7rem 1fr 2.5rem; align-items: center; gap: 0.6rem; }
 .mf-bar { height: 6px; border-radius: 3px; background: var(--fs-surface-3); overflow: hidden; span { display: block; height: 100%; background: var(--fs-accent); } }
 .mf-q { color: var(--fs-muted); }
 .method details { margin-top: 0.25rem; summary { cursor: pointer; color: var(--fs-accent-text); } ul, ol { padding-left: 1.1rem; margin: 0.3rem 0; display: grid; gap: 0.2rem; } }
 .cap { display: block; }
+.kind { white-space: normal; max-width: 100%; }
 .fingerprint { overflow-wrap: anywhere; }
 .explain-btn { padding: 0; font-size: 0.74rem; color: var(--fs-accent-text); text-decoration: underline; }
+.three { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 0.8rem; margin-bottom: 0.6rem; h5 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fs-muted); margin: 0 0 0.25rem; } p { margin: 0 0 0.3rem; font-size: 0.78rem; overflow-wrap: anywhere; } }
 .explain-row td { background: var(--fs-surface-2); padding: 0.6rem 1rem; }
 .explain-table { width: 100%; font-size: 0.78rem; th, td { padding: 0.15rem 0.4rem; } thead th { color: var(--fs-muted); font-weight: 600; } .factor-line th, .factor-line td { border-top: 1px solid var(--fs-border); font-weight: 600; } .num { text-align: right; } }
 @media (max-width: 575.98px) { .board-controls, .board-foot, .board-note { padding-inline: 1rem; } }
@@ -314,6 +359,8 @@ export class LeaderboardComponent {
   readonly showAll = signal(false);
   readonly showBacktest = signal(false);
   readonly methodOpen = signal(true);
+  readonly originOpen = signal(true);
+  readonly coverageBreakdown = coverageBreakdown;
   private readonly explained = signal<ReadonlySet<string>>(new Set());
   readonly metricValue = metricValue;
   private request?: Subscription;
@@ -326,6 +373,8 @@ export class LeaderboardComponent {
   readonly watchlistSymbols = computed(() => [...new Set(this.market.trackedAssets().map(a => a.symbol.toUpperCase()))].slice(0, 25));
   readonly visibleRows = computed(() => (this.showAll() ? this.data()?.rows ?? [] : (this.data()?.rows ?? []).slice(0, 10)));
   readonly unrankedList = computed(() => (this.data()?.unranked ?? []).map(u => u.symbol).join(', '));
+  readonly selectionText = computed(() => selectionLines(this.data()?.selection).join(' → '));
+  readonly countryText = computed(() => coverageBreakdown(this.data()?.selection?.countries));
   readonly method = computed(() => methodFactors(this.data()?.provenance?.methodology));
   readonly universeInfo = computed(() => this.universes().find(u => u.id === this.universe()));
   readonly example = computed(() => {
@@ -340,6 +389,7 @@ export class LeaderboardComponent {
       if (typeof saved.universe === 'string' && saved.universe !== WATCHLIST) this.universe.set(saved.universe);
       if (typeof saved.strategy === 'string') this.strategy.set(saved.strategy);
       if (saved.methodOpen === false) this.methodOpen.set(false);
+      if (saved.originOpen === false) this.originOpen.set(false);
     } catch { /* storage may be unavailable */ }
     inject(DestroyRef).onDestroy(() => this.request?.unsubscribe());
     this.load();
@@ -393,6 +443,23 @@ export class LeaderboardComponent {
   alternatives(row: LeaderboardRow): string[] { return alternativeList(row); }
 
   toggleMethod(): void { this.methodOpen.update(v => !v); this.save(); }
+  toggleOrigin(): void { this.originOpen.update(v => !v); this.save(); }
+  kindLabel(kind: string | undefined): string { return sourceKindLabel(kind); }
+
+  /** Saves the ranked list with each company's listing and the sources of its inclusion and numbers. */
+  download(format: 'csv' | 'json'): void {
+    const d = this.data();
+    if (!d) return;
+    const body = format === 'csv' ? universeCsv(d.rows)
+      : JSON.stringify({ universe: d.universe_info ? { ...d.universe_info } : d.universe, selection: d.selection, generated_at: d.generated_at, as_of: d.as_of,
+        companies: d.rows.map(r => ({ rank: r.rank, symbol: r.symbol, listing: r.listing, discovery: r.discovery, metrics_source: r.metrics_source })) }, null, 2);
+    const url = URL.createObjectURL(new Blob([body], { type: format === 'csv' ? 'text/csv' : 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `leaderboard-${d.universe}-${d.as_of || 'undated'}.${format}`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
   coverage(d: LeaderboardResponse): string { return coverageSummary(d.rows, d.unranked.length); }
   sumLines(row: LeaderboardRow): string[] { return scoreSum(row.breakdown); }
   isExplained(symbol: string): boolean { return this.explained().has(symbol); }
@@ -401,6 +468,6 @@ export class LeaderboardComponent {
   }
 
   private save(): void {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify({ universe: this.universe(), strategy: this.strategy(), methodOpen: this.methodOpen() })); } catch { /* ignore */ }
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ universe: this.universe(), strategy: this.strategy(), methodOpen: this.methodOpen(), originOpen: this.originOpen() })); } catch { /* ignore */ }
   }
 }

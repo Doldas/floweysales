@@ -162,6 +162,9 @@ function leaderboard(universe, strategy) {
       momentum_12_1_pct: mom, from_high_pct: high, rsi14: rsi, above_sma200: !flags.includes('below_sma200'), reasons, flags, ttm_through: '2026-09-30' };
     factors.forEach((k, i) => { row[k] = f[i]; });
     // The server adds this when asked to explain the score (?explain=1).
+    row.listing = { exchange: 'US listing (exchange not recorded)', country: 'US', known: false };
+    row.discovery = { why: 'On the hand-picked US mega caps list; the maintainers chose it and no external record backs the choice.', source: 'Curated by the FloweySales maintainers', kind: 'curated', url: null, as_of: null };
+    row.metrics_source = { provider: 'YAHOO', price_as_of: '2026-10-28', fundamentals_through: '2026-09-30' };
     row.breakdown = { missing_factor_score: 40, total: s, factors: factors.map((k, i) => ({
       factor: k, weight: methodWeights[k] ?? 0, missing: false, score: f[i], contribution: Math.round(f[i] * (methodWeights[k] ?? 0) * 10) / 10,
       metrics: [{ field: methodMetric[k], label: methodMetricLabel[k], value: 12.5, percentile: f[i], weight: 1, higher_is_better: true }] })) };
@@ -169,6 +172,10 @@ function leaderboard(universe, strategy) {
   }).sort((a, b) => b.score - a.score).map((r, i) => ({ ...r, rank: i + 1 }));
   return { universe, strategy, provider: 'YAHOO', as_of: '2026-10-28', generated_at: '2026-10-28T15:30:00Z', rows,
     unranked: [{ symbol: 'BRK-B', error: 'fewer than four reported quarters' }], universes: boardUniverses, strategies: boardStrategies,
+    universe_info: { id: universe, label: 'US mega caps', description: '25 large US-listed companies across sectors, picked by hand.', source: { kind: 'curated', name: 'Curated by the FloweySales maintainers', url: null, as_of: null,
+      rule: 'Hand-picked from among the largest US-listed companies when the list was written.', limitations: 'Not an official index and not re-checked against one.' } },
+    selection: { initial: rows.length + 1, ranked: rows.length, excluded: [{ symbol: 'BRK-B', reason: 'fewer than four reported quarters' }], countries: { US: rows.length }, exchanges: { 'US listing (exchange not recorded)': rows.length },
+      steps: [{ step: 'On the list', count: rows.length + 1 }, { step: 'No usable data', count: -1 }, { step: 'Ranked', count: rows.length }] },
     provenance: { universe_id: universe, universe_hash: 'u1', inputs_hash: 'd1', price_dates: { newest: '2026-10-28', oldest: '2026-10-27' },
       disclaimer: 'Research suggestion, not personalized financial advice. Scores are percentiles within this list from provider data, not predictions.',
       methodology: { version: '2026-11-1', hash: 'm1', strategy, weights: methodWeights, factors,
