@@ -122,6 +122,7 @@ export class MarketState {
   /** Feed health as four separate facts; see feed-status.ts. */
   readonly feed = computed(() => {
     const provider = this.providers().find(p => p.id === this.provider());
+    const tick = this.stream.latestTick();
     return feedStatus({
       research: this.mode() === 'research',
       hasTracker: !!this.trackedSymbol(),
@@ -130,6 +131,11 @@ export class MarketState {
       quoteKind: provider?.quote_kind ?? '',
       providerLabel: provider?.label ?? this.provider(),
       officialApi: provider ? provider.official_api : null,
+      // Facts of the latest tick; the stream clears them with the tick on a switch.
+      quoteTimeAt: tick?.quote_time ? tick.quote_time * 1000 : null,
+      delaySeconds: tick?.delay_seconds ?? null,
+      marketState: tick?.market_state ?? 'unknown',
+      marketBasis: tick?.market_basis,
     }, this.clock());
   });
   /** Short feed text. A connection alone never reads as "Live". */

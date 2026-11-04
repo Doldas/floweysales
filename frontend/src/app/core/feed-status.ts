@@ -7,6 +7,7 @@
 export type FeedConnection = 'none' | 'connecting' | 'connected' | 'reconnecting' | 'offline';
 export type FeedFreshness = 'no-data' | 'fresh' | 'stale';
 export type FeedDataType = 'realtime' | 'delayed' | 'bar-close' | 'unknown';
+export type MarketSession = 'open' | 'closed' | 'unknown';
 export type FeedTone = 'is-success' | 'is-warning' | 'is-danger' | 'is-info' | '';
 
 export interface FeedInput {
@@ -21,6 +22,14 @@ export interface FeedInput {
   officialApi: boolean | null;
   /** An update older than this counts as stale. */
   staleAfterMs?: number;
+  /** The provider's own time of the latest quote (ms); null or absent when it did not say. */
+  quoteTimeAt?: number | null;
+  /** How far behind the market the provider says the quote is; null or absent when unknown. */
+  delaySeconds?: number | null;
+  /** The market session of the latest tick; absent or `unknown` when nobody can say. */
+  marketState?: MarketSession;
+  /** `provider` when the provider stated it; `regular_hours` when computed (holidays unknown). */
+  marketBasis?: string;
 }
 
 export interface FeedStatus {
@@ -32,6 +41,7 @@ export interface FeedStatus {
   connection: FeedConnection;
   freshness: FeedFreshness;
   dataType: FeedDataType;
+  session: MarketSession;
   /** One plain sentence per fact, for the details popover. */
   details: { label: string; text: string }[];
   /** Reconnecting by hand is meaningful. */
@@ -41,6 +51,12 @@ export interface FeedStatus {
 const formatUtcTime = (ms: number): string => new Date(ms).toISOString().slice(11, 16);
 
 export const DEFAULT_STALE_AFTER_MS = 5 * 60_000;
+
+/** Minutes from a kind such as `delayed_15m`; null when the kind does not say. */
+export function delayMinutesOf(quoteKind: string): number | null {
+  const m = /^delayed[_-]?(\d{1,3})m?$/.exec(quoteKind.trim().toLowerCase());
+  return m ? Number(m[1]) : null;
+}
 
 export function dataTypeOf(quoteKind: string): FeedDataType {
   const kind = quoteKind.trim().toLowerCase();
@@ -65,6 +81,14 @@ const dataTypeText: Record<FeedDataType, string> = {
   unknown: 'The provider does not say whether quotes are real time or delayed.',
 };
 
+function sessionText(session: MarketSession, basis: string | undefined): string {
+  if (session === 'unknown') return 'Unknown. Neither the provider nor the exchange could be identified for this instrument.';
+  const state = session === 'open' ? 'Open' : 'Closed';
+  return basis === 'provider'
+    ? `${state}, as stated by the provider.`
+    : `${state} by the exchange's regular weekday hours. Holidays and early closes are not known.`;
+}
+
 function age(ms: number): string {
   const minutes = Math.round(ms / 60_000);
   if (minutes < 1) return 'under a minute ago';
@@ -73,14 +97,21 @@ function age(ms: number): string {
 }
 
 export function feedStatus(input: FeedInput, now: number): FeedStatus {
-  const dataType = dataTypeOf(input.quoteKind);
+  const stated = input.delaySeconds ?? null;
+  // A stated delay beats the declared kind: "real time" with a delay is not real time.
+  const delayMin = stated !== null && stated > 0 ? Math.round(stated / 60) : delayMinutesOf(input.quoteKind);
+  const dataType: FeedDataType = stated !== null && stated > 0 ? 'delayed' : dataTypeOf(input.quoteKind);
+  const session: MarketSession = input.marketState ?? 'unknown';
   const staleAfter = input.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
   const freshness: FeedFreshness = input.lastUpdateAt === null
     ? 'no-data'
     : now - input.lastUpdateAt > staleAfter ? 'stale' : 'fresh';
   const last = input.lastUpdateAt === null ? '' : formatUtcTime(input.lastUpdateAt) + ' UTC';
 
-  const base = { connection: input.connection, freshness, dataType, pulse: false, canReconnect: false };
+  const quoteAt = input.quoteTimeAt ?? null;
+  const quoteText = quoteAt === null ? '' : formatUtcTime(quoteAt) + ' UTC';
+
+  const base = { connection: input.connection, freshness, dataType, session, pulse: false, canReconnect: false };
 
   if (input.research) {
     return { ...base, connection: 'none', headline: 'Prices from history', tone: 'is-info',
@@ -95,9 +126,11 @@ export function feedStatus(input: FeedInput, now: number): FeedStatus {
     { label: 'Connection', text: connectionText[input.connection] },
     { label: 'Freshness', text: freshness === 'no-data'
         ? 'No price update has arrived yet.'
-        : `Last update ${last} (${age(now - input.lastUpdateAt!)}).` },
-    { label: 'Data type', text: dataTypeText[dataType] },
-    { label: 'Market session', text: 'Unknown. The provider does not report whether the market is open.' },
+        : `Last update received ${last} (${age(now - input.lastUpdateAt!)}).`
+          + (quoteAt === null ? ' The provider did not state the quote\'s own time.' : ` The quote itself is from ${quoteText}.`) },
+    { label: 'Data type', text: dataType === 'delayed' && delayMin !== null
+        ? `The quotes are delayed by about ${delayMin} min.` : dataTypeText[dataType] },
+    { label: 'Market session', text: sessionText(session, input.marketBasis) },
     { label: 'Provider', text: input.providerLabel
         + (input.officialApi === null ? '' : input.officialApi ? ' (official API)' : ' (unofficial API)') },
   ];
@@ -110,8 +143,10 @@ export function feedStatus(input: FeedInput, now: number): FeedStatus {
 
   // Connected from here on.
   if (freshness === 'no-data') return status('Waiting for the first price', 'is-warning');
+  // A closed market explains old prices, so it comes before "stale".
+  if (session === 'closed') return status(`Market closed · last ${quoteAt === null ? last : quoteText}`, 'is-info');
   if (freshness === 'stale') return status(`No new prices since ${last}`, 'is-warning', { canReconnect: true });
+  if (dataType === 'delayed') return status(delayMin === null ? 'Delayed prices' : `Delayed ${delayMin} min`, 'is-info');
   if (dataType === 'realtime') return status('Live prices', 'is-success', { pulse: true });
-  if (dataType === 'delayed') return status('Delayed prices', 'is-info');
-  return status(`Last update ${last}`, 'is-info');
+  return status(quoteAt === null ? `Last update ${last}` : `Last quote ${quoteText}`, 'is-info');
 }
