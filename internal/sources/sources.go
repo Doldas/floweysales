@@ -28,6 +28,10 @@ const (
 
 const maxExcerpt = 2000
 
+// maxReadExcerpt bounds the page text kept for the audit. It is the text the
+// model was given, so a figure in it can be checked, but it stays out of events.
+const maxReadExcerpt = 16000
+
 // Source is one thing a tool returned that an answer may cite.
 type Source struct {
 	ID          string `json:"id"` // S1, S2, ...
@@ -84,8 +88,75 @@ func (r *Registry) Register(tool, callID, argsJSON, result string) (string, []So
 		return r.registerSearch(callID, argsJSON, result)
 	case "get_sec_section":
 		return r.registerSection(callID, result)
+	case "read_source":
+		return r.registerRead(argsJSON, result)
 	}
 	return result, nil
+}
+
+// ReadTarget resolves the source_id of a read_source call to the URL of a
+// search hit from this run. The model never supplies the address itself, so
+// it cannot open a page no search returned.
+func (r *Registry) ReadTarget(argsJSON string) (Source, error) {
+	var args struct {
+		SourceID string `json:"source_id"`
+	}
+	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil || args.SourceID == "" {
+		return Source{}, fmt.Errorf("source_id is required, for example S3")
+	}
+	src, ok := r.Get(strings.ToUpper(strings.TrimSpace(args.SourceID)))
+	switch {
+	case !ok:
+		return Source{}, fmt.Errorf("%s is not a source returned in this run; use a source_id from a search_web result", args.SourceID)
+	case src.Access == AccessRead:
+		return Source{}, fmt.Errorf("%s has already been read; its content came with the earlier tool result", src.ID)
+	case src.URL == "":
+		return Source{}, fmt.Errorf("%s has no page address to open", src.ID)
+	}
+	return src, nil
+}
+
+// registerRead upgrades a search hit to a source the agent read: the page text
+// the model received becomes the excerpt the audit checks figures against.
+func (r *Registry) registerRead(argsJSON, result string) (string, []Source) {
+	src, err := r.ReadTarget(argsJSON)
+	if err != nil {
+		return result, nil
+	}
+	var page struct {
+		Title       string `json:"title"`
+		Text        string `json:"text"`
+		RetrievedAt string `json:"retrieved_at"`
+	}
+	if json.Unmarshal([]byte(result), &page) != nil || strings.TrimSpace(page.Text) == "" {
+		return result, nil
+	}
+	i := r.byID[src.ID]
+	r.list[i].Access = AccessRead
+	r.list[i].RetrievedAt = page.RetrievedAt
+	if page.Title != "" {
+		r.list[i].Title = page.Title
+	}
+	text := page.Text
+	if len(text) > maxReadExcerpt {
+		text = text[:maxReadExcerpt]
+	}
+	r.list[i].Excerpt = text
+	shown := r.list[i]
+	if len(shown.Excerpt) > maxExcerpt {
+		shown.Excerpt = shown.Excerpt[:maxExcerpt]
+	}
+	var doc map[string]json.RawMessage
+	if json.Unmarshal([]byte(result), &doc) != nil {
+		return result, []Source{shown}
+	}
+	id, _ := json.Marshal(src.ID)
+	doc["source_id"] = id
+	out, err := json.Marshal(doc)
+	if err != nil {
+		return result, []Source{shown}
+	}
+	return string(out), []Source{shown}
 }
 
 func (r *Registry) registerSearch(callID, argsJSON, result string) (string, []Source) {

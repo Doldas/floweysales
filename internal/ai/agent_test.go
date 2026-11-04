@@ -390,3 +390,65 @@ func TestValidEvidenceMode(t *testing.T) {
 		t.Error("unknown modes must be rejected")
 	}
 }
+
+func readCall(id, sourceID string) string {
+	args, _ := json.Marshal(map[string]string{"source_id": sourceID})
+	a, _ := json.Marshal(string(args))
+	return `{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"` + id + `","type":"function","function":{"name":"read_source","arguments":` + string(a) + `}}]},"finish_reason":"tool_calls"}]}`
+}
+
+// runReading scripts a search followed by the given rounds and records what
+// the executor was asked to run and what the final sources event said.
+func runReading(t *testing.T, rounds ...string) (asked []string, summary Event) {
+	t.Helper()
+	srv, _ := scriptedOpenAI(t, rounds...)
+	err := Run(context.Background(), NewClient(srv.URL, "", "test"), fakeDS{}, []Message{{Role: "user", Content: "x"}},
+		AgentOptions{Execute: func(_ context.Context, name, args string) (string, error) {
+			asked = append(asked, name+" "+args)
+			if name == "read_source" {
+				return `{"url":"https://news.example/acme","title":"Acme Q3 results","text":"Acme reported revenue of 4,300 million.","retrieved_at":"2026-11-04T09:00:00Z"}`, nil
+			}
+			return acmeSearch, nil
+		}}, func(e Event) {
+			if e.Type == "sources" {
+				summary = e
+			}
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return asked, summary
+}
+
+func TestReadSourceOpensASearchHitAndTheAuditChecksThePage(t *testing.T) {
+	asked, summary := runReading(t, searchCall("c1"), readCall("c2", "S1"),
+		answerChunk("Acme reported revenue of 4,300 million [S1]."))
+	if len(asked) != 2 || asked[1] != `read_source {"url":"https://news.example/acme"}` {
+		t.Fatalf("the address must come from the registry, not the model: %v", asked)
+	}
+	if len(summary.Sources) != 1 || summary.Sources[0].Access != "read" || summary.Sources[0].Title != "Acme Q3 results" {
+		t.Fatalf("the hit should now count as read: %+v", summary.Sources)
+	}
+	if len(summary.Audit) != 0 {
+		t.Fatalf("a figure on the page it read should pass the check: %+v", summary.Audit)
+	}
+}
+
+func TestReadSourceKeepsTheSnippetFigureHonest(t *testing.T) {
+	// The snippet said 4,200; the page says 4,300. Once read, the page decides.
+	_, summary := runReading(t, searchCall("c1"), readCall("c2", "S1"),
+		answerChunk("Acme reported revenue of 4,200 million [S1]."))
+	if len(summary.Audit) != 1 || summary.Audit[0].Kind != "figure_mismatch" {
+		t.Fatalf("audit: %+v", summary.Audit)
+	}
+}
+
+func TestReadSourceRefusesWhatNoSearchReturned(t *testing.T) {
+	asked, summary := runReading(t, searchCall("c1"), readCall("c2", "S9"), answerChunk("Nothing to add."))
+	if len(asked) != 1 {
+		t.Fatalf("an unknown source id must never reach the fetcher: %v", asked)
+	}
+	if len(summary.Sources) != 1 || summary.Sources[0].Access != "listed" {
+		t.Fatalf("sources: %+v", summary.Sources)
+	}
+}

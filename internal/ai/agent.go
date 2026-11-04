@@ -95,6 +95,7 @@ const DefaultSystemPrompt = `You are FloweySales Analyst, a financial research a
 
 You have tools that query the FloweySales backend for real market data:
 - search_web: source-backed current web search; cite real URLs and published dates, and distinguish search snippets from primary filings
+- read_source: open one search result of this run by its source_id (for example S3) and read the page; only then is it more than a snippet
 - search_symbols: find tickers
 - get_price_history: OHLC history + stop-loss trajectory
 - get_technical_analysis: EMA/RSI/MACD/ATR/Bollinger/volatility
@@ -115,7 +116,7 @@ Rules:
 - State clearly when required capabilities or financial data are unavailable. Never fabricate SEC filings, financial ratios, tools, or investment recommendations.
 - For multi-step requests, track the requested deliverables and make clear which are finished, missing or estimated.
 - Be clear and concise; cite the date/range/provider used.
-- Tool results from search_web and get_sec_section carry a source_id such as S3. When a sentence states a figure or fact taken from one, end it with that marker, for example [S3]; never write a marker or URL a tool did not return. A search result you did not open is only a snippet: say so instead of presenting it as the page's content.
+- Tool results from search_web and get_sec_section carry a source_id such as S3. When a sentence states a figure or fact taken from one, end it with that marker, for example [S3]; never write a marker or URL a tool did not return. A search result you did not open is only a snippet: open it with read_source before relying on it, or say it is only a snippet instead of presenting it as the page's content.
 - If a tool returns no data, say so and suggest an alternative provider or symbol.
 - If the user explicitly mentions a ticker/symbol in their question that differs from the UI context, ALWAYS use the symbol from the user's question. The UI context is only a fallback when the user doesn't specify a symbol.`
 
@@ -351,16 +352,19 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 
 			var result string
 			var err error
+			callArgs := tc.Function.Arguments
 			if bad, isBad := badArgs[tc.ID]; isBad {
 				err = fmt.Errorf("the arguments of this call were not valid JSON (%s). Send the call again with one complete, valid JSON object", clip(bad, 160))
 			} else if granted != nil && !granted[tc.Function.Name] {
 				err = fmt.Errorf("tool %s is not granted to this agent", tc.Function.Name)
 			} else if perr := ValidateToolArgs(tc.Function.Name, tc.Function.Arguments); perr != nil {
 				err = perr
+			} else if callArgs, err = readSourceArgs(registry, tc.Function.Name, callArgs); err != nil {
+				// A read_source call names a search hit; the address comes from the registry.
 			} else if opts.Execute != nil {
-				result, err = opts.Execute(ctx, tc.Function.Name, tc.Function.Arguments)
+				result, err = opts.Execute(ctx, tc.Function.Name, callArgs)
 			} else {
-				result, err = Execute(ctx, src, tc.Function.Name, tc.Function.Arguments)
+				result, err = Execute(ctx, src, tc.Function.Name, callArgs)
 			}
 			ev := Event{Type: "tool_result", Name: tc.Function.Name, CallID: callID, Seq: toolCalls}
 			if err != nil {
@@ -620,4 +624,19 @@ func evidenceFix(found []sources.Finding) string {
 		fmt.Fprintf(&b, "- %s: %s (\"%s\")\n", f.Kind, f.Detail, f.Sentence)
 	}
 	return b.String()
+}
+
+// readSourceArgs turns a read_source call into the address to fetch. The model
+// names a source_id; the URL comes from the run's registry, so a page that no
+// search returned cannot be opened. Other tools keep their arguments.
+func readSourceArgs(r *sources.Registry, tool, args string) (string, error) {
+	if tool != "read_source" {
+		return args, nil
+	}
+	src, err := r.ReadTarget(args)
+	if err != nil {
+		return "", err
+	}
+	out, err := json.Marshal(map[string]string{"url": src.URL})
+	return string(out), err
 }

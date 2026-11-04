@@ -104,3 +104,36 @@ func TestInjectedTextInAPageChangesNothing(t *testing.T) {
 		t.Fatal("the excerpt is kept as data")
 	}
 }
+
+func TestReadTargetOnlyResolvesUnreadSearchHits(t *testing.T) {
+	r := NewRegistry()
+	r.Register("search_web", "c1", `{"query":"q"}`, `{"results":[{"title":"A","url":"https://a.example/x","snippet":"s"}]}`)
+	r.Register("get_sec_section", "c2", `{}`, `{"form":"10-K","item":"1A","accession":"0001","document_url":"https://www.sec.gov/d","excerpt":"text"}`)
+	if s, err := r.ReadTarget(`{"source_id":"s1"}`); err != nil || s.URL != "https://a.example/x" {
+		t.Fatalf("S1: %+v %v", s, err)
+	}
+	for _, args := range []string{`{}`, `{"source_id":"S7"}`, `{"source_id":"S2"}`, `not json`} {
+		if _, err := r.ReadTarget(args); err == nil {
+			t.Errorf("%s should be refused", args)
+		}
+	}
+}
+
+func TestRegisterReadKeepsTheIDAndStoresThePageText(t *testing.T) {
+	r := NewRegistry()
+	r.Register("search_web", "c1", `{"query":"q"}`, `{"results":[{"title":"A","url":"https://a.example/x","snippet":"s"}]}`)
+	long := strings.Repeat("word ", 1000)
+	out, added := r.Register("read_source", "c2", `{"source_id":"S1"}`, `{"url":"https://a.example/x","title":"Page A","text":"`+long+`","retrieved_at":"2026-11-04T09:00:00Z"}`)
+	if len(added) != 1 || added[0].ID != "S1" || added[0].Access != AccessRead || len(added[0].Excerpt) > maxExcerpt {
+		t.Fatalf("added: %+v", added)
+	}
+	if !strings.Contains(out, `"source_id":"S1"`) || len(r.All()) != 1 {
+		t.Fatalf("out %s, sources %d", out, len(r.All()))
+	}
+	if got, _ := r.Get("S1"); len(got.Excerpt) != len(long) || got.Title != "Page A" {
+		t.Fatalf("the audit needs the text the model got: %d %q", len(got.Excerpt), got.Title)
+	}
+	if _, err := r.ReadTarget(`{"source_id":"S1"}`); err == nil {
+		t.Error("a page already read is not opened twice")
+	}
+}
