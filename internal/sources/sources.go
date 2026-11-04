@@ -5,11 +5,13 @@
 package sources
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"floweysales/internal/grounding"
 )
@@ -56,6 +58,38 @@ type Registry struct {
 }
 
 func NewRegistry() *Registry { return &Registry{byID: map[string]int{}} }
+
+// RegistryFrom rebuilds a registry from saved sources, for a task run that
+// resumes: the ids the earlier rounds handed out (S1, S2, ...) keep their
+// meaning and new sources continue the numbering. Entries whose ids are not
+// S1..Sn in order are dropped with everything after them.
+func RegistryFrom(saved []Source) *Registry {
+	r := NewRegistry()
+	for i, s := range saved {
+		if s.ID != fmt.Sprintf("S%d", i+1) {
+			break
+		}
+		r.byID[s.ID] = len(r.list)
+		r.list = append(r.list, s)
+	}
+	return r
+}
+
+// Compact returns the sources with each excerpt cut to maxExcerpt bytes, at
+// most max sources, for a record that only shows what was cited.
+func Compact(list []Source, max, maxExcerpt int) []Source {
+	if len(list) > max {
+		list = list[:max]
+	}
+	out := make([]Source, len(list))
+	for i, s := range list {
+		if len(s.Excerpt) > maxExcerpt {
+			s.Excerpt = strings.ToValidUTF8(s.Excerpt[:maxExcerpt], "")
+		}
+		out[i] = s
+	}
+	return out
+}
 
 // All returns the sources in registration order.
 func (r *Registry) All() []Source { return append([]Source(nil), r.list...) }
@@ -230,14 +264,84 @@ const (
 	SnippetOnly = "snippet_only" // cites a search hit the agent never read
 	FigureNotIn = "figure_mismatch"
 	Uncited     = "uncited"
-	NotPrimary  = "not_primary"    // a secondary source cited where only primary filings count
-	QuoteNotIn  = "quote_mismatch" // a quoted passage that is not in the cited text
+	NotPrimary  = "not_primary"     // a secondary source cited where only primary filings count
+	QuoteNotIn  = "quote_mismatch"  // a quoted passage that is not in the cited text
+	Excluded    = "excluded_source" // a source of a type the user's settings do not accept
+	Stale       = "stale"           // a source older than the recency limit, or with no date to check
+	Unreachable = "unreachable"     // a cited link that no longer resolves
 )
+
+// ValidClass reports whether class is a source type a setting may name.
+func ValidClass(class string) bool {
+	return class == ClassPrimaryFiling || class == ClassWebPage
+}
 
 // Options tunes an audit.
 type Options struct {
-	// PrimaryOnly flags every citation of a source that is not a primary filing.
+	// PrimaryOnly flags every citation of a source that is not a primary filing,
+	// unless AllowClasses names the types that count instead.
 	PrimaryOnly bool
+	// AllowClasses, when set, are the only source types that count; a citation
+	// of any other type is flagged. DenyClasses are never accepted and win over
+	// AllowClasses.
+	AllowClasses []string
+	DenyClasses  []string
+	// MaxAgeDays, when above zero, flags a cited source published longer ago
+	// than that. A source with no publication date cannot be shown to be recent
+	// and is flagged too.
+	MaxAgeDays int
+	// Now is the clock of the recency check; zero means the current time.
+	Now time.Time
+}
+
+// classProblem says why a source type is not accepted, or "" when it is.
+func (o Options) classProblem(class string) (kind, detail string) {
+	for _, c := range o.DenyClasses {
+		if c == class {
+			return Excluded, "Sources of type " + class + " are excluded by the evidence settings."
+		}
+	}
+	if len(o.AllowClasses) > 0 {
+		for _, c := range o.AllowClasses {
+			if c == class {
+				return "", ""
+			}
+		}
+		return Excluded, "Sources of type " + class + " are not among the types the evidence settings accept (" + strings.Join(o.AllowClasses, ", ") + ")."
+	}
+	if o.PrimaryOnly && class != ClassPrimaryFiling {
+		return NotPrimary, "is not a primary filing, and this mode accepts primary filings only."
+	}
+	return "", ""
+}
+
+// ageProblem says why a source breaks the recency limit, or "" when it does not.
+func (o Options) ageProblem(src Source) string {
+	if o.MaxAgeDays <= 0 {
+		return ""
+	}
+	published, ok := parseDate(src.PublishedAt)
+	if !ok {
+		return fmt.Sprintf("has no publication date, so it cannot be shown to be within the last %d days.", o.MaxAgeDays)
+	}
+	now := o.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	if age := int(now.Sub(published).Hours() / 24); age > o.MaxAgeDays {
+		return fmt.Sprintf("was published %s, %d days ago; the limit is %d days.", published.UTC().Format("2006-01-02"), age, o.MaxAgeDays)
+	}
+	return ""
+}
+
+func parseDate(raw string) (time.Time, bool) {
+	raw = strings.TrimSpace(raw)
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02"} {
+		if t, err := time.Parse(layout, raw); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
 }
 
 // Finding is one problem the audit found, tied to the sentence it is in.
@@ -284,10 +388,7 @@ func AuditWith(answer string, r *Registry, opts Options) []Finding {
 		if text == "" {
 			continue
 		}
-		shown := text
-		if len(shown) > 240 {
-			shown = shown[:240] + "…"
-		}
+		shown := shortSentence(text)
 		cited := map[string]bool{}
 		var excerpts []string
 		var listedOnly = true
@@ -303,8 +404,14 @@ func AuditWith(answer string, r *Registry, opts Options) []Finding {
 				continue
 			}
 			excerpts = append(excerpts, src.Excerpt)
-			if opts.PrimaryOnly && src.Class != ClassPrimaryFiling {
-				out = append(out, Finding{Kind: NotPrimary, Sentence: shown, Source: id, Detail: id + " is not a primary filing, and this mode accepts primary filings only."})
+			if kind, detail := opts.classProblem(src.Class); kind != "" {
+				if kind == NotPrimary {
+					detail = id + " " + detail
+				}
+				out = append(out, Finding{Kind: kind, Sentence: shown, Source: id, Detail: detail})
+			}
+			if detail := opts.ageProblem(src); detail != "" {
+				out = append(out, Finding{Kind: Stale, Sentence: shown, Source: id, Detail: id + " " + detail})
 			}
 			if src.Access == AccessRead {
 				listedOnly = false
@@ -342,6 +449,123 @@ func AuditWith(answer string, r *Registry, opts Options) []Finding {
 		}
 	}
 	return out
+}
+
+// LinkChecker reports an error when a cited address does not resolve. The
+// caller supplies it so that the address checks of the server apply and tests
+// need no network.
+type LinkChecker func(ctx context.Context, rawURL string) error
+
+const (
+	// MaxLinkChecks bounds how many distinct addresses one run checks; cited
+	// links beyond it are left unchecked, not flagged.
+	MaxLinkChecks    = 8
+	linkCheckTimeout = 8 * time.Second
+)
+
+// LinkCache remembers what the link check found, so a correction round does
+// not check the same address again, and counts the checks made.
+type LinkCache struct {
+	result  map[string]error
+	checked int
+}
+
+// Findings checks the addresses of the sources the answer cites by marker and
+// the agent never opened (an opened page was fetched, so it resolved). Each
+// check is bounded by a timeout, and the run by MaxLinkChecks addresses.
+func (c *LinkCache) Findings(ctx context.Context, answer string, r *Registry, check LinkChecker) []Finding {
+	if check == nil {
+		return nil
+	}
+	if c.result == nil {
+		c.result = map[string]error{}
+	}
+	var out []Finding
+	for _, m := range splitSentences(answer) {
+		text := strings.TrimSpace(m)
+		seen := map[string]bool{}
+		for _, match := range citation.FindAllStringSubmatch(text, -1) {
+			id := "S" + match[1]
+			src, ok := r.Get(id)
+			if seen[id] || !ok || src.Access == AccessRead || src.URL == "" {
+				continue
+			}
+			seen[id] = true
+			err, known := c.result[src.URL]
+			if !known {
+				if ctx.Err() != nil || c.checked >= MaxLinkChecks {
+					continue
+				}
+				c.checked++
+				cctx, cancel := context.WithTimeout(ctx, linkCheckTimeout)
+				err = check(cctx, src.URL)
+				cancel()
+				if ctx.Err() != nil {
+					continue // the run was cancelled; that says nothing about the link
+				}
+				c.result[src.URL] = err
+			}
+			if err != nil {
+				msg := err.Error()
+				if len(msg) > 160 {
+					msg = msg[:160]
+				}
+				out = append(out, Finding{Kind: Unreachable, Sentence: shortSentence(text), Source: id, Detail: id + " (" + src.URL + ") did not resolve: " + msg})
+			}
+		}
+	}
+	return out
+}
+
+// shortSentence is how a finding shows its sentence.
+func shortSentence(text string) string {
+	if len(text) > 240 {
+		return text[:240] + "…"
+	}
+	return text
+}
+
+// InsufficientEvidence is the answer when every sentence of a draft failed.
+const InsufficientEvidence = "Insufficient verifiable evidence: every statement in the draft failed the citation check, so none is shown."
+
+// Block removes the sentences the findings are about and returns what is left
+// with a line saying what was removed, and the findings that led to it. The
+// removed text is not repeated. When nothing is left the answer says that the
+// evidence was insufficient.
+func Block(answer string, found []Finding) (string, []Finding) {
+	if len(found) == 0 {
+		return answer, nil
+	}
+	flagged := map[string]bool{}
+	for _, f := range found {
+		flagged[f.Sentence] = true
+	}
+	var kept strings.Builder
+	removed := 0
+	kinds := map[string]bool{}
+	var order []string
+	for _, m := range splitSentences(answer) {
+		text := strings.TrimSpace(m)
+		if text != "" && flagged[shortSentence(text)] {
+			removed++
+			continue
+		}
+		kept.WriteString(m)
+	}
+	for _, f := range found {
+		if !kinds[f.Kind] {
+			kinds[f.Kind] = true
+			order = append(order, f.Kind)
+		}
+	}
+	if removed == 0 {
+		return answer, nil
+	}
+	body := strings.TrimSpace(kept.String())
+	if body == "" {
+		return InsufficientEvidence + " Checks that failed: " + strings.Join(order, ", ") + ".", found
+	}
+	return body + fmt.Sprintf("\n\nRemoved %d statement(s) that failed the citation check (%s). Sources lists the findings.", removed, strings.Join(order, ", ")), found
 }
 
 func normalizeURL(raw string) string {
