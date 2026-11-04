@@ -25,7 +25,7 @@ import { uploadProblem, usedPercent } from './saved-transactions';
         @for (f of store.files(); track f.id) {
           <li class="d-flex align-items-center gap-2 py-1">
             <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
-            <span class="me-auto">{{ f.name }} <small class="text-muted">{{ size(f.size_bytes) }} · saved {{ f.created_at | date: 'yyyy-MM-dd' }}</small></span>
+            <span class="me-auto">{{ f.name }} <small class="text-muted">{{ size(f.size_bytes) }} · saved {{ f.created_at | date: 'yyyy-MM-dd' }} UTC</small></span>
             <button type="button" class="btn btn-sm btn-outline-danger" [disabled]="busy()" (click)="remove(f.id, f.name)" [attr.aria-label]="'Delete ' + f.name">Delete</button>
           </li>
         }

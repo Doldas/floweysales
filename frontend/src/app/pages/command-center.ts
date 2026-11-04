@@ -14,6 +14,7 @@ import { duration, everyLabel, greeting, runLabel, runTone, timeAgo } from '../u
 import { MarketService, type TrackedAsset } from '../services';
 import type { TodayBriefing } from '../models';
 import { REGIME_LABELS, alertName, hasAnything, regimeIcon, signedChange, todayPrompt } from '../components/today-view';
+import { formatUtcLongDay } from '../ui/datetime';
 
 interface TrackerStatus { symbol: string; provider: string; has_tick: boolean; age_seconds: number | null }
 interface WorkspaceFile { path: string; content_type: string; size: number }
@@ -42,7 +43,7 @@ export class CommandCenterPage {
 
   readonly templates = FLOW_TEMPLATES.filter(t => !('adminOnly' in t && t.adminOnly) || this.access.isAdmin());
   readonly greeting = greeting();
-  readonly today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  readonly today = formatUtcLongDay(Date.now());
   readonly name = computed(() => {
     const local = this.auth.user()?.email?.split('@')[0] ?? '';
     return local ? local.charAt(0).toUpperCase() + local.slice(1).split(/[._-]/)[0] : '';

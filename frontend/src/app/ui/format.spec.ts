@@ -2,7 +2,7 @@
 //   node --test src/app/ui/format.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { duration, everyLabel, formatMoney, runLabel, runTone, timeAgo } from './format.ts';
+import { duration, greeting, everyLabel, formatMoney, runLabel, runTone, timeAgo } from './format.ts';
 
 const NOW = Date.UTC(2026, 9, 30, 12, 0, 0);
 
@@ -43,11 +43,15 @@ test('run statuses map to labels and tones', () => {
 });
 
 test('money is whole units with a currency when the code is usable', () => {
-  assert.equal(formatMoney(1234567.89, 'USD', 'en-US'), '$1,234,568');
-  assert.equal(formatMoney(-50, 'usd', 'en-US'), '-$50');
-  assert.equal(formatMoney(1500, '', 'en-US'), '1,500');
-  assert.equal(formatMoney(1500, 'EURO', 'en-US'), '1,500');
-  assert.equal(formatMoney(1500, 'ZZZ', 'en-US').includes('1,500'), true);
+  assert.equal(formatMoney(1234567.89, 'USD'), '$1,234,568');
+  assert.equal(formatMoney(-50, 'usd'), '-$50');
+  assert.equal(formatMoney(1500, ''), '1,500');
+  assert.equal(formatMoney(1500, 'EURO'), '1,500');
+  assert.equal(formatMoney(1500, 'ZZZ').includes('1,500'), true);
   assert.equal(formatMoney(NaN, 'USD'), '—');
   assert.equal(formatMoney(undefined), '—');
+});
+
+test('greeting no longer depends on the machine clock', () => {
+  assert.equal(greeting(), 'Welcome back');
 });

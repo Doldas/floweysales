@@ -40,7 +40,7 @@ So a chart's axis and its own tooltip can disagree today. The backend already wo
 
 Commits so far come from one human email address and Dependabot, so no other contributor needs to agree to the license.
 
-### WP2: UTC and en-US formatting (M, `fix/utc-en-us-formatting`)
+### WP2: UTC and en-US formatting (M, `fix/utc-en-us-formatting`) — implemented in the #219 PR
 
 **One place to format, in `frontend/src/app/ui/format.ts`:**
 

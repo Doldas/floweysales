@@ -29,6 +29,7 @@ import zoomPlugin from 'chartjs-plugin-zoom';
 
 import { ThemeService } from '../theme.service';
 import { HistorySeries, TradingRecord } from '../models';
+import { formatNumber, formatUtcDateTime, formatUtcMonthDay, formatUtcTime } from '../ui/datetime';
 import {
   bollinger,
   ema,
@@ -234,15 +235,15 @@ export class TradingChartComponent implements AfterViewInit {
     const labelOf = (t: number, prevYear: number): string => {
       const d = new Date(t * 1000);
       if (intraday) {
-        return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+        return formatUtcTime(d);
       }
       if (sparse) {
         // Long ranges: label only year transitions so the axis reads 2023,
         // 2024, ... instead of repeating month names across the whole span.
-        const year = d.getFullYear();
+        const year = d.getUTCFullYear();
         return year !== prevYear ? String(year) : '';
       }
-      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      return formatUtcMonthDay(d);
     };
 
     // EMAs are computed over the full close series (accuracy), then the
@@ -268,7 +269,7 @@ export class TradingChartComponent implements AfterViewInit {
     const hasStops = Array.isArray(stops) && stops.length === points.length;
 
     // Force the first point to carry a year label so the axis is anchored.
-    let prevYear = new Date(points[0].t * 1000).getFullYear() - 1;
+    let prevYear = new Date(points[0].t * 1000).getUTCFullYear() - 1;
 
     for (let i = 0; i < points.length; i++) {
       const p = points[i];
@@ -278,7 +279,7 @@ export class TradingChartComponent implements AfterViewInit {
       lowest = Math.min(lowest, p.l || p.c);
 
       fullLabels.push(labelOf(p.t, prevYear));
-      prevYear = new Date(p.t * 1000).getFullYear();
+      prevYear = new Date(p.t * 1000).getUTCFullYear();
       fullPrices.push(p.c);
       fullStops.push(hasStops && stops![i] > 0 ? stops![i] : null);
       fullFast.push(fast);
@@ -394,13 +395,13 @@ export class TradingChartComponent implements AfterViewInit {
   private xLabelFor(t: number, prevT?: number): string {
     const d = new Date(t * 1000);
     if (this.xLabelMode === 'intraday') {
-      return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      return formatUtcTime(d);
     }
     if (this.xLabelMode === 'sparse') {
-      const prevYear = prevT ? new Date(prevT * 1000).getFullYear() : -1;
-      return d.getFullYear() !== prevYear ? String(d.getFullYear()) : '';
+      const prevYear = prevT ? new Date(prevT * 1000).getUTCFullYear() : -1;
+      return d.getUTCFullYear() !== prevYear ? String(d.getUTCFullYear()) : '';
     }
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return formatUtcMonthDay(d);
   }
 
   clear(): void {
@@ -423,7 +424,7 @@ export class TradingChartComponent implements AfterViewInit {
   }
 
   private fmtPrice(v: number | null | undefined): string {
-    return v === undefined || v === null ? '' : v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return v === undefined || v === null ? '' : formatNumber(v, { maximumFractionDigits: 2 });
   }
 
   /** Recomputes every enabled study from the meta series and syncs panels. */
@@ -690,11 +691,7 @@ export class TradingChartComponent implements AfterViewInit {
               title: (items) => {
                 const m = this.meta[items[0]?.dataIndex ?? -1];
                 if (!m) return '';
-                const d = new Date(m.t * 1000);
-                return d.toLocaleString('en-GB', {
-                  timeZone: 'UTC', year: 'numeric', month: 'short', day: '2-digit',
-                  hour: '2-digit', minute: '2-digit', hour12: false,
-                }) + ' UTC';
+                return formatUtcDateTime(m.t * 1000);
               },
               label: (item) => `${item.dataset.label}: ${this.fmtPrice(item.parsed?.y)}`,
               afterBody: (items) => {
@@ -706,7 +703,7 @@ export class TradingChartComponent implements AfterViewInit {
                   lines.push(`Low ${this.fmtPrice(m.l)}   Close ${this.fmtPrice(m.c)}`);
                 }
                 if (m.v) {
-                  lines.push(`Volume ${Math.round(m.v).toLocaleString()}`);
+                  lines.push(`Volume ${formatNumber(Math.round(m.v))}`);
                 }
                 return lines;
               },

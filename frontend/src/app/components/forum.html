@@ -144,7 +144,7 @@
                   <span class="post-avatar" aria-hidden="true">{{ initials(post.author) }}</span>
                   <div class="post-meta">
                     <span class="post-author">{{ post.author || 'Anonymous' }}</span>
-                    <time [attr.datetime]="postMillis(post) ? (postMillis(post) | date: 'yyyy-MM-ddTHH:mm:ssZZZZZ') : null" [title]="postMillis(post) | date: 'medium'">· {{ timeAgo(postMillis(post)) }}</time>
+                    <time [attr.datetime]="postMillis(post) ? (postMillis(post) | date: 'yyyy-MM-ddTHH:mm:ssZZZZZ') : null" [title]="utc(postMillis(post))">· {{ timeAgo(postMillis(post)) }}</time>
                     @if (post.source === 'provider') { <span class="fs-status is-info no-dot" title="Posted on the data provider's own forum">Provider</span> }
                   </div>
                   @if (post.symbol && post.symbol !== topic()) {
