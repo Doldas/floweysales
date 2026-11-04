@@ -159,7 +159,7 @@ not forecasts or price targets and nothing here trades.
 A ranking nobody has tested is a guess, so the leaderboard can replay a
 strategy over the past. On **Markets → Leaderboard** choose *Backtest this
 strategy*, or call
-`GET /api/market/backtest?universe=…&strategy=…&top=10&rebalance=monthly|quarterly&cost_bps=10&years=3|5`
+`GET /api/market/backtest?universe=…&strategy=…&top=10&rebalance=monthly|quarterly&cost_bps=10&years=3|5|10` (or `from=YYYY-MM-DD&to=YYYY-MM-DD`, UTC; the response carries `from`, `to`, `data_start`, `data_end` and a `notice` when the data is shorter than asked)
 (or `symbols=` with up to 25 tickers; readable by `research.read`).
 
 **Method.** The first rebalance is the first trading day on or after the start

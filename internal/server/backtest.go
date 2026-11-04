@@ -35,6 +35,7 @@ type backtestRequest struct {
 	rebalance  int // trading days
 	costBps    float64
 	years      int
+	from, to   time.Time // custom UTC window; zero when years is used
 	provider   market.Provider
 	cacheKey   string
 	rebalLabel string
@@ -47,6 +48,13 @@ type backtestResponse struct {
 	Provider    string   `json:"provider"`
 	Symbols     []string `json:"symbols"`
 	GeneratedAt string   `json:"generated_at"`
+	// From and To are the dates asked for (UTC); DataStart and DataEnd are what the provider returned.
+	From      string `json:"from"`
+	To        string `json:"to,omitempty"`
+	DataStart string `json:"data_start,omitempty"`
+	DataEnd   string `json:"data_end,omitempty"`
+	// Notice says when the tested period is shorter than the one asked for.
+	Notice string `json:"notice,omitempty"`
 	backtest.Result
 }
 
@@ -116,10 +124,20 @@ func (e *Engine) parseBacktestRequest(r *http.Request) (backtestRequest, error) 
 	}
 	switch q.Get("years") {
 	case "", "3":
-	case "5":
-		req.years = 5
+	case "5", "10":
+		req.years, _ = strconv.Atoi(q.Get("years"))
 	default:
-		return req, badRequest{errors.New("years must be 3 or 5")}
+		return req, badRequest{errors.New("years must be 3, 5 or 10, or give from and to dates")}
+	}
+	if q.Get("from") != "" || q.Get("to") != "" {
+		if q.Get("from") == "" {
+			return req, badRequest{errors.New("give a from date when you give a to date")}
+		}
+		_, _, from, to, perr := strategyPeriod("", q.Get("from"), q.Get("to"), time.Now())
+		if perr != nil {
+			return req, badRequest{perr}
+		}
+		req.from, req.to, req.years = from, to, 0
 	}
 	req.provider = e.parseProvider(q.Get("provider"))
 	req.cacheKey = backtestKey(req)
@@ -131,7 +149,7 @@ func (e *Engine) parseBacktestRequest(r *http.Request) (backtestRequest, error) 
 func backtestKey(req backtestRequest) string {
 	sorted := append([]string(nil), req.symbols...)
 	sort.Strings(sorted)
-	return fmt.Sprintf("%s|%s|%s|%s|%d|%s|%g|%d", req.provider, strings.Join(sorted, ","), req.strategy.ID, req.benchmark, req.top, req.rebalLabel, req.costBps, req.years)
+	return fmt.Sprintf("%s|%s|%s|%s|%d|%s|%g|%d", req.provider, strings.Join(sorted, ","), req.strategy.ID, req.benchmark, req.top, req.rebalLabel, req.costBps, req.years) + "|" + req.from.Format(strategyDateLayout) + "|" + req.to.Format(strategyDateLayout)
 }
 
 // leaderboardScorer ranks the symbols exactly as the leaderboard does, from
@@ -212,7 +230,7 @@ func (e *Engine) backtestData(ctx context.Context, provider market.Provider, sym
 func (e *Engine) runBacktest(ctx context.Context, req backtestRequest) (backtestResponse, error) {
 	// The first year of bars is only warm-up, so a five-year test needs ten.
 	rng := market.Range5Y
-	if req.years == 5 {
+	if req.years >= 5 || req.years == 0 {
 		rng = market.Range10Y
 	}
 	series, fin, missing := e.backtestData(ctx, req.provider, req.symbols, rng)
@@ -223,10 +241,11 @@ func (e *Engine) runBacktest(ctx context.Context, req backtestRequest) (backtest
 	if s, err := e.flowHistory(ctx, req.benchmark, req.provider, rng); err == nil && len(s.Points) > 1 {
 		bench = &s
 	}
-	cfg := backtest.Config{
-		Start: time.Now().UTC().AddDate(-req.years, 0, 0), TopN: req.top,
-		RebalanceDays: req.rebalance, CostBps: req.costBps,
+	start, end := req.from, req.to
+	if req.years > 0 {
+		start = time.Now().UTC().AddDate(-req.years, 0, 0)
 	}
+	cfg := backtest.Config{Start: start, End: end, TopN: req.top, RebalanceDays: req.rebalance, CostBps: req.costBps}
 	result, err := backtest.Run(cfg, series, fin, bench, e.leaderboardScorer(req.strategy))
 	if err != nil {
 		return backtestResponse{}, badRequest{err}
@@ -239,6 +258,12 @@ func (e *Engine) runBacktest(ctx context.Context, req backtestRequest) (backtest
 	}
 	res := backtestResponse{Universe: req.universe, Strategy: req.strategy.ID, Provider: req.provider.String(),
 		Symbols: req.symbols, GeneratedAt: time.Now().UTC().Format(time.RFC3339), Result: result}
+	res.From, res.To = start.Format(strategyDateLayout), ""
+	if !end.IsZero() {
+		res.To = end.Format(strategyDateLayout)
+	}
+	res.DataStart, res.DataEnd = seriesDates(series)
+	res.Notice = backtestNotice(start, end, res.DataStart, res.DataEnd, result)
 	if bench != nil {
 		res.Benchmark = req.benchmark
 	}
@@ -313,4 +338,35 @@ func (e *Engine) registerBacktestRoutes() {
 		}
 		writeJSON(w, http.StatusOK, res)
 	})
+}
+
+// seriesDates returns the earliest and latest bar dates across the universe.
+func seriesDates(series map[string]market.HistorySeries) (first, last string) {
+	for _, s := range series {
+		lo, hi := barDates(s.Points)
+		if lo != "" && (first == "" || lo < first) {
+			first = lo
+		}
+		if hi > last {
+			last = hi
+		}
+	}
+	return first, last
+}
+
+// backtestNotice says so when the replay does not cover the dates asked for:
+// the data is shorter, or the first year of bars was needed as warm-up.
+func backtestNotice(start, end time.Time, dataStart, dataEnd string, r backtest.Result) string {
+	notice := strategyCoverageNotice(start, end, dataStart, dataEnd)
+	if len(r.Rebalances) == 0 || start.IsZero() {
+		return notice
+	}
+	if got := r.Rebalances[0].Date; got > start.AddDate(0, 0, 45).Format(strategyDateLayout) {
+		note := "The first rebalance is on " + got + ", after the " + start.Format(strategyDateLayout) + " start, because a year of prices is needed before picking."
+		if notice != "" {
+			return notice + " " + note
+		}
+		return note
+	}
+	return notice
 }

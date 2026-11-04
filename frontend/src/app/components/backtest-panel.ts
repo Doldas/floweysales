@@ -1,8 +1,10 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import type { Subscription } from 'rxjs';
 
 import { MarketService, describeHttpError } from '../services';
 import type { BacktestParams, BacktestResult } from '../models';
+import { periodError } from '../core/strategy-period';
 import { chartSummary, curvePath, metricTiles, warningText } from './backtest-view';
 
 const CHART_W = 640;
@@ -15,6 +17,7 @@ const CHART_H = 220;
  */
 @Component({
   selector: 'fs-backtest-panel',
+  imports: [FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 <section class="bt" aria-labelledby="bt-title">
@@ -31,9 +34,20 @@ const CHART_H = 220;
       <div class="fs-segmented" role="group" aria-label="Period">
         <button type="button" [attr.aria-pressed]="years() === 3" (click)="set('years', 3)">3Y</button>
         <button type="button" [attr.aria-pressed]="years() === 5" (click)="set('years', 5)">5Y</button>
+        <button type="button" [attr.aria-pressed]="years() === 10" (click)="set('years', 10)">10Y</button>
+        <button type="button" [attr.aria-pressed]="years() === 0" (click)="set('years', 0)">Custom</button>
       </div>
     </div>
   </div>
+
+  @if (years() === 0) {
+    <form class="bt-custom" (ngSubmit)="runCustom()" novalidate>
+      <label>From (UTC) <input type="date" class="form-control form-control-sm" name="from" [ngModel]="from()" (ngModelChange)="from.set($event)" min="1990-01-01" [max]="today"></label>
+      <label>To (UTC) <input type="date" class="form-control form-control-sm" name="to" [ngModel]="to()" (ngModelChange)="to.set($event)" [max]="today"></label>
+      <button type="submit" class="btn btn-sm btn-primary">Run</button>
+      @if (customError(); as msg) { <span class="text-danger small" role="alert">{{ msg }}</span> }
+    </form>
+  }
 
   @if (loading()) {
     <div class="progress rounded-0" style="height: 2px" role="progressbar" aria-label="Replaying the strategy"><div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div></div>
@@ -76,6 +90,8 @@ const CHART_H = 220;
       </figcaption>
     </figure>
 
+    @if (r.notice) { <p class="bt-note" role="note"><i class="bi bi-info-circle" aria-hidden="true"></i> {{ r.notice }}</p> }
+
     <div class="bt-warnings alert alert-warning" role="note">
       <strong>Read this before trusting the result</strong>
       <ul class="mb-0">
@@ -111,6 +127,7 @@ const CHART_H = 220;
 .bt-head { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
 .bt-title { font-size: 0.95rem; margin: 0; margin-right: auto; }
 .bt-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.bt-custom { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.6rem; padding: 0 1rem 0.5rem; label { font-size: 0.75rem; color: var(--fs-muted); display: grid; gap: 0.15rem; } }
 .bt-note { font-size: 0.75rem; color: var(--fs-muted); margin: 0; }
 .bt-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.6rem; }
 .bt-tiles .fs-kpi { padding: 0.7rem 0.85rem; .fs-kpi-value { font-size: 1.15rem; } }
@@ -144,6 +161,10 @@ export class BacktestPanelComponent {
   readonly top = signal<number>(10);
   readonly rebalance = signal<BacktestParams['rebalance']>('monthly');
   readonly years = signal<BacktestParams['years']>(5);
+  readonly from = signal('');
+  readonly to = signal('');
+  readonly customError = signal('');
+  readonly today = new Date().toISOString().slice(0, 10);
   readonly result = signal<BacktestResult | null>(null);
   readonly loading = signal(false);
   readonly error = signal('');
@@ -168,7 +189,15 @@ export class BacktestPanelComponent {
     if (key === 'top') this.top.set(value as number);
     else if (key === 'rebalance') this.rebalance.set(value as BacktestParams['rebalance']);
     else this.years.set(value as BacktestParams['years']);
+    this.customError.set('');
+    if (key === 'years' && value === 0) return; // wait for dates
     this.run();
+  }
+
+  runCustom(): void {
+    const msg = !this.from() ? 'Choose a start date.' : periodError(this.from(), this.to(), this.today);
+    this.customError.set(msg);
+    if (!msg) this.run();
   }
 
   run(): void {
@@ -178,6 +207,7 @@ export class BacktestPanelComponent {
     this.request = this.api.backtest({
       universe: this.universe(), strategy: this.strategy(), symbols: this.symbols(),
       top: this.top(), rebalance: this.rebalance(), years: this.years(),
+      ...(this.years() === 0 ? { from: this.from(), to: this.to() || undefined } : {}),
     }).subscribe({
       next: res => { this.result.set(res); this.loading.set(false); },
       error: err => { this.error.set(describeHttpError(err)); this.result.set(null); this.loading.set(false); },

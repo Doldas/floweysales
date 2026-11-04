@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,7 +84,8 @@ func TestBacktestValidationAndCache(t *testing.T) {
 	e := backtestEngine(t)
 	for _, query := range []string{
 		"symbols=UP,FLAT&top=0", "symbols=UP,FLAT&top=26", "symbols=UP,FLAT&top=3", "symbols=UP,FLAT&top=x",
-		"symbols=UP,FLAT&rebalance=weekly", "symbols=UP,FLAT&years=4", "symbols=UP,FLAT&cost_bps=-1",
+		"symbols=UP,FLAT&rebalance=weekly", "symbols=UP,FLAT&years=4", "symbols=UP,FLAT&years=1", "symbols=UP,FLAT&to=2024-01-01", "symbols=UP,FLAT&from=2024-02-30",
+		"symbols=UP,FLAT&from=2024-06-01&to=2024-01-01", "symbols=UP,FLAT&from=1980-01-01", "symbols=UP,FLAT&cost_bps=-1",
 		"symbols=UP,FLAT&strategy=yolo", "universe=mars",
 	} {
 		if code, _ := getBacktest(e, query); code != http.StatusBadRequest {
@@ -116,5 +118,34 @@ func TestLeaderboardUniversesNameABenchmark(t *testing.T) {
 		if u.Benchmark == "" {
 			t.Errorf("%s has no benchmark", u.ID)
 		}
+	}
+}
+
+func TestBacktestCustomPeriod(t *testing.T) {
+	e := backtestEngine(t)
+	now := time.Now().UTC()
+	from, to := now.AddDate(-3, 0, 0).Format("2006-01-02"), now.AddDate(0, -3, 0).Format("2006-01-02")
+	code, body := getBacktest(e, "symbols=UP,FLAT&top=1&benchmark=SPY&from="+from+"&to="+to)
+	if code != http.StatusOK {
+		t.Fatalf("status %d: %v", code, body)
+	}
+	if body["from"] != from || body["to"] != to {
+		t.Fatalf("period %v..%v, want %s..%s", body["from"], body["to"], from, to)
+	}
+	last := body["rebalances"].([]any)
+	if d := last[len(last)-1].(map[string]any)["date"].(string); d > to {
+		t.Fatalf("rebalanced on %s, after the end date %s", d, to)
+	}
+}
+
+func TestBacktestTenYearsSaysWhenDataIsShorter(t *testing.T) {
+	e := backtestEngine(t)
+	code, body := getBacktest(e, "symbols=UP,FLAT&top=1&benchmark=SPY&years=10")
+	if code != http.StatusOK {
+		t.Fatalf("status %d: %v", code, body)
+	}
+	notice, _ := body["notice"].(string)
+	if !strings.Contains(notice, "data starts") || body["data_start"] == "" {
+		t.Fatalf("a 10-year ask on 4 years of data needs a notice: %q", notice)
 	}
 }
