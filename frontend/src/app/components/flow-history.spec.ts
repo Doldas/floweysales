@@ -3,7 +3,7 @@
 // No extra test dependencies are required.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { UNDO_HISTORY_LIMIT, canCancelRun, canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history.ts';
+import { UNDO_HISTORY_LIMIT, byteSizeLabel, outputPreviewLabel, canCancelRun, canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history.ts';
 
 const runs = [
   { id: 1, trigger: 'manual', status: 'SUCCESS' },
@@ -131,4 +131,18 @@ test('executed node order skips flow markers and repeats', () => {
   assert.deepEqual(executedNodeOrder([
     { node: 'a', status: 'SUCCESS' }, { node: 'flow', status: 'RESUMED' }, { node: 'b', status: 'FAILED' }, { node: 'b', status: 'SUCCESS' },
   ]), ['a', 'b']);
+});
+
+test('byteSizeLabel scales units', () => {
+  assert.equal(byteSizeLabel(850), '850 B');
+  assert.equal(byteSizeLabel(4000), '3.9 KB');
+  assert.equal(byteSizeLabel(18883), '18.4 KB');
+  assert.equal(byteSizeLabel(1.5 * 1024 * 1024), '1.5 MB');
+});
+
+test('outputPreviewLabel only labels a cut output', () => {
+  assert.equal(outputPreviewLabel(4000, 18883), 'Showing the first 3.9 KB of 18.4 KB');
+  assert.equal(outputPreviewLabel(500, 500), '');
+  assert.equal(outputPreviewLabel(500, null), '');
+  assert.equal(outputPreviewLabel(500, undefined), '');
 });

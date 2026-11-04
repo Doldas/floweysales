@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="039-flow-run-step-outputs" author="floweysales" dbms="mysql">
+  <addColumn tableName="agent_flow_run_steps">
+   <column name="output_bytes" type="INT" remarks="Size of the step output before it was cut to a preview; null for steps recorded earlier"/>
+  </addColumn>
+  <createTable tableName="agent_flow_run_outputs">
+   <column name="step_id" type="BIGINT"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="run_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="bytes" type="INT"><constraints nullable="false"/></column>
+   <column name="truncated" type="BOOLEAN" defaultValueBoolean="false"><constraints nullable="false"/></column>
+   <column name="content" type="MEDIUMTEXT" remarks="Redacted full step output, kept only when it is longer than the preview"><constraints nullable="false"/></column>
+   <column name="created_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"/>
+  </createTable>
+  <createIndex tableName="agent_flow_run_outputs" indexName="idx_flow_run_outputs_run"><column name="run_id"/></createIndex>
+  <addForeignKeyConstraint baseTableName="agent_flow_run_outputs" baseColumnNames="step_id"
+   referencedTableName="agent_flow_run_steps" referencedColumnNames="id" constraintName="fk_flow_output_step" onDelete="CASCADE"/>
+  <rollback>
+   <dropTable tableName="agent_flow_run_outputs"/>
+   <dropColumn tableName="agent_flow_run_steps" columnName="output_bytes"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

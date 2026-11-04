@@ -11,7 +11,7 @@ import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 import { NotifyService } from '../core/notify.service';
 import { AuthState } from '../auth.service';
-import { canCancelRun, canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history';
+import { byteSizeLabel, canCancelRun, canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, outputPreviewLabel, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history';
 import { listOverviewFlows } from './flow-overview';
 import { semanticIssues } from './flow-semantics';
 import { nearestPort, portPoints, wireFromDrag, edgeKey, wirePath, type PortPoint } from './wire-drag';
@@ -26,7 +26,7 @@ interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string 
 interface FunctionDef { id:number; name:string; graph?:unknown }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow extends PublishState { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
-interface FlowRunStep {id:number;node:string;label:string;status:string;input?:string;output:string;error?:string;started_at?:string;created_at?:string;duration_ms?:number|null;attempts?:number|null;worker_attempt?:number|null;tool_calls?:ToolCall[]}
+interface FlowRunStep {id:number;node:string;label:string;status:string;input?:string;output:string;output_bytes?:number;output_truncated?:boolean;output_stored?:boolean;error?:string;started_at?:string;created_at?:string;duration_ms?:number|null;attempts?:number|null;worker_attempt?:number|null;tool_calls?:ToolCall[]}
 interface FlowRun { id:number; parent_run_id?:number|null; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null; failed_node?:string|null; flow_revision?:number|null; attempts?:number; max_attempts?:number; queued_at?:string|null }
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
@@ -592,7 +592,15 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
            @if(step.worker_attempt!=null&&step.worker_attempt>1){<p class="muted">Worker attempt {{step.worker_attempt}}</p>}
            @if(step.error){<p><strong>Error</strong></p><pre>{{step.error}}</pre>}
            @if(step.input){<p><strong>Input</strong></p><pre>{{step.input}}</pre>}
-           @if(step.output){<p><strong>Output</strong></p><pre>{{step.output}}</pre>}
+           @if(step.output){<p><strong>Output</strong></p><pre>{{fullOutputs()[step.id]??step.output}}</pre>
+            @if(step.output_truncated){
+             <p class="muted" role="status">{{fullOutputs()[step.id]!==undefined?'Showing the whole output ('+byteSize(fullOutputs()[step.id].length)+')':previewLabel(step)}}.@if(!step.output_stored&&fullOutputs()[step.id]===undefined){ The whole output was not kept for this step.}</p>
+             @if(step.output_stored){<span class="d-flex gap-2">
+              @if(fullOutputs()[step.id]===undefined){<button class="btn btn-sm btn-outline-secondary" [disabled]="loadingOutput()===step.id" (click)="showFullOutput(run.id,step)">{{loadingOutput()===step.id?'Loading…':'Show full output'}}</button>}
+              <button class="btn btn-sm btn-outline-secondary" [disabled]="loadingOutput()===step.id" (click)="downloadOutput(run.id,step)">Download</button>
+             </span>}
+            }
+           }
            @if(step.status==='SUCCESS'&&step.output&&step.output.length<4000){
             <button class="btn btn-sm btn-outline-secondary" (click)="previewReplay(run.id,step.node)">Replay preview from this node</button>
            }
@@ -1115,6 +1123,26 @@ export class FlowStudioComponent {
   readonly filteredRuns=()=>filterFlowRuns(this.runs(),this.historyStatusFilter(),this.historySearch());
  readonly traceRunId=signal(0);
  readonly traceSteps=signal<FlowRunStep[]>([]);
+ readonly fullOutputs=signal<Record<number,string>>({});
+ readonly loadingOutput=signal(0);
+ byteSize=byteSizeLabel;
+ previewLabel(step:FlowRunStep):string{return outputPreviewLabel(step.output.length,step.output_bytes)}
+ private async fetchFullOutput(runId:number,step:FlowRunStep):Promise<string|null>{
+  const known=this.fullOutputs()[step.id];if(known!==undefined)return known;
+  this.loadingOutput.set(step.id);
+  try{
+   const data=await this.request('/api/admin/flows/'+this.historyFlowId()+'/runs/'+runId+'/steps/'+step.id+'/output');
+   this.fullOutputs.update(m=>({...m,[step.id]:String(data.output??'')}));
+   return this.fullOutputs()[step.id];
+  }catch(e){this.message.set('Cannot load the full output: '+String(e));return null}
+  finally{this.loadingOutput.set(0)}
+ }
+ async showFullOutput(runId:number,step:FlowRunStep){await this.fetchFullOutput(runId,step)}
+ async downloadOutput(runId:number,step:FlowRunStep){
+  const text=await this.fetchFullOutput(runId,step);if(text===null)return;
+  const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));
+  const a=document.createElement('a');a.href=url;a.download='run-'+runId+'-'+step.node+'-output.txt';a.click();URL.revokeObjectURL(url);
+ }
  readonly executionGraph=signal<FlowGraph|null>(null);
  readonly executionSnapshotUnavailable=signal(false);
  readonly executionSelectedNode=signal('');
