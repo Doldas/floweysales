@@ -201,6 +201,7 @@ type Engine struct {
 	// insiderTrades replaces the SEC Form 4 reader in tests.
 	insiderTrades func(ctx context.Context, ticker string, lookbackDays, maxFilings int) ([]sec.InsiderTrade, error)
 	planLimits    adapterLimiter
+	toolLimits    adapterLimiter // metered agent tool calls of ordinary users
 	todayCache    todayCache
 	worldCache    worldCache
 }

@@ -130,10 +130,8 @@ func (e *Engine) registerTeamRoutes() {
 
 		maxSteps, maxCalls := e.agentLimits()
 		agent := ai.AgentOptions{MaxSteps: maxSteps, MaxToolCalls: min(maxCalls, teamMemberToolCall), AnswerAfterToolBudget: true}
-		if e.authService != nil && user.Role != identity.RoleSysAdmin {
-			// The same rule as chat: tools read shared engine data.
-			agent.DisableTools = true
-		}
+		// The same rule as chat: ordinary users get the scoped tool list.
+		e.scopeAgentTools(&agent, user, e.authService != nil)
 		runCtx := r.Context()
 		if e.authService != nil {
 			runCtx = withAgentUser(runCtx, user)
