@@ -1,4 +1,5 @@
 import { Injectable, signal } from '@angular/core';
+import { FeedConnection } from './core/feed-status';
 import { TradingRecord } from './models';
 
 /**
@@ -15,6 +16,10 @@ export class LiveSseService {
   readonly latestTick = signal<TradingRecord | null>(null);
   readonly connected = signal(false);
   readonly attempted = signal(false);
+  /** Whether the browser is opening, holding, retrying or has lost the stream. */
+  readonly state = signal<FeedConnection>('none');
+  /** When this browser last received a price update (ms). */
+  readonly lastUpdateAt = signal<number | null>(null);
 
   /** (Re)connects for the given symbol. Reopening the source is cheap. */
   connectFor(symbol: string,provider=''): void {
@@ -26,7 +31,9 @@ export class LiveSseService {
     this.close();
     this.currentConfigKey = key;
     this.latestTick.set(null);
+    this.lastUpdateAt.set(null);
     this.attempted.set(true);
+    this.state.set('connecting');
 
     const open = () => {
       if (this.currentConfigKey !== key) return;
@@ -36,7 +43,7 @@ export class LiveSseService {
       const es = new EventSource('/api/prices/stream?'+query.toString());
       this.source = es;
 
-      es.onopen = () => { this.retryDelay = 1000; this.connected.set(true); };
+      es.onopen = () => { this.retryDelay = 1000; this.connected.set(true); this.state.set('connected'); };
       es.onmessage = (ev) => {
         try {
           if(this.currentConfigKey!==key)return;
@@ -44,7 +51,9 @@ export class LiveSseService {
           // Explicit client-side guard even when older backends do not filter SSE.
           if(record.symbol!==symbol || (provider && record.provider && record.provider!==provider))return;
           this.latestTick.set(record);
+          this.lastUpdateAt.set(Date.now());
           this.connected.set(true);
+          this.state.set('connected');
         } catch (err) {
           console.error('Malformed SSE frame', err, ev.data);
         }
@@ -53,6 +62,8 @@ export class LiveSseService {
       // state through the signal so the UI can show "reconnecting".
       es.onerror = () => {
         this.connected.set(false);
+        // CONNECTING: the browser is retrying by itself. CLOSED: it gave up and we retry.
+        this.state.set(es.readyState === EventSource.CLOSED ? 'offline' : 'reconnecting');
         // After a non-recoverable failure the browser stops retrying; reopen ourselves.
         if (es.readyState === EventSource.CLOSED && this.source === es && this.currentConfigKey === key) {
           es.close();
@@ -76,6 +87,16 @@ export class LiveSseService {
       this.source = null;
     }
     this.connected.set(false);
+    this.state.set('none');
+  }
+
+  /** Drops the stream and opens a fresh one for the current instrument. */
+  reconnect(): void {
+    const key = this.currentConfigKey;
+    if (!key) return;
+    const [symbol, provider] = key.split('|');
+    this.currentConfigKey = null;
+    this.connectFor(symbol === '__all__' ? '' : symbol, provider);
   }
 
   /** A tick is newer if it changed the timestamp for the tracked symbol. */

@@ -12,6 +12,7 @@ import { PluginTools } from '../core/plugin-tools';
 import { tabIcon } from '../components/plugin-tools';
 import { ThemeService } from '../theme.service';
 import { AgentDockComponent } from './agent-dock';
+import { FeedStatusComponent } from './feed-status';
 import { CommandPaletteComponent, CommandPaletteService } from './command-palette';
 import { SymbolSearchComponent } from './symbol-search';
 import { ToastHostComponent } from './toast-host';
@@ -33,7 +34,7 @@ interface NavSection {
 @Component({
   selector: 'fs-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, DecimalPipe, AgentDockComponent, CommandPaletteComponent, SymbolSearchComponent, ToastHostComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, DecimalPipe, AgentDockComponent, CommandPaletteComponent, SymbolSearchComponent, ToastHostComponent, FeedStatusComponent],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
 })
@@ -102,14 +103,6 @@ export class ShellComponent {
   readonly initials = computed(() => {
     const email = this.auth.user()?.email ?? '';
     return (email.split('@')[0] || 'FS').slice(0, 2).toUpperCase();
-  });
-
-  readonly statusTone = computed(() => {
-    const label = this.market.statusLabel();
-    if (label === 'Live') return 'is-success';
-    if (label === 'Disconnected' || label === 'Stopped out') return 'is-danger';
-    if (label === 'Research mode') return 'is-info';
-    return 'is-warning';
   });
 
   readonly priceChange = computed(() => this.market.dayChange() ?? this.market.rangeChange());

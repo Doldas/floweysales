@@ -63,7 +63,7 @@
         <a routerLink="/markets" class="sidebar-market" title="Open the active instrument in Markets">
           <div class="sidebar-market-top">
             <span class="sym">{{ market.trackedSymbol() }}</span>
-            <span class="fs-status no-dot" [class]="statusTone()">{{ market.statusLabel() }}</span>
+            <span class="fs-status no-dot" [class]="market.feed().tone">{{ market.feed().headline }}</span>
           </div>
           <div class="sidebar-market-price">
             <span class="tabular">{{ market.livePrice() > 0 ? (market.livePrice() | number: '1.2-2') : '—' }}</span>
@@ -103,10 +103,7 @@
       <fs-symbol-search class="topbar-search" />
 
       <div class="topbar-actions">
-        <span class="fs-status topbar-status" [class]="statusTone()" role="status">
-          @if (market.statusLabel() === 'Live') { <span class="fs-pulse" aria-hidden="true"></span> }
-          {{ market.statusLabel() }}
-        </span>
+        <fs-feed-status class="topbar-status" />
         <button type="button" class="btn btn-outline-secondary btn-sm palette-trigger" (click)="palette.open()" title="Command palette (Ctrl K)">
           <i class="bi bi-command" aria-hidden="true"></i>
           <span class="palette-label">Search or run…</span>
