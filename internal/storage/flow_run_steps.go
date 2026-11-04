@@ -35,6 +35,9 @@ type AgentFlowRunStep struct {
 	WorkerAttempt *int   `json:"worker_attempt"`
 	// ToolCalls lists the read-only tools an agent node called.
 	ToolCalls json.RawMessage `json:"tool_calls,omitempty"`
+	// Sources is the record of what an agent node retrieved, what the citation
+	// check found in its answer and the evidence policy it ran under.
+	Sources json.RawMessage `json:"sources,omitempty"`
 }
 
 // FlowRunStepRecord is one node execution to persist. Input, output and
@@ -52,6 +55,8 @@ type FlowRunStepRecord struct {
 	WorkerAttempt int
 	// ToolCalls is a JSON array the caller has already redacted and bounded.
 	ToolCalls string
+	// Sources is a JSON object the caller has already redacted and bounded.
+	Sources string
 }
 
 func nullablePreview(s string) any {
@@ -75,15 +80,19 @@ func (d *Database) AppendAgentFlowRunStepRecord(ctx context.Context, runID int64
 	if step.ToolCalls != "" && json.Valid([]byte(step.ToolCalls)) {
 		toolCalls = step.ToolCalls
 	}
+	var sources any
+	if step.Sources != "" && json.Valid([]byte(step.Sources)) {
+		sources = step.Sources
+	}
 	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 	result, err := tx.ExecContext(ctx, `INSERT INTO agent_flow_run_steps(run_id,node_id,node_label,status,input_preview,output_preview,error_message,
-		started_at,duration_ms,attempts,worker_attempt,tool_calls,output_bytes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		started_at,duration_ms,attempts,worker_attempt,tool_calls,sources,output_bytes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		runID, step.Node, step.Label, step.Status, nullablePreview(step.Input), redact.Preview(step.Output, stepPreviewLimit),
-		nullablePreview(step.Error), started, step.DurationMS, step.Attempts, workerAttempt, toolCalls, len(step.Output))
+		nullablePreview(step.Error), started, step.DurationMS, step.Attempts, workerAttempt, toolCalls, sources, len(step.Output))
 	if err != nil {
 		return err
 	}
@@ -127,7 +136,7 @@ func (d *Database) AppendAgentFlowRunStep(ctx context.Context, runID int64, node
 func (d *Database) ListAgentFlowRunSteps(ctx context.Context, runID int64) ([]AgentFlowRunStep, error) {
 	rows, err := d.db.QueryContext(ctx, `SELECT id,node_id,COALESCE(node_label,''),status,COALESCE(input_preview,''),COALESCE(output_preview,''),
 		COALESCE(error_message,''),IF(started_at IS NULL,'',DATE_FORMAT(started_at,'%Y-%m-%dT%H:%i:%s.%fZ')),
-		DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%s.%fZ'),duration_ms,attempts,worker_attempt,tool_calls,output_bytes,
+		DATE_FORMAT(created_at,'%Y-%m-%dT%H:%i:%s.%fZ'),duration_ms,attempts,worker_attempt,tool_calls,sources,output_bytes,
 		EXISTS(SELECT 1 FROM agent_flow_run_outputs o WHERE o.step_id=agent_flow_run_steps.id)
 		FROM agent_flow_run_steps WHERE run_id=? ORDER BY id LIMIT 100`, runID)
 	if err != nil {
@@ -139,11 +148,14 @@ func (d *Database) ListAgentFlowRunSteps(ctx context.Context, runID int64) ([]Ag
 		var step AgentFlowRunStep
 		var duration sql.NullInt64
 		var attempts, worker sql.NullInt32
-		var toolCalls sql.NullString
+		var toolCalls, sources sql.NullString
 		var outputBytes sql.NullInt32
 		if err := rows.Scan(&step.ID, &step.Node, &step.Label, &step.Status, &step.Input, &step.Output, &step.Error,
-			&step.StartedAt, &step.CreatedAt, &duration, &attempts, &worker, &toolCalls, &outputBytes, &step.OutputStored); err != nil {
+			&step.StartedAt, &step.CreatedAt, &duration, &attempts, &worker, &toolCalls, &sources, &outputBytes, &step.OutputStored); err != nil {
 			return nil, err
+		}
+		if sources.Valid {
+			step.Sources = json.RawMessage(sources.String)
 		}
 		if outputBytes.Valid {
 			value := int(outputBytes.Int32)

@@ -68,6 +68,9 @@ func (s engineSource) DelegateToTeam(ctx context.Context, team, goal, constraint
 	agent := ai.AgentOptions{MaxSteps: maxSteps, MaxToolCalls: min(maxCalls, teamMemberToolCall), AnswerAfterToolBudget: true}
 	e.scopeAgentTools(&agent, user, e.authService != nil)
 	agent.AllowedTools = withoutTool(firstTools(agent.AllowedTools), ai.DelegateToolName)
+	// The members answer under the user's saved evidence default.
+	policy := e.savedEvidencePolicy(ctx, user.ID)
+	policy.Apply(&agent)
 
 	question := goal
 	if c := strings.TrimSpace(constraints); c != "" {

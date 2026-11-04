@@ -43,6 +43,10 @@ type teamRequestBody struct {
 	ProfileID int64               `json:"profile_id,omitempty"`
 	Chair     *bool               `json:"chair"`
 	Model     string              `json:"model"`
+	// EvidenceMode and Evidence are as for chat: every member answers under the
+	// same evidence policy, or the caller's saved default when neither is sent.
+	EvidenceMode string             `json:"evidence_mode,omitempty"`
+	Evidence     *ai.EvidencePolicy `json:"evidence,omitempty"`
 	// Optional UI context, as for chat.
 	Symbol   string `json:"symbol,omitempty"`
 	Provider string `json:"provider,omitempty"`
@@ -126,6 +130,11 @@ func (e *Engine) registerTeamRoutes() {
 			return
 		}
 
+		evidence, problem := e.requestEvidencePolicy(r.Context(), user.ID, req.EvidenceMode, req.Evidence)
+		if problem != "" {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Evidence settings: " + problem})
+			return
+		}
 		specs, chairWanted, problem := e.teamSpecs(r.Context(), user.ID, &req)
 		if problem != "" {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": problem})
@@ -149,6 +158,7 @@ func (e *Engine) registerTeamRoutes() {
 		agent := ai.AgentOptions{MaxSteps: maxSteps, MaxToolCalls: min(maxCalls, teamMemberToolCall), AnswerAfterToolBudget: true}
 		// The same rule as chat: ordinary users get the scoped tool list.
 		e.scopeAgentTools(&agent, user, e.authService != nil)
+		evidence.Apply(&agent)
 		runCtx := r.Context()
 		if e.authService != nil {
 			runCtx = withAgentUser(runCtx, user)

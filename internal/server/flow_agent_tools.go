@@ -15,6 +15,7 @@ import (
 	"floweysales/internal/grounding"
 	"floweysales/internal/persona"
 	"floweysales/internal/redact"
+	"floweysales/internal/sources"
 )
 
 // Agent nodes run without tools unless a SYS_ADMIN grants some. Grants come
@@ -73,7 +74,18 @@ func validateFlowAgentTools(n flowNode) error {
 		if len(n.Tools) > 0 || n.MaxToolCalls != 0 || n.RequireGrounding {
 			return fmt.Errorf("only agent nodes can be granted tools")
 		}
+		if n.Evidence != nil {
+			return fmt.Errorf("node %s: only agent nodes have an evidence mode", n.ID)
+		}
 		return nil
+	}
+	if n.Evidence != nil {
+		if err := n.Evidence.Validate(); err != nil {
+			return fmt.Errorf("agent %s: evidence: %w", n.ID, err)
+		}
+		if n.OutputMode == "json" && n.Evidence.Strict() {
+			return fmt.Errorf("agent %s: an evidence mode checks prose, so it cannot be combined with JSON output", n.ID)
+		}
 	}
 	if len(n.Tools) > maxFlowAgentTools {
 		return fmt.Errorf("agent %s: at most %d tools can be granted", n.ID, maxFlowAgentTools)
@@ -97,6 +109,22 @@ func validateFlowAgentTools(n flowNode) error {
 // flowAgentOptions applies the node's grant to the agent run. Without a
 // grant the agent has no tools at all.
 func flowAgentOptions(n flowNode, systemPrompt string) ai.AgentOptions {
+	opts := flowAgentBaseOptions(n, systemPrompt)
+	if n.Evidence != nil {
+		n.Evidence.Apply(&opts)
+		if n.Evidence.Strict() {
+			// Room for the corrections a failing draft goes back for.
+			opts.MaxSteps += flowEvidenceCorrections
+		}
+	}
+	return opts
+}
+
+// flowEvidenceCorrections is how many extra model rounds a strict evidence
+// mode may use on top of the node's tool budget.
+const flowEvidenceCorrections = 2
+
+func flowAgentBaseOptions(n flowNode, systemPrompt string) ai.AgentOptions {
 	if len(n.Tools) == 0 {
 		if n.RequireGrounding {
 			// Without tools the input is the only evidence, typically rows
@@ -159,6 +187,24 @@ type flowToolTrace struct {
 	pending string
 	// evidence holds each attempt's tool results for the grounding check.
 	evidence map[int]*strings.Builder
+	// live holds the sources each attempt retrieved so far and final the
+	// citation check's summary of the attempts that got that far.
+	live  map[int][]sources.Source
+	final map[int]ai.Event
+}
+
+const (
+	maxRecordedStepSources = 40
+	stepSourceExcerpt      = 400
+)
+
+// flowSourcesRecord is what a step stores about its sources.
+type flowSourcesRecord struct {
+	Attempt int                `json:"attempt"`
+	Policy  *ai.EvidencePolicy `json:"policy,omitempty"`
+	Sources []sources.Source   `json:"sources"`
+	Audit   []sources.Finding  `json:"audit,omitempty"`
+	Removed []sources.Finding  `json:"removed,omitempty"`
 }
 
 // observe records tool events; a tool_result follows its own tool_start.
@@ -166,6 +212,26 @@ func (t *flowToolTrace) observe(attempt int, ev ai.Event) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	switch ev.Type {
+	case "source":
+		if t.live == nil {
+			t.live = map[int][]sources.Source{}
+		}
+		for _, s := range ev.Sources {
+			replaced := false
+			for i := range t.live[attempt] {
+				if t.live[attempt][i].ID == s.ID {
+					t.live[attempt][i], replaced = s, true
+				}
+			}
+			if !replaced {
+				t.live[attempt] = append(t.live[attempt], s)
+			}
+		}
+	case "sources":
+		if t.final == nil {
+			t.final = map[int]ai.Event{}
+		}
+		t.final[attempt] = ev
 	case "tool_start":
 		t.pending = ev.Arguments
 	case "tool_result":
@@ -199,6 +265,53 @@ func (t *flowToolTrace) observe(attempt int, ev ai.Event) {
 		}
 		t.calls = append(t.calls, call)
 	}
+}
+
+// Findings returns what the citation check found in one attempt's answer.
+func (t *flowToolTrace) Findings(attempt int) []sources.Finding {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.final[attempt].Audit
+}
+
+// SourcesJSON returns the record of the last attempt that retrieved sources,
+// redacted and bounded, or "" when none did.
+func (t *flowToolTrace) SourcesJSON() string {
+	if t == nil {
+		return ""
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	attempt := 0
+	for a := range t.live {
+		attempt = max(attempt, a)
+	}
+	for a := range t.final {
+		attempt = max(attempt, a)
+	}
+	rec := flowSourcesRecord{Attempt: attempt, Sources: t.live[attempt]}
+	if fin, ok := t.final[attempt]; ok {
+		rec.Sources, rec.Policy = fin.Sources, fin.Policy
+		rec.Audit, rec.Removed = append([]sources.Finding(nil), fin.Audit...), append([]sources.Finding(nil), fin.Removed...)
+	}
+	if len(rec.Sources) == 0 && len(rec.Audit) == 0 && len(rec.Removed) == 0 {
+		return ""
+	}
+	rec.Sources = sources.Compact(rec.Sources, maxRecordedStepSources, stepSourceExcerpt)
+	for i := range rec.Sources {
+		s := &rec.Sources[i]
+		s.Query, s.Title, s.Excerpt = redact.String(s.Query), redact.String(s.Title), redact.String(s.Excerpt)
+	}
+	for _, list := range [][]sources.Finding{rec.Audit, rec.Removed} {
+		for i := range list {
+			list[i].Sentence, list[i].Detail = redact.String(list[i].Sentence), redact.String(list[i].Detail)
+		}
+	}
+	raw, err := json.Marshal(rec)
+	if err != nil {
+		return ""
+	}
+	return string(raw)
 }
 
 // Evidence returns one attempt's successful tool results.
