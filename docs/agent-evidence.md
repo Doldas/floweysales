@@ -48,7 +48,7 @@ The prompt in these modes asks the model to say "insufficient verifiable evidenc
 
 ### Saved default
 
-`GET`, `PUT` and `DELETE /api/ai/evidence-default` read, save and reset the signed-in user's own default (table `user_evidence_defaults`). It applies to chat and team requests that send no `evidence_mode` or `evidence`, and to the members of a team that the agent delegates to with `delegate_to_team`. A request that names `evidence_mode` alone gets that mode with no settings, so choosing Standard in the chat turns a saved default off for that request. Only the user can change it; there is no administrator endpoint, and deleting an account deletes it. A saved default that no longer validates is ignored.
+`GET`, `PUT` and `DELETE /api/ai/evidence-default` read, save and reset the signed-in user's own default (table `user_evidence_defaults`). It applies to chat and team requests that send no `evidence_mode` or `evidence`, and, only when the delegating run carries no policy of its own, to the members of a team that the agent delegates to with `delegate_to_team`. Delegated members otherwise answer under the policy of the run that delegates: the chat's choice, or the flow node's `evidence` setting. A request that names `evidence_mode` alone gets that mode with no settings, so choosing Standard in the chat turns a saved default off for that request. Only the user can change it; there is no administrator endpoint, and deleting an account deletes it. A saved default that no longer validates is ignored.
 
 ## Teams, flows and tasks
 

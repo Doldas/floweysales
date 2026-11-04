@@ -140,9 +140,9 @@
       </select>
     </div>
     @if (evidenceHint(); as hint) { <div class="profile-note">{{ hint }}</div> }
-    @if (session.evidenceMode() !== 'standard') {
-      <details class="evidence-settings small">
+    <details class="evidence-settings small">
         <summary>Evidence settings</summary>
+        @if (session.evidenceMode() !== 'standard') {
         <div class="evidence-grid">
           <label for="evidence-failure">A statement that still fails the check</label>
           <select id="evidence-failure" class="form-select form-select-sm" [disabled]="session.streaming()" (change)="session.updateEvidence({ block: $any($event.target).value === 'block' })">
@@ -157,6 +157,7 @@
             <label class="form-check-inline"><input type="checkbox" [disabled]="session.streaming()" [checked]="session.evidenceSettings().webPages" (change)="session.updateEvidence({ webPages: $any($event.target).checked })"> Web pages</label>
           </div>
         </div>
+        } @else { <p class="mb-1 text-muted">Standard shows citations and flags problems afterward. Pick Evidence only or Primary sources only to set limits.</p> }
         @if (session.evidenceProblem(); as problem) { <p class="text-danger mb-1" role="alert">{{ problem }}</p> }
         @if (evidenceSummary(); as line) { <p class="mb-1 text-muted">{{ line }}</p> }
         <div class="evidence-actions">
@@ -164,7 +165,6 @@
           @if (session.evidenceHasDefault()) { <button type="button" class="btn btn-sm btn-outline-secondary" (click)="session.saveEvidenceDefault(false)" [disabled]="session.streaming()">Remove my default</button> }
         </div>
       </details>
-    }
     @if (session.evidenceNote(); as note) { <p class="small text-muted mb-1" role="status">{{ note }}</p> }
     @if (session.profiles().length) {
       <div class="persona-row">

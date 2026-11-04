@@ -49,7 +49,7 @@ The agent can open a search hit by its id. It cannot be made to fetch an address
 
 ### Evidence mode
 
-The **Evidence** selector in the chat sets how strictly the agent is held to its citations. It is your own choice, and administrators have no say in it. **Save as my default** stores your settings on the server, so new chats and team runs start from them; **Remove default** goes back to Standard. A choice made in the chat itself always wins over the saved default.
+The **Evidence** selector in the chat sets how strictly the agent is held to its citations. It is your own choice, and administrators have no say in it. **Save as my default** stores your settings on the server, so new chats and team runs start from them; **Remove default** goes back to Standard. A choice made in the chat itself always wins over the saved default, and a team the agent delegates to answers under the chat's choice.
 
 | Mode | What happens |
 | --- | --- |

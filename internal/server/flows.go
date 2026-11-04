@@ -600,9 +600,21 @@ func (e *Engine) configuredFlowModelsAllowed(ctx context.Context, graph flowGrap
 	return nil
 }
 
+// flowChoiceOwner is the person whose saved teams a flow's agent nodes use: the
+// flow's owner, which is not the saver when an administrator edits or publishes
+// someone else's flow. A flow not yet stored belongs to its saver.
+func (e *Engine) flowChoiceOwner(ctx context.Context, flowID, saverID int64) int64 {
+	if flowID != 0 && e.db != nil {
+		if owner, err := e.db.FlowOwner(ctx, flowID); err == nil && owner != 0 {
+			return owner
+		}
+	}
+	return saverID
+}
+
 // flowChoicesAvailable checks, when a flow is saved or published, the choices
 // its agent nodes make from what others prepared: an enabled model profile,
-// and a saved team of the person saving. A run checks them again.
+// and a saved team of the flow's owner. A run checks them again.
 func (e *Engine) flowChoicesAvailable(ctx context.Context, userID int64, graph flowGraph) error {
 	for _, node := range graph.Nodes {
 		if node.ProfileID != 0 {
@@ -1113,7 +1125,7 @@ func (e *Engine) saveFlow(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	saver, _ := e.currentUser(r)
-	if err := e.flowChoicesAvailable(r.Context(), saver.ID, graph); err != nil {
+	if err := e.flowChoicesAvailable(r.Context(), e.flowChoiceOwner(r.Context(), f.ID, saver.ID), graph); err != nil {
 		writeJSON(w, 400, map[string]string{"error": err.Error()})
 		return
 	}

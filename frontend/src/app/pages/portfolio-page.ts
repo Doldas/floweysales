@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild } from '@angular/core';
 
 import { LedgerComponent } from '../components/ledger';
 import { PortfolioRiskComponent } from '../components/portfolio-risk-panel';
@@ -25,7 +25,13 @@ import { MarketState } from '../core/market-state';
         <button type="button" [attr.aria-pressed]="view() === 'risk'" (click)="view.set('risk')">Risk</button>
       </div>
       <div [hidden]="view() !== 'desk'">
-        <fse-ledger [trackedSymbol]="market.trackedSymbol()" [livePrice]="market.livePrice()" [currency]="market.currency()" />
+        @if (needsTracker()) {
+          <p class="small text-muted mb-2" role="status">
+            {{ market.trackedSymbol() }} is selected but not tracked live, so there is no server price to fill an order against. Market orders wait for a tick.
+            <button type="button" class="btn btn-sm btn-outline-primary ms-1" (click)="market.trackLive()" [disabled]="!market.canTrackSelected()">Track live</button>
+          </p>
+        }
+        <fse-ledger [trackedSymbol]="market.trackedSymbol()" [livePrice]="orderPrice()" [currency]="market.currency()" />
       </div>
       @if (view() === 'risk') { <fs-portfolio-risk (prefill)="prefill($event)" /> }
     </div>
@@ -34,6 +40,10 @@ import { MarketState } from '../core/market-state';
 export class PortfolioPage {
   readonly market = inject(MarketState);
   readonly view = signal<'desk' | 'risk'>('desk');
+  /** Live mode: an instrument without a tracker gets no ticks, so the server has no price for it. */
+  readonly needsTracker = computed(() => this.market.mode() === 'live' && !!this.market.trackedSymbol() && !this.market.selectedTracked());
+  /** The history close of an untracked instrument is not a price the engine can fill against. */
+  readonly orderPrice = computed(() => (this.needsTracker() ? 0 : this.market.livePrice()));
   private readonly ledger = viewChild(LedgerComponent);
 
   /** Aims the order ticket at a suggestion; the user still reviews and confirms. */

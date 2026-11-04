@@ -367,6 +367,7 @@ export class AgentSession {
     this.noticeState.set(EMPTY_NOTICES);
     this.answerSources.set([]);
     this.answerAudit.set([]);
+    this.answerRemoved.set([]);
     // The saved conversation lives on the server; this view shows the continuation.
     this.wire = [];
     this.entries.set([]);
