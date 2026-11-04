@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="041-agent-team-budget" author="floweysales" dbms="mysql">
+  <addColumn tableName="agent_teams">
+   <column name="max_tokens" type="INT" remarks="Token ceiling of one run; NULL for none. Enforced where the endpoint reports usage"/>
+   <column name="max_cost" type="DOUBLE" remarks="Cost ceiling of one run in the currency of the model profiles' prices; NULL for none"/>
+   <column name="max_tool_calls" type="INT" remarks="Ceiling on tool calls across all members of one run; NULL for none"/>
+  </addColumn>
+  <rollback>
+   <dropColumn tableName="agent_teams" columnName="max_tokens"/>
+   <dropColumn tableName="agent_teams" columnName="max_cost"/>
+   <dropColumn tableName="agent_teams" columnName="max_tool_calls"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

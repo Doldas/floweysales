@@ -34,15 +34,18 @@ const maxReadExcerpt = 16000
 
 // Source is one thing a tool returned that an answer may cite.
 type Source struct {
-	ID          string `json:"id"` // S1, S2, ...
-	Tool        string `json:"tool"`
-	CallID      string `json:"call_id,omitempty"`
-	Query       string `json:"query,omitempty"`
-	URL         string `json:"url,omitempty"`
-	Title       string `json:"title,omitempty"`
-	Class       string `json:"class"`
-	Access      string `json:"access"`
-	DocumentID  string `json:"document_id,omitempty"` // SEC accession
+	ID         string `json:"id"` // S1, S2, ...
+	Tool       string `json:"tool"`
+	CallID     string `json:"call_id,omitempty"`
+	Query      string `json:"query,omitempty"`
+	URL        string `json:"url,omitempty"`
+	Title      string `json:"title,omitempty"`
+	Class      string `json:"class"`
+	Access     string `json:"access"`
+	DocumentID string `json:"document_id,omitempty"` // SEC accession
+	// Member names the team member who retrieved the source, when a
+	// delegated team did; the parent run only saw what the member reported.
+	Member      string `json:"member,omitempty"`
 	PublishedAt string `json:"published_at,omitempty"`
 	RetrievedAt string `json:"retrieved_at,omitempty"`
 	// Excerpt is what the model received, bounded.
@@ -90,6 +93,8 @@ func (r *Registry) Register(tool, callID, argsJSON, result string) (string, []So
 		return r.registerSection(callID, result)
 	case "read_source":
 		return r.registerRead(argsJSON, result)
+	case "delegate_to_team":
+		return r.registerDelegation(callID, result)
 	}
 	return result, nil
 }
@@ -189,6 +194,74 @@ func (r *Registry) registerSearch(callID, argsJSON, result string) (string, []So
 		return result, added
 	}
 	doc["results"] = raw
+	out, err := json.Marshal(doc)
+	if err != nil {
+		return result, added
+	}
+	return string(out), added
+}
+
+// maxMemberSources bounds the sources kept per team member.
+const maxMemberSources = 12
+
+// registerDelegation records the sources the members of a delegated team
+// retrieved, so the parent's answer can cite them as [Sn] and the citation
+// check treats them like its own: a member's search hit is a snippet, a page
+// or filing the member opened is read, and the excerpt is the text the member
+// received. Each source keeps the member's name. The model gets the ids in
+// place of the member's raw source objects.
+func (r *Registry) registerDelegation(callID, result string) (string, []Source) {
+	var doc map[string]json.RawMessage
+	if json.Unmarshal([]byte(result), &doc) != nil {
+		return result, nil
+	}
+	var members []map[string]json.RawMessage
+	if json.Unmarshal(doc["members"], &members) != nil || len(members) == 0 {
+		return result, nil
+	}
+	var added []Source
+	for _, m := range members {
+		var name string
+		_ = json.Unmarshal(m["name"], &name)
+		var reported []Source
+		if json.Unmarshal(m["sources"], &reported) != nil {
+			delete(m, "sources")
+			continue
+		}
+		seen := map[string]bool{}
+		var shown []map[string]string
+		for _, src := range reported {
+			key := src.DocumentID
+			if key == "" {
+				key = normalizeURL(src.URL)
+			}
+			if (src.URL == "" && src.DocumentID == "") || seen[key] || len(shown) >= maxMemberSources {
+				continue
+			}
+			seen[key] = true
+			if src.Class != ClassPrimaryFiling {
+				src.Class = ClassWebPage
+			}
+			if src.Access != AccessRead {
+				src.Access = AccessListed
+			}
+			s := r.add(Source{Tool: "delegate_to_team", CallID: callID, Member: name, Query: src.Query, URL: src.URL, Title: src.Title,
+				Class: src.Class, Access: src.Access, DocumentID: src.DocumentID, PublishedAt: src.PublishedAt, RetrievedAt: src.RetrievedAt, Excerpt: src.Excerpt})
+			added = append(added, s)
+			shown = append(shown, map[string]string{"source_id": s.ID, "url": s.URL, "title": s.Title, "access": s.Access})
+		}
+		raw, err := json.Marshal(shown)
+		if err != nil || len(shown) == 0 {
+			delete(m, "sources")
+			continue
+		}
+		m["sources"] = raw
+	}
+	raw, err := json.Marshal(members)
+	if err != nil {
+		return result, added
+	}
+	doc["members"] = raw
 	out, err := json.Marshal(doc)
 	if err != nil {
 		return result, added

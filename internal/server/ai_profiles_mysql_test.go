@@ -77,6 +77,8 @@ func TestModelProfilesAndSavedTeamsOnMySQL(t *testing.T) {
 		t.Errorf("a team is not readable by another user, got %v", err)
 	}
 	team.ID, team.Name, team.Members = id, "Panel 2", team.Members[:1]
+	tokens, cost, calls := 20000, 0.5, 30
+	team.MaxTokens, team.MaxCost, team.MaxToolCalls = &tokens, &cost, &calls
 	if _, err := db.SaveSavedTeam(ctx, 202, team); !errors.Is(err, storage.ErrTeamNotFound) {
 		t.Errorf("a team is not replaceable by another user, got %v", err)
 	}
@@ -86,6 +88,9 @@ func TestModelProfilesAndSavedTeamsOnMySQL(t *testing.T) {
 	got, err := db.GetSavedTeam(ctx, 101, id)
 	if err != nil || got.Name != "Panel 2" || len(got.Members) != 1 || got.Members[0].ProfileID == nil || *got.Members[0].ProfileID != a {
 		t.Fatalf("replace: %v %+v", err, got)
+	}
+	if got.MaxTokens == nil || *got.MaxTokens != 20000 || got.MaxCost == nil || *got.MaxCost != 0.5 || got.MaxToolCalls == nil || *got.MaxToolCalls != 30 {
+		t.Errorf("a team's budget ceilings round-trip: %+v", got)
 	}
 	if err := db.DeleteModelProfile(ctx, a); err != nil {
 		t.Fatal(err)

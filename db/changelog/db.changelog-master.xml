@@ -42,4 +42,5 @@
   <include file="038-ai-model-profiles-and-teams.xml" relativeToChangelogFile="true"/>
   <include file="039-flow-run-step-outputs.xml" relativeToChangelogFile="true"/>
   <include file="040-backtest-runs.xml" relativeToChangelogFile="true"/>
+  <include file="041-agent-team-budget.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>
