@@ -84,11 +84,11 @@
         }
         @if (groups().read.length) {
           <h4>Read by the agent</h4>
-          <ul>@for (s of groups().read; track s.id) { <li><span class="sid">[{{ s.id }}]</span> {{ s.title || s.url }} @if (link(s.url); as href) { <a [href]="href" target="_blank" rel="noopener noreferrer">open</a> } @if (s.document_id) { <span class="text-muted">{{ s.document_id }}</span> }</li> }</ul>
+          <ul>@for (s of groups().read; track s.id) { <li><span class="sid">[{{ s.id }}]</span> {{ s.title || s.url }} @if (link(s.url); as href) { <a [href]="href" target="_blank" rel="noopener noreferrer">open</a> } @if (s.document_id) { <span class="text-muted">{{ s.document_id }}</span> } @if (origin(s); as who) { <span class="text-muted">· {{ who }}</span> }</li> }</ul>
         }
         @if (groups().listed.length) {
           <h4>Search results only (title and snippet)</h4>
-          <ul>@for (s of groups().listed; track s.id) { <li><span class="sid">[{{ s.id }}]</span> {{ s.title || s.url }} @if (link(s.url); as href) { <a [href]="href" target="_blank" rel="noopener noreferrer">open</a> }</li> }</ul>
+          <ul>@for (s of groups().listed; track s.id) { <li><span class="sid">[{{ s.id }}]</span> {{ s.title || s.url }} @if (link(s.url); as href) { <a [href]="href" target="_blank" rel="noopener noreferrer">open</a> } @if (origin(s); as who) { <span class="text-muted">· {{ who }}</span> }</li> }</ul>
         }
       </details>
     }

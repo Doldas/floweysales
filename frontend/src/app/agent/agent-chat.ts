@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
-import { EVIDENCE_MODES, auditSummary, findingLabel, safeUrl, splitSources } from '../core/answer-sources';
+import { EVIDENCE_MODES, auditSummary, findingLabel, safeUrl, sourceOrigin, splitSources } from '../core/answer-sources';
 import { AgentSession, type ChatEntry } from '../core/agent-session';
 import { renderMarkdown } from '../markdown';
 import { toolLabel } from '../components/agent-tools';
@@ -29,6 +29,7 @@ export class AgentChatComponent {
   readonly findingLabel = findingLabel;
   readonly evidenceModes = EVIDENCE_MODES;
   readonly evidenceHint = computed(() => this.session.evidenceMode() === 'standard' ? '' : EVIDENCE_MODES.find(m => m.id === this.session.evidenceMode())?.hint ?? '');
+  readonly origin = sourceOrigin;
   readonly groups = computed(() => splitSources(this.session.answerSources()));
   readonly auditText = computed(() => auditSummary(this.session.answerAudit()));
   link(url: string | undefined): string { return safeUrl(url); }

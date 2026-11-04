@@ -2,7 +2,7 @@
 //   node --test src/app/core/answer-sources.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EVIDENCE_MODES, auditSummary, delegationProgress, parseEvidenceMode, findingLabel, safeUrl, splitSources } from './answer-sources.ts';
+import { EVIDENCE_MODES, auditSummary, delegationProgress, parseEvidenceMode, findingLabel, safeUrl, sourceOrigin, splitSources } from './answer-sources.ts';
 
 test('sources split by whether the agent opened them', () => {
   const { read, listed } = splitSources([
@@ -41,4 +41,9 @@ test('delegationProgress names the member and its stance', () => {
   assert.equal(delegationProgress({ type: 'member_done', name: 'Walter Ashgrove', stance: 'does_not_fit' }), 'Walter Ashgrove answered (does not fit)');
   assert.equal(delegationProgress({ type: 'member_done', agent: 'quant', error: 'timeout' }), 'quant failed: timeout');
   assert.equal(delegationProgress({ type: 'delta' }), '');
+});
+
+test('a source a delegated team member retrieved names that member', () => {
+  assert.equal(sourceOrigin({ member: 'Owner' }), 'retrieved by team member Owner');
+  assert.equal(sourceOrigin({}), '');
 });

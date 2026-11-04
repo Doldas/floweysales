@@ -4,6 +4,7 @@
  * state the page renders. Pure, tested with node --test.
  */
 import type { Persona, Stance, TeamEvent } from '../models';
+import type { BudgetSummary } from './team-budget';
 import { finishCall, startCall, type ToolCall } from '#app/components/tool-call-view';
 
 export const STANCE_LABEL: Record<Stance, string> = {
@@ -21,7 +22,7 @@ export interface MemberState {
   /** Why the member has no tools, when that is so. */
   note?: string;
 }
-export interface TeamState { members: MemberState[]; chair: MemberState | null; finished: boolean; error: string }
+export interface TeamState { members: MemberState[]; chair: MemberState | null; finished: boolean; error: string; budget?: BudgetSummary }
 
 const blank = (id: string, name: string): MemberState => ({ id, name, status: 'waiting', streamed: '', final: '', steps: [], error: '' });
 
@@ -56,6 +57,8 @@ export function applyTeamEvent(s: TeamState, ev: TeamEvent): TeamState {
         ...m, final: ev.content ?? '', stance: isStance(ev.stance) ? ev.stance : undefined, error: ev.error ?? m.error,
         status: ev.content ? 'done' : 'error',
       }));
+    case 'budget':
+      return ev.budget ? { ...s, budget: ev.budget } : s;
     case 'done': {
       // A member that never reported by the end of the run has no answer to wait for.
       const settle = (m: MemberState): MemberState => (m.status === 'waiting' || m.status === 'running'

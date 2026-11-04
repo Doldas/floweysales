@@ -1,3 +1,4 @@
+import type { BudgetSummary } from './components/team-budget';
 import type { Provenance } from './core/provenance';
 export interface MarketData {
   assetDataProvider?: string;
@@ -595,6 +596,8 @@ export interface TeamEvent {
   agent?: string; name?: string; content?: string; result?: string; tool_error?: string; error?: string; stance?: string;
   arguments?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean;
   severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string;
+  /** On the 'budget' event that ends a run with a budget. */
+  budget?: BudgetSummary;
 }
 export type StrategyOperandType = 'price' | 'const' | 'ema' | 'sma' | 'rsi' | 'atr' | 'highest' | 'lowest' | 'fib_retr' | 'fib_ext' | 'swing_high' | 'swing_low';
 export interface StrategyOperand { type: StrategyOperandType; field?: string; period?: number; ratio?: number; value?: number }
@@ -657,7 +660,11 @@ export interface ModelProfile {
   enabled?: boolean; is_default: boolean; position?: number;
 }
 export interface SavedTeamMember { persona: string; profile_id: number | null }
-export interface SavedTeam { id: number; name: string; chair: boolean; members: SavedTeamMember[]; updated_at?: string }
+export interface SavedTeam {
+  id: number; name: string; chair: boolean; members: SavedTeamMember[]; updated_at?: string;
+  /** The team's budget ceilings for one run; null for none. */
+  max_tokens?: number | null; max_cost?: number | null; max_tool_calls?: number | null;
+}
 
 export interface AboutInfo {
   name: string;

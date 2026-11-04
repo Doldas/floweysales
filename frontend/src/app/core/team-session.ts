@@ -5,6 +5,7 @@ import { missingProfiles, savedMembers, teamMembersBody } from '../components/pr
 import { MarketService } from '../services';
 import { MarketState } from './market-state';
 import { DEFAULT_TEAM, applyTeamEvent, startTeam, type TeamState } from '../components/team-view';
+import { NO_BUDGET, budgetBody, budgetInputOf, parseBudget, type BudgetInput } from '../components/team-budget';
 
 /**
  * Runs a team of persona agents on one question and keeps the streamed
@@ -32,6 +33,8 @@ export class TeamSession {
   readonly teamName = signal('');
   readonly savedId = signal<number | null>(null);
   readonly teamNotice = signal('');
+  /** Ceilings for a run (empty: none). A saved team keeps them. */
+  readonly budget = signal<BudgetInput>(NO_BUDGET);
   private abort: AbortController | null = null;
 
   readonly chosen = computed(() => this.personas().filter(p => this.selected().includes(p.id)));
@@ -65,6 +68,7 @@ export class TeamSession {
     this.chair.set(team.chair);
     const gone = missingProfiles(team, this.profiles());
     this.profileOf.set(Object.fromEntries(team.members.map(m => [m.persona, m.profile_id !== null && gone.includes(m.profile_id) ? null : m.profile_id])));
+    this.budget.set(budgetInputOf(team));
     this.teamName.set(team.name);
     this.savedId.set(team.id);
     this.teamNotice.set(gone.length ? 'A model profile of this team is no longer offered; those members use the default.' : '');
@@ -74,7 +78,9 @@ export class TeamSession {
     const name = this.teamName().trim();
     if (!name || !this.selected().length) return;
     const existing = this.savedTeams().find(t => t.name === name);
-    this.api.saveTeam({ id: existing?.id, name, chair: this.chair(), members: savedMembers(this.selected(), this.profileOf()) }).subscribe({
+    const limits = parseBudget(this.budget());
+    if (!limits.ok) { this.teamNotice.set(limits.error); return; }
+    this.api.saveTeam({ id: existing?.id, name, chair: this.chair(), members: savedMembers(this.selected(), this.profileOf()), ...limits.limits }).subscribe({
       next: r => { this.savedId.set(r.id); this.teamNotice.set(existing ? 'Team updated.' : 'Team saved.'); this.loadChoices(); },
       error: err => this.teamNotice.set(err?.error?.error ?? 'The team could not be saved.'),
     });
@@ -94,6 +100,8 @@ export class TeamSession {
     const members = this.chosen();
     if (!question || !members.length || this.running()) return;
     this.error.set('');
+    const limits = parseBudget(this.budget());
+    if (!limits.ok) { this.error.set(limits.error); return; }
     this.running.set(true);
     const withChair = this.chair() && members.length > 1;
     this.state.set(startTeam(members, withChair));
@@ -104,7 +112,7 @@ export class TeamSession {
       const res = await fetch('/api/ai/team', {
         method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
         body: JSON.stringify({
-          question, members: teamMembersBody(members.map(m => m.id), this.profileOf()), chair: withChair,
+          question, members: teamMembersBody(members.map(m => m.id), this.profileOf()), chair: withChair, ...budgetBody(limits.limits),
           symbol: this.market.trackedSymbol(), provider: this.market.provider(), range: this.market.historyRange(), price: price > 0 ? price.toFixed(4) : '',
         }),
       });

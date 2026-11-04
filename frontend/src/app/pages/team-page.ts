@@ -8,6 +8,7 @@ import { toolLabel } from '../components/agent-tools';
 import { KIND_LABEL, changeLabel, stalenessNote, summaryLine, usdCompact } from '../components/portfolio-view';
 import { STANCE_ICON, STANCE_LABEL, defaultQuestion, shownText, stanceCounts, togglePersona, type MemberState } from '../components/team-view';
 import { defaultOptionLabel, profileOption, profileSummary } from '../components/profile-view';
+import { budgetLine } from '../components/team-budget';
 import { MarketState } from '../core/market-state';
 import { TeamSession } from '../core/team-session';
 import { renderMarkdown } from '../markdown';
@@ -122,6 +123,13 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
           }
         </ul>
       }
+      <h3>Budget for a run</h3>
+      <div class="saved-row" role="group" aria-label="Budget for a run">
+        <label class="budget-field">Tokens <input class="form-control form-control-sm" inputmode="numeric" placeholder="no ceiling" [value]="team.budget().tokens" [disabled]="team.running()" (input)="setBudget('tokens', $event)" /></label>
+        <label class="budget-field">Cost (US$) <input class="form-control form-control-sm" inputmode="decimal" placeholder="no ceiling" [value]="team.budget().cost" [disabled]="team.running()" (input)="setBudget('cost', $event)" /></label>
+        <label class="budget-field">Tool calls <input class="form-control form-control-sm" inputmode="numeric" placeholder="no ceiling" [value]="team.budget().calls" [disabled]="team.running()" (input)="setBudget('calls', $event)" /></label>
+      </div>
+      <p class="muted">The run stops with a message when a ceiling is reached; answers so far are kept. Tokens and cost are counted only where the model endpoint reports usage, and cost needs the prices in the model profile; otherwise they show as unknown and only the tool-call ceiling holds. A saved team keeps its ceilings.</p>
       <h3>Saved teams</h3>
       <div class="saved-row">
         @if (team.savedTeams().length) {
@@ -179,6 +187,7 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
         </article>
       }
     </div>
+    @if (s.budget; as b) { <p class="muted" role="status" aria-label="What the run used">{{ budgetText(b) }}</p> }
     <p class="muted">Each character only sees your question and its own tool results, never another's answer. Fictional characters; not investment advice.</p>
   }
 </div>
@@ -221,6 +230,7 @@ h2 { font-size: 1rem; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; al
 .models { display: grid; gap: 0.5rem; h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fs-muted); margin: 0.2rem 0 0; } }
 .model-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; li { display: grid; grid-template-columns: 8rem minmax(0, 14rem) minmax(0, 1fr); gap: 0.5rem; align-items: center; font-size: 0.82rem; } small { overflow-wrap: anywhere; } }
 @media (max-width: 700px) { .model-rows li { grid-template-columns: minmax(0, 1fr); } }
+.budget-field { display: grid; gap: 0.15rem; font-size: 0.78rem; color: var(--fs-muted); input { width: 9rem; } }
 .saved-row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; select, input { max-width: 18rem; min-width: 0; } }
 .model-tag { font-family: var(--bs-font-monospace); }
 .q { display: grid; gap: 0.25rem; font-size: 0.8rem; color: var(--fs-muted); }
@@ -251,6 +261,8 @@ export class TeamPage {
   };
   loadPicked(): void { const t = this.team.savedTeams().find(x => x.id === this.picked()); if (t) this.team.loadTeam(t); }
   deletePicked(): void { const id = this.picked(); if (id !== null) { this.team.deleteSaved(id); this.picked.set(null); } }
+  readonly budgetText = budgetLine;
+  setBudget(field: 'tokens' | 'cost' | 'calls', ev: Event): void { this.team.budget.update(b => ({ ...b, [field]: (ev.target as HTMLInputElement).value })); }
   failedCalls = (m: { steps: { status: string }[] }): number => m.steps.filter(x => x.status === 'error').length;
   readonly team = inject(TeamSession);
   readonly market = inject(MarketState);
