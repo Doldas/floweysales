@@ -36,7 +36,7 @@ The prompt in these modes asks the model to say "insufficient verifiable evidenc
 
 ## Not built yet
 
-Quote and reachability checks, claim labels checked by the server, a block option that removes unsupported sentences, evidence mode for agent teams and flow nodes, a recency limit, and saved defaults per user or per saved team. Evaluation cases for contradictory sources and stale facts belong in `internal/eval`.
+Quote and reachability checks, claim labels checked by the server, a block option that removes unsupported sentences, evidence mode for agent teams and flow nodes, a recency limit, and saved defaults per user or per saved team.
 
 ## Opening a page (`read_source`)
 
