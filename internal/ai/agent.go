@@ -102,6 +102,9 @@ type AgentOptions struct {
 	// it on cited sources the agent did not open; when nil, the data source's
 	// LinkChecker is used if it has one.
 	CheckLink sources.LinkChecker
+	// Now is the clock of the recency limit; zero means the current time. A
+	// test or an evaluation case fixes it.
+	Now time.Time
 }
 
 // DefaultSystemPrompt instructs the model how to use the market tools.
@@ -184,7 +187,9 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	// audit is the citation check of an answer; strict modes also check that
 	// the sources it cites by link still resolve.
 	audit := func(answer string) []sources.Finding {
-		found := sources.AuditWith(answer, registry, policy.auditOptions())
+		auditOpts := policy.auditOptions()
+		auditOpts.Now = opts.Now
+		found := sources.AuditWith(answer, registry, auditOpts)
 		if strict {
 			found = append(found, links.Findings(ctx, answer, registry, checkLink)...)
 		}

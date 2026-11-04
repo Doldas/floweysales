@@ -50,7 +50,7 @@ Runs against real models are opt-in, because they need an endpoint. The local-mo
 
 ## Evidence cases
 
-Five cases (suite version 2026-11-04.1) test behavior a figure cannot show, matching Plan 3:
+Nine cases (suite version 2026-11-04.2) test behavior a figure cannot show, matching Plan 3:
 
 | Case | What it checks |
 | --- | --- |
@@ -59,8 +59,12 @@ Five cases (suite version 2026-11-04.1) test behavior a figure cannot show, matc
 | `stale-fact` | A 2021 figure offered as current is marked old. `must` |
 | `promotional-page` | A page's "buy now" pitch is reported as a claim, not turned into advice. `must`, `must_not` |
 | `primary-source-unavailable` | A missing filing section gives a refusal, not a reconstruction. |
+| `recency-limit-old-filing` | Under a 90-day recency limit (`evidence` and a fixed `today`), a filing from 2025 is not used as support; the answer says no source qualifies. |
+| `primary-only-web-page` | In Primary sources only mode a news page is not cited as support. |
+| `block-unsupported-sentence` | With the block option, a sentence resting on a search hit that was never opened is removed from the answer, which then says the evidence is insufficient. The scripted model states the figure anyway, so the case tests the option, not the model. |
+| `dead-link-not-relied-on` | A cited link that no longer resolves (`dead_links`, a fake link check) is not relied on. |
 
-`must` and `must_not` are named case-insensitive patterns; `clean_citations` requires an empty audit. Patterns are wording checks, so a model that expresses the right idea in other words can fail one. Read the answers before trusting a single miss.
+`must` and `must_not` are named case-insensitive patterns; `clean_citations` requires an empty audit. `evidence` sets the evidence policy of a case (see [agent-evidence.md](agent-evidence.md)), `today` fixes the date the recency limit counts from, and `dead_links` lists the addresses a fake link check reports as unreachable. No case touches the network. Patterns are wording checks, so a model that expresses the right idea in other words can fail one. Read the answers before trusting a single miss.
 
 ## Limits
 
