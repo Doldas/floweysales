@@ -102,3 +102,18 @@ test('the export keeps the three sources apart and cannot run as a spreadsheet f
   assert.ok(line.includes(`"'=HYPERLINK(""x"")"`) || line.includes("'=HYPERLINK"), 'a leading = is neutralized');
   assert.ok(line.endsWith(',YAHOO,2026-10-28,2026-09-30'));
 });
+
+test('regionCoverage keeps regions without a market as empty rows', async () => {
+  const { regionCoverage } = await import('./leaderboard-view.ts');
+  const rows = regionCoverage([
+    { label: 'US mega caps', region: 'north_america', countries: ['US'] },
+    { label: 'US tech', region: 'north_america', countries: ['US'] },
+    { label: 'Nordic large caps', region: 'europe', countries: ['SE', 'DK'] },
+  ]);
+  assert.equal(rows.length, 6);
+  const by = Object.fromEntries(rows.map(r => [r.id, r]));
+  assert.deepEqual(by['north_america'].universes, ['US mega caps', 'US tech']);
+  assert.deepEqual(by['north_america'].countries, ['US']);
+  assert.deepEqual(by['europe'].countries, ['DK', 'SE']);
+  for (const id of ['asia', 'africa', 'south_america', 'oceania']) assert.deepEqual(by[id].universes, [], id);
+});

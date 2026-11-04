@@ -14,3 +14,9 @@ Which surfaces describe the origin of what they show, using the contract in
 | Financial statements | Planned | |
 
 States: **Covered** (API and UI), **Planned** (not started).
+
+## Leaderboard regions (#209)
+
+The Leaderboard lists all six world regions with the universes offered in each. Asia, Africa, South America and Oceania
+show "No supported market yet": no universe there has been checked against the provider (prices and four quarters of
+reports for at least 80% of members, Plan 4 WP3 step 1). A region is added only after that check.
