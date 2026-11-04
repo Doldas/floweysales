@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"floweysales/internal/ai"
+	"floweysales/internal/identity"
 	"floweysales/internal/sources"
 	"floweysales/internal/storage"
 )
@@ -29,6 +30,37 @@ type delegateMember struct {
 	// Sources are what the member retrieved; the run's citation registry
 	// replaces them with ids the answer can cite.
 	Sources []sources.Source `json:"sources,omitempty"`
+}
+
+type delegatePinKey struct{}
+
+// delegatePin restricts a delegation to one team and to a fixed tool list, for
+// the agent node of a flow: it acts for the flow's owner without a request.
+type delegatePin struct {
+	teamID int64
+	tools  []string
+}
+
+// flowDelegationContext prepares the context of a flow agent node that may
+// delegate to one saved team. The node acts for the flow's owner, whose team
+// it is; the team's members get only the research tools a flow agent can be
+// granted, never the owner's personal data tools.
+func (e *Engine) flowDelegationContext(ctx context.Context, flowID, teamID int64) (context.Context, error) {
+	user := identity.User{Role: identity.RoleSysAdmin}
+	if e.authService != nil {
+		if e.db == nil {
+			return ctx, errors.New("the flow's owner is unavailable")
+		}
+		owner, err := e.db.FlowOwner(ctx, flowID)
+		if err != nil {
+			return ctx, errors.New("the flow's owner is unavailable")
+		}
+		if user, err = e.authService.ActiveUserByID(ctx, owner); err != nil {
+			return ctx, errors.New("the flow's owner is not an active account")
+		}
+	}
+	ctx = withAgentUser(ctx, user)
+	return context.WithValue(ctx, delegatePinKey{}, delegatePin{teamID: teamID, tools: flowAgentToolCatalog}), nil
 }
 
 // DelegateToTeam runs one of the signed-in user's saved teams on a goal for
@@ -58,6 +90,10 @@ func (s engineSource) DelegateToTeam(ctx context.Context, team, goal, constraint
 	if err != nil {
 		return "", err
 	}
+	pin, pinned := ctx.Value(delegatePinKey{}).(delegatePin)
+	if pinned && saved.ID != pin.teamID {
+		return "", fmt.Errorf("this agent may delegate only to team %d", pin.teamID)
+	}
 	specs, _, limits, problem := e.teamSpecs(ctx, user.ID, &teamRequestBody{TeamID: saved.ID})
 	if problem != "" {
 		return "", errors.New(problem)
@@ -71,6 +107,9 @@ func (s engineSource) DelegateToTeam(ctx context.Context, team, goal, constraint
 	agent := ai.AgentOptions{MaxSteps: maxSteps, MaxToolCalls: min(maxCalls, teamMemberToolCall), AnswerAfterToolBudget: true}
 	e.scopeAgentTools(&agent, user, e.authService != nil)
 	agent.AllowedTools = withoutTool(firstTools(agent.AllowedTools), ai.DelegateToolName)
+	if pinned {
+		agent.AllowedTools = intersectTools(agent.AllowedTools, pin.tools)
+	}
 
 	question := goal
 	if c := strings.TrimSpace(constraints); c != "" {
@@ -202,6 +241,20 @@ func firstTools(scoped []string) []string {
 		return scoped
 	}
 	return ai.ToolNames()
+}
+
+func intersectTools(list, allowed []string) []string {
+	ok := map[string]bool{}
+	for _, t := range allowed {
+		ok[t] = true
+	}
+	out := make([]string, 0, len(list))
+	for _, t := range list {
+		if ok[t] {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func withoutTool(list []string, name string) []string {

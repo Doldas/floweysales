@@ -16,6 +16,14 @@ type ManagedUser struct {
 	Active bool   `json:"active"`
 }
 
+// ActiveUserByID returns an active account, for work that runs on its behalf
+// without a request (a scheduled flow).
+func (s *Service) ActiveUserByID(ctx context.Context, id int64) (User, error) {
+	var u User
+	err := s.db.QueryRowContext(ctx, "SELECT id,email,role FROM auth_users WHERE id=? AND active=TRUE", id).Scan(&u.ID, &u.Email, &u.Role)
+	return u, err
+}
+
 func (s *Service) ListUsers(ctx context.Context) ([]ManagedUser, error) {
 	rows, err := s.db.QueryContext(ctx, "SELECT id,email,role,active FROM auth_users ORDER BY id DESC LIMIT 200")
 	if err != nil {
