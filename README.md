@@ -23,6 +23,10 @@ Press **Ctrl/⌘ K** anywhere for the command palette. Light and dark themes fol
 the system setting and can be toggled in the top bar. See
 [ADR 0001](docs/adr/0001-agentic-workspace-shell.md) for the design decisions.
 
+## Documentation
+
+The **[user guide](docs/guide/index.md)** describes each area as built: [getting started](docs/guide/getting-started.md), [Markets](docs/guide/markets.md), the [Leaderboard](docs/guide/leaderboard.md), [strategies and backtests](docs/guide/strategies.md), [Flow Studio](docs/guide/flows.md), [agents, teams and evidence modes](docs/guide/agents.md), [provenance and trust](docs/guide/provenance.md), [settings and roles](docs/guide/settings.md) and [Help and About](docs/guide/help.md). It is published with the project site at https://doldas.github.io/floweysales/ and the app's Help page links to it. See [docs/README.md](docs/README.md) for the technical notes, which are for people who build or run FloweySales.
+
 ## Requirements
 
 - Go 1.27.1+ (see `go.mod`)
