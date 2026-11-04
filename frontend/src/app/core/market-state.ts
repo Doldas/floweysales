@@ -5,7 +5,7 @@ import { MarketService, describeHttpError, type TrackedAsset } from '../services
 import { LiveSseService } from '../live.service';
 import { feedStatus } from './feed-status';
 import { instrumentFromQuery, instrumentKey, isStaleResponse, pickInitialInstrument } from './instrument-ref';
-import { RecentInstrument, addRecent, parseRecent } from './recent-instruments';
+import { FavoriteInstrument, RecentInstrument, addRecent, isFavorite, parseFavorites, parseRecent, toggleFavorite } from './recent-instruments';
 import { OrdersState } from '../orders-state';
 import { NotifyService } from './notify.service';
 import {
@@ -60,6 +60,8 @@ export class MarketState {
 
   /** The instruments looked at last, newest first; kept in this browser only. */
   readonly recent = signal<RecentInstrument[]>(parseRecent(this.readLocal('recentInstruments')));
+  /** Instruments the user starred; kept in this browser only, like the recent list. */
+  readonly favorites = signal<FavoriteInstrument[]>(parseFavorites(this.readLocal('favoriteInstruments')));
   readonly trackedAssets = signal<TrackedAsset[]>([]);
   readonly trackedSymbol = signal('');
   readonly trackedName = signal('');
@@ -117,6 +119,16 @@ export class MarketState {
     return points.filter((_, i) => i % step === 0).map(p => p.c);
   });
 
+  readonly selectedFavorite = computed(() =>
+    !!this.trackedSymbol() && isFavorite(this.favorites(), { symbol: this.trackedSymbol(), provider: this.trackedProvider() }));
+
+  /** Whether a server tracker (live mode) or watchlist entry (research) exists for the selected instrument. */
+  readonly selectedTracked = computed(() =>
+    this.trackedAssets().some(t => t.symbol === this.trackedSymbol() && t.provider === this.trackedProvider()));
+  /** Live mode only: "Track live" applies to a selected instrument that has no tracker and fits under the limit. */
+  readonly canTrackSelected = computed(() =>
+    this.mode() === 'live' && !!this.trackedSymbol() && !this.selectedTracked() && this.trackedAssets().length < MAX_TRACKERS);
+
   /** Ticks every 30 s so a silent feed turns stale without any new event. */
   private readonly clock = signal(Date.now());
   /** Feed health as four separate facts; see feed-status.ts. */
@@ -125,7 +137,8 @@ export class MarketState {
     const tick = this.stream.latestTick();
     return feedStatus({
       research: this.mode() === 'research',
-      hasTracker: !!this.trackedSymbol(),
+      hasTracker: this.selectedTracked(),
+      hasSelection: !!this.trackedSymbol(),
       connection: this.stream.state(),
       lastUpdateAt: this.stream.lastUpdateAt(),
       quoteKind: provider?.quote_kind ?? '',
@@ -244,8 +257,12 @@ export class MarketState {
     return this.api.search(query, provider).pipe(map(list => list ?? []));
   }
 
-  /** Validates a typed symbol (or takes a search hit) and makes it active. */
-  track(target: string | SymbolInfo): void {
+  /**
+   * Validates a typed symbol (or takes a search hit) and makes it the selected
+   * instrument. Selecting never changes the server: in live mode an instrument
+   * that is not tracked yet is shown from history only, until `trackLive()`.
+   */
+  select(target: string | SymbolInfo): void {
     if (typeof target !== 'string') {
       this.launch(target.symbol, target.name, target.exchange);
       return;
@@ -273,6 +290,27 @@ export class MarketState {
       },
       error: err => this.notify.error('Ticker validation failed: ' + describeHttpError(err)),
     });
+  }
+
+  /** Stars or unstars the selected instrument. A full list says so instead of silently refusing. */
+  toggleFavoriteSelected(): void {
+    const symbol = this.trackedSymbol();
+    if (!symbol) return;
+    const next = toggleFavorite(this.favorites(), {
+      symbol, provider: this.trackedProvider(), name: this.trackedName() || undefined, exchange: this.trackedExchange() || undefined,
+    });
+    if (next.length !== this.favorites().length) {
+      this.favorites.set(next);
+      this.writeLocal('favoriteInstruments', JSON.stringify(next));
+    } else {
+      this.notify.info('The favorites list is full. Remove one first.');
+    }
+  }
+
+  /** Live mode: starts a server tracker for the selected instrument (the explicit "Track live"). */
+  trackLive(): void {
+    if (!this.canTrackSelected()) return;
+    this.launch(this.trackedSymbol(), undefined, undefined, true);
   }
 
   view(target: TrackedAsset): void {
@@ -335,7 +373,7 @@ export class MarketState {
     this.api.getTrackers().subscribe({ next: data => this.trackedAssets.set(data.trackers ?? []), error: () => {} });
   }
 
-  private launch(symbol: string, name?: string, exchange?: string): void {
+  private launch(symbol: string, name?: string, exchange?: string, startTracker = false): void {
     const provider = this.provider();
     this.connecting.set(true);
     this.gotTickForCurrentAsset = false;
@@ -364,6 +402,19 @@ export class MarketState {
       return;
     }
 
+    // Selecting is not tracking: an untracked instrument gets history, no tracker and no stream.
+    const tracked = this.trackedAssets().some(t => t.symbol === symbol && t.provider === provider);
+    if (!tracked && !startTracker) {
+      if (this.firstTickTimer) {
+        clearTimeout(this.firstTickTimer);
+        this.firstTickTimer = null;
+      }
+      this.stream.clear();
+      this.orders.loadFor(symbol);
+      this.loadHistory(symbol, provider, false);
+      return;
+    }
+
     this.stream.connectFor(symbol, provider);
     this.orders.loadFor(symbol);
     this.api.applyConfig(symbol, provider).subscribe({
@@ -373,6 +424,7 @@ export class MarketState {
       },
       error: err => {
         this.connecting.set(false);
+        if (startTracker) this.stream.clear();
         this.notify.error('Failed to switch asset: ' + describeHttpError(err));
       },
     });

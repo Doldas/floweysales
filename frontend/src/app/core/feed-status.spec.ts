@@ -123,6 +123,14 @@ test('research mode and no tracker have their own states', () => {
   assert.equal(feedStatus(input({ hasTracker: false }), NOW).headline, 'No active tracker');
 });
 
+test('a selected instrument without a tracker is not shown as live or as having no selection', () => {
+  const s = feedStatus(input({ hasTracker: false, hasSelection: true }), NOW);
+  assert.equal(s.headline, 'Not tracked live');
+  assert.equal(s.pulse, false);
+  assert.equal(s.canReconnect, false);
+  assert.match(s.details[0].text, /Track live/);
+});
+
 test('unknown provider facts are disclosed', () => {
   const s = feedStatus(input({ quoteKind: '', officialApi: null }), NOW);
   assert.match(s.details.find(d => d.label === 'Data type')!.text, /does not say/);

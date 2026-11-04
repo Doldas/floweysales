@@ -12,7 +12,10 @@ export type FeedTone = 'is-success' | 'is-warning' | 'is-danger' | 'is-info' | '
 
 export interface FeedInput {
   research: boolean;
+  /** The selected instrument has a tracker (live) or watchlist entry. */
   hasTracker: boolean;
+  /** An instrument is selected, tracked or not. */
+  hasSelection?: boolean;
   connection: FeedConnection;
   /** When this browser last received a price update (ms); null before the first one. */
   lastUpdateAt: number | null;
@@ -116,6 +119,10 @@ export function feedStatus(input: FeedInput, now: number): FeedStatus {
   if (input.research) {
     return { ...base, connection: 'none', headline: 'Prices from history', tone: 'is-info',
       details: [{ label: 'Source', text: 'Research mode shows the loaded history. There is no live price stream.' }] };
+  }
+  if (!input.hasTracker && input.hasSelection) {
+    return { ...base, connection: 'none', headline: 'Not tracked live', tone: 'is-info',
+      details: [{ label: 'Source', text: 'This instrument is selected but has no live tracker, so only loaded history is shown. Use "Track live" to receive prices.' }] };
   }
   if (!input.hasTracker || input.connection === 'none') {
     return { ...base, connection: 'none', headline: 'No active tracker', tone: '',

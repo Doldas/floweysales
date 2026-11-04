@@ -177,6 +177,19 @@
   .chip-name { font-size: 0.8rem; color: var(--fs-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .chip-meta { font-size: 0.68rem; color: var(--fs-muted); flex: 0 0 auto; }
 }
+.instrument-chip.is-ignored { opacity: 0.6; }
+.chip-note { font-size: 0.68rem; color: var(--fs-muted); flex: 0 0 auto; font-style: italic; }
+.star-btn { flex: 0 0 auto; color: var(--fs-muted); &[aria-pressed='true'] { color: var(--bs-warning); } }
+.picker-open { display: none; }
+.picker-sheet {
+  position: fixed; inset: 0; z-index: 1075; display: flex; flex-direction: column; gap: 0.75rem;
+  padding: 0.75rem 1rem; background: var(--fs-bg); overflow: auto;
+  .picker-head { display: flex; align-items: center; justify-content: space-between; }
+  .picker-title { font-weight: 650; }
+  .picker-note { margin: 0; font-size: 0.8rem; color: var(--fs-muted); }
+  fs-symbol-search { display: block; }
+}
+.instrument-chip + .star-btn + .topbar-search { margin-left: 0; }
 .instrument-chip + .topbar-search { margin-left: 0; }
 .topbar-search { flex: 0 1 380px; margin-left: auto; min-width: 0; }
 .topbar-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; flex: 0 0 auto; }
@@ -255,7 +268,8 @@
 
 @media (max-width: 767.98px) {
   .topbar-search { display: none; }
-  .instrument-chip .chip-name, .instrument-chip .chip-meta { display: none; }
+  .picker-open { display: inline-flex; }
+  .instrument-chip .chip-name, .instrument-chip .chip-meta, .instrument-chip .chip-note { display: none; }
   .topbar-actions { margin-left: auto; gap: 0.35rem; }
 }
 
