@@ -1233,6 +1233,9 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			state.Values[lastNodeID] = previous
 		}
 		nodeResults[lastNodeID] = previous
+		if err := checkFlowRunBudget(nodeResults); err != nil {
+			return "", err
+		}
 		// Every node before i has completed; save that so a run whose
 		// worker is lost resumes here instead of starting over.
 		if checkpointer != nil && i > startIndex {

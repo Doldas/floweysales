@@ -452,3 +452,15 @@ func TestStepDiagnosticsRecordRedactedInputErrorAndAttempt(t *testing.T) {
 		t.Fatalf("run attribution: %+v %v", runs, err)
 	}
 }
+
+func TestFailedCheckpointLeavesOneNoteWithTheConsequence(t *testing.T) {
+	var notes []string
+	flaky := &memoryCheckpoints{fail: errors.New("oversized flow checkpoint")}
+	cp := &flowCheckpointer{store: flaky.store, lastSaved: -1, warn: func(m string) { notes = append(notes, m) }}
+	if _, err := runWithCheckpoints(t, pureFlow(2), cp); err != nil {
+		t.Fatal(err)
+	}
+	if len(notes) != 1 || !strings.Contains(notes[0], "could not be saved") || !strings.Contains(notes[0], "restart from the start") || !strings.Contains(notes[0], "oversized") {
+		t.Fatalf("want one explanatory note, got %q", notes)
+	}
+}

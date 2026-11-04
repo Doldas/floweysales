@@ -45,3 +45,14 @@ func TestCheckFlowOutputSizeNamesNode(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestRunBudgetNamesTheLargestOutput(t *testing.T) {
+	results := map[string]string{"a": "x", "big": strings.Repeat("y", flowRunOutputBudget)}
+	err := checkFlowRunBudget(results)
+	if err == nil || !strings.Contains(err.Error(), "node big") || !strings.Contains(err.Error(), "run budget") {
+		t.Fatalf("got %v", err)
+	}
+	if err := checkFlowRunBudget(map[string]string{"a": strings.Repeat("y", flowNodeOutputMax)}); err != nil {
+		t.Fatalf("one node at the limit is fine: %v", err)
+	}
+}

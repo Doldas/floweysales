@@ -48,6 +48,13 @@ type flowCheckpointState struct {
 type flowCheckpointer struct {
 	resume *storage.FlowRunCheckpoint
 	store  func(ctx context.Context, nextIndex int, state json.RawMessage) error
+	// warn records a note in the run's steps. It is called once, on the first
+	// checkpoint that cannot be saved, so the run history says why a lost
+	// worker would redo work.
+	warn func(msg string)
+	// lastSaved is the step index of the newest checkpoint in storage, or -1.
+	lastSaved int
+	warned    bool
 }
 
 // save persists state. Losing the lease stops the run; other storage errors
@@ -62,8 +69,24 @@ func (c *flowCheckpointer) save(ctx context.Context, nextIndex int, state flowCh
 			return err
 		}
 		log.Printf("[Flows] Checkpoint before step %d not saved: %v", nextIndex+1, err)
+		if !c.warned && c.warn != nil {
+			c.warned = true
+			c.warn(checkpointWarning(nextIndex, len(raw), c.lastSaved, err))
+		}
+		return nil
 	}
+	c.lastSaved = nextIndex
 	return nil
+}
+
+// checkpointWarning says what a failed checkpoint costs: if the worker is lost
+// the run resumes from the last saved one, or from the start.
+func checkpointWarning(nextIndex, size, lastSaved int, cause error) string {
+	resume := "from the start"
+	if lastSaved > 0 {
+		resume = fmt.Sprintf("from step %d", lastSaved+1)
+	}
+	return fmt.Sprintf("The resume checkpoint before step %d (%d bytes) could not be saved: %s. The run continues; if the worker is lost it would restart %s. Later checkpoints are still tried.", nextIndex+1, size, cause, resume)
 }
 
 // restoreFlowCheckpoint validates a checkpoint against the run's node order.
@@ -217,7 +240,14 @@ func (e *Engine) runClaimedFlow(workerCtx context.Context, c *storage.ClaimedFlo
 
 	checkpointer := &flowCheckpointer{resume: c.Checkpoint, store: func(ctx context.Context, nextIndex int, state json.RawMessage) error {
 		return e.db.SaveAgentFlowRunCheckpoint(ctx, c.RunID, e.flowWorkerID, nextIndex, state)
+	}, lastSaved: -1, warn: func(msg string) {
+		if err := e.db.AppendAgentFlowRunStep(ctx, c.RunID, "flow", "Checkpoint not saved", "WARNING", msg); err != nil {
+			log.Printf("[Flows] Checkpoint note for run %d not saved: %v", c.RunID, err)
+		}
 	}}
+	if c.Checkpoint != nil {
+		checkpointer.lastSaved = c.Checkpoint.NextIndex
+	}
 	if c.Checkpoint != nil {
 		note := fmt.Sprintf("Attempt %d resumed from the checkpoint before step %d", c.Attempt, c.Checkpoint.NextIndex+1)
 		if err := e.db.AppendAgentFlowRunStep(ctx, c.RunID, "flow", "Resumed", "RESUMED", note); err != nil {
