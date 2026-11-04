@@ -13,7 +13,7 @@ import { LEADERBOARD_FACTORS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES } fr
 import { ProgressStatusComponent } from '../ui/progress-status';
 import { SkeletonComponent } from '../ui/skeleton';
 import { BacktestPanelComponent } from './backtest-panel';
-import { FACTOR_LABELS, STRATEGY_PLAYBOOK, alternativeList, coverageBreakdown, coverageSummary, flagList, leaderboardPrompt, methodFactors, metricValue, num, pct, reasonList, scoreSum, scoreTone, selectionLines, sourceKindLabel, universeCsv } from './leaderboard-view';
+import { FACTOR_LABELS, regionCoverage, STRATEGY_PLAYBOOK, alternativeList, coverageBreakdown, coverageSummary, flagList, leaderboardPrompt, methodFactors, metricValue, num, pct, reasonList, scoreSum, scoreTone, selectionLines, sourceKindLabel, universeCsv } from './leaderboard-view';
 
 const WATCHLIST = 'watchlist';
 const STORE_KEY = 'fs.leaderboard';
@@ -51,6 +51,17 @@ const STORE_KEY = 'fs.leaderboard';
         <button type="button" [attr.aria-pressed]="universe() === watchlist" (click)="setUniverse(watchlist)" title="The symbols on your watchlist or trackers">My watchlist</button>
       }
     </div>
+    <details class="regions">
+      <summary>Coverage by region</summary>
+      <ul>
+        @for (r of regions(); track r.id) {
+          <li><strong>{{ r.label }}</strong>:
+            @if (r.universes.length) { {{ r.universes.join(', ') }} ({{ r.countries.join(', ') }}) } @else { <span class="text-muted">No supported market yet</span> }
+          </li>
+        }
+      </ul>
+      <p class="text-muted mb-0">A region is listed as covered only when a list of companies is offered and its prices and reports have been checked. Nothing is filled in for the rest.</p>
+    </details>
     <div class="strategies" role="group" aria-label="Strategy">
       @for (s of strategies(); track s.id) {
         <button type="button" class="fs-chip" [attr.aria-pressed]="strategy() === s.id" (click)="setStrategy(s.id)" [title]="s.description">{{ s.label }}</button>
@@ -296,6 +307,7 @@ const STORE_KEY = 'fs.leaderboard';
 .board-sub { font-size: 0.8rem; color: var(--fs-muted); margin-top: 0.15rem; }
 .board-actions { display: flex; align-items: center; gap: 0.4rem; }
 .as-of { font-size: 0.75rem; color: var(--fs-muted); white-space: nowrap; }
+.regions { font-size: 0.8125rem; summary { cursor: pointer; color: var(--fs-muted); } ul { margin: 0.4rem 0; padding-left: 1.1rem; } }
 .board-controls { display: grid; gap: 0.6rem; padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--fs-border); }
 .strategies { display: flex; flex-wrap: wrap; gap: 0.35rem; .fs-chip { padding: 0.2rem 0.65rem; font-size: 0.78rem; } }
 .board-note { font-size: 0.75rem; color: var(--fs-muted); margin: 0; padding: 0.75rem 1.25rem; }
@@ -384,6 +396,7 @@ export class LeaderboardComponent {
   readonly selectionText = computed(() => selectionLines(this.data()?.selection).join(' → '));
   readonly countryText = computed(() => coverageBreakdown(this.data()?.selection?.countries));
   readonly method = computed(() => methodFactors(this.data()?.provenance?.methodology));
+  readonly regions = computed(() => regionCoverage(this.universes()));
   readonly universeInfo = computed(() => this.universes().find(u => u.id === this.universe()));
   readonly example = computed(() => {
     const row = this.data()?.rows.find(r => r.breakdown);

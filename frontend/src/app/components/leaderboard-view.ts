@@ -137,3 +137,23 @@ export function universeCsv(rows: LeaderboardRow[]): string {
     r.discovery?.url, r.discovery?.as_of, r.metrics_source?.provider, r.metrics_source?.price_as_of, r.metrics_source?.fundamentals_through].map(csvCell).join(','));
   return [head.join(','), ...lines].join('\n') + '\n';
 }
+
+export const REGIONS: readonly { id: string; label: string }[] = [
+  { id: 'north_america', label: 'North America' }, { id: 'south_america', label: 'South America' }, { id: 'europe', label: 'Europe' },
+  { id: 'asia', label: 'Asia' }, { id: 'africa', label: 'Africa' }, { id: 'oceania', label: 'Oceania' },
+];
+
+export interface RegionCoverage { id: string; label: string; universes: string[]; countries: string[] }
+
+/**
+ * Coverage by world region, from the universes the server actually offers.
+ * A region with none keeps its row (empty), so "No supported market yet" is
+ * shown rather than the region being hidden or padded.
+ */
+export function regionCoverage(universes: readonly { label: string; region?: string; countries?: string[] }[]): RegionCoverage[] {
+  return REGIONS.map(r => {
+    const inRegion = universes.filter(u => u.region === r.id);
+    const countries = [...new Set(inRegion.flatMap(u => u.countries ?? []))].sort();
+    return { ...r, universes: inRegion.map(u => u.label), countries };
+  });
+}
