@@ -26,7 +26,7 @@ interface FinRow {
   fcf: string;
 }
 
-const moneyFmt = new Intl.NumberFormat(undefined, {
+const moneyFmt = new Intl.NumberFormat('en-US', {
   notation: 'compact',
   maximumFractionDigits: 2,
 });
@@ -49,10 +49,10 @@ export class FinancialsComponent {
   readonly agentAction = input(true);
   readonly provider = input<ProviderId>('YAHOO');
 
-  readonly yearOptions = Array.from({length: new Date().getFullYear() - 1999}, (_,i) => new Date().getFullYear()-i);
+  readonly yearOptions = Array.from({length: new Date().getUTCFullYear() - 1999}, (_,i) => new Date().getUTCFullYear()-i);
   readonly yearMode = signal<'recent'|'custom'>('recent');
-  readonly fromYear = signal(Math.max(2000,new Date().getFullYear()-4));
-  readonly toYear = signal(new Date().getFullYear());
+  readonly fromYear = signal(Math.max(2000,new Date().getUTCFullYear()-4));
+  readonly toYear = signal(new Date().getUTCFullYear());
   readonly loading = signal(false);
   readonly error = signal('');
   readonly data = signal<FinancialsResponse | null>(null);

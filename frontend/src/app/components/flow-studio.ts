@@ -19,6 +19,7 @@ import { bindInputPin, declaredPins, mixesPinAndPlainInputs, pinBindings, pinEdg
 import { FlowNotifyChannelsComponent } from './flow-notify-channels';
 import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES, SCREEN_FIELDS, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
+import { formatUtcDateTime } from '../ui/datetime';
 
 interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'|'watchlist_quotes'|'technical_scan'|'fundamentals'|'sec_filings'|'news'|'leaderboard'|'screen'|'only_new'|'report_table'|'notify'|'insider_activity'|'macro_regime'|'portfolio_check'|'corporate_events'|'wealth_plan'|'backtest'; label:string; symbols?:string; universe?:string; strategy?:string; provider?:string; rule?:string; sort_by?:string; limit?:number; columns?:string; title?:string; key_fields?:string; cooldown_hours?:number; lookback_days?:number; forms?:string; kinds?:string; years?:number; channel?:'email'|'webhook'; subject?:string; skip_empty?:boolean; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number;persona?:string;require_grounding?:boolean; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
@@ -1123,7 +1124,7 @@ export class FlowStudioComponent {
  displayRunTime(value?:string|null):string{
    if(!value)return 'Unavailable';
    const date=new Date(value);
-   return Number.isNaN(date.getTime())?'Unavailable':date.toLocaleString();
+   return Number.isNaN(date.getTime())?'Unavailable':formatUtcDateTime(date);
  }
  displayStepDuration(ms:number|null|undefined):string{
    if(ms==null)return 'Unavailable';

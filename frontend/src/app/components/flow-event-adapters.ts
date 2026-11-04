@@ -1,6 +1,7 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { adapterProblem, curlExample, deliveryPath, deliverySummary, type AdapterDelivery, type EventAdapter } from './event-adapters';
+import { formatUtcDateTime } from '../ui/datetime';
 
 interface Trigger { id: number; event_key: string; payload_type: string }
 
@@ -91,7 +92,7 @@ export class FlowEventAdaptersComponent implements OnInit {
  readonly summary=deliverySummary;
 
  ngOnInit(){this.refresh()}
- time(value?:string){return value?new Date(value).toLocaleString():''}
+ time(value?:string){return value?formatUtcDateTime(value):''}
  curl(a:EventAdapter,secret:string){return curlExample(location.origin,a,secret)}
 
  async refresh(){

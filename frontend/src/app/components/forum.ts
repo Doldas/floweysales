@@ -19,6 +19,7 @@ import { MarketService, describeHttpError } from '../services';
 import { MarketState } from '../core/market-state';
 import { NotifyService } from '../core/notify.service';
 import { ForumPost } from '../models';
+import { formatUtcDateTime } from '../ui/datetime';
 import { timeAgo } from '../ui/format';
 import {
   BODY_MAX,
@@ -68,6 +69,7 @@ export class ForumComponent {
   protected readonly titleMax = TITLE_MAX;
   protected readonly bodyMax = BODY_MAX;
   protected readonly timeAgo = timeAgo;
+  protected readonly utc = formatUtcDateTime;
   protected readonly initials = initials;
   protected readonly excerpt = excerpt;
   protected readonly isLong = isLong;

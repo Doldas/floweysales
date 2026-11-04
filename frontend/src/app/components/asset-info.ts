@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 
 import { StockHolding, type MarketData } from '../models';
+import { formatNumber } from '../ui/datetime';
 
 @Component({
   selector: 'fse-asset-info',
@@ -49,7 +50,7 @@ export class AssetInfoComponent {
     if (!val || Number.isNaN(val)) return '---';
     if (val >= 1e9) return `${(val / 1e9).toFixed(2)}B ${currency}`;
     if (val >= 1e6) return `${(val / 1e6).toFixed(2)}M ${currency}`;
-    return `${val.toLocaleString()} ${currency}`;
+    return `${formatNumber(val)} ${currency}`;
   };
 
   readonly stars = (n: number | undefined): string => (n ? `${n} / 5` : 'N/A');

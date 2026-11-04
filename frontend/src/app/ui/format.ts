@@ -1,5 +1,7 @@
 /** Small display helpers shared by pages. Pure functions; no Angular. */
 
+const UTC_DATE = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric' });
+
 /** "3 min ago", "2 h ago", "yesterday", or a date for older timestamps. */
 export function timeAgo(value: string | number | null | undefined, now = Date.now()): string {
   if (value === null || value === undefined || value === '') return '—';
@@ -12,7 +14,7 @@ export function timeAgo(value: string | number | null | undefined, now = Date.no
   if (s < 86400) return `${Math.round(s / 3600)} h ago`;
   if (s < 172800) return 'yesterday';
   if (s < 7 * 86400) return `${Math.round(s / 86400)} days ago`;
-  return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  return UTC_DATE.format(t); // UTC, like every date in the app (see datetime.ts; node --test cannot import it)
 }
 
 /** Human duration for milliseconds: 820 ms, 4.2 s, 3 min 10 s. */
@@ -42,13 +44,9 @@ export function runLabel(status: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** Time-of-day greeting. */
-export function greeting(date = new Date()): string {
-  const h = date.getHours();
-  if (h < 5) return 'Working late';
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
+/** Greeting. It does not depend on the time of day: every time in the app is UTC, which says nothing about the reader's morning. */
+export function greeting(): string {
+  return 'Welcome back';
 }
 
 /** Readable schedule: 15 → "Every 15 min", 60 → "Hourly", 1440 → "Daily". */
@@ -64,12 +62,12 @@ export function everyLabel(minutes: number): string {
  * Whole-unit money: 1234567 and "USD" → "$1,234,567". Without a usable
  * currency code it is the plain number, so a bad code never throws.
  */
-export function formatMoney(value: number | null | undefined, currency = '', locale?: string): string {
+export function formatMoney(value: number | null | undefined, currency = ''): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
   try {
     if (/^[A-Za-z]{3}$/.test(currency)) {
-      return new Intl.NumberFormat(locale, { style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: 0 }).format(value);
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: 0 }).format(value);
     }
   } catch { /* unknown code: fall through */ }
-  return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value);
 }
