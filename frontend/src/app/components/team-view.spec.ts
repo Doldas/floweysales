@@ -2,7 +2,7 @@
 //   node --test src/app/components/team-view.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_TEAM, applyTeamEvent, shownText, stanceCounts, startTeam, stripStance, togglePersona } from './team-view.ts';
+import { DEFAULT_TEAM, applyTeamEvent, evidenceLine, shownText, stanceCounts, startTeam, stripStance, togglePersona } from './team-view.ts';
 import type { TeamEvent } from '../models';
 
 const run = (events: TeamEvent[]) => events.reduce(applyTeamEvent, startTeam([{ id: 'a', name: 'Alpha' }, { id: 'b', name: 'Beta' }], true));
@@ -23,6 +23,20 @@ test('events fold into per-member state and a chair', () => {
   assert.equal(s.members[1].stance, 'does_not_fit');
   assert.equal(s.chair?.status, 'done');
   assert.equal(shownText(s.members[0]), 'Good cash.');
+});
+
+test('a member keeps its sources and the citation check result', () => {
+  const sources = [{ id: 'S1', tool: 'search_web', class: 'web_page', access: 'listed' }];
+  const s = run([
+    { type: 'member_start', agent: 'a' },
+    { type: 'sources', agent: 'a', sources, audit: [{ kind: 'snippet_only', sentence: 'x', detail: 'y' }], removed: [{ kind: 'stale', sentence: 'z', detail: 'w' }] },
+    { type: 'sources', agent: 'b', sources: [] },
+  ]);
+  assert.equal(s.members[0].sources?.length, 1);
+  assert.match(evidenceLine(s.members[0]), /^1 statement was removed.*found 1 problem\./);
+  assert.equal(evidenceLine(s.members[1]), '');
+  assert.match(evidenceLine({ ...s.members[1], sources }), /does not confirm the claims are true/);
+  assert.equal(applyTeamEvent(startTeam([], false), { type: 'sources', sources }).members.length, 0);
 });
 
 test('streamed text shows until the final answer arrives, without the stance line', () => {

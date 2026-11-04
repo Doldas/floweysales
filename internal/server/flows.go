@@ -62,6 +62,11 @@ type flowNode struct {
 	// RequireGrounding fails an attempt whose answer states figures that are
 	// not in its tool results or input.
 	RequireGrounding bool `json:"require_grounding,omitempty"`
+	// Evidence sets the evidence mode and limits of an agent node (see
+	// docs/agent-evidence.md). A strict mode holds the answer until its
+	// citations check, and a node whose answer still fails fails the attempt,
+	// unless the policy blocks the unsupported sentences.
+	Evidence *ai.EvidencePolicy `json:"evidence,omitempty"`
 	// Investor nodes (see flow_investor.go).
 	Symbols       string `json:"symbols,omitempty"`
 	Provider      string `json:"provider,omitempty"`
@@ -1162,6 +1167,7 @@ type flowNodeError struct {
 	DurationMS int64
 	Attempts   *int
 	ToolCalls  string
+	Sources    string
 	Err        error
 }
 
@@ -1220,9 +1226,13 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			nodeErr.Attempts = &attempts
 		}
 		nodeErr.ToolCalls = nodeTools.JSON()
+		nodeErr.Sources = nodeTools.SourcesJSON()
 		flowErr = nodeErr
 	}()
 	record := func(step map[string]string) {
+		// The sources go to the step record, not into the run's output.
+		sourcesJSON := step["sources"]
+		delete(step, "sources")
 		results = append(results, step)
 		if runID, ok := ctx.Value(flowTraceRunKey{}).(int64); ok && depth == 0 {
 			status := step["status"]
@@ -1240,7 +1250,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 			attempt, _ := ctx.Value(flowAttemptKey{}).(int)
 			if err := e.db.AppendAgentFlowRunStepRecord(ctx, runID, storage.FlowRunStepRecord{
 				Node: step["node"], Label: step["label"], Status: status, Input: input, Output: step["output"],
-				StartedAt: stepStarted, DurationMS: durationMS, WorkerAttempt: attempt, ToolCalls: step["tool_calls"],
+				StartedAt: stepStarted, DurationMS: durationMS, WorkerAttempt: attempt, ToolCalls: step["tool_calls"], Sources: sourcesJSON,
 			}); err != nil {
 				log.Printf("[Flows] Node trace persistence failed: %v", err)
 			}
@@ -1634,6 +1644,13 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				runErr = nodeCtx.Err()
 			}
 			cancel()
+			if runErr == nil && n.Evidence != nil && n.Evidence.Strict() {
+				// Nobody reads a flag in a flow, so an answer that still fails
+				// its citation check fails the attempt instead of flowing on.
+				if found := tools.Findings(attemptNumber); len(found) > 0 {
+					runErr = fmt.Errorf("evidence check: %d problem(s) remain in the answer, for example %s: %s", len(found), found[0].Kind, found[0].Detail)
+				}
+			}
 			if runErr == nil && n.RequireGrounding {
 				if err := grounding.Check(result.String(), tools.Evidence(attemptNumber), prompt); err != nil {
 					runErr = fmt.Errorf("grounding check: %w", err)
@@ -1682,7 +1699,7 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 		if len(previous) > 6000 {
 			previous = previous[:6000]
 		}
-		record(map[string]string{"node": n.ID, "label": n.Label, "output": previous, "tool_calls": nodeTools.JSON()})
+		record(map[string]string{"node": n.ID, "label": n.Label, "output": previous, "tool_calls": nodeTools.JSON(), "sources": nodeTools.SourcesJSON()})
 	}
 	currentNode = nil
 	if v2 && lastNodeID != "start" && state.Active[lastNodeID] {

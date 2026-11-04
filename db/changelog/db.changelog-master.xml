@@ -44,4 +44,5 @@
   <include file="040-backtest-runs.xml" relativeToChangelogFile="true"/>
   <include file="041-ranking-preferences.xml" relativeToChangelogFile="true"/>
   <include file="042-agent-team-budget.xml" relativeToChangelogFile="true"/>
+  <include file="043-evidence-settings.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

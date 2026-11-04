@@ -55,6 +55,14 @@ type Case struct {
 	CleanCitations bool `json:"clean_citations,omitempty"`
 	// Reference, for calculator cases, recomputes Expected[0].
 	Reference *Reference `json:"reference,omitempty"`
+	// Evidence is the evidence policy the case runs under (mode, block or
+	// flag, recency limit, source types). Today is the date the recency limit
+	// counts from, so a case does not age with the calendar. DeadLinks are the
+	// addresses the link check finds unreachable; every other one resolves.
+	// None of these touch the network.
+	Evidence  *ai.EvidencePolicy `json:"evidence,omitempty"`
+	Today     string             `json:"today,omitempty"`
+	DeadLinks []string           `json:"dead_links,omitempty"`
 }
 
 // Pattern is a case-insensitive regular expression with a name for reports.
@@ -105,6 +113,14 @@ func ParseSuite(raw []byte) (Suite, error) {
 			if _, err := regexp.Compile("(?i)" + p.Regex); err != nil || p.Label == "" {
 				return s, fmt.Errorf("case %s has a pattern %q that is unnamed or does not compile", c.ID, p.Label)
 			}
+		}
+		if c.Evidence != nil {
+			if err := c.Evidence.Validate(); err != nil {
+				return s, fmt.Errorf("case %s: %w", c.ID, err)
+			}
+		}
+		if _, err := caseToday(c); err != nil {
+			return s, fmt.Errorf("case %s: today must be a date such as 2026-11-03", c.ID)
 		}
 		seen[c.ID] = true
 	}
@@ -201,10 +217,26 @@ func runCase(ctx context.Context, client *ai.Client, c Case, opts Options) Resul
 		}
 		return out, err
 	}
-	err := ai.Run(ctx, client, nil, []ai.Message{{Role: "user", Content: c.Question}}, ai.AgentOptions{
+	agent := ai.AgentOptions{
 		SystemPrompt: opts.SystemPrompt, MaxSteps: opts.MaxToolCalls + 2, MaxToolCalls: opts.MaxToolCalls,
 		AllowedTools: c.Tools, AnswerAfterToolBudget: true, Execute: execute,
-	}, func(ev ai.Event) {
+	}
+	if c.Evidence != nil {
+		c.Evidence.Apply(&agent)
+		if c.Evidence.Strict() {
+			agent.MaxSteps += 2 // rounds for the corrections of a failing draft
+		}
+		agent.CheckLink = func(_ context.Context, address string) error {
+			for _, dead := range c.DeadLinks {
+				if dead == address {
+					return fmt.Errorf("HTTP status 404")
+				}
+			}
+			return nil
+		}
+		agent.Now, _ = caseToday(c)
+	}
+	err := ai.Run(ctx, client, nil, []ai.Message{{Role: "user", Content: c.Question}}, agent, func(ev ai.Event) {
 		mu.Lock()
 		defer mu.Unlock()
 		switch ev.Type {
@@ -242,6 +274,14 @@ func runCase(ctx context.Context, client *ai.Client, c Case, opts Options) Resul
 	return r
 }
 
+// caseToday is the fixed date of a case, or the zero time for the real clock.
+func caseToday(c Case) (time.Time, error) {
+	if c.Today == "" {
+		return time.Time{}, nil
+	}
+	return time.Parse("2006-01-02", c.Today)
+}
+
 // fixtureResult answers a tool call from the case fixtures; calculators,
 // which are deterministic and offline, run for real.
 func fixtureResult(ctx context.Context, c Case, name, args string) (string, error) {
@@ -254,7 +294,7 @@ func fixtureResult(ctx context.Context, c Case, name, args string) (string, erro
 	return "", fmt.Errorf("no data available from %s for this question", name)
 }
 
-var refusalPattern = regexp.MustCompile(`(?i)\b(not available|unavailable|no data|not (?:yet )?(?:reported|disclosed|published)|cannot (?:find|determine|provide)|could not (?:find|determine)|insufficient data|does not (?:include|contain)|no (?:filing|figure|record)s?)\b`)
+var refusalPattern = regexp.MustCompile(`(?i)\b(not available|unavailable|no data|not (?:yet )?(?:reported|disclosed|published)|cannot (?:find|determine|provide)|could not (?:find|determine)|insufficient (?:verifiable )?(?:data|evidence)|does not (?:include|contain)|no (?:filing|figure|record)s?)\b`)
 
 // Score checks an answer against a case and the evidence the agent saw.
 func Score(c Case, answer, evidence string) Result {

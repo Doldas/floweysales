@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
-import { EVIDENCE_MODES, auditSummary, findingLabel, safeUrl, sourceOrigin, splitSources } from '../core/answer-sources';
+import { EVIDENCE_MODES, auditSummary, findingLabel, removedSummary, safeUrl, settingsSummary, sourceOrigin, splitSources } from '../core/answer-sources';
 import { AgentSession, type ChatEntry } from '../core/agent-session';
 import { renderMarkdown } from '../markdown';
 import { toolLabel } from '../components/agent-tools';
@@ -37,6 +37,8 @@ export class AgentChatComponent {
   readonly canResume = canResume;
   readonly when = formatUtcDateTime;
   readonly mark = (status: string): string => (status === 'done' ? 'bi-check-circle-fill' : status === 'missing' ? 'bi-x-circle-fill' : 'bi-circle');
+  readonly evidenceSummary = computed(() => settingsSummary(this.session.evidenceSettings()));
+  readonly removedText = computed(() => removedSummary(this.session.answerRemoved()));
   readonly groups = computed(() => splitSources(this.session.answerSources()));
   readonly auditText = computed(() => auditSummary(this.session.answerAudit()));
   link(url: string | undefined): string { return safeUrl(url); }
@@ -98,6 +100,7 @@ export class AgentChatComponent {
     void this.session.loadPersonas();
     void this.session.loadProfiles();
     void this.session.loadTasks();
+    void this.session.loadEvidenceDefault();
     // Keep the newest message in view while the agent streams.
     effect(() => {
       this.session.entries();

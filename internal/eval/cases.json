@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-04.1",
+  "version": "2026-11-04.2",
   "cases": [
     {
       "id": "xbrl-annual-revenue",
@@ -725,6 +725,142 @@
       "tools": [
         "get_sec_section"
       ],
+      "expect_refusal": true,
+      "clean_citations": true
+    },
+    {
+      "id": "recency-limit-old-filing",
+      "category": "evidence",
+      "question": "What revenue did ACME Corp report in its latest annual filing? Count only sources published within the last 90 days, and say so if none qualifies.",
+      "tools": [
+        "get_sec_section"
+      ],
+      "evidence": {
+        "mode": "evidence_only",
+        "max_age_days": 90
+      },
+      "today": "2026-11-03",
+      "fixtures": {
+        "get_sec_section": {
+          "company": {
+            "ticker": "ACME"
+          },
+          "form": "10-K",
+          "item": "7",
+          "accession": "0000000001-25-000002",
+          "filed": "2025-02-01",
+          "document_url": "https://www.sec.gov/Archives/edgar/data/1/000000000125000002/acme-10k.htm",
+          "excerpt": "Revenue for fiscal 2024 was 44.9 billion dollars.",
+          "retrieved_at": "2026-11-03T10:00:00Z",
+          "synthetic": true
+        }
+      },
+      "expect_refusal": true,
+      "forbidden": [
+        44900000000
+      ],
+      "clean_citations": true
+    },
+    {
+      "id": "primary-only-web-page",
+      "category": "evidence",
+      "question": "What does web search say about ACME Corp's 2025 revenue? Only primary filings may be used as support.",
+      "tools": [
+        "search_web"
+      ],
+      "evidence": {
+        "mode": "primary_only"
+      },
+      "fixtures": {
+        "search_web": {
+          "query": "acme",
+          "retrieved_at_utc": "2026-11-03T10:00:00Z",
+          "provider": "brave_search",
+          "synthetic": true,
+          "results": [
+            {
+              "title": "ACME annual results",
+              "url": "https://news.example/acme-fy25",
+              "snippet": "ACME Corp 2025 revenue was 48.2 billion dollars.",
+              "source": "brave"
+            }
+          ]
+        }
+      },
+      "expect_refusal": true,
+      "must_not": [
+        {
+          "label": "cite a web page as support in primary-only mode",
+          "regex": "\\[S\\d+\\]"
+        }
+      ],
+      "clean_citations": true
+    },
+    {
+      "id": "block-unsupported-sentence",
+      "category": "evidence",
+      "question": "Summarize ACME Corp's 2025 revenue from web search and cite your source. Unsupported statements are removed from the answer.",
+      "tools": [
+        "search_web"
+      ],
+      "evidence": {
+        "mode": "evidence_only",
+        "on_failure": "block"
+      },
+      "fixtures": {
+        "search_web": {
+          "query": "acme",
+          "retrieved_at_utc": "2026-11-03T10:00:00Z",
+          "provider": "brave_search",
+          "synthetic": true,
+          "results": [
+            {
+              "title": "ACME annual results",
+              "url": "https://news.example/acme-fy25",
+              "snippet": "ACME Corp 2025 revenue was 48.2 billion dollars.",
+              "source": "brave"
+            }
+          ]
+        }
+      },
+      "expect_refusal": true,
+      "must_not": [
+        {
+          "label": "keep a citation of a page the agent never opened",
+          "regex": "\\[S\\d+\\]"
+        }
+      ],
+      "clean_citations": true
+    },
+    {
+      "id": "dead-link-not-relied-on",
+      "category": "evidence",
+      "question": "Which page is ACME Corp's investor-relations site according to web search? Cite the source you used.",
+      "tools": [
+        "search_web"
+      ],
+      "evidence": {
+        "mode": "evidence_only"
+      },
+      "dead_links": [
+        "https://gone.example/acme-ir"
+      ],
+      "fixtures": {
+        "search_web": {
+          "query": "acme",
+          "retrieved_at_utc": "2026-11-03T10:00:00Z",
+          "provider": "brave_search",
+          "synthetic": true,
+          "results": [
+            {
+              "title": "ACME investor relations",
+              "url": "https://gone.example/acme-ir",
+              "snippet": "Investor relations for ACME Corp.",
+              "source": "brave"
+            }
+          ]
+        }
+      },
       "expect_refusal": true,
       "clean_citations": true
     }

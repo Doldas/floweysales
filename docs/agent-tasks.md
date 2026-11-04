@@ -13,6 +13,7 @@ Under the composer, **Required parts** takes the deliverables, one per line (up 
 - **Evidence ledger.** Every tool call is recorded with its arguments, a preview of the result, any error and a timestamp.
 - **Checkpoints.** After each model round the conversation, ledger, checklist and spent budgets are saved in `agent_tasks`. Failed, cancelled (client disconnect) and incomplete tasks keep their last checkpoint.
 - **Resume.** The saved conversation, ledger and tool-call count are restored. The task continues without dropping evidence.
+- **Sources.** The checkpoint also keeps the sources the run retrieved (up to 60), the citation check findings, what the block option removed and the evidence policy ([agent-evidence.md](agent-evidence.md)). A resumed task keeps its `[S3]` markers meaningful and its policy.
 
 ## API
 
@@ -20,7 +21,7 @@ Under the composer, **Required parts** takes the deliverables, one per line (up 
 | --- | --- |
 | `POST /api/ai/chat` with `deliverables` | Starts a task. The SSE stream gains `task` (id) and `checkpoint` (status, checklist) events |
 | `GET /api/ai/tasks` | Your tasks, newest first |
-| `GET /api/ai/tasks/{id}` | One task with checklist and evidence ledger |
+| `GET /api/ai/tasks/{id}` | One task with checklist, evidence ledger, sources, findings and evidence policy |
 | `POST /api/ai/tasks/{id}/resume` | Continues from the checkpoint; body `{"message": "..."}` is optional. Refused (409) for a `complete` task |
 | `DELETE /api/ai/tasks/{id}` | Removes a task |
 

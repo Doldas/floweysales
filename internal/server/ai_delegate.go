@@ -110,6 +110,9 @@ func (s engineSource) DelegateToTeam(ctx context.Context, team, goal, constraint
 	if pinned {
 		agent.AllowedTools = intersectTools(agent.AllowedTools, pin.tools)
 	}
+	// The members answer under the user's saved evidence default.
+	policy := e.savedEvidencePolicy(ctx, user.ID)
+	policy.Apply(&agent)
 
 	question := goal
 	if c := strings.TrimSpace(constraints); c != "" {

@@ -63,6 +63,10 @@ type Event struct {
 	Audit   []sources.Finding `json:"audit,omitempty"`
 	// Budget accompanies a "budget" event at the end of a team run.
 	Budget *BudgetSummary `json:"budget,omitempty"`
+	// Removed lists what the block option took out of the answer, and Policy
+	// the evidence settings the check ran under (strict modes and limits only).
+	Removed []sources.Finding `json:"removed,omitempty"`
+	Policy  *EvidencePolicy   `json:"policy,omitempty"`
 }
 
 // AgentOptions tunes a run.
@@ -93,6 +97,16 @@ type AgentOptions struct {
 	// check passes, with up to two corrections) or "primary_only" (as
 	// evidence_only, and only primary filings count).
 	EvidenceMode string
+	// EvidenceLimits are the settings under the mode: block or flag, a recency
+	// limit and the source types that count.
+	EvidenceLimits EvidenceLimits
+	// CheckLink tells whether a cited address still resolves. Strict modes use
+	// it on cited sources the agent did not open; when nil, the data source's
+	// LinkChecker is used if it has one.
+	CheckLink sources.LinkChecker
+	// Now is the clock of the recency limit; zero means the current time. A
+	// test or an evaluation case fixes it.
+	Now time.Time
 }
 
 // DefaultSystemPrompt instructs the model how to use the market tools.
@@ -158,16 +172,42 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	deliverables := append([]Deliverable(nil), opts.Deliverables...)
 	var ledger []LedgerEntry
 	registry := sources.NewRegistry()
-	// reportSources runs the citation check on the final answer and tells the UI.
-	strict := opts.EvidenceMode == EvidenceOnly || opts.EvidenceMode == PrimaryOnly
+	if opts.Resume != nil {
+		// A resumed run keeps the policy and the sources of the earlier rounds.
+		registry = sources.RegistryFrom(opts.Resume.Sources)
+		if opts.EvidenceMode == "" && opts.Resume.Evidence != nil {
+			opts.Resume.Evidence.Apply(&opts)
+		}
+	}
+	policy := opts.Policy()
+	strict := policy.Strict()
+	checkLink := opts.CheckLink
+	if lc, ok := src.(LinkChecker); ok && checkLink == nil {
+		checkLink = lc.CheckLink
+	}
+	var links sources.LinkCache
+	// audit is the citation check of an answer; strict modes also check that
+	// the sources it cites by link still resolve.
 	audit := func(answer string) []sources.Finding {
-		return sources.AuditWith(answer, registry, sources.Options{PrimaryOnly: opts.EvidenceMode == PrimaryOnly})
+		auditOpts := policy.auditOptions()
+		auditOpts.Now = opts.Now
+		found := sources.AuditWith(answer, registry, auditOpts)
+		if strict {
+			found = append(found, links.Findings(ctx, answer, registry, checkLink)...)
+		}
+		return found
 	}
 	evidenceRetries := 0
+	var lastAudit, lastRemoved []sources.Finding
+	// reportSources runs the citation check on the final answer and tells the UI.
 	reportSources := func(answer string) {
-		found := audit(answer)
-		if all := registry.All(); len(all) > 0 || len(found) > 0 {
-			emit(Event{Type: "sources", Sources: all, Audit: found})
+		lastAudit = audit(answer)
+		if all := registry.All(); len(all) > 0 || len(lastAudit) > 0 || len(lastRemoved) > 0 {
+			ev := Event{Type: "sources", Sources: all, Audit: lastAudit, Removed: lastRemoved}
+			if strict || policy.EvidenceLimits.active() {
+				ev.Policy = &policy
+			}
+			emit(ev)
 		}
 	}
 	messages := make([]Message, 0, len(transcript)+2)
@@ -184,7 +224,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		system += reportFormat(deliverables)
 	}
 	if strict {
-		system += evidenceRules(opts.EvidenceMode)
+		system += evidenceRules(policy)
 	}
 	messages = append(messages, Message{Role: "system", Content: system})
 	if opts.Resume != nil {
@@ -196,10 +236,15 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		if !isTask {
 			return
 		}
-		emit(Event{Type: "checkpoint", Checkpoint: &Checkpoint{
+		cp := &Checkpoint{
 			Messages: append([]Message(nil), messages[1:]...), Ledger: append([]LedgerEntry(nil), ledger...),
 			Deliverables: deliverables, Steps: stepsBefore + step, ToolCalls: toolCalls, Status: status, NoTools: noTools,
-		}})
+			Sources: sources.Compact(registry.All(), maxCheckpointSources, 16000), Audit: lastAudit, Removed: lastRemoved,
+		}
+		if strict || policy.EvidenceLimits.active() {
+			cp.Evidence = &policy
+		}
+		emit(Event{Type: "checkpoint", Checkpoint: cp})
 	}
 
 	tools := ToolDefs()
@@ -294,7 +339,18 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 					emit(Event{Type: "notice", Severity: "info", Code: "notice", Content: fmt.Sprintf("Checking citations: %d problem(s) found in the draft; the agent is correcting it.", len(found))})
 					continue
 				}
-				emit(Event{Type: "notice", Severity: "warning", Code: "notice", Content: fmt.Sprintf("The citation check still found %d problem(s) after %d correction(s). The flagged sentences are unverified; see Sources.", len(found), evidenceRetries)})
+				if policy.OnFailure == OnFailureBlock {
+					blocked, removed := sources.Block(assistant.Content, found)
+					if len(removed) > 0 {
+						held.Reset()
+						held.WriteString(blocked)
+						assistant.Content, lastRemoved = blocked, removed
+						emit(Event{Type: "notice", Severity: "warning", Code: "notice", Content: fmt.Sprintf("The citation check still found %d problem(s) after %d correction(s). The statements that failed were removed from the answer; see Sources.", len(found), evidenceRetries)})
+					}
+				}
+				if lastRemoved == nil {
+					emit(Event{Type: "notice", Severity: "warning", Code: "notice", Content: fmt.Sprintf("The citation check still found %d problem(s) after %d correction(s). The flagged sentences are unverified; see Sources.", len(found), evidenceRetries)})
+				}
 			}
 		}
 		if held.Len() > 0 {
@@ -347,8 +403,8 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 				status = TaskIncomplete
 				emit(Event{Type: "notice", Severity: "warning", Code: "task_incomplete", Content: "The task is incomplete. Missing: " + strings.Join(append(missing, noEvidence(ledger, tools != nil)...), "; ")})
 			}
-			checkpoint(step, status)
 			reportSources(assistant.Content)
+			checkpoint(step, status)
 			emit(Event{Type: "done", Steps: stepsBefore + step})
 			return nil
 		}
@@ -622,31 +678,8 @@ func completeWithRetry(ctx context.Context, client *Client, messages *[]Message,
 	return Message{}, fmt.Errorf("%w (gave up after %d attempts)", last, maxModelAttempts)
 }
 
-const (
-	EvidenceOnly = "evidence_only"
-	PrimaryOnly  = "primary_only"
-	// maxEvidenceRetries is how often a strict-mode draft goes back to the model.
-	maxEvidenceRetries = 2
-)
-
-// ValidEvidenceMode reports whether mode is one a request may name.
-func ValidEvidenceMode(mode string) bool {
-	return mode == "" || mode == "standard" || mode == EvidenceOnly || mode == PrimaryOnly
-}
-
-func evidenceRules(mode string) string {
-	rules := `
-
-Evidence-only mode:
-- State a factual claim only when a retrieved source supports it, and end that sentence with its [Sn] marker.
-- Label what you cannot support: say "insufficient verifiable evidence" for it, or ask to research further. Do not fill the gap from memory.
-- Keep calculation, inference and opinion apart from reported fact, and say which a sentence is.
-- A citation check runs on your answer. It checks that markers exist, that the source was opened and that figures appear in it. It does not prove a claim is true.`
-	if mode == PrimaryOnly {
-		rules += "\n- Only primary filings (for example get_sec_section) count as support. Search results and web pages are leads, not proof."
-	}
-	return rules
-}
+// maxEvidenceRetries is how often a strict-mode draft goes back to the model.
+const maxEvidenceRetries = 2
 
 // evidenceFix tells the model what the citation check found in its draft.
 func evidenceFix(found []sources.Finding) string {

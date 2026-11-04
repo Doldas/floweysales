@@ -196,6 +196,9 @@ func (s *Service) DeleteUser(ctx context.Context, id int64) error {
 	if _, err = tx.ExecContext(ctx, "DELETE FROM ranking_preferences WHERE user_id=?", id); err != nil {
 		return err
 	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM user_evidence_defaults WHERE user_id=?", id); err != nil {
+		return err
+	}
 	if _, err = tx.ExecContext(ctx, "DELETE FROM custom_strategies WHERE user_id=?", id); err != nil {
 		return err
 	}

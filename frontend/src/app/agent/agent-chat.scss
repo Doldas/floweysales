@@ -131,6 +131,8 @@
 .working { flex-wrap: wrap; }
 .status-detail { font-size: 0.72rem; summary { cursor: pointer; } code { white-space: pre-wrap; overflow-wrap: anywhere; } }
 .recovered { padding-left: 2.3rem; }
+.evidence-settings { margin-bottom: 0.4rem; color: var(--fs-muted); summary { cursor: pointer; } .evidence-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 11rem); gap: 0.35rem 0.6rem; align-items: center; margin: 0.4rem 0; } .form-check-inline { margin-right: 0.75rem; } .evidence-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; } }
+@media (max-width: 480px) { .evidence-settings .evidence-grid { grid-template-columns: minmax(0, 1fr); } }
 .profile-note { font-size: 0.72rem; color: var(--fs-muted); margin: -0.2rem 0 0.4rem; overflow-wrap: anywhere; }
 .sources { padding-left: 2.3rem; summary { cursor: pointer; color: var(--fs-muted); } h4 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fs-muted); margin: 0.6rem 0 0.2rem; } ul { margin: 0; padding-left: 1.1rem; overflow-wrap: anywhere; } .sid { font-variant-numeric: tabular-nums; color: var(--fs-muted); } .finding { overflow-wrap: anywhere; } }
 

@@ -6,7 +6,8 @@ import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 
 import { toolLabel } from '../components/agent-tools';
 import { KIND_LABEL, changeLabel, stalenessNote, summaryLine, usdCompact } from '../components/portfolio-view';
-import { STANCE_ICON, STANCE_LABEL, defaultQuestion, shownText, stanceCounts, togglePersona, type MemberState } from '../components/team-view';
+import { EVIDENCE_MODES, findingLabel } from '../core/answer-sources';
+import { STANCE_ICON, STANCE_LABEL, defaultQuestion, evidenceLine, shownText, stanceCounts, togglePersona, type MemberState } from '../components/team-view';
 import { defaultOptionLabel, profileOption, profileSummary } from '../components/profile-view';
 import { budgetLine } from '../components/team-budget';
 import { MarketState } from '../core/market-state';
@@ -161,6 +162,16 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
       }
       <button type="button" class="btn btn-sm btn-ghost" (click)="suggest()">Suggest a question</button>
     </div>
+    <div class="run-bar">
+      <label for="team-evidence">Evidence</label>
+      <select id="team-evidence" class="form-select form-select-sm" [disabled]="team.running()" (change)="team.evidence.set($any($event.target).value)">
+        <option value="default" [selected]="team.evidence() === 'default'">My default (set in the chat)</option>
+        @for (m of evidenceModes; track m.id) { <option [value]="m.id" [selected]="team.evidence() === m.id">{{ m.label }}</option> }
+      </select>
+    </div>
+    @if (team.evidence() !== 'default' && team.evidence() !== 'standard') {
+      <p class="muted">Every character's answer is held until its citations are checked. A mode picked here brings none of the limits of your saved default. The neutral chair has no sources of its own, so its summary is not citation checked.</p>
+    }
     @if (team.error()) { <p class="err" role="alert">{{ team.error() }}</p> }
   </section>
 
@@ -198,6 +209,11 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
       <ul>@for (st of m.steps; track st.callId) { <li><fs-tool-call [call]="st" /></li> }</ul></details>
   }
   @if (m.note) { <p class="muted">{{ m.note }}</p> }
+  @if (evidence(m); as line) {
+    <p class="muted evidence-line" [class.bad]="m.audit?.length || m.removed?.length" role="status">{{ line }}</p>
+    @for (f of m.audit ?? []; track $index) { <p class="muted evidence-line"><strong>{{ findingLabel(f.kind) }}.</strong> {{ f.detail }}</p> }
+    @for (f of m.removed ?? []; track $index) { <p class="muted evidence-line"><strong>Removed:</strong> {{ findingLabel(f.kind) }}. {{ f.detail }}</p> }
+  }
   @switch (m.status) {
     @case ('waiting') { <p class="muted">Waiting…</p> }
     @case ('error') { <p class="err">{{ m.error || 'No answer.' }}</p> }
@@ -282,6 +298,9 @@ export class TeamPage {
   readonly stanceLabel = (s: string) => STANCE_LABEL[s as keyof typeof STANCE_LABEL];
   readonly label = toolLabel;
   readonly text = shownText;
+  readonly evidence = evidenceLine;
+  readonly findingLabel = findingLabel;
+  readonly evidenceModes = EVIDENCE_MODES;
   private readonly cache = new Map<string, SafeHtml>();
 
   constructor() {

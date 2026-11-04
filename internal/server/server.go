@@ -203,6 +203,8 @@ type Engine struct {
 	summarize    func(ctx context.Context, messages []ai.Message) (string, error)
 	transactions transactionStore
 	agentTasks   agentTaskStore
+	// evidenceDefaults keeps each user's saved evidence settings; tests replace the database.
+	evidenceDefaults evidenceDefaultStore
 	// strategyHistory replaces the provider history read in tests.
 	strategyHistory func(ctx context.Context, symbol string, p market.Provider, rng string) (market.HistorySeries, error)
 	paperState      func() ([]trading.Position, trading.Summary)
@@ -310,6 +312,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerForumRoutes()
 	e.registerAIRoutes()
 	e.registerAgentTaskRoutes()
+	e.registerEvidenceRoutes()
 	e.registerIntegrationSettingsRoutes()
 	e.registerTradingSettingsRoutes()
 	e.registerUserManagementRoutes()
