@@ -52,7 +52,7 @@ to 25 symbols, or, when it is empty, the symbols in their input (a JSON array of
 tickers, rows with a `symbol` field, `{"symbols": [...]}` or comma-separated
 text, for example from an event payload). A symbol that fails becomes an
 `{"symbol", "error"}` row instead of failing the node; the node fails only when
-every symbol fails. Outputs are JSON arrays of rows, at most 256 KiB by default. `FLOW_NODE_OUTPUT_MAX_BYTES` raises or lowers the limit (16 KiB to 1 MiB). A node over the limit fails with its size and the limit; it never passes on a cut-off result.
+every symbol fails. Outputs are JSON arrays of rows, at most 256 KiB by default. `FLOW_NODE_OUTPUT_MAX_BYTES` raises or lowers the limit (16 KiB to 1 MiB). A node over the limit fails with its size and the limit; it never passes on a cut-off result. An agent node accepts at most 64 KiB of previous output and fails with a message to add a `screen` or `report_table` node first, rather than reading cut-off JSON. An email that is shortened says so and names the run that holds the full output.
 
 | Node | Output per row | Notes |
 | --- | --- | --- |
