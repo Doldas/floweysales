@@ -417,6 +417,27 @@ export interface BacktestResult {
   segments?: BacktestSegment[];
   segment_summary?: string;
   segment_note?: string;
+  /** Buys and sells of single holdings, and the return with and without the best rebalance periods. */
+  trades?: number;
+  concentration?: BacktestConcentration;
+  /** Named past windows the replay fully covers, the ones it does not, and the hindsight caveat. */
+  stress?: BacktestStress[];
+  stress_not_covered?: string[];
+  stress_note?: string;
+  /** Replayed days grouped by the benchmark's own trend and volatility; labels describe the past only. */
+  regimes?: BacktestRegime[];
+  regime_unlabeled_days?: number;
+  regime_note?: string;
+  walk_forward_note?: string;
+}
+export interface BacktestConcentration { periods: number; dropped: number; total_return_pct: number; without_best_return_pct: number }
+export interface BacktestStress {
+  name: string; from: string; to: string; days: number; return_pct: number; max_drawdown_pct: number;
+  benchmark_return_pct?: number; excess_pct?: number;
+}
+export interface BacktestRegime {
+  id: string; name: string; days: number; share_pct: number;
+  cagr_pct?: number; benchmark_cagr_pct?: number; excess_cagr_pct?: number;
 }
 export interface BacktestSegment {
   from: string; to: string; days: number; cagr_pct: number; volatility_pct: number; max_drawdown_pct: number; sharpe: number;

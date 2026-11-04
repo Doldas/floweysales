@@ -229,6 +229,14 @@ func (e *Engine) runBacktestBatch(ctx context.Context, base url.Values) (batchRe
 	return out, nil
 }
 
+// multipleTestingFrom is the number of compared results from which the multiple-testing note is added.
+const multipleTestingFrom = 3
+
+// multipleTestingNote warns that picking the best of several tries flatters it.
+func multipleTestingNote(n int, what string) string {
+	return fmt.Sprintf("%d %s were compared. The best of many tries looks better than it is likely to be on new data, because some of it is luck; the more you try, the more that applies, so do not pick a winner from this table alone.", n, what)
+}
+
 // batchLimitations states what the spread cannot show. They are facts about
 // how the cells were built, not judgments of the strategy.
 func batchLimitations(b batchResponse) []string {
@@ -238,6 +246,9 @@ func batchLimitations(b batchResponse) []string {
 	}
 	if b.Summary.Completed < 6 {
 		notes = append(notes, fmt.Sprintf("Only %d backtests completed; the spread is too small to say how the strategy behaves across conditions.", b.Summary.Completed))
+	}
+	if b.Summary.Completed >= multipleTestingFrom {
+		notes = append(notes, multipleTestingNote(b.Summary.Completed, "backtests"))
 	}
 	if b.Summary.Failed > 0 {
 		notes = append(notes, fmt.Sprintf("%d backtests failed and are not in the spread; see each cell's error.", b.Summary.Failed))

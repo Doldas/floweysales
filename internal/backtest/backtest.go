@@ -32,6 +32,9 @@ const (
 	WarnPriceIndex    = "price_index_benchmark"
 	WarnThinFundament = "thin_fundamentals"
 	WarnShortHistory  = "short_history"
+	// Added from the counts of trades and of periods behind the result.
+	WarnFewTrades      = "few_trades"
+	WarnFewPeriodsLead = "few_periods_drive_result"
 	// Added by the caller, which knows what it could not fetch.
 	WarnNoBenchmark    = "benchmark_unavailable"
 	WarnSymbolsMissing = "symbols_unavailable"
@@ -43,6 +46,8 @@ var WarningTexts = map[string]string{
 	WarnPriceIndex:     "The benchmark is a price index without dividends, which understates what holding it paid.",
 	WarnThinFundament:  "Few reported quarters were available for the early years, so early picks lean on price factors.",
 	WarnShortHistory:   "Fewer than 24 rebalances fit the history, so the result says little about how the strategy behaves over time.",
+	WarnFewTrades:      "Fewer than 30 trades: averages and hit rates are too noisy to say whether the ranking has an edge.",
+	WarnFewPeriodsLead: "The total return is zero or negative when the three best rebalance periods are left out, so the result leans on a few periods.",
 	WarnNoBenchmark:    "The benchmark could not be loaded, so the strategy is shown without a comparison.",
 	WarnSymbolsMissing: "Some symbols had no price history and were left out of the universe.",
 }
@@ -99,6 +104,18 @@ type Result struct {
 	Segments       []Segment `json:"segments,omitempty"`
 	SegmentSummary string    `json:"segment_summary,omitempty"`
 	SegmentNote    string    `json:"segment_note,omitempty"`
+	// Trades counts buys and sells of single holdings; Concentration shows the return without the best periods.
+	Trades        int            `json:"trades"`
+	Concentration *Concentration `json:"concentration,omitempty"`
+	// Stress holds the named windows the replay fully covers; StressNotCovered names those it does not.
+	Stress           []StressResult `json:"stress,omitempty"`
+	StressNotCovered []string       `json:"stress_not_covered,omitempty"`
+	StressNote       string         `json:"stress_note"`
+	// Regimes group the replayed days by the benchmark's trend and volatility; empty without a benchmark.
+	Regimes         []Regime `json:"regimes,omitempty"`
+	RegimeUnlabeled int      `json:"regime_unlabeled_days,omitempty"`
+	RegimeNote      string   `json:"regime_note"`
+	WalkForwardNote string   `json:"walk_forward_note"`
 }
 
 const dateLayout = "2006-01-02"
@@ -265,6 +282,7 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 	rebalances := make([]Rebalance, 0, count)
 	equityAt := []float64{} // equity at each rebalance, for the hit rate
 	benchAt := []float64{}
+	rebalIdx := []int{} // curve index of each rebalance
 	curveEquity := make([]float64, 0, len(cal)-first)
 	turnoverSum, coverageSum := 0.0, 0.0
 	for i := first; i < len(cal); i++ {
@@ -335,6 +353,7 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 			sort.Strings(sorted)
 			rebalances = append(rebalances, Rebalance{Date: cal[i].Format(dateLayout), Holdings: sorted, Turnover: turnover, FundCovPct: round2(coverage)})
 			equityAt = append(equityAt, equity)
+			rebalIdx = append(rebalIdx, i-first)
 			benchAt = append(benchAt, benchEquity)
 		}
 		pt := Point{Date: cal[i].Format(dateLayout), Equity: round2(equity)}
@@ -371,6 +390,16 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 		metrics.HitRatePct = round2(float64(wins) / float64(len(equityAt)) * 100)
 	}
 
+	periods := make([]float64, len(rebalIdx))
+	for k, at := range rebalIdx {
+		end := len(curveEquity) - 1
+		if k+1 < len(rebalIdx) {
+			end = rebalIdx[k+1]
+		}
+		periods[k] = curveEquity[end] / curveEquity[at]
+	}
+	trades, conc := countTrades(rebalances), concentration(periods)
+
 	warnings := []string{WarnSurvivorship}
 	if benchTable != nil {
 		warnings = append(warnings, WarnPriceIndex)
@@ -381,13 +410,19 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 	if len(rebalances) < shortHistory {
 		warnings = append(warnings, WarnShortHistory)
 	}
-	res := Result{Config: cfg, Metrics: metrics, Curve: thin(curve, maxCurvePoints), Rebalances: rebalances, Warnings: warnings}
+	warnings = append(warnings, countWarnings(trades, conc)...)
+	res := Result{Config: cfg, Metrics: metrics, Curve: thin(curve, maxCurvePoints), Rebalances: rebalances, Warnings: warnings,
+		Trades: trades, Concentration: conc, StressNote: StressNote, RegimeNote: RegimeNote, WalkForwardNote: WalkForwardNote}
 	dates := make([]string, len(curve))
 	for i, p := range curve {
 		dates[i] = p.Date
 	}
 	if res.Segments = splitSegments(dates, curveEquity, benchCurve); res.Segments != nil {
 		res.SegmentSummary, res.SegmentNote = SegmentSummary(res.Segments), SegmentNote
+	}
+	res.Stress, res.StressNotCovered = stressResults(dates, curveEquity, benchCurve)
+	if benchTable != nil {
+		res.Regimes, res.RegimeUnlabeled = regimeResults(benchTable.px, regimeLabels(benchTable.px), first, curveEquity)
 	}
 	return res, nil
 }

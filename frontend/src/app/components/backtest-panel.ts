@@ -10,7 +10,7 @@ import { SkeletonComponent } from '../ui/skeleton';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import { PROGRESS_POLL_MS, newRunId, parseRunProgress, type RunProgress } from '../ui/run-progress';
 import { periodError } from '../core/strategy-period';
-import { batchHeadline, batchParams, batchRows, exportUrl, savedLabel, sensitivityHeadline, sensitivityParams, sensitivityRows, singleParams, chartSummary, curvePath, metricTiles, segmentRows, warningText } from './backtest-view';
+import { batchHeadline, batchParams, batchRows, exportUrl, savedLabel, sensitivityHeadline, sensitivityParams, sensitivityRows, singleParams, chartSummary, curvePath, metricTiles, regimeRows, segmentRows, stressRows, warningText } from './backtest-view';
 
 const CHART_W = 640;
 const CHART_H = 220;
@@ -112,6 +112,51 @@ const CHART_H = 220;
       </div>
       <p class="bt-note">{{ r.segment_summary }} {{ r.segment_note }}</p>
     }
+
+    @if (stress().length || r.stress_not_covered?.length) {
+      <h4 class="h6 mb-1 mt-3">Named stress windows</h4>
+      @if (stress().length) {
+        <div class="table-responsive">
+          <table class="table table-sm bt-stress">
+            <caption class="visually-hidden">Strategy and benchmark inside named past market falls</caption>
+            <thead><tr><th scope="col">Window (UTC)</th><th scope="col" class="text-end">Strategy</th><th scope="col" class="text-end">Benchmark</th><th scope="col" class="text-end">Excess</th><th scope="col" class="text-end">Worst drop</th></tr></thead>
+            <tbody>
+              @for (s of stress(); track s.name) {
+                <tr><td>{{ s.name }}<br /><span class="bt-note">{{ s.period }}, {{ s.days }} days</span></td><td class="text-end">{{ s.ret }}</td><td class="text-end">{{ s.benchmark }}</td>
+                  <td class="text-end" [class.text-success]="s.excessTone === 'up'" [class.text-danger]="s.excessTone === 'down'">{{ s.excess }}</td><td class="text-end">{{ s.drawdown }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      @if (r.stress_not_covered?.length) { <p class="bt-note">Not tested, the data does not cover: {{ r.stress_not_covered!.join(', ') }}.</p> }
+      <p class="bt-note">{{ r.stress_note }} Returns are totals over the window, not per year.</p>
+    }
+
+    @if (regimes().length) {
+      <h4 class="h6 mb-1 mt-3">Results by market regime</h4>
+      <div class="table-responsive">
+        <table class="table table-sm bt-regimes">
+          <caption class="visually-hidden">Strategy and benchmark return per year by benchmark trend and volatility</caption>
+          <thead><tr><th scope="col">Regime</th><th scope="col" class="text-end">Days</th><th scope="col" class="text-end">Strategy / year</th><th scope="col" class="text-end">Benchmark</th><th scope="col" class="text-end">Excess</th></tr></thead>
+          <tbody>
+            @for (g of regimes(); track g.name) {
+              <tr><td>{{ g.name }} ({{ g.share }})</td><td class="text-end">{{ g.days }}</td><td class="text-end">{{ g.cagr }}</td><td class="text-end">{{ g.benchmark }}</td>
+                <td class="text-end" [class.text-success]="g.excessTone === 'up'" [class.text-danger]="g.excessTone === 'down'">{{ g.excess }}</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="bt-note">{{ r.regime_note }}</p>
+    }
+
+    @if (r.trades !== undefined || r.concentration) {
+      <p class="bt-note mt-2">
+        @if (r.trades !== undefined) { {{ r.trades }} trades (buys and sells of single holdings). }
+        @if (r.concentration; as c) { Total return {{ c.total_return_pct.toFixed(1) }}% over {{ c.periods }} rebalance periods; without the best {{ c.dropped }}: {{ c.without_best_return_pct.toFixed(1) }}%. }
+      </p>
+    }
+    @if (r.walk_forward_note) { <p class="bt-note">{{ r.walk_forward_note }}</p> }
 
     <div class="bt-warnings alert alert-warning" role="note">
       <strong>Read this before trusting the result</strong>
@@ -375,6 +420,8 @@ export class BacktestPanelComponent {
   readonly strategyPath = computed(() => curvePath(this.result()?.curve ?? [], CHART_W, CHART_H, 'equity'));
   readonly benchPath = computed(() => curvePath(this.result()?.curve ?? [], CHART_W, CHART_H, 'benchmark'));
   readonly segments = computed(() => segmentRows(this.result()?.segments));
+  readonly stress = computed(() => stressRows(this.result()?.stress));
+  readonly regimes = computed(() => regimeRows(this.result()?.regimes));
   readonly summary = computed(() => (this.result() ? chartSummary(this.result()!) : ''));
 
   constructor() {

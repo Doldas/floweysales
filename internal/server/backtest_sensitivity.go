@@ -193,6 +193,9 @@ func sensitivityNotes(r sensitivityResponse, skippedTops int) []string {
 	if skippedTops > 0 {
 		notes = append(notes, fmt.Sprintf("%d holdings counts were skipped because the universe has too few symbols.", skippedTops))
 	}
+	if r.Summary.Completed >= multipleTestingFrom {
+		notes = append(notes, multipleTestingNote(r.Summary.Completed, "variants"))
+	}
 	if r.Summary.Failed > 0 {
 		notes = append(notes, fmt.Sprintf("%d variants failed and are not in the spread; see each variant's error.", r.Summary.Failed))
 	}
