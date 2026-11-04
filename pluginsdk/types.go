@@ -50,7 +50,10 @@ func (s HistorySeries) Closes() []float64 {
 
 // Asset is a quote snapshot. Data is the provider-specific payload stored with
 // every tracker tick and streamed to the UI as "marketData"; it should include
-// "assetDataProvider" and "type".
+// "assetDataProvider" and "type". It may also state, all optional and only when
+// the provider really knows: "quoteTimeUnix" (number, the quote's own time in Unix
+// seconds), "delaySeconds" (number, how far behind the market the quote is) and
+// "marketState" ("open" or "closed"). Absent means unknown; never send 0 for unknown.
 type Asset struct {
 	Symbol   string         `json:"symbol"`
 	Name     string         `json:"name"`

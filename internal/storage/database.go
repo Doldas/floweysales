@@ -15,15 +15,23 @@ import (
 
 // TradingRecord is one tick of the trading history.
 type TradingRecord struct {
-	Timestamp        int64           `json:"timestamp"`
-	Symbol           string          `json:"symbol"`
-	Provider         string          `json:"provider,omitempty"`
-	Price            float64         `json:"price"`
-	StopLoss         float64         `json:"stop_loss"`
-	FastEMA          float64         `json:"fast_ema"`
-	SlowEMA          float64         `json:"slow_ema"`
-	Currency         string          `json:"currency"`
-	Status           string          `json:"status"`
+	Timestamp int64   `json:"timestamp"`
+	Symbol    string  `json:"symbol"`
+	Provider  string  `json:"provider,omitempty"`
+	Price     float64 `json:"price"`
+	StopLoss  float64 `json:"stop_loss"`
+	FastEMA   float64 `json:"fast_ema"`
+	SlowEMA   float64 `json:"slow_ema"`
+	Currency  string  `json:"currency"`
+	Status    string  `json:"status"`
+	// Quote facts the provider or the clock state; carried on the wire only
+	// (not stored). Absent means unknown, never zero. MarketState is open,
+	// closed or unknown; MarketBasis says where it came from (provider, or
+	// regular_hours, which does not know holidays).
+	QuoteTime        int64           `json:"quote_time,omitempty"`
+	DelaySeconds     *int            `json:"delay_seconds,omitempty"`
+	MarketState      string          `json:"market_state,omitempty"`
+	MarketBasis      string          `json:"market_basis,omitempty"`
 	RawMarketJSONStr string          `json:"-"`
 	RawMarketJSON    json.RawMessage `json:"-"`
 }
