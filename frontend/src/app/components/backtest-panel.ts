@@ -4,6 +4,8 @@ import type { Subscription } from 'rxjs';
 
 import { MarketService, describeHttpError } from '../services';
 import type { BacktestParams, BacktestResult, BacktestSummary, BatchResult, SavedBacktest, SensitivityResult } from '../models';
+import type { Provenance } from '../core/provenance';
+import { SourceComponent } from '../ui/source';
 import { periodError } from '../core/strategy-period';
 import { batchHeadline, batchParams, batchRows, exportUrl, savedLabel, sensitivityHeadline, sensitivityParams, sensitivityRows, singleParams, chartSummary, curvePath, metricTiles, segmentRows, warningText } from './backtest-view';
 
@@ -17,7 +19,7 @@ const CHART_H = 220;
  */
 @Component({
   selector: 'fs-backtest-panel',
-  imports: [FormsModule],
+  imports: [FormsModule, SourceComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 <section class="bt" aria-labelledby="bt-title">
@@ -234,6 +236,9 @@ const CHART_H = 220;
           }
         </ul>
       } @else { <p class="bt-note">Nothing saved yet.</p> }
+      @if (openedRun(); as o) {
+        <p class="bt-note">“{{ o.name }}” is open below. Where it came from: <fs-source [fact]="o.provenance" /></p>
+      }
       @if (aiSummary(); as s) {
         <div class="bt-summary" aria-live="polite">
           <h5 class="h6 mb-1">Summary of “{{ summaryName() }}”</h5>
@@ -339,6 +344,8 @@ export class BacktestPanelComponent {
   readonly savedError = signal('');
   readonly aiSummary = signal<BacktestSummary | null>(null);
   readonly summaryName = signal('');
+  /** The saved run now shown in the result areas, with how its result was produced. */
+  readonly openedRun = signal<{ name: string; provenance: Provenance } | null>(null);
   readonly summaryLoading = signal<number | null>(null);
   readonly label = savedLabel;
   readonly exportHref = exportUrl;
@@ -423,6 +430,7 @@ export class BacktestPanelComponent {
     this.savedError.set('');
     this.api.getBacktestRun(r.id).subscribe({
       next: full => {
+        this.openedRun.set(full.provenance ? { name: full.name, provenance: full.provenance } : null);
         if (full.kind === 'batch') this.batch.set(full.result as BatchResult);
         else if (full.kind === 'sensitivity') this.sens.set(full.result as SensitivityResult);
         else { this.result.set(full.result as BacktestResult); this.error.set(''); }
