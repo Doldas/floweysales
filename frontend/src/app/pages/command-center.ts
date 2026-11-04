@@ -15,6 +15,7 @@ import { MarketService, type TrackedAsset } from '../services';
 import type { TodayBriefing } from '../models';
 import { REGIME_LABELS, alertName, hasAnything, regimeIcon, signedChange, todayPrompt } from '../components/today-view';
 import { formatUtcLongDay } from '../ui/datetime';
+import { SkeletonComponent } from '../ui/skeleton';
 
 interface TrackerStatus { symbol: string; provider: string; has_tick: boolean; age_seconds: number | null }
 interface WorkspaceFile { path: string; content_type: string; size: number }
@@ -26,7 +27,7 @@ interface WorkspaceFile { path: string; content_type: string; size: number }
 @Component({
   selector: 'fs-command-center',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, DecimalPipe, SparklineComponent],
+  imports: [RouterLink, DecimalPipe, SparklineComponent, SkeletonComponent],
   templateUrl: './command-center.html',
   styleUrl: './command-center.scss',
 })

@@ -33,7 +33,9 @@
         <i class="bi bi-arrow-clockwise" [class.spin]="loading()" aria-hidden="true"></i>
       </button>
     </div>
-    @if (loading()) { <div class="progress rounded-0" style="height: 2px"><div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div></div> }
+    @if (loading()) {
+      <div class="px-3 pt-2" [attr.aria-busy]="true"><fs-progress-status stage="Loading statements" />@if (!showBody()) { <fs-skeleton shape="rows" [rows]="6" aria-hidden="true" /> }</div>
+    }
 
     <div class="card-body">
       @if (showBody()) {
@@ -102,7 +104,7 @@
           </div>
         }
       } @else if (!loading()) {
-        <p class="text-muted mb-0">Loading statements…</p>
+        <p class="text-muted mb-0">No statements are shown yet.</p>
       }
     </div>
   </section>

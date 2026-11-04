@@ -187,6 +187,11 @@ type SavedTeam struct {
 	Chair     bool              `json:"chair"`
 	Members   []SavedTeamMember `json:"members"`
 	UpdatedAt string            `json:"updated_at,omitempty"`
+	// The team's budget: ceilings for one run, nil for none. Tokens and cost
+	// are enforced where the model endpoint reports token usage.
+	MaxTokens    *int     `json:"max_tokens"`
+	MaxCost      *float64 `json:"max_cost"`
+	MaxToolCalls *int     `json:"max_tool_calls"`
 }
 
 // SavedTeamMember is one character of a team and the model profile it uses
@@ -196,15 +201,37 @@ type SavedTeamMember struct {
 	ProfileID *int64 `json:"profile_id"`
 }
 
+const teamColumns = "id,name,chair,DATE_FORMAT(updated_at,'%Y-%m-%dT%H:%i:%sZ'),max_tokens,max_cost,max_tool_calls"
+
+func scanTeam(r rowScanner, t *SavedTeam) error {
+	var tokens, calls sql.NullInt64
+	var cost sql.NullFloat64
+	if err := r.Scan(&t.ID, &t.Name, &t.Chair, &t.UpdatedAt, &tokens, &cost, &calls); err != nil {
+		return err
+	}
+	if tokens.Valid {
+		v := int(tokens.Int64)
+		t.MaxTokens = &v
+	}
+	if cost.Valid {
+		t.MaxCost = &cost.Float64
+	}
+	if calls.Valid {
+		v := int(calls.Int64)
+		t.MaxToolCalls = &v
+	}
+	return nil
+}
+
 func (d *Database) ListSavedTeams(ctx context.Context, userID int64) ([]SavedTeam, error) {
-	rows, err := d.db.QueryContext(ctx, "SELECT id,name,chair,DATE_FORMAT(updated_at,'%Y-%m-%dT%H:%i:%sZ') FROM agent_teams WHERE user_id=? ORDER BY name,id", userID)
+	rows, err := d.db.QueryContext(ctx, "SELECT "+teamColumns+" FROM agent_teams WHERE user_id=? ORDER BY name,id", userID)
 	if err != nil {
 		return nil, err
 	}
 	teams := []SavedTeam{}
 	for rows.Next() {
 		var t SavedTeam
-		if err := rows.Scan(&t.ID, &t.Name, &t.Chair, &t.UpdatedAt); err != nil {
+		if err := scanTeam(rows, &t); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -246,7 +273,7 @@ func (d *Database) teamMembers(ctx context.Context, teamID int64) ([]SavedTeamMe
 
 func (d *Database) GetSavedTeam(ctx context.Context, userID, id int64) (SavedTeam, error) {
 	var t SavedTeam
-	err := d.db.QueryRowContext(ctx, "SELECT id,name,chair,DATE_FORMAT(updated_at,'%Y-%m-%dT%H:%i:%sZ') FROM agent_teams WHERE user_id=? AND id=?", userID, id).Scan(&t.ID, &t.Name, &t.Chair, &t.UpdatedAt)
+	err := scanTeam(d.db.QueryRowContext(ctx, "SELECT "+teamColumns+" FROM agent_teams WHERE user_id=? AND id=?", userID, id), &t)
 	if errors.Is(err, sql.ErrNoRows) {
 		return t, ErrTeamNotFound
 	}
@@ -272,7 +299,7 @@ func (d *Database) SaveSavedTeam(ctx context.Context, userID int64, t SavedTeam)
 		if n >= MaxSavedTeams {
 			return 0, ErrTeamLimit
 		}
-		res, err := tx.ExecContext(ctx, "INSERT INTO agent_teams(user_id,name,chair) VALUES(?,?,?)", userID, t.Name, t.Chair)
+		res, err := tx.ExecContext(ctx, "INSERT INTO agent_teams(user_id,name,chair,max_tokens,max_cost,max_tool_calls) VALUES(?,?,?,?,?,?)", userID, t.Name, t.Chair, t.MaxTokens, t.MaxCost, t.MaxToolCalls)
 		if err != nil {
 			return 0, nameTaken(err, ErrTeamNameTaken)
 		}
@@ -280,7 +307,7 @@ func (d *Database) SaveSavedTeam(ctx context.Context, userID int64, t SavedTeam)
 			return 0, err
 		}
 	} else {
-		res, err := tx.ExecContext(ctx, "UPDATE agent_teams SET name=?,chair=?,updated_at=CURRENT_TIMESTAMP(6) WHERE user_id=? AND id=?", t.Name, t.Chair, userID, t.ID)
+		res, err := tx.ExecContext(ctx, "UPDATE agent_teams SET name=?,chair=?,max_tokens=?,max_cost=?,max_tool_calls=?,updated_at=CURRENT_TIMESTAMP(6) WHERE user_id=? AND id=?", t.Name, t.Chair, t.MaxTokens, t.MaxCost, t.MaxToolCalls, userID, t.ID)
 		if err != nil {
 			return 0, nameTaken(err, ErrTeamNameTaken)
 		}

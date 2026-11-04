@@ -173,7 +173,7 @@ export class CommandPaletteComponent {
       if (/^[A-Za-z0-9.\-^=]{1,15}$/.test(raw)) {
         dynamic.push({
           id: 'track', group: 'Agent', label: `Open ${raw.toUpperCase()} in Markets`, hint: this.market.provider(), icon: 'bi-graph-up',
-          run: () => { this.market.track(raw); void this.router.navigateByUrl('/markets'); },
+          run: () => { this.market.select(raw); void this.router.navigateByUrl('/markets'); },
         });
       }
     }

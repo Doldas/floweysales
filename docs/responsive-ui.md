@@ -35,3 +35,4 @@ Use `fs-skeleton`, `fs-progress-status` and the phases in `ui/async-state.ts` in
 - A progress bar is determinate only when `done` and `total` are measured; the app never shows a percentage it cannot measure.
 - A wait with a known timeout ends in a message and a retry, never a spinner forever.
 - Motion only marks a state change, stays under 200 ms for transitions, and uses opacity and transform. Shimmer stops under `prefers-reduced-motion`.
+- A long run that the server can count reports it: the client names the run with a `progress_id`, and `GET /api/market/backtest/progress?id=…` returns `{stage, done, total, finished}`. Today only the backtest batch does ("Backtesting · 3 of 12"). When the figure is missing the status shows the stage alone, never a zero. Counts are kept in memory for ten minutes.

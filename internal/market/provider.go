@@ -109,6 +109,10 @@ type QuoteSnapshot struct {
 	Stale                 bool    `json:"stale"`
 	StaleThresholdSeconds int64   `json:"stale_threshold_seconds"`
 	Note                  string  `json:"note"`
+	// MarketSession is open, closed or unknown. MarketSessionBasis is
+	// regular_hours (holidays not known) when computed from the exchange.
+	MarketSession      string `json:"market_session"`
+	MarketSessionBasis string `json:"market_session_basis,omitempty"`
 }
 
 func SnapshotFromSeries(symbol string, p Provider, series HistorySeries, now time.Time) (QuoteSnapshot, error) {
@@ -134,13 +138,15 @@ func SnapshotFromSeries(symbol string, p Provider, series HistorySeries, now tim
 	if actual == "" {
 		actual = p.ID()
 	}
+	session := SessionAt(symbol, "", now)
 	return QuoteSnapshot{
 		Symbol: symbol, RequestedProvider: p.ID(), Source: actual,
 		Currency: series.Currency, Price: last.Close, AsOfUnix: last.Timestamp,
 		FetchedAtUnix: now.Unix(), AgeSeconds: age, Interval: series.Interval,
 		QuoteType: "ohlc_bar_close", IsRealtime: false, Stale: age > threshold,
 		StaleThresholdSeconds: threshold,
-		Note:                  "Last available provider OHLC bar CLOSE, not an executable bid/ask or verified live quote. Market holidays and closed sessions affect age.",
+		MarketSession:         session.State, MarketSessionBasis: session.Basis,
+		Note: "Last available provider OHLC bar CLOSE, not an executable bid/ask or verified live quote. Market holidays and closed sessions affect age.",
 	}, nil
 }
 

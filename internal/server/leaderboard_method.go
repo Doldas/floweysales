@@ -79,6 +79,14 @@ var leaderboardFactorInfo = map[string]struct{ Label, Question string }{
 
 // leaderboardMethodology describes the scoring rules a strategy was ranked with.
 func leaderboardMethodology(strategy leaderboardStrategy) map[string]any {
+	return leaderboardMethodologyFor(strategy, rankingPreferences{})
+}
+
+// leaderboardMethodologyFor also records the user's preferences when they
+// change anything. The strategy passed in already carries the objective's
+// weights; the preferences enter the body, and so the fingerprint, so a
+// ranking made with them is never mistaken for one made without.
+func leaderboardMethodologyFor(strategy leaderboardStrategy, prefs rankingPreferences) map[string]any {
 	metrics := map[string][]map[string]any{}
 	for _, f := range leaderboardFactors {
 		for _, m := range leaderboardFactorMetrics[f] {
@@ -96,6 +104,10 @@ func leaderboardMethodology(strategy leaderboardStrategy) map[string]any {
 		"missing_data": "A metric a company lacks is skipped. A factor with no data at all scores 40, below the median: unknown is not good.",
 		"factors":      leaderboardFactors, "metrics": metrics, "caps": leaderboardCapRules, "missing_factor_score": leaderboardMissingFactor,
 	}
+	if prefs.active() {
+		body["preferences"] = prefs
+		body["preferences_summary"] = prefs.describe()
+	}
 	body["hash"] = shortHash(body)
 	return body
 }
@@ -112,6 +124,10 @@ func leaderboardInputsHash(rows []map[string]any) string {
 // reproduced and judged: methodology, universe, input fingerprint, freshness
 // and the disclaimer.
 func leaderboardProvenance(strategy leaderboardStrategy, universe string, symbols []string, rows []map[string]any) map[string]any {
+	return leaderboardProvenanceFor(strategy, rankingPreferences{}, universe, symbols, rows)
+}
+
+func leaderboardProvenanceFor(strategy leaderboardStrategy, prefs rankingPreferences, universe string, symbols []string, rows []map[string]any) map[string]any {
 	asOf, oldest := "", ""
 	for _, row := range rows {
 		if _, failed := row["error"]; failed {
@@ -127,7 +143,7 @@ func leaderboardProvenance(strategy leaderboardStrategy, universe string, symbol
 		}
 	}
 	return map[string]any{
-		"methodology":   leaderboardMethodology(strategy),
+		"methodology":   leaderboardMethodologyFor(strategy, prefs),
 		"universe_id":   universe,
 		"universe_hash": shortHash(symbols),
 		"inputs_hash":   leaderboardInputsHash(rows),

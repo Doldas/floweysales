@@ -2,6 +2,8 @@ import { Component, ElementRef, computed, inject, signal, viewChild } from '@ang
 import { MarketState } from '../core/market-state';
 import { PluginTools } from '../core/plugin-tools';
 import { formatUtcDateTime } from '../ui/datetime';
+import { SkeletonComponent } from '../ui/skeleton';
+import { ProgressStatusComponent } from '../ui/progress-status';
 import {
   capabilityLabels, isDomainProvider, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt,
   type PluginOverview, type PluginRow,
@@ -12,6 +14,7 @@ type View = 'all' | 'installed' | 'available';
 @Component({
  selector: 'fse-plugin-settings', host: { class: 'fs-native-forms' },
  standalone: true,
+ imports: [SkeletonComponent, ProgressStatusComponent],
  template: `
  @if (overview(); as o) {
  <div class="card">
@@ -159,7 +162,7 @@ type View = 'all' | 'installed' | 'available';
 floweysales_backend plugins install yahoo --accept-terms
 floweysales_backend plugins update</pre>
    </div>
-  } @else { <p class="muted">Loading plugins…</p> }
+  } @else { <div [attr.aria-busy]="true"><fs-progress-status stage="Loading plugins" /><fs-skeleton shape="rows" [rows]="3" aria-hidden="true" /></div> }
  }
  @if (message()) { <p role="status" class="result">{{ message() }}</p> }
 

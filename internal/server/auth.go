@@ -141,7 +141,7 @@ func isTaskRoute(method, path string) bool {
 // data: the wealth plan, the Today briefing and plugin tools (which keep no
 // state between calls).
 func isPlanRoute(method, path string) bool {
-	return isTeamStoreRoute(method, path) || isBacktestRunRoute(method, path) || (method == http.MethodGet && path == "/api/ai/profiles") ||
+	return isTeamStoreRoute(method, path) || isBacktestRunRoute(method, path) || isOwnSettingsRoute(method, path) || (method == http.MethodGet && path == "/api/ai/profiles") ||
 		isToolRoute(method, path) || isDomainRoute(method, path) || isTransactionRoute(method, path) ||
 		(method == http.MethodGet && path == "/api/plan") ||
 		(method == http.MethodPut && path == "/api/plan/profile") ||
@@ -150,10 +150,23 @@ func isPlanRoute(method, path string) bool {
 		isStrategyRoute(method, path)
 }
 
+// isOwnSettingsRoute matches the settings a user keeps for themselves: the
+// saved evidence default for chat and teams, and the leaderboard objective
+// and constraints. Each handler reads and writes only the caller's own row.
+func isOwnSettingsRoute(method, path string) bool {
+	switch path {
+	case "/api/ai/evidence-default":
+		return method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete
+	case "/api/market/leaderboard/preferences":
+		return method == http.MethodGet || method == http.MethodPut
+	}
+	return false
+}
+
 // isBacktestReadPath matches the backtest and its two robustness checks, which
 // replay public prices and keep nothing.
 func isBacktestReadPath(path string) bool {
-	return path == "/api/market/backtest" || path == "/api/market/backtest/batch" || path == "/api/market/backtest/sensitivity"
+	return path == "/api/market/backtest" || path == "/api/market/backtest/batch" || path == "/api/market/backtest/progress" || path == "/api/market/backtest/sensitivity"
 }
 
 // isBacktestRunRoute matches a user's saved backtests: listing, saving,

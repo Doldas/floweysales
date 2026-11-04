@@ -24,7 +24,7 @@ go test -race ./...
 go build ./...
 (cd pluginsdk && go vet ./... && go test -race ./...)
 cd frontend && npm ci && npm run build
-node --test frontend/src/app/components/flow-history.spec.ts frontend/src/app/components/flow-overview.spec.ts frontend/src/app/components/flow-versions.spec.ts frontend/src/app/components/update-status.spec.ts frontend/src/app/components/function-pins.spec.ts frontend/src/app/components/wire-drag.spec.ts frontend/src/app/components/flow-semantics.spec.ts frontend/src/app/components/side-effects.spec.ts frontend/src/app/components/agent-tools.spec.ts frontend/src/app/components/event-adapters.spec.ts frontend/src/app/ui/format.spec.ts frontend/src/app/markdown.spec.ts frontend/src/app/components/plugin-store.spec.ts frontend/src/app/core/agent-notices.spec.ts frontend/src/app/core/feed-status.spec.ts frontend/src/app/ui/async-state.spec.ts frontend/src/app/core/instrument-ref.spec.ts frontend/src/app/core/recent-instruments.spec.ts frontend/src/app/help/help-topics.spec.ts frontend/src/app/ui/datetime.spec.ts frontend/src/app/core/provenance.spec.ts frontend/src/app/core/strategy-period.spec.ts frontend/src/app/core/answer-sources.spec.ts frontend/src/app/components/tool-call-view.spec.ts frontend/src/app/components/team-view.spec.ts frontend/src/app/components/profile-view.spec.ts
+node --test frontend/src/app/components/flow-history.spec.ts frontend/src/app/components/flow-overview.spec.ts frontend/src/app/components/flow-versions.spec.ts frontend/src/app/components/update-status.spec.ts frontend/src/app/components/function-pins.spec.ts frontend/src/app/components/wire-drag.spec.ts frontend/src/app/components/flow-semantics.spec.ts frontend/src/app/components/side-effects.spec.ts frontend/src/app/components/agent-tools.spec.ts frontend/src/app/components/event-adapters.spec.ts frontend/src/app/ui/format.spec.ts frontend/src/app/markdown.spec.ts frontend/src/app/components/plugin-store.spec.ts frontend/src/app/core/agent-notices.spec.ts frontend/src/app/core/feed-status.spec.ts frontend/src/app/ui/async-state.spec.ts frontend/src/app/ui/run-progress.spec.ts frontend/src/app/core/instrument-ref.spec.ts frontend/src/app/core/recent-instruments.spec.ts frontend/src/app/help/help-topics.spec.ts frontend/src/app/ui/datetime.spec.ts frontend/src/app/core/provenance.spec.ts frontend/src/app/core/strategy-period.spec.ts frontend/src/app/core/answer-sources.spec.ts frontend/src/app/components/tool-call-view.spec.ts frontend/src/app/components/team-view.spec.ts frontend/src/app/components/profile-view.spec.ts frontend/src/app/components/team-budget.spec.ts frontend/src/app/core/task-view.spec.ts
 ```
 
 Browser tests: `cd frontend && npm run build && npm run e2e` (Playwright, mock backend; see the README). They run in CI after a merge into `main`.
@@ -32,6 +32,16 @@ Browser tests: `cd frontend && npm run build && npm run e2e` (Playwright, mock b
 Market-data providers are plugins, developed and released in [Doldas/floweysales-plugins](https://github.com/Doldas/floweysales-plugins). This repository owns the interfaces they build on: the wire protocol, manifest and store format (`docs/plugins.md`) and the SDK module `pluginsdk/`. The backend must not import the SDK or any plugin; CI fails if it does. A protocol or contract change needs matching updates to `pluginsdk/testdata/contract/` (tested by both the SDK and the backend) and a new `pluginsdk/v<semver>` tag after merge.
 
 `npm run build` creates the Angular bundle; the GitHub Pages site in `site/` is **static documentation**, not a hosted trading engine.
+
+Documentation: the user guide is Markdown in `docs/guide/` (each page has `title`, `order`, `summary` and `last-reviewed` front matter) and is built into the Pages site by `scripts/build-docs.mjs`. Change it in the same PR as the behavior it describes, and describe only what exists. The site's icons and colors are copies of the app's, kept in step by `node scripts/sync-brand.mjs`. Before a PR that touches docs, `site/` or the app icons, run:
+
+```sh
+node --test scripts/build-docs.test.mjs
+node scripts/sync-brand.mjs --check
+node scripts/build-docs.mjs --check   # builds the guide and fails on a broken internal link
+```
+
+CI runs the same three commands in the `policy` job. Links to other sites are listed but not fetched, so an outside site cannot block a merge.
 
 ## License
 

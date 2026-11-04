@@ -90,6 +90,14 @@ export class LiveSseService {
     this.state.set('none');
   }
 
+  /** Drops the stream and forgets its last tick, for an instrument that has no tracker. */
+  clear(): void {
+    this.close();
+    this.currentConfigKey = null;
+    this.latestTick.set(null);
+    this.lastUpdateAt.set(null);
+  }
+
   /** Drops the stream and opens a fresh one for the current instrument. */
   reconnect(): void {
     const key = this.currentConfigKey;

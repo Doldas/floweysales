@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"floweysales/internal/ai"
+	"floweysales/internal/sources"
 	"floweysales/internal/storage"
 )
 
@@ -38,6 +39,9 @@ func (e *Engine) agentTaskStore() agentTaskStore {
 }
 
 const saveTimeout = 10 * time.Second
+
+// taskSourcePreview is how much of a source's excerpt a task view shows.
+const taskSourcePreview = 600
 
 // taskRecorder persists the checkpoints of one task run. A nil recorder does
 // nothing, so callers need not branch.
@@ -124,7 +128,14 @@ type taskView struct {
 	storage.AgentTask
 	Deliverables []ai.Deliverable `json:"deliverables"`
 	Ledger       []ai.LedgerEntry `json:"ledger,omitempty"`
-	Resumable    bool             `json:"resumable"`
+	// Sources, Audit and Removed are what the run retrieved, what the citation
+	// check found in its answer and what the block option removed; Evidence is
+	// the policy it ran under. Excerpts are cut to a preview.
+	Sources   []sources.Source   `json:"sources,omitempty"`
+	Audit     []sources.Finding  `json:"audit,omitempty"`
+	Removed   []sources.Finding  `json:"removed,omitempty"`
+	Evidence  *ai.EvidencePolicy `json:"evidence,omitempty"`
+	Resumable bool               `json:"resumable"`
 }
 
 func newTaskView(t storage.AgentTask, withLedger bool) taskView {
@@ -134,6 +145,8 @@ func newTaskView(t storage.AgentTask, withLedger bool) taskView {
 		var cp ai.Checkpoint
 		if json.Unmarshal([]byte(t.Checkpoint), &cp) == nil {
 			v.Ledger = cp.Ledger
+			v.Sources = sources.Compact(cp.Sources, len(cp.Sources), taskSourcePreview)
+			v.Audit, v.Removed, v.Evidence = cp.Audit, cp.Removed, cp.Evidence
 		}
 	}
 	v.Resumable = t.Status != ai.TaskComplete

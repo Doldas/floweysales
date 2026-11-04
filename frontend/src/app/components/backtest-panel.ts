@@ -6,8 +6,11 @@ import { MarketService, describeHttpError } from '../services';
 import type { BacktestParams, BacktestResult, BacktestSummary, BatchResult, SavedBacktest, SensitivityResult } from '../models';
 import type { Provenance } from '../core/provenance';
 import { SourceComponent } from '../ui/source';
+import { SkeletonComponent } from '../ui/skeleton';
+import { ProgressStatusComponent } from '../ui/progress-status';
+import { PROGRESS_POLL_MS, newRunId, parseRunProgress, type RunProgress } from '../ui/run-progress';
 import { periodError } from '../core/strategy-period';
-import { batchHeadline, batchParams, batchRows, exportUrl, savedLabel, sensitivityHeadline, sensitivityParams, sensitivityRows, singleParams, chartSummary, curvePath, metricTiles, segmentRows, warningText } from './backtest-view';
+import { batchHeadline, batchParams, batchRows, exportUrl, savedLabel, sensitivityHeadline, sensitivityParams, sensitivityRows, singleParams, chartSummary, curvePath, metricTiles, regimeRows, segmentRows, stressRows, warningText } from './backtest-view';
 
 const CHART_W = 640;
 const CHART_H = 220;
@@ -19,7 +22,7 @@ const CHART_H = 220;
  */
 @Component({
   selector: 'fs-backtest-panel',
-  imports: [FormsModule, SourceComponent],
+  imports: [FormsModule, SourceComponent, SkeletonComponent, ProgressStatusComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 <section class="bt" aria-labelledby="bt-title">
@@ -52,9 +55,9 @@ const CHART_H = 220;
   }
 
   @if (loading()) {
-    <div class="progress rounded-0" style="height: 2px" role="progressbar" aria-label="Replaying the strategy"><div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div></div>
-    <div class="bt-tiles placeholder-glow" aria-hidden="true">
-      @for (i of skeleton; track i) { <div class="card fs-kpi"><span class="placeholder col-6"></span><span class="placeholder col-9"></span></div> }
+    <fs-progress-status stage="Replaying the strategy" />
+    <div class="bt-tiles" aria-hidden="true">
+      @for (i of skeleton; track i) { <div class="card fs-kpi"><fs-skeleton shape="kpi" /></div> }
     </div>
     <p class="bt-note">Replaying the strategy month by month on prices and quarters as they were known then. The first run of a universe takes a while; repeats are instant.</p>
   }
@@ -110,6 +113,51 @@ const CHART_H = 220;
       <p class="bt-note">{{ r.segment_summary }} {{ r.segment_note }}</p>
     }
 
+    @if (stress().length || r.stress_not_covered?.length) {
+      <h4 class="h6 mb-1 mt-3">Named stress windows</h4>
+      @if (stress().length) {
+        <div class="table-responsive">
+          <table class="table table-sm bt-stress">
+            <caption class="visually-hidden">Strategy and benchmark inside named past market falls</caption>
+            <thead><tr><th scope="col">Window (UTC)</th><th scope="col" class="text-end">Strategy</th><th scope="col" class="text-end">Benchmark</th><th scope="col" class="text-end">Excess</th><th scope="col" class="text-end">Worst drop</th></tr></thead>
+            <tbody>
+              @for (s of stress(); track s.name) {
+                <tr><td>{{ s.name }}<br /><span class="bt-note">{{ s.period }}, {{ s.days }} days</span></td><td class="text-end">{{ s.ret }}</td><td class="text-end">{{ s.benchmark }}</td>
+                  <td class="text-end" [class.text-success]="s.excessTone === 'up'" [class.text-danger]="s.excessTone === 'down'">{{ s.excess }}</td><td class="text-end">{{ s.drawdown }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      @if (r.stress_not_covered?.length) { <p class="bt-note">Not tested, the data does not cover: {{ r.stress_not_covered!.join(', ') }}.</p> }
+      <p class="bt-note">{{ r.stress_note }} Returns are totals over the window, not per year.</p>
+    }
+
+    @if (regimes().length) {
+      <h4 class="h6 mb-1 mt-3">Results by market regime</h4>
+      <div class="table-responsive">
+        <table class="table table-sm bt-regimes">
+          <caption class="visually-hidden">Strategy and benchmark return per year by benchmark trend and volatility</caption>
+          <thead><tr><th scope="col">Regime</th><th scope="col" class="text-end">Days</th><th scope="col" class="text-end">Strategy / year</th><th scope="col" class="text-end">Benchmark</th><th scope="col" class="text-end">Excess</th></tr></thead>
+          <tbody>
+            @for (g of regimes(); track g.name) {
+              <tr><td>{{ g.name }} ({{ g.share }})</td><td class="text-end">{{ g.days }}</td><td class="text-end">{{ g.cagr }}</td><td class="text-end">{{ g.benchmark }}</td>
+                <td class="text-end" [class.text-success]="g.excessTone === 'up'" [class.text-danger]="g.excessTone === 'down'">{{ g.excess }}</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="bt-note">{{ r.regime_note }}</p>
+    }
+
+    @if (r.trades !== undefined || r.concentration) {
+      <p class="bt-note mt-2">
+        @if (r.trades !== undefined) { {{ r.trades }} trades (buys and sells of single holdings). }
+        @if (r.concentration; as c) { Total return {{ c.total_return_pct.toFixed(1) }}% over {{ c.periods }} rebalance periods; without the best {{ c.dropped }}: {{ c.without_best_return_pct.toFixed(1) }}%. }
+      </p>
+    }
+    @if (r.walk_forward_note) { <p class="bt-note">{{ r.walk_forward_note }}</p> }
+
     <div class="bt-warnings alert alert-warning" role="note">
       <strong>Read this before trusting the result</strong>
       <ul class="mb-0">
@@ -155,6 +203,9 @@ const CHART_H = 220;
       <button type="button" class="btn btn-sm btn-primary" (click)="runBatch()" [disabled]="batchLoading() || !batchCells()">
         {{ batchLoading() ? 'Running…' : 'Run ' + batchCells() + ' backtests' }}
       </button>
+      @if (batchLoading()) {
+        <fs-progress-status class="bt-batch-progress" [stage]="batchProgress()?.stage ?? 'Running the batch'" [done]="batchProgress()?.done ?? null" [total]="batchProgress()?.total ?? null" />
+      }
       @if (batchCells() > maxCells) { <span class="text-danger small" role="alert">Too many: pick fewer markets or periods ({{ maxCells }} at most).</span> }
     </div>
     @if (batchError(); as err) { <p class="text-danger small" role="alert">{{ err }}</p> }
@@ -330,8 +381,11 @@ export class BacktestPanelComponent {
   readonly pickedPeriods = signal<string[]>(['3', '5', '10']);
   readonly batch = signal<BatchResult | null>(null);
   readonly batchLoading = signal(false);
+  /** Counts from the server while a batch runs; null until it reports them. */
+  readonly batchProgress = signal<RunProgress | null>(null);
   readonly batchError = signal('');
   private batchRequest?: Subscription;
+  private progressTimer?: ReturnType<typeof setInterval>;
   readonly sens = signal<SensitivityResult | null>(null);
   readonly sensLoading = signal(false);
   readonly sensError = signal('');
@@ -366,10 +420,12 @@ export class BacktestPanelComponent {
   readonly strategyPath = computed(() => curvePath(this.result()?.curve ?? [], CHART_W, CHART_H, 'equity'));
   readonly benchPath = computed(() => curvePath(this.result()?.curve ?? [], CHART_W, CHART_H, 'benchmark'));
   readonly segments = computed(() => segmentRows(this.result()?.segments));
+  readonly stress = computed(() => stressRows(this.result()?.stress));
+  readonly regimes = computed(() => regimeRows(this.result()?.regimes));
   readonly summary = computed(() => (this.result() ? chartSummary(this.result()!) : ''));
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => { this.request?.unsubscribe(); this.batchRequest?.unsubscribe(); this.sensRequest?.unsubscribe(); });
+    inject(DestroyRef).onDestroy(() => { this.request?.unsubscribe(); this.batchRequest?.unsubscribe(); this.sensRequest?.unsubscribe(); this.stopProgress(); });
     // The market being viewed is ticked by default; a switch resets the batch.
     effect(() => {
       const u = this.universe();
@@ -465,10 +521,29 @@ export class BacktestPanelComponent {
     this.batchLoading.set(true);
     this.batchError.set('');
     const params = batchParams({ universes: this.pickedMarkets(), periods: this.pickedPeriods(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance() });
-    this.batchRequest = this.api.backtestBatch(params).subscribe({
-      next: res => { this.lastParams.batch = params; this.openedRun.set(null); this.batch.set(res); this.batchLoading.set(false); },
-      error: err => { this.batchError.set(describeHttpError(err)); this.batchLoading.set(false); },
+    const runId = newRunId();
+    this.startProgress(runId);
+    this.batchRequest = this.api.backtestBatch(params, runId).subscribe({
+      next: res => { this.stopProgress(); this.lastParams.batch = params; this.openedRun.set(null); this.batch.set(res); this.batchLoading.set(false); },
+      error: err => { this.stopProgress(); this.batchError.set(describeHttpError(err)); this.batchLoading.set(false); },
     });
+  }
+
+  /** Asks the server how many backtests of this batch are done; a failed ask just shows no count. */
+  private startProgress(runId: string): void {
+    this.stopProgress();
+    this.progressTimer = setInterval(() => {
+      this.api.backtestProgress(runId).subscribe({
+        next: raw => { if (this.batchLoading()) this.batchProgress.set(parseRunProgress(raw)); },
+        error: () => undefined,
+      });
+    }, PROGRESS_POLL_MS);
+  }
+
+  private stopProgress(): void {
+    clearInterval(this.progressTimer);
+    this.progressTimer = undefined;
+    this.batchProgress.set(null);
   }
 
   runSensitivity(): void {

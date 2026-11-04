@@ -161,6 +161,8 @@ type Engine struct {
 	leaderboardCache map[string]leaderboardCacheEntry
 	leaderboardCalls map[string]*leaderboardCall
 
+	runProgress *runProgressTable
+
 	backtestMu    sync.Mutex
 	backtestCache map[string]backtestCacheEntry
 	backtestCalls map[string]*backtestCall
@@ -192,6 +194,7 @@ type Engine struct {
 	secFilings    func(ctx context.Context, ticker string, limit int) (sec.Filings, error)
 	flowState     flowNodeStateStore
 	profiles      investorProfileStore
+	rankingPrefs  rankingPreferencesStore // leaderboard objective and constraints per user; tests replace the database
 	strategies    strategyStore
 	modelProfiles modelProfileStore // model profiles; tests replace the database
 	teams         teamStore         // saved agent teams
@@ -200,6 +203,8 @@ type Engine struct {
 	summarize    func(ctx context.Context, messages []ai.Message) (string, error)
 	transactions transactionStore
 	agentTasks   agentTaskStore
+	// evidenceDefaults keeps each user's saved evidence settings; tests replace the database.
+	evidenceDefaults evidenceDefaultStore
 	// strategyHistory replaces the provider history read in tests.
 	strategyHistory func(ctx context.Context, symbol string, p market.Provider, rng string) (market.HistorySeries, error)
 	paperState      func() ([]trading.Position, trading.Summary)
@@ -244,14 +249,17 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 
 		leaderboardCache: make(map[string]leaderboardCacheEntry),
 		leaderboardCalls: make(map[string]*leaderboardCall),
+		runProgress:      newRunProgressTable(),
 		backtestCache:    make(map[string]backtestCacheEntry),
 		backtestCalls:    make(map[string]*backtestCall),
 	}
 
 	e.registerMarketRoutes()
 	e.registerLeaderboardRoutes()
+	e.registerRankingPreferenceRoutes()
 	e.registerBacktestRoutes()
 	e.registerBacktestBatchRoutes()
+	e.registerRunProgressRoutes()
 	e.registerBacktestSensitivityRoutes()
 	e.registerBacktestRunRoutes()
 	e.registerBacktestSummaryRoute()
@@ -304,6 +312,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerForumRoutes()
 	e.registerAIRoutes()
 	e.registerAgentTaskRoutes()
+	e.registerEvidenceRoutes()
 	e.registerIntegrationSettingsRoutes()
 	e.registerTradingSettingsRoutes()
 	e.registerUserManagementRoutes()
@@ -480,13 +489,13 @@ func (h *sseHub) broadcastFor(symbol, provider string, data []byte) {
 	}
 }
 
-// BroadcastTick is invoked by the database insert callback.
-func (e *Engine) BroadcastTick(record storage.TradingRecord) {
-	// Settle resting orders against the new tick before it is published.
-	e.matchOrders(record.Symbol, record.Price)
-
+// tickPayload is the SSE body of one tick. timestamp (also sent as poll_time) is
+// when we polled the provider; quote_time is the provider's own time. quote_time,
+// delay_seconds and market_state are left out when unknown.
+func tickPayload(record storage.TradingRecord) map[string]any {
 	payload := map[string]any{
 		"timestamp":  record.Timestamp,
+		"poll_time":  record.Timestamp,
 		"symbol":     record.Symbol,
 		"provider":   record.Provider,
 		"price":      record.Price,
@@ -497,6 +506,27 @@ func (e *Engine) BroadcastTick(record storage.TradingRecord) {
 		"status":     record.Status,
 		"marketData": json.RawMessage(record.RawMarketJSON),
 	}
+	if record.QuoteTime > 0 {
+		payload["quote_time"] = record.QuoteTime
+	}
+	if record.DelaySeconds != nil {
+		payload["delay_seconds"] = *record.DelaySeconds
+	}
+	if record.MarketState != "" {
+		payload["market_state"] = record.MarketState
+		if record.MarketBasis != "" {
+			payload["market_basis"] = record.MarketBasis
+		}
+	}
+	return payload
+}
+
+// BroadcastTick is invoked by the database insert callback.
+func (e *Engine) BroadcastTick(record storage.TradingRecord) {
+	// Settle resting orders against the new tick before it is published.
+	e.matchOrders(record.Symbol, record.Price)
+
+	payload := tickPayload(record)
 
 	data, err := json.Marshal(payload)
 	if err != nil {

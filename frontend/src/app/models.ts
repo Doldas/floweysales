@@ -1,4 +1,6 @@
+import type { BudgetSummary } from './components/team-budget';
 import type { Provenance } from './core/provenance';
+import type { AnswerFinding, AnswerSource } from './core/answer-sources';
 export interface MarketData {
   assetDataProvider?: string;
   type?: string;
@@ -67,6 +69,15 @@ export interface TradingRecord {
   currency: string;
   status: string;
   marketData?: MarketData;
+  /** When the server polled the provider (Unix seconds). */
+  poll_time?: number;
+  /** The provider's own time of the quote (Unix seconds); absent when it did not say. */
+  quote_time?: number;
+  /** How far behind the market the provider says the quote is; absent when unknown. */
+  delay_seconds?: number;
+  market_state?: 'open' | 'closed' | 'unknown';
+  /** `provider`, or `regular_hours` (computed from the exchange's weekday hours; holidays unknown). */
+  market_basis?: string;
 }
 
 export type OrderSide = 'BUY' | 'SELL';
@@ -313,7 +324,7 @@ export interface LeaderboardRow {
   breakdown?: LeaderboardBreakdown;
   /** Why the company is on the list, where its numbers come from, and which listing it is: three separate answers. */
   discovery?: { why: string; source: string; kind: string; url: string | null; as_of: string | null };
-  metrics_source?: { provider: string; price_as_of?: string; fundamentals_through?: string };
+  metrics_source?: { provider: string; price_as_of?: string; fundamentals_through?: string; record_url?: string | null; fact?: Provenance };
   listing?: { exchange: string; mic?: string; country?: string; known: boolean };
 }
 
@@ -355,6 +366,43 @@ export interface LeaderboardProvenance {
   inputs_hash: string;
   price_dates: { newest: string; oldest: string };
   disclaimer: string;
+  /** The ranking, the list and the data behind it in the shared provenance format. */
+  fact?: Provenance;
+  universe_fact?: Provenance;
+  data_age?: LeaderboardDataAge;
+  bias?: LeaderboardBias;
+}
+
+/** How old the inputs are and whether they differ in age; `statements` is ready to show. */
+export interface LeaderboardDataAge {
+  mixed: boolean;
+  price_newest: string; price_oldest: string; price_span_days: number;
+  older_than_newest: number; stale_price: number; stale_fundamentals: number; no_fundamentals: number;
+  newest_price_age_days?: number;
+  list_as_of?: string | null; list_age_days?: number; list_stale?: boolean;
+  statements: string[];
+}
+
+/** Selection and survivorship effects measured from the data already fetched. */
+export interface LeaderboardBias {
+  point_in_time: boolean;
+  measures: Record<string, number | string>;
+  statements: string[];
+}
+
+/** A user's own objective and constraints for the leaderboard. */
+export interface RankingPreferences {
+  objective: string;
+  max_volatility_pct?: number;
+  exclude_unprofitable?: boolean;
+  require_fundamentals?: boolean;
+  exclude_symbols?: string[];
+}
+export interface RankingPreferencesResponse {
+  preferences: RankingPreferences;
+  objectives: Record<string, string>;
+  summary: string[];
+  stored: boolean;
 }
 
 export interface LeaderboardOption { id: string; label: string; description: string; benchmark?: string; source?: UniverseSource; region?: string; countries?: string[] }
@@ -370,6 +418,8 @@ export interface LeaderboardResponse {
   /** The list that was ranked, with its source; absent from older servers. */
   universe_info?: LeaderboardOption;
   selection?: LeaderboardSelection;
+  /** The caller's saved preferences and whether they shaped this ranking. */
+  preferences?: { applied: boolean; values: RankingPreferences; summary: string[]; effective_weights: Record<string, number> };
   universes: LeaderboardOption[];
   strategies: LeaderboardOption[];
   provenance?: LeaderboardProvenance;
@@ -417,6 +467,27 @@ export interface BacktestResult {
   segments?: BacktestSegment[];
   segment_summary?: string;
   segment_note?: string;
+  /** Buys and sells of single holdings, and the return with and without the best rebalance periods. */
+  trades?: number;
+  concentration?: BacktestConcentration;
+  /** Named past windows the replay fully covers, the ones it does not, and the hindsight caveat. */
+  stress?: BacktestStress[];
+  stress_not_covered?: string[];
+  stress_note?: string;
+  /** Replayed days grouped by the benchmark's own trend and volatility; labels describe the past only. */
+  regimes?: BacktestRegime[];
+  regime_unlabeled_days?: number;
+  regime_note?: string;
+  walk_forward_note?: string;
+}
+export interface BacktestConcentration { periods: number; dropped: number; total_return_pct: number; without_best_return_pct: number }
+export interface BacktestStress {
+  name: string; from: string; to: string; days: number; return_pct: number; max_drawdown_pct: number;
+  benchmark_return_pct?: number; excess_pct?: number;
+}
+export interface BacktestRegime {
+  id: string; name: string; days: number; share_pct: number;
+  cagr_pct?: number; benchmark_cagr_pct?: number; excess_cagr_pct?: number;
 }
 export interface BacktestSegment {
   from: string; to: string; days: number; cagr_pct: number; volatility_pct: number; max_drawdown_pct: number; sharpe: number;
@@ -595,6 +666,10 @@ export interface TeamEvent {
   agent?: string; name?: string; content?: string; result?: string; tool_error?: string; error?: string; stance?: string;
   arguments?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean;
   severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string;
+  /** On the 'budget' event that ends a run with a budget. */
+  budget?: BudgetSummary;
+  /** With a `sources` event: what the member retrieved and what the citation check found in its answer. */
+  sources?: AnswerSource[]; audit?: AnswerFinding[]; removed?: AnswerFinding[];
 }
 export type StrategyOperandType = 'price' | 'const' | 'ema' | 'sma' | 'rsi' | 'atr' | 'highest' | 'lowest' | 'fib_retr' | 'fib_ext' | 'swing_high' | 'swing_low';
 export interface StrategyOperand { type: StrategyOperandType; field?: string; period?: number; ratio?: number; value?: number }
@@ -657,7 +732,11 @@ export interface ModelProfile {
   enabled?: boolean; is_default: boolean; position?: number;
 }
 export interface SavedTeamMember { persona: string; profile_id: number | null }
-export interface SavedTeam { id: number; name: string; chair: boolean; members: SavedTeamMember[]; updated_at?: string }
+export interface SavedTeam {
+  id: number; name: string; chair: boolean; members: SavedTeamMember[]; updated_at?: string;
+  /** The team's budget ceilings for one run; null for none. */
+  max_tokens?: number | null; max_cost?: number | null; max_tool_calls?: number | null;
+}
 
 export interface AboutInfo {
   name: string;

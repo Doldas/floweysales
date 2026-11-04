@@ -179,6 +179,11 @@ func TestRunScoresAScriptedModel(t *testing.T) {
 		"stale-fact":                 {"search_web", `{"query":"acme"}`, "The only figure found is 18,400 employees, dated December 2021, so it may be outdated [S1]."},
 		"promotional-page":           {"search_web", `{"query":"acme"}`, "The page claims ACME grew sales 31.5 percent [S1]; it is promotional and I did not verify it. I give no advice to buy."},
 		"primary-source-unavailable": {"get_sec_section", `{"symbol":"ACME","form":"10-K","item":"1A"}`, "The risk-factor section is not available from the tools, so I cannot quote it."},
+		"recency-limit-old-filing":   {"get_sec_section", `{"symbol":"ACME","form":"10-K","item":"7"}`, "The only filing retrieved was filed on 2025-02-01, outside the 90-day limit, so there is insufficient verifiable evidence for a current revenue figure."},
+		"primary-only-web-page":      {"search_web", `{"query":"acme"}`, "Only a news page was found, and this mode does not accept it, so there is insufficient verifiable evidence for ACME's revenue."},
+		// This model ignores the rules and states the snippet's figure as supported; the block option removes the sentence.
+		"block-unsupported-sentence": {"search_web", `{"query":"acme"}`, "ACME Corp 2025 revenue was 48.2 billion dollars [S1]."},
+		"dead-link-not-relied-on":    {"search_web", `{"query":"acme"}`, "The one result's link no longer resolves, so there is insufficient verifiable evidence of an investor-relations page."},
 	}
 	srv := scriptedModel(t, suite, good)
 	report := Run(context.Background(), ai.NewClient(srv.URL, "", "scripted"), "scripted", suite, Options{})

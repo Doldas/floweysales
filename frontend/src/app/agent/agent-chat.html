@@ -75,20 +75,38 @@
         <button type="button" class="btn-close" (click)="session.dismissError()" aria-label="Dismiss this error"></button>
       </div>
     }
-    @if (!session.streaming() && session.answerSources().length) {
+    @if (session.activeTask(); as task) {
+      <section class="task-card small" aria-label="Task checklist">
+        <h4><i class="bi bi-list-check" aria-hidden="true"></i> Task {{ task.id }} · {{ statusLabel(task.status) }}</h4>
+        @if (checklistLine(task.checklist); as line) { <p class="mb-1" role="status">{{ line }}</p> }
+        <ul>
+          @for (d of task.checklist; track d.title) {
+            <li><i class="bi" [class]="mark(d.status)" aria-hidden="true"></i> {{ d.title }} <span class="text-muted">({{ d.status === 'pending' ? 'not yet reported' : d.status }}{{ d.note ? ': ' + d.note : '' }})</span></li>
+          }
+        </ul>
+        @if (task.status === 'incomplete') { <p class="mb-0 text-muted">Parts are missing, so this is not reported as finished. Open Saved tasks to resume it; the evidence gathered so far is kept.</p> }
+      </section>
+    }
+    @if (!session.streaming() && (session.answerSources().length || session.answerRemoved().length)) {
       <details class="sources small">
         <summary><i class="bi bi-journal-text" aria-hidden="true"></i> Sources ({{ session.answerSources().length }})</summary>
         <p class="mb-1" [class.text-danger]="session.answerAudit().length" role="status">{{ auditText() }}</p>
+        @if (removedText(); as removed) {
+          <p class="mb-1 text-danger" role="status">{{ removed }}</p>
+          @for (f of session.answerRemoved(); track $index) {
+            <p class="finding mb-1"><strong>{{ findingLabel(f.kind) }}.</strong> {{ f.detail }} <em>Removed: “{{ f.sentence }}”</em></p>
+          }
+        }
         @for (f of session.answerAudit(); track $index) {
           <p class="finding mb-1"><strong>{{ findingLabel(f.kind) }}.</strong> {{ f.detail }} <em>“{{ f.sentence }}”</em></p>
         }
         @if (groups().read.length) {
           <h4>Read by the agent</h4>
-          <ul>@for (s of groups().read; track s.id) { <li><span class="sid">[{{ s.id }}]</span> {{ s.title || s.url }} @if (link(s.url); as href) { <a [href]="href" target="_blank" rel="noopener noreferrer">open</a> } @if (s.document_id) { <span class="text-muted">{{ s.document_id }}</span> }</li> }</ul>
+          <ul>@for (s of groups().read; track s.id) { <li><span class="sid">[{{ s.id }}]</span> {{ s.title || s.url }} @if (link(s.url); as href) { <a [href]="href" target="_blank" rel="noopener noreferrer">open</a> } @if (s.document_id) { <span class="text-muted">{{ s.document_id }}</span> } @if (origin(s); as who) { <span class="text-muted">· {{ who }}</span> }</li> }</ul>
         }
         @if (groups().listed.length) {
           <h4>Search results only (title and snippet)</h4>
-          <ul>@for (s of groups().listed; track s.id) { <li><span class="sid">[{{ s.id }}]</span> {{ s.title || s.url }} @if (link(s.url); as href) { <a [href]="href" target="_blank" rel="noopener noreferrer">open</a> }</li> }</ul>
+          <ul>@for (s of groups().listed; track s.id) { <li><span class="sid">[{{ s.id }}]</span> {{ s.title || s.url }} @if (link(s.url); as href) { <a [href]="href" target="_blank" rel="noopener noreferrer">open</a> } @if (origin(s); as who) { <span class="text-muted">· {{ who }}</span> }</li> }</ul>
         }
       </details>
     }
@@ -122,6 +140,32 @@
       </select>
     </div>
     @if (evidenceHint(); as hint) { <div class="profile-note">{{ hint }}</div> }
+    <details class="evidence-settings small">
+        <summary>Evidence settings</summary>
+        @if (session.evidenceMode() !== 'standard') {
+        <div class="evidence-grid">
+          <label for="evidence-failure">A statement that still fails the check</label>
+          <select id="evidence-failure" class="form-select form-select-sm" [disabled]="session.streaming()" (change)="session.updateEvidence({ block: $any($event.target).value === 'block' })">
+            <option value="flag" [selected]="!session.evidenceSettings().block">Stays, with a warning</option>
+            <option value="block" [selected]="session.evidenceSettings().block">Is removed from the answer</option>
+          </select>
+          <label for="evidence-age">Only sources from the last (days, 0 = any age)</label>
+          <input id="evidence-age" type="number" min="0" max="3650" step="1" class="form-control form-control-sm" [disabled]="session.streaming()" [value]="session.evidenceSettings().maxAgeDays" (change)="session.updateEvidence({ maxAgeDays: +$any($event.target).value })">
+          <span id="evidence-types-label">Source types that count</span>
+          <div role="group" aria-labelledby="evidence-types-label">
+            <label class="form-check-inline"><input type="checkbox" [disabled]="session.streaming()" [checked]="session.evidenceSettings().filings" (change)="session.updateEvidence({ filings: $any($event.target).checked })"> Filings</label>
+            <label class="form-check-inline"><input type="checkbox" [disabled]="session.streaming()" [checked]="session.evidenceSettings().webPages" (change)="session.updateEvidence({ webPages: $any($event.target).checked })"> Web pages</label>
+          </div>
+        </div>
+        } @else { <p class="mb-1 text-muted">Standard shows citations and flags problems afterward. Pick Evidence only or Primary sources only to set limits.</p> }
+        @if (session.evidenceProblem(); as problem) { <p class="text-danger mb-1" role="alert">{{ problem }}</p> }
+        @if (evidenceSummary(); as line) { <p class="mb-1 text-muted">{{ line }}</p> }
+        <div class="evidence-actions">
+          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="session.saveEvidenceDefault(true)" [disabled]="session.streaming() || !!session.evidenceProblem()">Save as my default</button>
+          @if (session.evidenceHasDefault()) { <button type="button" class="btn btn-sm btn-outline-secondary" (click)="session.saveEvidenceDefault(false)" [disabled]="session.streaming()">Remove my default</button> }
+        </div>
+      </details>
+    @if (session.evidenceNote(); as note) { <p class="small text-muted mb-1" role="status">{{ note }}</p> }
     @if (session.profiles().length) {
       <div class="persona-row">
         <label for="profile-pick">Model</label>
@@ -132,6 +176,29 @@
       </div>
       @if (chosenProfile(); as p) { <div class="profile-note">{{ p.description }} {{ profileSummary(p) }}</div> }
     }
+    <details class="task-compose">
+      <summary>Required parts (optional)@if (session.deliverableCount()) { · {{ session.deliverableCount() }} }</summary>
+      <textarea rows="3" class="form-control form-control-sm" [value]="session.deliverablesText()" (input)="session.deliverablesText.set($any($event.target).value)"
+                [disabled]="session.streaming()" aria-label="Required parts of the answer, one per line" placeholder="Latest price&#10;DCF with stated assumptions&#10;Risk note"></textarea>
+      <small class="text-muted">One per line, up to {{ session.maxDeliverables }}. The question is saved as a task. The agent must report each part as done or missing; it cannot claim to be finished while one is open, and an interrupted task can be resumed.</small>
+    </details>
+    <details class="task-list" (toggle)="$any($event.target).open && session.loadTasks()">
+      <summary>Saved tasks@if (session.tasks().length) { ({{ session.tasks().length }}) }</summary>
+      @if (!session.tasks().length) { <p class="text-muted small mb-0">No saved tasks yet. A question with required parts becomes one.</p> }
+      <ul>
+        @for (t of session.tasks(); track t.id) {
+          <li>
+            <div class="task-title"><strong>{{ t.title }}</strong> <span class="badge text-bg-secondary">{{ statusLabel(t.status) }}</span></div>
+            <small class="text-muted">{{ t.steps }} model rounds · {{ t.tool_calls }} tool calls · updated {{ when(t.updated_at) }}</small>
+            @if (checklistLine(t.deliverables); as line) { <small>{{ line }}</small> }
+            <div class="task-actions">
+              <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="session.streaming() || !canResume(t) || !session.canSend()" (click)="session.resumeTask(t)">Resume</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="session.streaming()" (click)="session.deleteTask(t.id)" [attr.aria-label]="'Delete task ' + t.title">Delete</button>
+            </div>
+          </li>
+        }
+      </ul>
+    </details>
     <div class="composer-box">
       <textarea #composer rows="1" [value]="draft()" (input)="onInput($any($event.target).value)" (keydown)="onKeydown($event)"
                 [placeholder]="session.configured() || !session.configLoaded() ? 'Ask a research question…' : 'AI model not configured'"

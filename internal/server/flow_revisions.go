@@ -148,6 +148,10 @@ func writeRevisionLookupError(w http.ResponseWriter, err error) {
 // graph they are about to publish or activate.
 func (e *Engine) nonAdminMayUse(w http.ResponseWriter, r *http.Request, f storage.AgentFlow, g flowGraph) bool {
 	current, _ := e.currentUser(r)
+	if err := e.flowChoicesAvailable(r.Context(), e.flowChoiceOwner(r.Context(), f.ID, current.ID), g); err != nil {
+		writeJSON(w, 403, map[string]string{"error": err.Error()})
+		return false
+	}
 	if current.Role == identity.RoleSysAdmin {
 		return true
 	}

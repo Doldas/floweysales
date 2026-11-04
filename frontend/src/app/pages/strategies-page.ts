@@ -11,6 +11,8 @@ import { AgentSession } from '../core/agent-session';
 import { MarketState } from '../core/market-state';
 import { PERIOD_PRESETS, parseSavedPeriods, periodError, periodRequest, withSavedPeriod, type PeriodChoice, type SavedPeriod } from '../core/strategy-period';
 import { todayUtc } from '../ui/datetime';
+import { SkeletonComponent } from '../ui/skeleton';
+import { ProgressStatusComponent } from '../ui/progress-status';
 import type { Persona, SavedStrategy, StrategyCatalog, StrategyDef, StrategyRunResult } from '../models';
 import { MarketService, describeHttpError } from '../services';
 import { SymbolSearchComponent } from '../shell/symbol-search';
@@ -28,7 +30,7 @@ const H_EQUITY = 160;
 @Component({
   selector: 'fs-strategies-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HelpButtonComponent, SymbolSearchComponent, StrategyBuilderComponent],
+  imports: [HelpButtonComponent, SymbolSearchComponent, StrategyBuilderComponent, SkeletonComponent, ProgressStatusComponent],
   template: `
 <div class="fs-page research-container">
   <header class="fs-page-header">
@@ -126,7 +128,10 @@ const H_EQUITY = 160;
         </section>
 
         @if (loading()) {
-          <div class="progress rounded-0" style="height: 2px" role="progressbar" aria-label="Replaying the strategy"><div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div></div>
+          <div [attr.aria-busy]="true">
+            <fs-progress-status stage="Replaying the strategy" />
+            <fs-skeleton shape="block" height="9rem" aria-hidden="true" />
+          </div>
         }
         @if (error(); as err) { <div class="fs-empty" role="alert"><i class="bi bi-exclamation-triangle"></i><h3>Could not run the test</h3><p class="mb-0">{{ err }}</p></div> }
 

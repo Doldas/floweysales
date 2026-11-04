@@ -94,3 +94,17 @@ func ClientFrom(ctx context.Context) *Client {
 	c, _ := ctx.Value(clientKey{}).(*Client)
 	return c
 }
+
+type evidencePolicyKey struct{}
+
+// withRunEvidencePolicy records the evidence policy a run was given, so a team
+// it delegates to answers under the same one.
+func withRunEvidencePolicy(ctx context.Context, p EvidencePolicy) context.Context {
+	return context.WithValue(ctx, evidencePolicyKey{}, p)
+}
+
+// RunEvidencePolicy is the policy of the run that owns ctx. ok is false outside a run.
+func RunEvidencePolicy(ctx context.Context) (EvidencePolicy, bool) {
+	p, ok := ctx.Value(evidencePolicyKey{}).(EvidencePolicy)
+	return p, ok
+}

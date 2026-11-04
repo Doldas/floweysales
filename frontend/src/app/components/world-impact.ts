@@ -4,6 +4,8 @@ import type { CompanyWorld, WorldHeadline } from '../models';
 import { AgentSession } from '../core/agent-session';
 import { MarketService } from '../services';
 import { SourceComponent } from '../ui/source';
+import { SkeletonComponent } from '../ui/skeleton';
+import { ProgressStatusComponent } from '../ui/progress-status';
 import { ROLE_ICON, companyPrompt, publishedLabel, roleLine } from './world-view';
 
 const SECTORS = ['Energy', 'Materials', 'Industrials', 'Consumer Discretionary', 'Consumer Staples', 'Health Care', 'Financials',
@@ -16,7 +18,7 @@ const SECTORS = ['Energy', 'Materials', 'Industrials', 'Consumer Discretionary',
 @Component({
   selector: 'fs-world-impact',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SourceComponent],
+  imports: [SourceComponent, SkeletonComponent, ProgressStatusComponent],
   template: `
 <section class="card world" aria-label="World events and this company">
   <header>
@@ -39,7 +41,10 @@ const SECTORS = ['Energy', 'Materials', 'Industrials', 'Consumer Discretionary',
     </div>
   </header>
   @if (loading()) {
-    <p class="muted">Reading the news…</p>
+    <div [attr.aria-busy]="true">
+      <fs-progress-status stage="Reading the news" />
+      <fs-skeleton shape="rows" [rows]="2" aria-hidden="true" />
+    </div>
   } @else if (failed()) {
     <p class="muted">Could not load the world view for this company.</p>
   } @else if (data(); as d) {

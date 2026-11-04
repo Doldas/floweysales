@@ -9,12 +9,14 @@ import type { WorldHeadline, WorldTheme, WorldView } from '../models';
 import { MarketService } from '../services';
 import { SymbolSearchComponent } from '../shell/symbol-search';
 import { SourceComponent } from '../ui/source';
+import { SkeletonComponent } from '../ui/skeleton';
+import { ProgressStatusComponent } from '../ui/progress-status';
 
 /** What is happening in the world, and which sectors and commodities it touches. */
 @Component({
   selector: 'fs-world-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, SymbolSearchComponent, WorldImpactComponent, SourceComponent],
+  imports: [RouterLink, SymbolSearchComponent, WorldImpactComponent, SourceComponent, SkeletonComponent, ProgressStatusComponent],
   template: `
     <div class="fs-page research-container">
       <header class="fs-page-header">
@@ -30,7 +32,10 @@ import { SourceComponent } from '../ui/source';
       </header>
 
       @if (loading() && !world()) {
-        <p class="muted">Reading the news…</p>
+        <div [attr.aria-busy]="true">
+          <fs-progress-status stage="Reading the news" />
+          <fs-skeleton shape="rows" [rows]="4" aria-hidden="true" />
+        </div>
       } @else if (failed()) {
         <div class="fs-empty"><i class="bi bi-globe2"></i><h3>The world view could not load</h3><p class="mb-0">Try again in a moment.</p></div>
       } @else if (world(); as w) {

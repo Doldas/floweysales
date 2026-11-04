@@ -63,3 +63,24 @@ func TestAllowedAPI(t *testing.T) {
 		}
 	}
 }
+
+func TestOrdinaryUsersMaySetTheirOwnEvidenceDefaultAndLeaderboardPreferences(t *testing.T) {
+	cases := []struct {
+		method, path string
+		want         bool
+	}{
+		{"GET", "/api/ai/evidence-default", true},
+		{"PUT", "/api/ai/evidence-default", true},
+		{"DELETE", "/api/ai/evidence-default", true},
+		{"POST", "/api/ai/evidence-default", false},
+		{"GET", "/api/market/leaderboard/preferences", true},
+		{"PUT", "/api/market/leaderboard/preferences", true},
+		{"DELETE", "/api/market/leaderboard/preferences", false},
+		{"GET", "/api/market/backtest/progress", true},
+	}
+	for _, c := range cases {
+		if got := allowedAPI("USER", c.method, c.path); got != c.want {
+			t.Errorf("USER %s %s = %v, want %v", c.method, c.path, got, c.want)
+		}
+	}
+}

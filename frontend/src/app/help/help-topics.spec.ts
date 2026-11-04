@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import test from 'node:test';
 
-import { CONTEXT_TOPICS, DOCS_URL, HELP_TOPICS, searchHelp, topicById } from './help-topics.ts';
+import { CONTEXT_TOPICS, DOCS_URL, HELP_TOPICS, guideUrl, searchHelp, topicById } from './help-topics.ts';
 
 test('every topic the app links to exists', () => {
   for (const id of CONTEXT_TOPICS) assert.ok(topicById(id), id);
@@ -25,4 +26,16 @@ test('every word must match, and an empty search lists everything', () => {
 
 test('the documentation link is the published site', () => {
   assert.equal(DOCS_URL, 'https://doldas.github.io/floweysales/');
+});
+
+test('every guide page a topic points to exists', () => {
+  for (const t of HELP_TOPICS.filter(t => t.guide)) {
+    assert.ok(existsSync(new URL(`../../../../docs/guide/${t.guide}.md`, import.meta.url)), `${t.id} -> ${t.guide}`);
+  }
+  for (const id of CONTEXT_TOPICS) assert.ok(topicById(id)?.guide, `${id} has no guide page`);
+});
+
+test('a topic links to its guide page, or to the guide front page', () => {
+  assert.equal(guideUrl(topicById('leaderboard')), 'https://doldas.github.io/floweysales/guide/leaderboard.html');
+  assert.equal(guideUrl(topicById('glossary')), 'https://doldas.github.io/floweysales/guide/');
 });

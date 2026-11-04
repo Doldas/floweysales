@@ -9,6 +9,8 @@ import {
   BacktestParams,
   BacktestResult, BatchResult, SensitivityResult, SavedBacktest, BacktestSummary,
   LeaderboardResponse,
+  RankingPreferences,
+  RankingPreferencesResponse,
   MarketData,
   Order,
   OrderRequest,
@@ -95,11 +97,21 @@ export class MarketService {
   }
 
   /** Ranks a preset universe, or up to 25 symbols, for a strategy. */
-  getLeaderboard(universe: string, strategy: string, symbols: string[] = []): Observable<LeaderboardResponse> {
+  getLeaderboard(universe: string, strategy: string, symbols: string[] = [], ignorePreferences = false): Observable<LeaderboardResponse> {
     const params: Record<string, string> = { strategy, explain: '1' };
+    if (ignorePreferences) params['preferences'] = 'off';
     if (symbols.length) params['symbols'] = symbols.join(',');
     else params['universe'] = universe;
     return this.http.get<LeaderboardResponse>('/api/market/leaderboard', { params });
+  }
+
+  /** The signed-in user's saved leaderboard objective and constraints. */
+  getRankingPreferences(): Observable<RankingPreferencesResponse> {
+    return this.http.get<RankingPreferencesResponse>('/api/market/leaderboard/preferences');
+  }
+
+  saveRankingPreferences(prefs: RankingPreferences): Observable<RankingPreferencesResponse> {
+    return this.http.put<RankingPreferencesResponse>('/api/market/leaderboard/preferences', prefs);
   }
 
   /** Replays a leaderboard strategy over past prices; slow on a cold cache. */
@@ -108,8 +120,13 @@ export class MarketService {
   }
 
   /** One strategy over several universes and periods; each cell is an ordinary backtest. */
-  backtestBatch(params: Record<string, string>): Observable<BatchResult> {
-    return this.http.get<BatchResult>('/api/market/backtest/batch', { params });
+  backtestBatch(params: Record<string, string>, progressId?: string): Observable<BatchResult> {
+    return this.http.get<BatchResult>('/api/market/backtest/batch', { params: progressId ? { ...params, progress_id: progressId } : params });
+  }
+
+  /** How many backtests of a named batch have finished; 404 until the run starts. */
+  backtestProgress(id: string): Observable<unknown> {
+    return this.http.get<unknown>('/api/market/backtest/progress', { params: { id } });
   }
 
   /** One setting at a time (trading cost, holdings, rebalance) around a base backtest. */
@@ -147,7 +164,7 @@ export class MarketService {
   deleteAdminProfile(id: number): Observable<unknown> { return this.http.delete(`/api/admin/ai/profiles/${id}`); }
   /** The user's saved agent teams. */
   getSavedTeams(): Observable<{ teams: SavedTeam[]; max: number }> { return this.http.get<{ teams: SavedTeam[]; max: number }>('/api/ai/teams'); }
-  saveTeam(t: { id?: number; name: string; chair: boolean; members: SavedTeamMember[] }): Observable<{ id: number }> {
+  saveTeam(t: { id?: number; name: string; chair: boolean; members: SavedTeamMember[]; max_tokens?: number | null; max_cost?: number | null; max_tool_calls?: number | null }): Observable<{ id: number }> {
     return t.id ? this.http.put<{ id: number }>(`/api/ai/teams/${t.id}`, t) : this.http.post<{ id: number }>('/api/ai/teams', t);
   }
   deleteTeam(id: number): Observable<unknown> { return this.http.delete(`/api/ai/teams/${id}`); }

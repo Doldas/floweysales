@@ -1,7 +1,29 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { MAX_RECENT, addRecent, parseRecent } from './recent-instruments.ts';
+import { MAX_FAVORITES, MAX_RECENT, addRecent, isFavorite, parseFavorites, parseRecent, toggleFavorite } from './recent-instruments.ts';
+
+test('favorites toggle on and off, per provider', () => {
+  let list = toggleFavorite([], { symbol: 'volv-b.st', provider: 'yahoo', name: 'Volvo' });
+  assert.deepEqual(list, [{ symbol: 'VOLV-B.ST', provider: 'YAHOO', name: 'Volvo' }]);
+  assert.equal(isFavorite(list, { symbol: 'VOLV-B.ST', provider: 'YAHOO' }), true);
+  assert.equal(isFavorite(list, { symbol: 'VOLV-B.ST', provider: 'FINNHUB' }), false);
+  list = toggleFavorite(list, { symbol: 'VOLV-B.ST', provider: 'FINNHUB' });
+  assert.equal(list.length, 2);
+  list = toggleFavorite(list, { symbol: 'VOLV-B.ST', provider: 'YAHOO' });
+  assert.deepEqual(list.map(f => f.provider), ['FINNHUB']);
+});
+
+test('a full favorites list refuses a new entry but still lets one go', () => {
+  const full = Array.from({ length: MAX_FAVORITES }, (_, i) => ({ symbol: `S${i}`, provider: 'YAHOO' }));
+  assert.equal(toggleFavorite(full, { symbol: 'NEW', provider: 'YAHOO' }).length, MAX_FAVORITES);
+  assert.equal(toggleFavorite(full, { symbol: 'S3', provider: 'YAHOO' }).length, MAX_FAVORITES - 1);
+});
+
+test('stored favorites that are malformed are dropped, never thrown on', () => {
+  assert.deepEqual(parseFavorites('not json'), []);
+  assert.deepEqual(parseFavorites('[{"symbol":"<b>","provider":"YAHOO"},{"symbol":"AAPL","provider":"YAHOO"}]').map(f => f.symbol), ['AAPL']);
+});
 
 test('the newest instrument comes first and a repeat moves up instead of doubling', () => {
   let list = addRecent([], { symbol: 'nvda', provider: 'yahoo' });

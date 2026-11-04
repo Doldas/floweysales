@@ -4,7 +4,9 @@
  * state the page renders. Pure, tested with node --test.
  */
 import type { Persona, Stance, TeamEvent } from '../models';
+import type { BudgetSummary } from './team-budget';
 import { finishCall, startCall, type ToolCall } from '#app/components/tool-call-view';
+import { auditSummary, removedSummary, type AnswerFinding, type AnswerSource } from '#app/core/answer-sources';
 
 export const STANCE_LABEL: Record<Stance, string> = {
   fits: 'Fits', partly: 'Partly fits', does_not_fit: 'Does not fit', insufficient_data: 'Not enough data',
@@ -20,8 +22,10 @@ export interface MemberState {
   model?: string;
   /** Why the member has no tools, when that is so. */
   note?: string;
+  /** What the member retrieved, what the citation check found in its answer, and what the block option removed. */
+  sources?: AnswerSource[]; audit?: AnswerFinding[]; removed?: AnswerFinding[];
 }
-export interface TeamState { members: MemberState[]; chair: MemberState | null; finished: boolean; error: string }
+export interface TeamState { members: MemberState[]; chair: MemberState | null; finished: boolean; error: string; budget?: BudgetSummary }
 
 const blank = (id: string, name: string): MemberState => ({ id, name, status: 'waiting', streamed: '', final: '', steps: [], error: '' });
 
@@ -49,6 +53,8 @@ export function applyTeamEvent(s: TeamState, ev: TeamEvent): TeamState {
       return patch(s, agent, m => ({ ...m, steps: startCall(m.steps, ev, Date.now(), m.name) }));
     case 'tool_result':
       return patch(s, agent, m => ({ ...m, steps: finishCall(m.steps, ev, Date.now(), m.name) }));
+    case 'sources':
+      return agent ? patch(s, agent, m => ({ ...m, sources: ev.sources ?? [], audit: ev.audit ?? [], removed: ev.removed ?? [] })) : s;
     case 'error':
       return agent ? patch(s, agent, m => ({ ...m, error: ev.error ?? m.error })) : { ...s, error: ev.error ?? 'Team run failed' };
     case 'member_done':
@@ -56,6 +62,8 @@ export function applyTeamEvent(s: TeamState, ev: TeamEvent): TeamState {
         ...m, final: ev.content ?? '', stance: isStance(ev.stance) ? ev.stance : undefined, error: ev.error ?? m.error,
         status: ev.content ? 'done' : 'error',
       }));
+    case 'budget':
+      return ev.budget ? { ...s, budget: ev.budget } : s;
     case 'done': {
       // A member that never reported by the end of the run has no answer to wait for.
       const settle = (m: MemberState): MemberState => (m.status === 'waiting' || m.status === 'running'
@@ -70,6 +78,12 @@ export function applyTeamEvent(s: TeamState, ev: TeamEvent): TeamState {
 /** What a member's card shows: the finished answer, else what has streamed so far. */
 export function shownText(m: MemberState): string {
   return stripStance(m.final || m.streamed);
+}
+
+/** The citation check result under a member's answer, or '' when the member retrieved no sources. */
+export function evidenceLine(m: MemberState): string {
+  if (!m.sources?.length && !m.audit?.length && !m.removed?.length) return '';
+  return [removedSummary(m.removed ?? []), auditSummary(m.audit ?? [])].filter(Boolean).join(' ');
 }
 
 /** The closing STANCE line is a machine-readable summary, shown as a badge instead. */

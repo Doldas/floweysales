@@ -9,7 +9,7 @@ function elt(tag, cls, value) {
   return node;
 }
 function badge(status) {
- const label = status === 'implemented' ? '✓ FloweySales' : status === 'experimental' ? '! Experimentell' : '○ Endast upstream';
+ const label = status === 'implemented' ? '✓ FloweySales' : status === 'experimental' ? '! Unofficial' : '○ Provider only';
  return elt('span','status status-'+status,label);
 }
 function card(method,title,desc,status,meta) {
@@ -21,15 +21,15 @@ function card(method,title,desc,status,meta) {
  if(meta)root.append(elt('div','api-meta',meta));
  return root;
 }
-function match(...texts){return texts.filter(Boolean).join(' ').toLocaleLowerCase('sv').includes(filters.search)}
-function show(container,id,items){container.replaceChildren(...(items.length?items:[elt('p','empty','Inga poster matchar filtren.')]))}
+function match(...texts){return texts.filter(Boolean).join(' ').toLocaleLowerCase('en-US').includes(filters.search)}
+function show(container,id,items){container.replaceChildren(...(items.length?items:[elt('p','empty','No entries match the filters.')]))}
 function render(){
  const f=s=>filters.surface==='all'||filters.surface===s;
  const status=s=>filters.status==='all'||filters.status===s;
  const rest=inventory.rest.filter(x=>f('rest')&&status(x.status)&&match(x.method,x.path,x.description,x.access));
  show($('rest-results'),'rest',rest.map(x=>card(x.method,x.path,x.description,x.status,x.access)));
  const mcp=inventory.mcp.filter(x=>f('mcp')&&status(x.status)&&match(x.name,x.note));
- show($('mcp-results'),'mcp',mcp.map(x=>card('MCP tool',x.name,x.note||'Anrop via JSON-RPC tools/call',x.status,x.surface)));
+ show($('mcp-results'),'mcp',mcp.map(x=>card('MCP tool',x.name,x.note||'Call through JSON-RPC tools/call',x.status,x.surface)));
  const providers=[];
  for(const group of inventory.providers){
   const items=group.endpoints.filter(x=>f('providers')&&status(x.status)&&match(group.provider,x.operation,x.path,x.via));
@@ -39,12 +39,12 @@ function render(){
   const left=elt('div');
   left.append(elt('h3','',group.provider));
   left.append(elt('p','provider-notice',group.auth+' · '+group.note));
-  const link=elt('a','inline','Leverantörsdokumentation ↗');
+  const link=elt('a','inline','Provider documentation ↗');
   link.href=group.documentation;link.target='_blank';link.rel='noopener noreferrer';
   header.append(left,link);sec.append(header);
   const grid=elt('div','endpoint-grid');
   for(const item of items){
-    const description=item.operation?'Operation: '+item.operation:'Känd leverantörsendpoint';
+    const description=item.operation?'Operation: '+item.operation:'Known provider endpoint';
     grid.append(card('UPSTREAM',item.path,description,item.status,item.via));
   }
   sec.append(grid);providers.push(sec);
@@ -60,13 +60,13 @@ async function boot(){
   if(!r.ok)throw Error('HTTP '+r.status);
   inventory=await r.json();
   const live=inventory.providers.flatMap(x=>x.endpoints).filter(x=>x.status==='implemented').length;
-  for(const [num,title] of [[inventory.rest.length,'REST-routes'],[inventory.mcp.length,'MCP-verktyg'],[live,'Providerkopplingar']]){
+  for(const [num,title] of [[inventory.rest.length,'REST routes'],[inventory.mcp.length,'MCP tools'],[live,'Provider connections']]){
    const m=elt('div','metric');m.append(elt('strong','',String(num)),elt('span','',title));$('metrics').append(m);
   }
   $('source-results').replaceChildren(...inventory.sources.map(source=>{
    const a=elt('a','',source.label+' ↗');a.href=source.url;a.target='_blank';a.rel='noopener noreferrer';return a;
   }));
-  $('filter-search').addEventListener('input',e=>{filters.search=e.target.value.trim().toLocaleLowerCase('sv');render()});
+  $('filter-search').addEventListener('input',e=>{filters.search=e.target.value.trim().toLocaleLowerCase('en-US');render()});
   $('filter-surface').addEventListener('change',e=>{filters.surface=e.target.value;render()});
   $('filter-status').addEventListener('change',e=>{filters.status=e.target.value;render()});
   render();

@@ -12,9 +12,16 @@ export interface HelpTopic {
   /** Markdown. Plain text and external links only. */
   body: string;
   keywords?: string;
+  /** The user-guide page that covers this topic in full (a file name in docs/guide, without .html). */
+  guide?: string;
 }
 
 export const DOCS_URL = 'https://doldas.github.io/floweysales/';
+/** Address of a topic's page in the user guide, or the guide's front page when it has none. */
+export function guideUrl(topic: HelpTopic | undefined): string {
+  return topic?.guide ? `${DOCS_URL}guide/${topic.guide}.html` : `${DOCS_URL}guide/`;
+}
+
 export const REPO_URL = 'https://github.com/Doldas/floweysales';
 
 export const HELP_TOPICS: HelpTopic[] = [
@@ -32,6 +39,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 
 **Documentation vs. the agent.** This Help is written documentation. The Research Agent is an AI model: it can be wrong, so its answers are labeled as AI-generated.`,
     keywords: 'start begin first tutorial introduction',
+    guide: 'getting-started',
   },
   {
     id: 'research-agent', title: 'Research Agent', area: 'Research',
@@ -43,6 +51,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 - **Limits.** Each answer has a budget of reasoning rounds and tool calls, shown at the top of the page. If it runs out it says so.
 - **Verify.** An answer is an AI summary. Check dates and sources, especially for numbers.`,
     keywords: 'agent chat ai assistant tools model',
+    guide: 'agents',
   },
   {
     id: 'agent-team', title: 'Agent team', area: 'Research',
@@ -53,6 +62,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 - You can save a team and reuse it.
 - The result is research for you to weigh, not advice.`,
     keywords: 'team personas characters investors profile',
+    guide: 'agents',
   },
   {
     id: 'flows', title: 'Flows', area: 'Automation',
@@ -64,6 +74,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 - Steps that need a person land in the **Inbox**.
 - A step's output has a size limit set by the administrator; a step over it fails with a message naming the limit.`,
     keywords: 'automation workflow schedule inbox template node',
+    guide: 'flows',
   },
   {
     id: 'markets', title: 'Markets and the price feed', area: 'Markets',
@@ -79,6 +90,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 
 All times are UTC.`,
     keywords: 'live status feed stale delayed price chart connection reconnect',
+    guide: 'markets',
   },
   {
     id: 'leaderboard', title: 'Leaderboard', area: 'Markets',
@@ -90,6 +102,7 @@ All times are UTC.`,
 - **Where the companies come from** is shown above the table. The lists are curated, and membership of an index is not implied.
 - A high score means "worth a closer look", not "buy".`,
     keywords: 'ranking score factors universe screen strategy grade',
+    guide: 'leaderboard',
   },
   {
     id: 'strategies', title: 'Strategies and backtests', area: 'Markets',
@@ -100,18 +113,21 @@ All times are UTC.`,
 - Compare against simply holding the instrument.
 - Nothing is ordered: strategies here only run on historical data.`,
     keywords: 'backtest fibonacci rules return drawdown',
+    guide: 'strategies',
   },
   {
     id: 'world', title: 'World', area: 'Markets',
     summary: 'News and themes, with the publication date on every item.',
     body: `The World view collects headlines and themes. Every item shows the publisher's **publication date in UTC**, or "Date unavailable" when the source does not give one. A date is never guessed. When only a relative age such as "2 days ago" is known, it is labeled approximate.`,
     keywords: 'news headlines date published themes',
+    guide: 'markets',
   },
   {
     id: 'wealth-plan', title: 'Wealth plan', area: 'Markets',
     summary: 'Your phase, a target allocation and how likely a goal is.',
     body: `Enter your situation and goal to see which phase of building wealth you are in, what that phase usually needs, a target allocation and a seeded projection of how likely the goal is. It is a plan to discuss, not advice.`,
     keywords: 'plan goal allocation projection retirement',
+    guide: 'more-areas',
   },
   {
     id: 'glossary', title: 'Glossary', area: 'Reference',

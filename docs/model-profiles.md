@@ -30,5 +30,15 @@ The stream names the model: `run_start` carries `model` at the start of a run an
 ## Limits of this first version
 
 - One endpoint per server. A profile chooses among the models that endpoint serves. Several endpoints would add an endpoint reference to a profile and need no change for users.
-- Costs are shown, not enforced: the model client does not yet read token usage, so there is no per-team cost ceiling.
-- Flow agent nodes still take a model name from a person who can edit flows; they do not use profiles yet.
+- A flow agent node that still names a raw model keeps working (an ordinary user needs it to be in the model catalog); new choices should use a profile.
+- Budget ceilings stop a run only where the endpoint reports token usage; see below.
+
+## Budget ceilings
+
+A team run can carry ceilings, chosen by the user: **tokens** (prompt plus completion, 1,000 to 10,000,000), **cost** in US dollars, and **tool calls** across all members (1 to 500). They are set on the Team page, sent as `max_tokens`, `max_cost` and `max_tool_calls` with `POST /api/ai/team`, and kept with a saved team (the same three fields in `/api/ai/teams`; a request's values replace the saved ones). A delegated run (`delegate_to_team`) uses the saved team's ceilings.
+
+- All members and the chair share one budget. It is checked before each model round and each tool call, so a run can end one round past a token or cost ceiling, never further. Work already done is kept; the member shows an error that names the ceiling, and the final `budget` event says what was used and which ceiling stopped the run.
+- The model client asks the endpoint for token usage (`stream_options.include_usage`) and reads `usage` from the reply. An endpoint that rejects the option is asked again without it.
+- **Cost** is computed from the prices an administrator entered in the model profiles, per model. A model without both prices, or an endpoint that reports no usage, makes the cost **unknown**: it is shown as unknown, never as zero.
+- **Without usage figures the token and cost ceilings cannot be enforced.** The run says so in a notice and carries on; only the tool-call ceiling and the time limits hold. Local servers differ in whether they report usage. This has been tested against recorded replies, not against a live provider.
+- Tokens of a failed attempt that the endpoint never reported are not counted.

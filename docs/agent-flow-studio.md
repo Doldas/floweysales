@@ -133,6 +133,10 @@ The panel shows the same example for each new secret.
 
 Admin API (SYS_ADMIN): `GET|POST /api/admin/flow-event-adapters`, `PUT|DELETE /api/admin/flow-event-adapters/{id}` (`name`, `payload_pointer`, `rate_per_minute`, `enabled`), `POST /api/admin/flow-event-adapters/{id}/rotate-secret`, `GET /api/admin/flow-event-adapters/{id}/deliveries` (latest 50).
 
+## Model profile and team for agent nodes
+
+An agent node can pick a **model profile** (`profile_id`) instead of a raw model name, and can **delegate to one of your saved teams** (`team_id`). Both are your choice, not an administrator's; the profiles are the ones the administrator prepared. See [Flow agent nodes](agent-personas.md#flow-agent-nodes) for the rules: the team is pinned, its members get research tools only, a disabled profile fails the node, and the choices are checked when the flow is saved and again at every run.
+
 ## Research tools for agent nodes
 
 A SYS_ADMIN can let an agent node gather its own evidence instead of answering from its prompt alone. In the node's settings, **Research tools** lists the grantable tools. Tick up to 8 and optionally set **Max tool calls** (1–16; default 6).
@@ -142,6 +146,7 @@ A SYS_ADMIN can let an agent node gather its own evidence instead of answering f
 - **Budget:** once the call budget is spent, the tools are withdrawn and the agent must answer with what it has. The node does not fail. A granted agent's default timeout is 90 s instead of 45 s. Retries (0–2) remain allowed because no granted tool has side effects.
 - **Trace and evidence ledger:** every call is recorded on the node's run step (Liquibase 031, `tool_calls`): attempt, tool name, redacted arguments (300 characters), success or redacted error and result size. A successful call also records its provenance: retrieval time, the SHA-256 of the result, and up to 5 URLs and SEC accession numbers cited in it (redacted). Results themselves are not stored. At most 32 calls are kept per node. *Run history → Inspect nodes* lists them, and failed nodes keep their trace too.
 - **Require grounded figures** (optional): every figure in the answer must match a number in that attempt's tool results or in the node input. Without granted tools the node input is the only evidence, which suits agents that write up rows from investor nodes. Figures are decimals, percentages, scaled amounts (`$12.5B`, `2.35 billion`) and numbers of 100 or more; years, small counts and labels such as `FY2025` or `Q3` are ignored. A match may be rounded to the stated precision, be a fraction shown as a percentage, or use another scale (thousands, millions). Otherwise the attempt fails with up to 5 unsupported figures listed, and the node's retries apply. It is a mechanical check against invented numbers, not a fact check: a figure that happens to appear in the evidence for an unrelated reason passes.
+- **Evidence mode** (optional, prose output only): `Evidence only` or `Primary sources only`, with an option to remove failing statements and an age limit for sources. The answer is held until its `[S1]` citations pass the citation check (up to two corrections); if statements still fail, the attempt fails and the node's retries apply, unless the node removes them. Each step in run history lists the sources the agent retrieved, the findings and the policy. See [agent-evidence.md](agent-evidence.md). The setting is saved with the flow.
 - Tool results are passed to the model as untrusted data, and the system prompt asks it to cite the tool and period behind every number. Tools such as SEC facts and web search use the server's configured providers and keys, so their rate limits and costs apply.
 
 ## Durable run queue, checkpoints and dead-letter

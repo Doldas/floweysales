@@ -4,11 +4,14 @@ import type { AboutInfo } from '../models';
 import { DOCS_URL, REPO_URL } from '../help/help-topics';
 import { MarketService } from '../services';
 import { formatUtcDateTime } from '../ui/datetime';
+import { SkeletonComponent } from '../ui/skeleton';
+import { ProgressStatusComponent } from '../ui/progress-status';
 
 /** What FloweySales is, which build this is, and where the project lives. */
 @Component({
   selector: 'fs-about-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [SkeletonComponent, ProgressStatusComponent],
   template: `
 <div class="fs-page">
   <header class="fs-page-header">
@@ -48,7 +51,7 @@ import { formatUtcDateTime } from '../ui/datetime';
         } @else if (failed()) {
           <p class="text-muted mb-0" role="status">Build information is not available.</p>
         } @else {
-          <p class="text-muted mb-0" role="status">Loading…</p>
+          <div [attr.aria-busy]="true"><fs-progress-status stage="Loading build information" /><fs-skeleton shape="rows" [rows]="3" aria-hidden="true" /></div>
         }
       </div></div>
     </section>

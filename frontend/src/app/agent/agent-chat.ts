@@ -1,12 +1,14 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
-import { EVIDENCE_MODES, auditSummary, findingLabel, safeUrl, splitSources } from '../core/answer-sources';
+import { EVIDENCE_MODES, auditSummary, findingLabel, removedSummary, safeUrl, settingsSummary, sourceOrigin, splitSources } from '../core/answer-sources';
 import { AgentSession, type ChatEntry } from '../core/agent-session';
 import { renderMarkdown } from '../markdown';
 import { toolLabel } from '../components/agent-tools';
 import { defaultOptionLabel, profileOption, profileSummary } from '../components/profile-view';
 import { ToolCallComponent } from '../components/tool-call';
+import { canResume, checklistLine, taskStatusLabel } from '../core/task-view';
+import { formatUtcDateTime } from '../ui/datetime';
 import type { ToolCall } from '../components/tool-call-view';
 
 /** Consecutive tool calls are rendered together as one block of agent steps. */
@@ -29,6 +31,14 @@ export class AgentChatComponent {
   readonly findingLabel = findingLabel;
   readonly evidenceModes = EVIDENCE_MODES;
   readonly evidenceHint = computed(() => this.session.evidenceMode() === 'standard' ? '' : EVIDENCE_MODES.find(m => m.id === this.session.evidenceMode())?.hint ?? '');
+  readonly origin = sourceOrigin;
+  readonly statusLabel = taskStatusLabel;
+  readonly checklistLine = checklistLine;
+  readonly canResume = canResume;
+  readonly when = formatUtcDateTime;
+  readonly mark = (status: string): string => (status === 'done' ? 'bi-check-circle-fill' : status === 'missing' ? 'bi-x-circle-fill' : 'bi-circle');
+  readonly evidenceSummary = computed(() => settingsSummary(this.session.evidenceSettings()));
+  readonly removedText = computed(() => removedSummary(this.session.answerRemoved()));
   readonly groups = computed(() => splitSources(this.session.answerSources()));
   readonly auditText = computed(() => auditSummary(this.session.answerAudit()));
   link(url: string | undefined): string { return safeUrl(url); }
@@ -89,6 +99,8 @@ export class AgentChatComponent {
     void this.session.loadConfig();
     void this.session.loadPersonas();
     void this.session.loadProfiles();
+    void this.session.loadTasks();
+    void this.session.loadEvidenceDefault();
     // Keep the newest message in view while the agent streams.
     effect(() => {
       this.session.entries();

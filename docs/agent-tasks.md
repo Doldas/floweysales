@@ -2,6 +2,10 @@
 
 A chat becomes a **task** when `POST /api/ai/chat` carries `deliverables`, a list of up to 12 required parts of the answer (`["Latest price", "DCF", "Risk note"]`).
 
+## In the chat
+
+Under the composer, **Required parts** takes the deliverables, one per line (up to 12). A question sent with them is saved as a task, and a checklist card shows each part as done, reported missing or not yet reported while the run goes on. **Saved tasks** lists your tasks with their status, rounds, tool calls and last update (UTC), and offers **Resume** and **Delete**. Resume continues from the last checkpoint on the server; the chat then shows only the continuation, since the saved conversation stays on the server. The resumed run uses the default model and persona, not the ones chosen for the original question.
+
 ## What a task adds
 
 - **Checklist.** The agent ends its answer with `[done] <deliverable>` or `[missing] <deliverable> - <reason>` per line. A deliverable the answer leaves out counts as missing.
@@ -9,6 +13,7 @@ A chat becomes a **task** when `POST /api/ai/chat` carries `deliverables`, a lis
 - **Evidence ledger.** Every tool call is recorded with its arguments, a preview of the result, any error and a timestamp.
 - **Checkpoints.** After each model round the conversation, ledger, checklist and spent budgets are saved in `agent_tasks`. Failed, cancelled (client disconnect) and incomplete tasks keep their last checkpoint.
 - **Resume.** The saved conversation, ledger and tool-call count are restored. The task continues without dropping evidence.
+- **Sources.** The checkpoint also keeps the sources the run retrieved (up to 60), the citation check findings, what the block option removed and the evidence policy ([agent-evidence.md](agent-evidence.md)). A resumed task keeps its `[S3]` markers meaningful and its policy.
 
 ## API
 
@@ -16,7 +21,7 @@ A chat becomes a **task** when `POST /api/ai/chat` carries `deliverables`, a lis
 | --- | --- |
 | `POST /api/ai/chat` with `deliverables` | Starts a task. The SSE stream gains `task` (id) and `checkpoint` (status, checklist) events |
 | `GET /api/ai/tasks` | Your tasks, newest first |
-| `GET /api/ai/tasks/{id}` | One task with checklist and evidence ledger |
+| `GET /api/ai/tasks/{id}` | One task with checklist, evidence ledger, sources, findings and evidence policy |
 | `POST /api/ai/tasks/{id}/resume` | Continues from the checkpoint; body `{"message": "..."}` is optional. Refused (409) for a `complete` task |
 | `DELETE /api/ai/tasks/{id}` | Removes a task |
 
@@ -24,7 +29,7 @@ Statuses: `running`, `complete`, `incomplete`, `failed`, `cancelled`. A user kee
 
 ## Not covered yet
 
-The web UI does not show tasks, and the local-model VRAM benchmark from #5 is not built. `cmd/agent-eval` ([agent evaluation](agent-evaluation.md)) is its base.
+The local-model VRAM benchmark from #5 is not built. `cmd/agent-eval` ([agent evaluation](agent-evaluation.md)) is its base.
 
 ## Agent tools by role
 

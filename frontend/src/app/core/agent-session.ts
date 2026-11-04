@@ -2,7 +2,8 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 
 import type { Message, ModelProfile, Persona } from '../models';
 import { MarketState } from './market-state';
-import { delegationProgress, parseEvidenceMode, type AnswerFinding, type AnswerSource, type EvidenceMode } from './answer-sources';
+import { defaultTypes, delegationProgress, parseEvidenceMode, policyFromSettings, settingsFromPolicy, settingsProblem, type AnswerFinding, type AnswerSource, type EvidenceMode, type EvidencePolicy, type EvidenceSettings } from './answer-sources';
+import { MAX_DELIVERABLES, parseChecklist, parseDeliverables, type SavedTask, type TaskDeliverable } from './task-view';
 import { EMPTY_NOTICES, applyNotice, dismissNotice, finishNotices, recoveryLine, type NoticeState } from './agent-notices';
 
 export interface AiPreset {
@@ -28,8 +29,13 @@ interface AiConfig {
 const PROFILE_KEY = 'fs.profile';
 const EVIDENCE_KEY = 'fs.evidenceMode';
 
-function readStoredEvidenceMode(): EvidenceMode {
-  try { return parseEvidenceMode(localStorage.getItem(EVIDENCE_KEY)); } catch { return 'standard'; }
+/** The settings kept in this browser: a policy object, or the plain mode an older version stored. */
+function readStoredEvidence(): EvidenceSettings {
+  try {
+    const raw = localStorage.getItem(EVIDENCE_KEY);
+    if (raw?.startsWith('{')) return settingsFromPolicy(JSON.parse(raw));
+    return settingsFromPolicy({ mode: parseEvidenceMode(raw) });
+  } catch { return settingsFromPolicy(null); }
 }
 
 function readStoredProfile(): number | null {
@@ -91,6 +97,8 @@ export class AgentSession {
   /** What the latest run retrieved, and what the citation check found in its answer. */
   readonly answerSources = signal<AnswerSource[]>([]);
   readonly answerAudit = signal<AnswerFinding[]>([]);
+  /** Statements the block option took out of the latest answer. */
+  readonly answerRemoved = signal<AnswerFinding[]>([]);
   readonly runStatus = computed(() => this.noticeState().status);
   readonly runStatusDetail = computed(() => this.noticeState().statusDetail);
   readonly notices = computed(() => this.noticeState().notices);
@@ -108,11 +116,64 @@ export class AgentSession {
   readonly catalog = signal<{ id: number; model: string; label: string }[]>([]);
   /** The investor character answering, or '' for the plain analyst. */
   readonly persona = signal('');
-  /** How strictly answers must be backed by retrieved sources; kept in this browser. */
-  readonly evidenceMode = signal<EvidenceMode>(readStoredEvidenceMode());
+  /**
+   * How strictly answers must be backed by retrieved sources, and the limits under
+   * the mode. Kept in this browser; the user's saved default (on the server) fills
+   * it in when the chat opens.
+   */
+  readonly evidenceSettings = signal<EvidenceSettings>(readStoredEvidence());
+  readonly evidenceMode = computed<EvidenceMode>(() => this.evidenceSettings().mode);
+  readonly evidenceProblem = computed(() => settingsProblem(this.evidenceSettings()));
+  /** Whether the user has a saved default, and the outcome of the last save or reset. */
+  readonly evidenceHasDefault = signal(false);
+  readonly evidenceNote = signal('');
   setEvidenceMode(mode: EvidenceMode): void {
-    this.evidenceMode.set(mode);
-    try { localStorage.setItem(EVIDENCE_KEY, mode); } catch { /* ignore */ }
+    // The source types a mode counts differ, so a change of mode starts from its own.
+    this.updateEvidence({ mode, ...defaultTypes(mode), ...(mode === 'standard' ? { block: false } : {}) });
+  }
+  updateEvidence(patch: Partial<EvidenceSettings>): void {
+    this.evidenceSettings.update(s => ({ ...s, ...patch }));
+    this.evidenceNote.set('');
+    try { localStorage.setItem(EVIDENCE_KEY, JSON.stringify(policyFromSettings(this.evidenceSettings()))); } catch { /* ignore */ }
+  }
+
+  private evidenceLoaded = false;
+  /** Fills the settings from the saved default once per page load, so a later change in the chat is not overwritten. */
+  async loadEvidenceDefault(): Promise<void> {
+    if (this.evidenceLoaded) return;
+    this.evidenceLoaded = true;
+    try {
+      const res = await fetch('/api/ai/evidence-default', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const saved: EvidencePolicy | null = (await res.json()).policy;
+      this.evidenceHasDefault.set(!!saved);
+      if (saved) {
+        this.evidenceSettings.set(settingsFromPolicy(saved));
+        try { localStorage.setItem(EVIDENCE_KEY, JSON.stringify(saved)); } catch { /* ignore */ }
+      }
+    } catch { /* The browser's own choice stays. */ }
+  }
+
+  /** Saves the current settings as the user's default, or removes the default. */
+  async saveEvidenceDefault(save: boolean): Promise<void> {
+    if (save && this.evidenceProblem()) { this.evidenceNote.set(this.evidenceProblem()); return; }
+    try {
+      const res = await fetch('/api/ai/evidence-default', {
+        method: save ? 'PUT' : 'DELETE', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: save ? JSON.stringify(policyFromSettings(this.evidenceSettings())) : undefined,
+      });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try { detail = (await res.json())?.error || detail; } catch { /* keep the status */ }
+        this.evidenceNote.set(`Could not ${save ? 'save' : 'reset'} the default: ${detail}`);
+        return;
+      }
+      this.evidenceHasDefault.set(save);
+      this.evidenceNote.set(save ? 'Saved as your default for chat and team runs.' : 'Your default was removed; new chats start from Standard.');
+    } catch {
+      this.evidenceNote.set(`Could not ${save ? 'save' : 'reset'} the default.`);
+    }
   }
   readonly personas = signal<Persona[]>([]);
   /** Model profiles the administrator prepared, and the one chosen (null: the default). */
@@ -121,6 +182,14 @@ export class AgentSession {
   /** The model the current run uses, from the server (it changes if a fallback takes over). */
   readonly activeModel = signal('');
   readonly personaName = computed(() => this.personas().find(p => p.id === this.persona())?.name ?? '');
+  /** Required parts typed for the next question, one per line. Filled in, the question becomes a saved task. */
+  readonly deliverablesText = signal('');
+  readonly deliverableCount = computed(() => parseDeliverables(this.deliverablesText()).length);
+  readonly maxDeliverables = MAX_DELIVERABLES;
+  /** The task the current or latest run belongs to, with its checklist as the server last reported it. */
+  readonly activeTask = signal<{ id: number; status: string; checklist: TaskDeliverable[] } | null>(null);
+  /** The user's saved tasks, newest first. */
+  readonly tasks = signal<SavedTask[]>([]);
   /** Whether the floating dock is open. */
   readonly dockOpen = signal(false);
 
@@ -227,6 +296,7 @@ export class AgentSession {
     this.noticeState.set(EMPTY_NOTICES);
     this.answerSources.set([]);
     this.answerAudit.set([]);
+    this.answerRemoved.set([]);
     this.assistantId = -1;
   }
 
@@ -247,36 +317,87 @@ export class AgentSession {
       return;
     }
 
+    if (this.evidenceProblem()) {
+      this.error.set(`Evidence settings: ${this.evidenceProblem()}`);
+      return;
+    }
     this.error.set('');
     this.noticeState.set(EMPTY_NOTICES);
     this.answerSources.set([]);
     this.answerAudit.set([]);
+    this.answerRemoved.set([]);
     this.push({ role: 'user', content });
     this.wire.push({ role: 'user', content });
     this.streaming.set(true);
     this.assistantId = -1;
 
+    const ctx = this.context();
+    const required = parseDeliverables(this.deliverablesText());
+    this.deliverablesText.set('');
+    this.activeTask.set(null);
+    await this.stream('/api/ai/chat', {
+      messages: this.wire.map(m => ({ ...m })),
+      model: this.canConfigure() ? this.chatModel() : undefined,
+      persona: this.persona() || undefined,
+      profile_id: this.profileId() || undefined,
+      // Always sent, so a choice of Standard is not replaced by the saved default.
+      evidence: policyFromSettings(this.evidenceSettings()),
+      deliverables: required.length ? required : undefined,
+      symbol: ctx.symbol,
+      provider: ctx.provider,
+      range: ctx.range,
+      price: ctx.price,
+    });
+    if (required.length) void this.loadTasks();
+  }
+
+  async loadTasks(): Promise<void> {
+    try {
+      const res = await fetch('/api/ai/tasks', { credentials: 'same-origin' });
+      if (res.ok) this.tasks.set((await res.json()).tasks || []);
+    } catch { /* the list stays as it was */ }
+  }
+
+  /** Continues a saved task from its last checkpoint: the server restores the conversation, the evidence gathered and the budgets already spent. */
+  async resumeTask(task: SavedTask): Promise<void> {
+    if (this.streaming()) return;
+    await this.loadConfig();
+    if (!this.canSend()) return;
+    this.error.set('');
+    this.noticeState.set(EMPTY_NOTICES);
+    this.answerSources.set([]);
+    this.answerAudit.set([]);
+    this.answerRemoved.set([]);
+    // The saved conversation lives on the server; this view shows the continuation.
+    this.wire = [];
+    this.entries.set([]);
+    this.push({ role: 'user', content: `Resume the task: ${task.title}` });
+    this.streaming.set(true);
+    this.assistantId = -1;
+    this.activeTask.set({ id: task.id, status: task.status, checklist: task.deliverables });
+    await this.stream(`/api/ai/tasks/${task.id}/resume`, {});
+    void this.loadTasks();
+  }
+
+  async deleteTask(id: number): Promise<void> {
+    try {
+      const res = await fetch(`/api/ai/tasks/${id}`, { method: 'DELETE', credentials: 'same-origin' });
+      if (res.ok) this.tasks.update(list => list.filter(t => t.id !== id));
+      else this.error.set((await res.json().catch(() => null))?.error || 'The task could not be deleted.');
+    } catch { this.error.set('The task could not be deleted.'); }
+  }
+
+  /** Posts a run request and folds the event stream into the conversation. */
+  private async stream(url: string, body: unknown): Promise<void> {
     const controller = new AbortController();
     this.abort = controller;
-    const ctx = this.context();
-
     try {
-      const res = await fetch('/api/ai/chat', {
+      const res = await fetch(url, {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
-        body: JSON.stringify({
-          messages: this.wire.map(m => ({ ...m })),
-          model: this.canConfigure() ? this.chatModel() : undefined,
-          persona: this.persona() || undefined,
-          profile_id: this.profileId() || undefined,
-          evidence_mode: this.evidenceMode() === 'standard' ? undefined : this.evidenceMode(),
-          symbol: ctx.symbol,
-          provider: ctx.provider,
-          range: ctx.range,
-          price: ctx.price,
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok || !res.body) {
         let detail = `HTTP ${res.status}`;
@@ -335,7 +456,7 @@ export class AgentSession {
       if (!line.startsWith('data:')) continue;
       const payload = line.slice(5).trim();
       if (!payload) continue;
-      let ev: { model?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean; type?: string; severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string; content?: string; name?: string; arguments?: string; result?: string; tool_error?: string; error?: string; message?: Message; sources?: AnswerSource[]; audit?: AnswerFinding[]; parent_call_id?: string; agent?: string; stance?: string };
+      let ev: { model?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean; type?: string; severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string; content?: string; name?: string; arguments?: string; result?: string; tool_error?: string; error?: string; message?: Message; sources?: AnswerSource[]; audit?: AnswerFinding[]; removed?: AnswerFinding[]; parent_call_id?: string; agent?: string; stance?: string };
       try {
         ev = JSON.parse(payload);
       } catch {
@@ -344,6 +465,13 @@ export class AgentSession {
       switch (ev.type) {
         case 'run_start':
           this.activeModel.set(ev.model || '');
+          break;
+        case 'task':
+          // The run was saved as a task; its checklist follows in checkpoint events.
+          this.activeTask.update(t => ({ id: Number(ev.name), status: ev.content || 'running', checklist: t?.checklist ?? [] }));
+          break;
+        case 'checkpoint':
+          this.activeTask.update(t => ({ id: Number(ev.name) || t?.id || 0, status: ev.content || t?.status || 'running', checklist: ev.result ? parseChecklist(ev.result) : t?.checklist ?? [] }));
           break;
         case 'transcript_message':
           if (ev.message && (ev.message.role === 'assistant' || ev.message.role === 'tool')) this.wire.push(ev.message);
@@ -368,6 +496,7 @@ export class AgentSession {
         case 'sources':
           this.answerSources.set(ev.sources ?? []);
           this.answerAudit.set(ev.audit ?? []);
+          this.answerRemoved.set(ev.removed ?? []);
           break;
         case 'error':
           this.error.set(ev.error || 'AI error');

@@ -1,0 +1,83 @@
+/* Docs site styles. Colors come from tokens.css, which is generated from the app's design tokens. */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--fs-bg);color:var(--fs-text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55}
+a{color:var(--fs-accent-text);text-underline-offset:3px}
+a:hover{color:var(--fs-accent)}
+:focus-visible{outline:0;box-shadow:var(--fs-focus);border-radius:4px}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.wrap{max-width:1180px;margin:auto;padding-left:24px;padding-right:24px}
+.skip{position:absolute;left:-9999px}
+.skip:focus{left:10px;top:10px;z-index:10;background:var(--fs-surface);color:var(--fs-text);padding:10px;border-radius:6px}
+.visually-hidden{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+.topbar{min-height:68px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--fs-border)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-.01em;color:var(--fs-text);text-decoration:none}
+.brand img{border-radius:8px;display:block}
+.topbar nav{display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+.topbar nav a{font-size:14px;color:var(--fs-muted);text-decoration:none}
+.topbar nav a:hover,.topbar nav a[aria-current]{color:var(--fs-accent-text)}
+.theme-toggle{font:inherit;font-size:13px;color:var(--fs-text-2);background:var(--fs-surface);border:1px solid var(--fs-border-strong);border-radius:8px;padding:5px 10px;cursor:pointer}
+
+.eyebrow{font:600 12px/1.4 ui-monospace,SFMono-Regular,monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--fs-accent-text)}
+.hero{padding-top:84px;padding-bottom:88px}
+.hero-mark{display:block;border-radius:22px;box-shadow:0 12px 36px rgba(91,95,240,.35);margin-bottom:28px}
+h1{margin:14px 0 18px;font-size:clamp(36px,5.6vw,64px);line-height:1.08;letter-spacing:-.04em;font-weight:700}
+h1 em{font-style:normal;color:var(--fs-accent)}
+.lead{max-width:680px;font-size:19px;line-height:1.65;color:var(--fs-text-2)}
+.actions{display:flex;gap:12px;align-items:center;margin-top:30px;flex-wrap:wrap}
+.primary,.secondary{padding:12px 20px;font-weight:600;font-size:14px;border-radius:9px;text-decoration:none;display:inline-block}
+.primary{background:var(--fs-accent);color:#fff}
+.primary:hover{background:var(--fs-accent-hover);color:#fff}
+.secondary{border:1px solid var(--fs-border-strong);color:var(--fs-text);background:var(--fs-surface)}
+.fine{font-size:13px;color:var(--fs-muted);margin-top:26px}
+.section{padding-top:56px;padding-bottom:72px;border-top:1px solid var(--fs-border)}
+h2{font-size:clamp(24px,2.8vw,34px);letter-spacing:-.03em;line-height:1.2;margin:12px 0 28px}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.card{background:var(--fs-surface);padding:24px;border:1px solid var(--fs-border);border-radius:14px;box-shadow:var(--fs-shadow-sm)}
+.card h3{font-size:18px;letter-spacing:-.02em;margin:0 0 8px}
+.card h3 a{color:var(--fs-text);text-decoration:none}
+.card h3 a:hover{color:var(--fs-accent)}
+.card p{color:var(--fs-text-2);font-size:15px;margin:0;line-height:1.6}
+.status{display:inline-block;margin-top:12px;font:600 11px/1.4 ui-monospace,monospace;letter-spacing:.04em;padding:3px 8px;border-radius:6px;background:var(--fs-pos-soft);color:var(--fs-pos)}
+.limits{color:var(--fs-text-2);max-width:760px;padding-left:1.2em}
+footer{border-top:1px solid var(--fs-border);padding-top:20px;padding-bottom:30px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--fs-muted)}
+
+/* User guide */
+.guide{display:grid;grid-template-columns:240px minmax(0,1fr) 200px;gap:36px;padding-top:32px;padding-bottom:56px;align-items:start}
+.guide-nav{position:sticky;top:16px}
+.guide-nav input{width:100%;padding:9px 12px;border:1px solid var(--fs-border-strong);border-radius:8px;background:var(--fs-surface);color:var(--fs-text);font:inherit;font-size:14px}
+.guide-nav ul,.on-this ul{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:2px}
+.guide-nav a{display:block;padding:7px 10px;border-radius:8px;color:var(--fs-text-2);text-decoration:none;font-size:14px;border:1px solid transparent}
+.guide-nav a:hover{background:var(--fs-surface-3)}
+.guide-nav a[aria-current]{background:var(--fs-accent-soft);border-color:var(--fs-accent);color:var(--fs-text)}
+.on-this{position:sticky;top:16px;font-size:13px}
+.on-this a{color:var(--fs-muted);text-decoration:none;display:block;padding:3px 0}
+.on-this a:hover{color:var(--fs-accent-text)}
+.prose{min-width:0;max-width:760px}
+.prose h1{font-size:clamp(30px,4vw,42px);margin-top:0}
+.prose h2{font-size:25px;margin:40px 0 12px;padding-top:12px;border-top:1px solid var(--fs-border)}
+.prose h3{font-size:19px;margin:28px 0 8px;letter-spacing:-.01em}
+.prose p,.prose li{color:var(--fs-text-2);font-size:16px}
+.prose li{margin:4px 0}
+.prose code{background:var(--fs-surface-3);padding:1px 5px;border-radius:5px;font-size:.9em}
+.prose pre{background:var(--fs-sunken);border:1px solid var(--fs-border);padding:14px;border-radius:10px;overflow-x:auto;font-size:13px}
+.prose pre code{background:none;padding:0}
+.prose blockquote{margin:16px 0;padding:2px 16px;border-left:4px solid var(--fs-accent);background:var(--fs-accent-soft);border-radius:0 8px 8px 0}
+.table-wrap{overflow-x:auto;margin:16px 0}
+.prose table{border-collapse:collapse;width:100%;font-size:14px}
+.prose th,.prose td{border:1px solid var(--fs-border);padding:8px 10px;text-align:left;vertical-align:top}
+.prose th{background:var(--fs-surface-2);color:var(--fs-text)}
+.reviewed{font-size:13px;color:var(--fs-muted);margin-top:40px}
+.pager{display:flex;justify-content:space-between;gap:12px;margin-top:20px;padding-top:16px;border-top:1px solid var(--fs-border);font-size:14px}
+
+@media(max-width:1020px){.guide{grid-template-columns:220px minmax(0,1fr)}.on-this{display:none}}
+@media(max-width:700px){
+  .topbar{padding-top:12px;padding-bottom:12px}
+  .hero{padding-top:52px;padding-bottom:56px}
+  .lead{font-size:17px}
+  .cards{grid-template-columns:1fr}
+  .guide{grid-template-columns:1fr;gap:20px}
+  .guide-nav{position:static}
+  footer{flex-direction:column}
+}

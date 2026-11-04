@@ -112,7 +112,7 @@ async function testViewport(name, width, height, role = 'SYS_ADMIN') {
       const dock = await page.locator('#fs-agent-dock').boundingBox();
       check('agent dock remains within viewport', !!dock && dock.x >= -1 && dock.x + dock.width <= width + 1 && dock.y >= -1 && dock.y + dock.height <= height + 2, JSON.stringify(dock));
       if (width <= 575) check('mobile agent dock is full screen', !!dock && Math.abs(dock.width - width) <= 2);
-      check('agent composer visible', await page.locator('#fs-agent-dock textarea').isVisible());
+      check('agent composer visible', await page.locator('#fs-agent-dock textarea[aria-label="Message the research agent"]').isVisible());
       await page.getByRole('button', { name: 'Close agent' }).click();
       await noOverflow('after closing the agent dock');
     } else {

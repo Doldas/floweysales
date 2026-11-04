@@ -43,6 +43,12 @@ type teamRequestBody struct {
 	ProfileID int64               `json:"profile_id,omitempty"`
 	Chair     *bool               `json:"chair"`
 	Model     string              `json:"model"`
+	// The run's ceilings; they replace those of a saved team.
+	budgetLimits
+	// EvidenceMode and Evidence are as for chat: every member answers under the
+	// same evidence policy, or the caller's saved default when neither is sent.
+	EvidenceMode string             `json:"evidence_mode,omitempty"`
+	Evidence     *ai.EvidencePolicy `json:"evidence,omitempty"`
 	// Optional UI context, as for chat.
 	Symbol   string `json:"symbol,omitempty"`
 	Provider string `json:"provider,omitempty"`
@@ -126,9 +132,19 @@ func (e *Engine) registerTeamRoutes() {
 			return
 		}
 
-		specs, chairWanted, problem := e.teamSpecs(r.Context(), user.ID, &req)
+		evidence, problem := e.requestEvidencePolicy(r.Context(), user.ID, req.EvidenceMode, req.Evidence)
+		if problem != "" {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Evidence settings: " + problem})
+			return
+		}
+		specs, chairWanted, saved, problem := e.teamSpecs(r.Context(), user.ID, &req)
 		if problem != "" {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": problem})
+			return
+		}
+		limits := saved.over(req.budgetLimits)
+		if err := limits.validate(); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 			return
 		}
 		members, problem := e.buildTeamMembers(r.Context(), specs)
@@ -149,12 +165,14 @@ func (e *Engine) registerTeamRoutes() {
 		agent := ai.AgentOptions{MaxSteps: maxSteps, MaxToolCalls: min(maxCalls, teamMemberToolCall), AnswerAfterToolBudget: true}
 		// The same rule as chat: ordinary users get the scoped tool list.
 		e.scopeAgentTools(&agent, user, e.authService != nil)
+		evidence.Apply(&agent)
 		runCtx := r.Context()
 		if e.authService != nil {
 			runCtx = withAgentUser(runCtx, user)
 		}
 		runCtx, cancel := context.WithTimeout(runCtx, 10*time.Minute)
 		defer cancel()
+		runCtx = ai.WithBudget(runCtx, e.newBudget(runCtx, limits))
 
 		chair := len(members) > 1 && chairWanted
 		_ = ai.RunTeam(runCtx, ai.NewClient(baseURL, apiKey, model), engineSource{e: e}, ai.TeamOptions{
@@ -193,17 +211,18 @@ func (e *Engine) buildTeamMembers(ctx context.Context, specs []teamMemberRequest
 
 // teamSpecs works out who is on the team: a saved team, members with their
 // own profiles, or plain characters. It also says whether the chair runs.
-func (e *Engine) teamSpecs(ctx context.Context, userID int64, req *teamRequestBody) ([]teamMemberRequest, bool, string) {
+// A saved team also brings its budget ceilings.
+func (e *Engine) teamSpecs(ctx context.Context, userID int64, req *teamRequestBody) ([]teamMemberRequest, bool, budgetLimits, string) {
 	chair := req.Chair == nil || *req.Chair
 	switch {
 	case req.TeamID != 0:
 		store := e.teamStore()
 		if store == nil {
-			return nil, false, "Saved teams are unavailable."
+			return nil, false, budgetLimits{}, "Saved teams are unavailable."
 		}
 		saved, err := store.GetSavedTeam(ctx, userID, req.TeamID)
 		if err != nil {
-			return nil, false, "That saved team was not found."
+			return nil, false, budgetLimits{}, "That saved team was not found."
 		}
 		out := make([]teamMemberRequest, 0, len(saved.Members))
 		for _, m := range saved.Members {
@@ -216,7 +235,7 @@ func (e *Engine) teamSpecs(ctx context.Context, userID int64, req *teamRequestBo
 		if req.Chair == nil {
 			chair = saved.Chair
 		}
-		return out, chair, ""
+		return out, chair, savedLimits(saved), ""
 	case len(req.Members) > 0:
 		out := make([]teamMemberRequest, 0, len(req.Members))
 		for _, m := range req.Members {
@@ -225,11 +244,11 @@ func (e *Engine) teamSpecs(ctx context.Context, userID int64, req *teamRequestBo
 			}
 			out = append(out, m)
 		}
-		return out, chair, ""
+		return out, chair, budgetLimits{}, ""
 	}
 	out := make([]teamMemberRequest, 0, len(req.Personas))
 	for _, id := range req.Personas {
 		out = append(out, teamMemberRequest{Persona: id, ProfileID: req.ProfileID})
 	}
-	return out, chair, ""
+	return out, chair, budgetLimits{}, ""
 }

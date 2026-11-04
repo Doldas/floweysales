@@ -92,3 +92,29 @@ func mustJSON(t *testing.T, v any) []byte {
 	}
 	return b
 }
+
+func TestBatchReportsHowManyBacktestsHaveFinished(t *testing.T) {
+	e := backtestEngine(t)
+	rec := httptest.NewRecorder()
+	e.mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/market/backtest/batch?symbols=UP,FLAT&strategy=momentum&top=1&periods=3,5&progress_id=run-abc12345", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body)
+	}
+	var res batchResponse
+	_ = json.Unmarshal(rec.Body.Bytes(), &res)
+	if _, leaked := res.Parameters["progress_id"]; leaked {
+		t.Fatalf("the progress id is not a parameter of the run: %v", res.Parameters)
+	}
+	rec = httptest.NewRecorder()
+	e.mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/market/backtest/progress?id=run-abc12345", nil))
+	var p runProgress
+	_ = json.Unmarshal(rec.Body.Bytes(), &p)
+	if rec.Code != http.StatusOK || p.Done != 2 || p.Total != 2 || !p.Finished {
+		t.Fatalf("progress %d: %+v", rec.Code, p)
+	}
+	rec = httptest.NewRecorder()
+	e.mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/market/backtest/progress?id=unknown-run-1", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("an unknown run has no figure, not zero: %d", rec.Code)
+	}
+}

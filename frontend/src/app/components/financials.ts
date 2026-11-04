@@ -10,6 +10,8 @@ import {
 
 import { MarketService, describeHttpError } from '../services';
 import { AgentSession } from '../core/agent-session';
+import { SkeletonComponent } from '../ui/skeleton';
+import { ProgressStatusComponent } from '../ui/progress-status';
 import type { FinancialsResponse, ProviderId, QuarterlyFinancial } from '../models';
 
 interface FinRow {
@@ -36,7 +38,7 @@ const DASH = '—';
 @Component({
   selector: 'fse-financials',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [],
+  imports: [SkeletonComponent, ProgressStatusComponent],
   templateUrl: './financials.html',
   styleUrl: './financials.scss',
 })

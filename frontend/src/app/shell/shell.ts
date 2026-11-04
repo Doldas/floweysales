@@ -54,6 +54,10 @@ export class ShellComponent {
   readonly navOpen = signal(false);
   readonly userMenuOpen = signal(false);
   readonly pageTitle = signal('Command Center');
+  /** Whether the current page follows the selected instrument (route `data.instrument`); unknown pages say nothing. */
+  readonly instrumentUse = signal<'used' | 'ignored' | null>(null);
+  /** Full-screen instrument picker, for narrow screens where the topbar search is hidden. */
+  readonly pickerOpen = signal(false);
 
   readonly sections: NavSection[] = [
     {
@@ -132,8 +136,11 @@ export class ShellComponent {
       const plugin = r.paramMap.get('plugin');
       const tab = plugin ? this.pluginTools.plugins().find(p => p.plugin_id === plugin)?.tools.tab.label : undefined;
       this.pageTitle.set(tab ?? (r.data?.['title'] as string) ?? 'FloweySales');
+      const use = r.data?.['instrument'];
+      this.instrumentUse.set(use === 'used' || use === 'ignored' ? use : null);
       this.navOpen.set(false);
       this.userMenuOpen.set(false);
+      this.pickerOpen.set(false);
     });
 
     // Keep the selection in the address so a copied link opens the same instrument.
@@ -145,7 +152,7 @@ export class ShellComponent {
     });
 
     // Lock background scroll while the mobile navigation drawer is open.
-    effect(() => document.body.classList.toggle('overflow-hidden', this.navOpen()));
+    effect(() => document.body.classList.toggle('overflow-hidden', this.navOpen() || this.pickerOpen()));
   }
 
   signOut(): void {
@@ -168,7 +175,14 @@ export class ShellComponent {
     if (key === 'escape') {
       this.navOpen.set(false);
       this.userMenuOpen.set(false);
+      this.pickerOpen.set(false);
     }
+  }
+
+  openPicker(): void {
+    this.pickerOpen.set(true);
+    // Focus the search once the sheet is in the DOM; the keyboard then opens on phones.
+    setTimeout(() => document.querySelector<HTMLInputElement>('.picker-sheet input')?.focus());
   }
 
   @HostListener('document:click', ['$event'])

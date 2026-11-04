@@ -142,8 +142,13 @@ func runOneTracker(ctx context.Context, target server.MarketTarget, db *storage.
 					dispatch(ctx, target.Symbol, target.ProviderID, "STOP_LOSS", "STOP LOSS: "+target.Symbol, fmt.Sprintf("Stop triggered for %s at %.4f (initial %.4f)", target.Symbol, t.StopLoss(), firstPrice))
 				}
 			}
+			polled := time.Now()
+			meta := market.QuoteMetaFrom(asset.Data)
+			exchange, _ := asset.Data["exchange"].(string)
+			session := market.ResolveSession(target.Symbol, exchange, meta, polled)
 			record := storage.TradingRecord{
-				Timestamp: time.Now().Unix(), Symbol: target.Symbol, Provider: target.ProviderID, Price: price,
+				Timestamp: polled.Unix(), QuoteTime: meta.QuoteTimeUnix, DelaySeconds: meta.DelaySeconds,
+				MarketState: session.State, MarketBasis: session.Basis, Symbol: target.Symbol, Provider: target.ProviderID, Price: price,
 				StopLoss: t.StopLoss(), FastEMA: fast, SlowEMA: slow,
 				Currency: asset.Currency, Status: state,
 				RawMarketJSON: rawMarketJSON(asset),

@@ -28,6 +28,9 @@ let nextId = 0;
             <dt>{{ d.label }}</dt><dd>{{ d.text }}</dd>
           }
         </dl>
+        @if (market.canTrackSelected()) {
+          <button type="button" class="btn btn-outline-primary btn-sm me-2" (click)="trackLive()">Track live</button>
+        }
         @if (market.feed().canReconnect) {
           <button type="button" class="btn btn-outline-secondary btn-sm" (click)="reconnect()">Reconnect</button>
         }
@@ -57,6 +60,11 @@ export class FeedStatusComponent {
 
   reconnect(): void {
     this.market.reconnectFeed();
+    this.open.set(false);
+  }
+
+  trackLive(): void {
+    this.market.trackLive();
     this.open.set(false);
   }
 

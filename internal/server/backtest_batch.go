@@ -107,7 +107,7 @@ func batchCellQuery(base url.Values, universe, period string) (url.Values, error
 	q := url.Values{}
 	for k, v := range base {
 		switch k {
-		case "universes", "periods", "universe", "years", "from", "to":
+		case "universes", "periods", "universe", "years", "from", "to", "progress_id":
 		case "symbols":
 			if universe == "custom" {
 				q[k] = v
@@ -152,12 +152,19 @@ func (e *Engine) runBacktestBatch(ctx context.Context, base url.Values) (batchRe
 	}
 	out := batchResponse{GeneratedAt: time.Now().UTC().Format(time.RFC3339), Universes: universes, Periods: periods, Parameters: url.Values{}}
 	for k, v := range base {
-		if k != "universes" && k != "periods" {
+		if k != "universes" && k != "periods" && k != "progress_id" {
 			out.Parameters[k] = v
 		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, batchTimeout)
 	defer cancel()
+
+	progressID, total := base.Get("progress_id"), len(universes)*len(periods)
+	e.runProgress.set(progressID, "Backtesting", 0, total, false)
+	defer func() {
+		p, _ := e.runProgress.get(progressID)
+		e.runProgress.set(progressID, "Backtesting", p.Done, total, true)
+	}()
 
 	var cagr, excess, drawdown, sharpe []float64
 	sum := &out.Summary
@@ -209,6 +216,7 @@ func (e *Engine) runBacktestBatch(ctx context.Context, base url.Values) (batchRe
 				sum.Failed++
 			}
 			out.Cells = append(out.Cells, cell)
+			e.runProgress.set(progressID, "Backtesting", len(out.Cells), total, false)
 			if ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled) {
 				return out, ctx.Err()
 			}
@@ -221,6 +229,14 @@ func (e *Engine) runBacktestBatch(ctx context.Context, base url.Values) (batchRe
 	return out, nil
 }
 
+// multipleTestingFrom is the number of compared results from which the multiple-testing note is added.
+const multipleTestingFrom = 3
+
+// multipleTestingNote warns that picking the best of several tries flatters it.
+func multipleTestingNote(n int, what string) string {
+	return fmt.Sprintf("%d %s were compared. The best of many tries looks better than it is likely to be on new data, because some of it is luck; the more you try, the more that applies, so do not pick a winner from this table alone.", n, what)
+}
+
 // batchLimitations states what the spread cannot show. They are facts about
 // how the cells were built, not judgments of the strategy.
 func batchLimitations(b batchResponse) []string {
@@ -230,6 +246,9 @@ func batchLimitations(b batchResponse) []string {
 	}
 	if b.Summary.Completed < 6 {
 		notes = append(notes, fmt.Sprintf("Only %d backtests completed; the spread is too small to say how the strategy behaves across conditions.", b.Summary.Completed))
+	}
+	if b.Summary.Completed >= multipleTestingFrom {
+		notes = append(notes, multipleTestingNote(b.Summary.Completed, "backtests"))
 	}
 	if b.Summary.Failed > 0 {
 		notes = append(notes, fmt.Sprintf("%d backtests failed and are not in the spread; see each cell's error.", b.Summary.Failed))
