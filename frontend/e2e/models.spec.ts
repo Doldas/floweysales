@@ -38,7 +38,7 @@ test.describe('model profiles', () => {
     expect((await save).postDataJSON()).toMatchObject({ name: 'My panel', chair: true, members: [{ persona: 'owner', profile_id: null }, { persona: 'teacher', profile_id: null }] });
     await expect(page.getByText('Team saved.')).toBeVisible();
 
-    await page.getByLabel('Saved team').selectOption({ label: 'Value panel (2)' });
+    await page.getByLabel('Saved team', { exact: true }).selectOption({ label: 'Value panel (2)' });
     await page.getByRole('button', { name: 'Load' }).click();
     await expect(page.getByLabel('Ashgrove', { exact: true })).toHaveValue('2');
     await expect(page.getByLabel('Name for this team')).toHaveValue('Value panel');
@@ -50,7 +50,7 @@ test.describe('administrator', () => {
     await open(page, 'settings');
     await page.getByRole('tab', { name: 'Model profiles' }).click();
     await expect(page.getByRole('heading', { name: 'Model profiles' })).toBeVisible();
-    await expect(page.getByText('Deep research')).toBeVisible();
+    await expect(page.getByRole('strong').filter({ hasText: 'Deep research' })).toBeVisible();
     await expect(page.getByText('falls back to')).toHaveCount(0);
     await expect(page.getByText('context size unknown')).toBeVisible(); // unknown stays unknown
     await page.getByRole('button', { name: 'Edit' }).first().click();

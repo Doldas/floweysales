@@ -42,6 +42,17 @@ type Event struct {
 	Attempt     int    `json:"attempt,omitempty"`
 	MaxAttempts int    `json:"max_attempts,omitempty"`
 	Detail      string `json:"detail,omitempty"`
+	// CallID ties a tool_result to its tool_start, also when calls overlap;
+	// Seq is the order of the calls in the run. DurationMS, Truncated and
+	// OriginalBytes describe the result; Redacted says secrets were masked in
+	// what is shown. Arguments and Result are what the user sees, bounded and
+	// redacted; the model received the full result.
+	CallID        string `json:"call_id,omitempty"`
+	Seq           int    `json:"seq,omitempty"`
+	DurationMS    int64  `json:"duration_ms,omitempty"`
+	Truncated     bool   `json:"truncated,omitempty"`
+	OriginalBytes int    `json:"original_bytes,omitempty"`
+	Redacted      bool   `json:"redacted,omitempty"`
 }
 
 // AgentOptions tunes a run.
@@ -194,7 +205,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		assistant, err := completeWithRetry(ctx, client, &messages, tools, emit)
 		if err != nil {
 			checkpoint(step-1, TaskFailed)
-			emit(Event{Type: "error", Error: err.Error()})
+			emit(Event{Type: "error", Error: userFacingError(err)})
 			return err
 		}
 		// Arguments that are not valid JSON make most providers reject the
@@ -274,7 +285,13 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 				continue
 			}
 			toolCalls++
-			emit(Event{Type: "tool_start", Name: tc.Function.Name, Arguments: tc.Function.Arguments})
+			callID := tc.ID
+			if callID == "" {
+				callID = fmt.Sprintf("call_%d", toolCalls)
+			}
+			started := time.Now()
+			shownArgs, argsCut, argsRedacted := forDisplay(tc.Function.Arguments, maxDisplayArgs)
+			emit(Event{Type: "tool_start", Name: tc.Function.Name, Arguments: shownArgs, CallID: callID, Seq: toolCalls, Truncated: argsCut, Redacted: argsRedacted})
 
 			var result string
 			var err error
@@ -282,12 +299,14 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 				err = fmt.Errorf("the arguments of this call were not valid JSON (%s). Send the call again with one complete, valid JSON object", clip(bad, 160))
 			} else if granted != nil && !granted[tc.Function.Name] {
 				err = fmt.Errorf("tool %s is not granted to this agent", tc.Function.Name)
+			} else if perr := ValidateToolArgs(tc.Function.Name, tc.Function.Arguments); perr != nil {
+				err = perr
 			} else if opts.Execute != nil {
 				result, err = opts.Execute(ctx, tc.Function.Name, tc.Function.Arguments)
 			} else {
 				result, err = Execute(ctx, src, tc.Function.Name, tc.Function.Arguments)
 			}
-			ev := Event{Type: "tool_result", Name: tc.Function.Name}
+			ev := Event{Type: "tool_result", Name: tc.Function.Name, CallID: callID, Seq: toolCalls}
 			if err != nil {
 				ev.ToolError = err.Error()
 				if payload, mErr := json.Marshal(map[string]string{"error": err.Error(), "hint": toolErrorHint}); mErr == nil {
@@ -297,12 +316,16 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 				}
 			}
 			if len(result) > opts.MaxToolResultBytes {
+				ev.Truncated, ev.OriginalBytes = true, len(result)
 				// Preserve valid JSON even when a provider returns an oversized payload.
 				preview := result[:opts.MaxToolResultBytes]
 				wrapped, _ := json.Marshal(map[string]any{"truncated": true, "original_bytes": len(result), "preview_text": preview})
 				result = string(wrapped)
 			}
-			ev.Result = result
+			shown, cut, redacted := forDisplay(result, maxDisplayResult)
+			ev.Result, ev.Redacted = shown, redacted
+			ev.Truncated = ev.Truncated || cut
+			ev.DurationMS = time.Since(started).Milliseconds()
 			emit(ev)
 			ledger = append(ledger, LedgerEntry{Seq: len(ledger) + 1, Tool: tc.Function.Name, Arguments: clip(tc.Function.Arguments, 300),
 				Preview: clip(result, ledgerPreviewBytes), Error: ev.ToolError, At: time.Now().UTC()})
@@ -342,12 +365,41 @@ const (
 // retryDelay is the pause before attempt n+1 (a variable so tests can skip it).
 var retryDelay = func(attempt int) time.Duration { return time.Duration(attempt) * 2 * time.Second }
 
+const (
+	// maxDisplayArgs and maxDisplayResult bound what is streamed to the user
+	// for a tool call; the model still gets the whole result (up to
+	// MaxToolResultBytes).
+	maxDisplayArgs   = 8 << 10
+	maxDisplayResult = 64 << 10
+)
+
+// forDisplay masks secrets in s and cuts it to max bytes, and says whether it
+// did either, so the interface never presents a cut or masked text as whole.
+func forDisplay(s string, max int) (shown string, truncated, redacted bool) {
+	masked := redact.String(s)
+	redacted = masked != s
+	if len(masked) > max {
+		return redact.Truncate(masked, max), true, redacted
+	}
+	return masked, false, redacted
+}
+
 var urlInText = regexp.MustCompile(`https?://\S+`)
 
 // failureDetail is a model error safe to show: secrets masked, endpoint
 // addresses removed, length bounded.
 func failureDetail(err error) string {
-	return redact.Preview(urlInText.ReplaceAllString(err.Error(), "<endpoint>"), 300)
+	return userFacingText(err, 300)
+}
+
+// userFacingError is a run's final error as the user sees it: credentials
+// masked and the endpoint address removed. The full error stays in the log.
+func userFacingError(err error) string {
+	return userFacingText(err, 600)
+}
+
+func userFacingText(err error, max int) string {
+	return redact.Preview(urlInText.ReplaceAllString(err.Error(), "<endpoint>"), max)
 }
 
 func clip(s string, n int) string {

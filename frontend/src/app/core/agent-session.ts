@@ -40,6 +40,14 @@ export interface ChatEntry {
   content: string;
   /** Tool name for agent steps. */
   name?: string;
+  /** Ties a step to its result when several calls overlap. */
+  callId?: string;
+  seq?: number;
+  truncated?: boolean;
+  originalBytes?: number;
+  redacted?: boolean;
+  /** The tool's error text, kept apart from its output. */
+  toolError?: string;
   /** JSON arguments the agent passed to the tool. */
   args?: string;
   status?: 'running' | 'ok' | 'error';
@@ -305,7 +313,7 @@ export class AgentSession {
       if (!line.startsWith('data:')) continue;
       const payload = line.slice(5).trim();
       if (!payload) continue;
-      let ev: { model?: string; type?: string; severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string; content?: string; name?: string; arguments?: string; result?: string; tool_error?: string; error?: string; message?: Message };
+      let ev: { model?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean; type?: string; severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string; content?: string; name?: string; arguments?: string; result?: string; tool_error?: string; error?: string; message?: Message };
       try {
         ev = JSON.parse(payload);
       } catch {
@@ -322,11 +330,12 @@ export class AgentSession {
           this.appendAssistant(ev.content || '');
           break;
         case 'tool_start':
-          this.push({ role: 'tool', name: ev.name, args: ev.arguments, content: '', status: 'running', startedAt: Date.now() });
+          this.push({ role: 'tool', name: ev.name, args: ev.arguments, content: '', status: 'running', startedAt: Date.now(),
+            callId: ev.call_id, seq: ev.seq, truncated: ev.truncated, redacted: ev.redacted });
           this.assistantId = -1;
           break;
         case 'tool_result':
-          this.finishStep(ev.name || '', ev.tool_error ? `Error: ${ev.tool_error}` : ev.result || 'No result', !ev.tool_error);
+          this.finishStep(ev);
           this.assistantId = -1;
           break;
         case 'error':
@@ -356,17 +365,27 @@ export class AgentSession {
     return id;
   }
 
-  private finishStep(name: string, result: string, ok: boolean): void {
+  /** Completes the step of the call the event belongs to: by call id, else the latest running call of the same tool. */
+  private finishStep(ev: { name?: string; result?: string; tool_error?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean }): void {
+    const ok = !ev.tool_error;
+    const done = {
+      content: ev.result || (ok ? 'No result' : ''), toolError: ev.tool_error, status: ok ? 'ok' as const : 'error' as const,
+      truncated: ev.truncated, originalBytes: ev.original_bytes, redacted: ev.redacted,
+    };
     this.entries.update(list => {
       const copy = list.slice();
-      for (let i = copy.length - 1; i >= 0; i--) {
+      let at = ev.call_id ? copy.findIndex(e => e.role === 'tool' && e.callId === ev.call_id) : -1;
+      if (at < 0) for (let i = copy.length - 1; i >= 0; i--) {
         const e = copy[i];
-        if (e.role === 'tool' && e.status === 'running' && (!name || e.name === name)) {
-          copy[i] = { ...e, content: result, status: ok ? 'ok' : 'error', durationMs: e.startedAt ? Date.now() - e.startedAt : undefined };
-          return copy;
-        }
+        if (e.role === 'tool' && e.status === 'running' && (!ev.name || e.name === ev.name)) { at = i; break; }
       }
-      return [...copy, { id: this.nextId++, role: 'tool', name, content: result, status: ok ? 'ok' : 'error' }];
+      if (at >= 0) {
+        const e = copy[at];
+        copy[at] = { ...e, ...done, truncated: e.truncated || ev.truncated, redacted: e.redacted || ev.redacted,
+          durationMs: ev.duration_ms ?? (e.startedAt ? Date.now() - e.startedAt : undefined) };
+        return copy;
+      }
+      return [...copy, { id: this.nextId++, role: 'tool', name: ev.name, callId: ev.call_id, seq: ev.seq, durationMs: ev.duration_ms, ...done }];
     });
   }
 

@@ -10,6 +10,7 @@ import { defaultOptionLabel, profileOption, profileSummary } from '../components
 import { MarketState } from '../core/market-state';
 import { TeamSession } from '../core/team-session';
 import { renderMarkdown } from '../markdown';
+import { ToolCallComponent } from '../components/tool-call';
 import { SymbolSearchComponent } from '../shell/symbol-search';
 
 /**
@@ -20,7 +21,7 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
 @Component({
   selector: 'fs-team-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SymbolSearchComponent, NgTemplateOutlet, RouterLink],
+  imports: [SymbolSearchComponent, NgTemplateOutlet, RouterLink, ToolCallComponent],
   template: `
 <div class="fs-page research-container">
   <header class="fs-page-header">
@@ -183,8 +184,8 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
 
 <ng-template #body let-m="m">
   @if (m.steps.length) {
-    <details class="steps"><summary>{{ m.steps.length }} tool {{ m.steps.length === 1 ? 'call' : 'calls' }}</summary>
-      <ul>@for (st of m.steps; track $index) { <li [class.run]="st.status === 'running'" [class.bad]="st.status === 'error'">{{ label(st.name) }}</li> }</ul></details>
+    <details class="steps"><summary>{{ m.steps.length }} tool {{ m.steps.length === 1 ? 'call' : 'calls' }}@if (failedCalls(m); as n) { <span class="bad"> · {{ n }} failed</span> }</summary>
+      <ul>@for (st of m.steps; track st.callId) { <li><fs-tool-call [call]="st" /></li> }</ul></details>
   }
   @if (m.note) { <p class="muted">{{ m.note }}</p> }
   @switch (m.status) {
@@ -235,7 +236,7 @@ h2 { font-size: 1rem; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; al
 .grid .panel { margin-bottom: 0; }
 .chair { border-color: var(--fs-accent); }
 .answer { font-size: 0.9rem; }
-.steps { font-size: 0.78rem; color: var(--fs-muted); ul { margin: 0.3rem 0 0; padding-left: 1.1rem; } .run { opacity: 0.6; } .bad { color: var(--fs-neg); } }
+.steps { font-size: 0.78rem; color: var(--fs-muted); summary { cursor: pointer; } ul { margin: 0.3rem 0 0; padding: 0; list-style: none; display: grid; gap: 2px; } .bad { color: var(--fs-neg); } }
   `],
 })
 export class TeamPage {
@@ -249,6 +250,7 @@ export class TeamPage {
   };
   loadPicked(): void { const t = this.team.savedTeams().find(x => x.id === this.picked()); if (t) this.team.loadTeam(t); }
   deletePicked(): void { const id = this.picked(); if (id !== null) { this.team.deleteSaved(id); this.picked.set(null); } }
+  failedCalls = (m: { steps: { status: string }[] }): number => m.steps.filter(x => x.status === 'error').length;
   readonly team = inject(TeamSession);
   readonly market = inject(MarketState);
   private readonly sanitizer = inject(DomSanitizer);
