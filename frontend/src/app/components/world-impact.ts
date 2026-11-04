@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, effect, inject, input, signal, untr
 import type { CompanyWorld, WorldHeadline } from '../models';
 import { AgentSession } from '../core/agent-session';
 import { MarketService } from '../services';
+import { SourceComponent } from '../ui/source';
 import { ROLE_ICON, companyPrompt, publishedLabel, roleLine } from './world-view';
 
 const SECTORS = ['Energy', 'Materials', 'Industrials', 'Consumer Discretionary', 'Consumer Staples', 'Health Care', 'Financials',
@@ -15,6 +16,7 @@ const SECTORS = ['Energy', 'Materials', 'Industrials', 'Consumer Discretionary',
 @Component({
   selector: 'fs-world-impact',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [SourceComponent],
   template: `
 <section class="card world" aria-label="World events and this company">
   <header>
@@ -51,10 +53,10 @@ const SECTORS = ['Energy', 'Materials', 'Industrials', 'Consumer Discretionary',
         <p class="basis">Matched on: {{ t.basis }}</p>
         <ul>
           @for (h of t.own_headlines ?? []; track h.url) {
-            <li><span class="tag">{{ symbol() }}</span> <a [href]="h.url" target="_blank" rel="noopener noreferrer">{{ h.title }}</a> <small>{{ h.source }} · {{ published(h) }}</small></li>
+            <li><span class="tag">{{ symbol() }}</span> <a [href]="h.url" target="_blank" rel="noopener noreferrer">{{ h.title }}</a> <small>{{ h.source }} · {{ published(h) }}</small> <fs-source [fact]="h.provenance" /></li>
           }
           @for (h of t.headlines.slice(0, 2); track h.url) {
-            <li><span class="tag world-tag">World</span> <a [href]="h.url" target="_blank" rel="noopener noreferrer">{{ h.title }}</a> <small>{{ h.source }} · {{ published(h) }}</small></li>
+            <li><span class="tag world-tag">World</span> <a [href]="h.url" target="_blank" rel="noopener noreferrer">{{ h.title }}</a> <small>{{ h.source }} · {{ published(h) }}</small> <fs-source [fact]="h.provenance" /></li>
           }
         </ul>
       </article>
@@ -64,7 +66,7 @@ const SECTORS = ['Energy', 'Materials', 'Industrials', 'Consumer Discretionary',
     @if (d.news.length) {
       <details>
         <summary>All {{ d.news.length }} headlines about {{ symbol() }}</summary>
-        <ul>@for (h of d.news; track h.url) { <li><a [href]="h.url" target="_blank" rel="noopener noreferrer">{{ h.title }}</a> <small>{{ h.source }} · {{ published(h) }}</small></li> }</ul>
+        <ul>@for (h of d.news; track h.url) { <li><a [href]="h.url" target="_blank" rel="noopener noreferrer">{{ h.title }}</a> <small>{{ h.source }} · {{ published(h) }}</small> <fs-source [fact]="h.provenance" /></li> }</ul>
       </details>
     }
   }

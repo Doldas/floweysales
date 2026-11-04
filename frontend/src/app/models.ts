@@ -1,3 +1,4 @@
+import type { Provenance } from './core/provenance';
 export interface MarketData {
   assetDataProvider?: string;
   type?: string;
@@ -589,7 +590,7 @@ export interface ReferencePortfolio {
 }
 export type WorldRole = 'benefits' | 'hurt' | 'mixed';
 export interface WorldExposure { kind: 'sector' | 'commodity' | 'macro'; name: string; role: WorldRole; why: string }
-export interface WorldHeadline { title: string; url: string; source?: string; published?: number; age?: string; summary?: string; via: string; themes?: string[] }
+export interface WorldHeadline { provenance?: Provenance; title: string; url: string; source?: string; published?: number; age?: string; summary?: string; via: string; themes?: string[] }
 export interface WorldTheme { id: string; label: string; driver: string; exposures: WorldExposure[]; headlines: WorldHeadline[]; count: number }
 export interface WorldSector { name: string; benefits_from?: string[]; hurt_by?: string[]; mixed?: string[] }
 export interface WorldView { generated_at: string; sources: string[]; notes?: string[]; themes: WorldTheme[]; sectors: WorldSector[] }
