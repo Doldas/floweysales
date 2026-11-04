@@ -3,6 +3,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import type { Message, ModelProfile, Persona } from '../models';
 import { MarketState } from './market-state';
 import { delegationProgress, parseEvidenceMode, type AnswerFinding, type AnswerSource, type EvidenceMode } from './answer-sources';
+import { MAX_DELIVERABLES, parseChecklist, parseDeliverables, type SavedTask, type TaskDeliverable } from './task-view';
 import { EMPTY_NOTICES, applyNotice, dismissNotice, finishNotices, recoveryLine, type NoticeState } from './agent-notices';
 
 export interface AiPreset {
@@ -121,6 +122,14 @@ export class AgentSession {
   /** The model the current run uses, from the server (it changes if a fallback takes over). */
   readonly activeModel = signal('');
   readonly personaName = computed(() => this.personas().find(p => p.id === this.persona())?.name ?? '');
+  /** Required parts typed for the next question, one per line. Filled in, the question becomes a saved task. */
+  readonly deliverablesText = signal('');
+  readonly deliverableCount = computed(() => parseDeliverables(this.deliverablesText()).length);
+  readonly maxDeliverables = MAX_DELIVERABLES;
+  /** The task the current or latest run belongs to, with its checklist as the server last reported it. */
+  readonly activeTask = signal<{ id: number; status: string; checklist: TaskDeliverable[] } | null>(null);
+  /** The user's saved tasks, newest first. */
+  readonly tasks = signal<SavedTask[]>([]);
   /** Whether the floating dock is open. */
   readonly dockOpen = signal(false);
 
@@ -256,27 +265,71 @@ export class AgentSession {
     this.streaming.set(true);
     this.assistantId = -1;
 
+    const ctx = this.context();
+    const required = parseDeliverables(this.deliverablesText());
+    this.deliverablesText.set('');
+    this.activeTask.set(null);
+    await this.stream('/api/ai/chat', {
+      messages: this.wire.map(m => ({ ...m })),
+      model: this.canConfigure() ? this.chatModel() : undefined,
+      persona: this.persona() || undefined,
+      profile_id: this.profileId() || undefined,
+      evidence_mode: this.evidenceMode() === 'standard' ? undefined : this.evidenceMode(),
+      deliverables: required.length ? required : undefined,
+      symbol: ctx.symbol,
+      provider: ctx.provider,
+      range: ctx.range,
+      price: ctx.price,
+    });
+    if (required.length) void this.loadTasks();
+  }
+
+  async loadTasks(): Promise<void> {
+    try {
+      const res = await fetch('/api/ai/tasks', { credentials: 'same-origin' });
+      if (res.ok) this.tasks.set((await res.json()).tasks || []);
+    } catch { /* the list stays as it was */ }
+  }
+
+  /** Continues a saved task from its last checkpoint: the server restores the conversation, the evidence gathered and the budgets already spent. */
+  async resumeTask(task: SavedTask): Promise<void> {
+    if (this.streaming()) return;
+    await this.loadConfig();
+    if (!this.canSend()) return;
+    this.error.set('');
+    this.noticeState.set(EMPTY_NOTICES);
+    this.answerSources.set([]);
+    this.answerAudit.set([]);
+    // The saved conversation lives on the server; this view shows the continuation.
+    this.wire = [];
+    this.entries.set([]);
+    this.push({ role: 'user', content: `Resume the task: ${task.title}` });
+    this.streaming.set(true);
+    this.assistantId = -1;
+    this.activeTask.set({ id: task.id, status: task.status, checklist: task.deliverables });
+    await this.stream(`/api/ai/tasks/${task.id}/resume`, {});
+    void this.loadTasks();
+  }
+
+  async deleteTask(id: number): Promise<void> {
+    try {
+      const res = await fetch(`/api/ai/tasks/${id}`, { method: 'DELETE', credentials: 'same-origin' });
+      if (res.ok) this.tasks.update(list => list.filter(t => t.id !== id));
+      else this.error.set((await res.json().catch(() => null))?.error || 'The task could not be deleted.');
+    } catch { this.error.set('The task could not be deleted.'); }
+  }
+
+  /** Posts a run request and folds the event stream into the conversation. */
+  private async stream(url: string, body: unknown): Promise<void> {
     const controller = new AbortController();
     this.abort = controller;
-    const ctx = this.context();
-
     try {
-      const res = await fetch('/api/ai/chat', {
+      const res = await fetch(url, {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
-        body: JSON.stringify({
-          messages: this.wire.map(m => ({ ...m })),
-          model: this.canConfigure() ? this.chatModel() : undefined,
-          persona: this.persona() || undefined,
-          profile_id: this.profileId() || undefined,
-          evidence_mode: this.evidenceMode() === 'standard' ? undefined : this.evidenceMode(),
-          symbol: ctx.symbol,
-          provider: ctx.provider,
-          range: ctx.range,
-          price: ctx.price,
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok || !res.body) {
         let detail = `HTTP ${res.status}`;
@@ -344,6 +397,13 @@ export class AgentSession {
       switch (ev.type) {
         case 'run_start':
           this.activeModel.set(ev.model || '');
+          break;
+        case 'task':
+          // The run was saved as a task; its checklist follows in checkpoint events.
+          this.activeTask.update(t => ({ id: Number(ev.name), status: ev.content || 'running', checklist: t?.checklist ?? [] }));
+          break;
+        case 'checkpoint':
+          this.activeTask.update(t => ({ id: Number(ev.name) || t?.id || 0, status: ev.content || t?.status || 'running', checklist: ev.result ? parseChecklist(ev.result) : t?.checklist ?? [] }));
           break;
         case 'transcript_message':
           if (ev.message && (ev.message.role === 'assistant' || ev.message.role === 'tool')) this.wire.push(ev.message);

@@ -75,6 +75,18 @@
         <button type="button" class="btn-close" (click)="session.dismissError()" aria-label="Dismiss this error"></button>
       </div>
     }
+    @if (session.activeTask(); as task) {
+      <section class="task-card small" aria-label="Task checklist">
+        <h4><i class="bi bi-list-check" aria-hidden="true"></i> Task {{ task.id }} · {{ statusLabel(task.status) }}</h4>
+        @if (checklistLine(task.checklist); as line) { <p class="mb-1" role="status">{{ line }}</p> }
+        <ul>
+          @for (d of task.checklist; track d.title) {
+            <li><i class="bi" [class]="mark(d.status)" aria-hidden="true"></i> {{ d.title }} <span class="text-muted">({{ d.status === 'pending' ? 'not yet reported' : d.status }}{{ d.note ? ': ' + d.note : '' }})</span></li>
+          }
+        </ul>
+        @if (task.status === 'incomplete') { <p class="mb-0 text-muted">Parts are missing, so this is not reported as finished. Open Saved tasks to resume it; the evidence gathered so far is kept.</p> }
+      </section>
+    }
     @if (!session.streaming() && session.answerSources().length) {
       <details class="sources small">
         <summary><i class="bi bi-journal-text" aria-hidden="true"></i> Sources ({{ session.answerSources().length }})</summary>
@@ -132,6 +144,29 @@
       </div>
       @if (chosenProfile(); as p) { <div class="profile-note">{{ p.description }} {{ profileSummary(p) }}</div> }
     }
+    <details class="task-compose">
+      <summary>Required parts (optional)@if (session.deliverableCount()) { · {{ session.deliverableCount() }} }</summary>
+      <textarea rows="3" class="form-control form-control-sm" [value]="session.deliverablesText()" (input)="session.deliverablesText.set($any($event.target).value)"
+                [disabled]="session.streaming()" aria-label="Required parts of the answer, one per line" placeholder="Latest price&#10;DCF with stated assumptions&#10;Risk note"></textarea>
+      <small class="text-muted">One per line, up to {{ session.maxDeliverables }}. The question is saved as a task. The agent must report each part as done or missing; it cannot claim to be finished while one is open, and an interrupted task can be resumed.</small>
+    </details>
+    <details class="task-list" (toggle)="$any($event.target).open && session.loadTasks()">
+      <summary>Saved tasks@if (session.tasks().length) { ({{ session.tasks().length }}) }</summary>
+      @if (!session.tasks().length) { <p class="text-muted small mb-0">No saved tasks yet. A question with required parts becomes one.</p> }
+      <ul>
+        @for (t of session.tasks(); track t.id) {
+          <li>
+            <div class="task-title"><strong>{{ t.title }}</strong> <span class="badge text-bg-secondary">{{ statusLabel(t.status) }}</span></div>
+            <small class="text-muted">{{ t.steps }} model rounds · {{ t.tool_calls }} tool calls · updated {{ when(t.updated_at) }}</small>
+            @if (checklistLine(t.deliverables); as line) { <small>{{ line }}</small> }
+            <div class="task-actions">
+              <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="session.streaming() || !canResume(t) || !session.canSend()" (click)="session.resumeTask(t)">Resume</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="session.streaming()" (click)="session.deleteTask(t.id)" [attr.aria-label]="'Delete task ' + t.title">Delete</button>
+            </div>
+          </li>
+        }
+      </ul>
+    </details>
     <div class="composer-box">
       <textarea #composer rows="1" [value]="draft()" (input)="onInput($any($event.target).value)" (keydown)="onKeydown($event)"
                 [placeholder]="session.configured() || !session.configLoaded() ? 'Ask a research question…' : 'AI model not configured'"
