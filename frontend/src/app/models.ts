@@ -413,6 +413,14 @@ export interface BacktestResult {
   curve: BacktestPoint[];
   rebalances: BacktestRebalance[];
   warnings: string[];
+  /** Consecutive parts of the period, each measured on its own; absent when the period is too short. */
+  segments?: BacktestSegment[];
+  segment_summary?: string;
+  segment_note?: string;
+}
+export interface BacktestSegment {
+  from: string; to: string; days: number; cagr_pct: number; volatility_pct: number; max_drawdown_pct: number; sharpe: number;
+  benchmark_cagr_pct?: number; excess_cagr_pct?: number;
 }
 
 /** One universe and period of GET /api/market/backtest/batch. A failed cell has an error and no metrics. */

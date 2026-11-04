@@ -11,6 +11,7 @@ import (
 
 	"floweysales/internal/ai"
 	"floweysales/internal/identity"
+	"floweysales/internal/storage"
 )
 
 func summaryEngine(t *testing.T, model func(call int, msgs []ai.Message) (string, error)) (*Engine, *int) {
@@ -125,5 +126,16 @@ func TestOrdinaryUsersMaySummarizeTheirOwnRunOnly(t *testing.T) {
 	}
 	if allowedAPI(identity.RoleUser, "GET", "/api/market/backtest/runs/3/summary") {
 		t.Error("only POST")
+	}
+}
+
+func TestFactsSheetCarriesTheConsecutiveParts(t *testing.T) {
+	run := storage.BacktestRun{ID: 1, Name: "n", Kind: "single", Query: "q", Result: `{"universe":"US","strategy":"value","from":"2020-01-01","to":"2023-01-01","metrics":{"cagr_pct":8.5},
+		"rebalances":[{}],"segments":[{"from":"2020-01-01","to":"2021-01-01","cagr_pct":12.3,"max_drawdown_pct":-9.1,"excess_cagr_pct":2.2},{"from":"2021-01-01","to":"2022-01-01","cagr_pct":-3.4,"max_drawdown_pct":-15,"excess_cagr_pct":-5.5}],
+		"segment_summary":"Beat the benchmark in 1 of 2 consecutive parts."}`}
+	facts, _, err := backtestFacts(run)
+	if err != nil || !strings.Contains(facts, "Part 2 of the period: 2021-01-01 to 2022-01-01; CAGR % -3.40; Excess CAGR % -5.50; Max drawdown % -15.00") ||
+		!strings.Contains(facts, "Beat the benchmark in 1 of 2 consecutive parts.") {
+		t.Fatalf("%v\n%s", err, facts)
 	}
 }
