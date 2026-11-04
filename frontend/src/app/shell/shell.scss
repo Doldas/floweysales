@@ -167,6 +167,17 @@
   border-bottom: 1px solid var(--fs-border);
 }
 .topbar-title { font-weight: 600; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.instrument-chip {
+  display: flex; align-items: baseline; gap: 0.45rem; min-width: 0; max-width: 24rem; padding: 0.25rem 0.65rem;
+  border: 1px solid var(--fs-border); border-radius: 999px; background: var(--fs-surface-2); color: var(--fs-text);
+  text-decoration: none; margin-left: auto;
+  &:hover { border-color: var(--fs-accent); text-decoration: none; }
+  &:focus-visible { box-shadow: var(--fs-focus); }
+  .chip-sym { font-weight: 650; font-size: 0.85rem; flex: 0 0 auto; }
+  .chip-name { font-size: 0.8rem; color: var(--fs-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .chip-meta { font-size: 0.68rem; color: var(--fs-muted); flex: 0 0 auto; }
+}
+.instrument-chip + .topbar-search { margin-left: 0; }
 .topbar-search { flex: 0 1 380px; margin-left: auto; min-width: 0; }
 .topbar-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; flex: 0 0 auto; }
 .topbar-search + .topbar-actions { margin-left: 0; }
@@ -244,6 +255,7 @@
 
 @media (max-width: 767.98px) {
   .topbar-search { display: none; }
+  .instrument-chip .chip-name, .instrument-chip .chip-meta { display: none; }
   .topbar-actions { margin-left: auto; gap: 0.35rem; }
 }
 

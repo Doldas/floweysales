@@ -1,9 +1,10 @@
 import { DestroyRef, Injectable, computed, effect, inject, signal } from '@angular/core';
-import { Observable, map, of } from 'rxjs';
+import { Observable, Subscription, map, of } from 'rxjs';
 
 import { MarketService, describeHttpError, type TrackedAsset } from '../services';
 import { LiveSseService } from '../live.service';
 import { feedStatus } from './feed-status';
+import { instrumentFromQuery, instrumentKey, isStaleResponse, pickInitialInstrument } from './instrument-ref';
 import { OrdersState } from '../orders-state';
 import { NotifyService } from './notify.service';
 import {
@@ -59,6 +60,10 @@ export class MarketState {
   readonly trackedAssets = signal<TrackedAsset[]>([]);
   readonly trackedSymbol = signal('');
   readonly trackedName = signal('');
+  /** Exchange of the selected instrument when the search result said so. */
+  readonly trackedExchange = signal('');
+  /** Provider of the instrument on screen (the picker in the search box may differ). */
+  readonly trackedProvider = signal<ProviderId>('YAHOO');
   readonly provider = signal<ProviderId>('YAHOO');
   readonly currency = signal('USD');
   readonly connecting = signal(false);
@@ -133,6 +138,9 @@ export class MarketState {
     this.stream.reconnect();
   }
 
+  private historyRequest: Subscription | null = null;
+  /** Provider and symbol of the instrument on screen; the provider picker alone does not change it. */
+  private activeKey = '';
   private firstTickTimer: ReturnType<typeof setTimeout> | null = null;
   private gotTickForCurrentAsset = false;
 
@@ -154,8 +162,9 @@ export class MarketState {
     this.refreshProviders();
     if (mode === 'research') {
       this.trackedAssets.set(this.loadWatchlist());
-      const last = this.readLocal('lastTrackedSymbol');
-      const provider = this.readLocal('lastProvider');
+      const link = this.linkedInstrument();
+      const last = pickInitialInstrument(link?.symbol ?? null, this.readLocal('lastTrackedSymbol'));
+      const provider = link?.provider ?? this.readLocal('lastProvider');
       if (isProviderId(provider)) this.provider.set(provider);
       const first = last ? { symbol: last, provider: this.provider() } : this.trackedAssets()[0];
       if (first) this.view(first);
@@ -167,7 +176,12 @@ export class MarketState {
         const provider = String(cfg?.provider ?? this.readLocal('lastProvider') ?? 'YAHOO').toUpperCase();
         this.provider.set(isProviderId(provider) ? provider : 'YAHOO');
         this.trackedAssets.set(cfg?.trackers ?? []);
-        if (this.trackedAssets().length > 0) {
+        const link = this.linkedInstrument();
+        if (link) {
+          // A link names the instrument it wants; opening it selects it.
+          if (link.provider && isProviderId(link.provider)) this.provider.set(link.provider);
+          this.launch(link.symbol);
+        } else if (this.trackedAssets().length > 0) {
           const active = this.trackedAssets().find(t => t.symbol === symbol && t.provider === this.provider()) ?? this.trackedAssets()[0];
           this.view(active);
         } else {
@@ -178,6 +192,15 @@ export class MarketState {
       },
       error: () => this.notify.error('Cannot reach the FloweySales engine. Is the backend running?'),
     });
+  }
+
+  /** The instrument a `?symbol=` link asks for, if any. */
+  private linkedInstrument(): { symbol: string; provider: string | null } | null {
+    try {
+      return instrumentFromQuery(window.location.search);
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -215,7 +238,7 @@ export class MarketState {
   /** Validates a typed symbol (or takes a search hit) and makes it active. */
   track(target: string | SymbolInfo): void {
     if (typeof target !== 'string') {
-      this.launch(target.symbol, target.name);
+      this.launch(target.symbol, target.name, target.exchange);
       return;
     }
     const symbol = target.trim().toUpperCase();
@@ -237,7 +260,7 @@ export class MarketState {
         }
         // Prefer the exact hit so the provider's own symbol is kept (e.g. BTCUSDT).
         const exact = results.find(r => r.symbol.toUpperCase() === symbol);
-        this.launch(exact ? exact.symbol : symbol, (exact ?? results[0]).name);
+        this.launch(exact ? exact.symbol : symbol, (exact ?? results[0]).name, (exact ?? results[0]).exchange);
       },
       error: err => this.notify.error('Ticker validation failed: ' + describeHttpError(err)),
     });
@@ -258,6 +281,8 @@ export class MarketState {
           this.stream.close();
           this.trackedSymbol.set('');
           this.trackedName.set('');
+          this.trackedExchange.set('');
+          this.activeKey = '';
           this.marketSeries.set(null);
         }
       }
@@ -301,13 +326,16 @@ export class MarketState {
     this.api.getTrackers().subscribe({ next: data => this.trackedAssets.set(data.trackers ?? []), error: () => {} });
   }
 
-  private launch(symbol: string, name?: string): void {
+  private launch(symbol: string, name?: string, exchange?: string): void {
     const provider = this.provider();
     this.connecting.set(true);
     this.gotTickForCurrentAsset = false;
     if (name) this.trackedName.set(name);
     else if (symbol !== this.trackedSymbol()) this.trackedName.set('');
+    this.trackedExchange.set(exchange ?? (symbol === this.trackedSymbol() ? this.trackedExchange() : ''));
     this.trackedSymbol.set(symbol);
+    this.activeKey = instrumentKey({ symbol, provider });
+    this.trackedProvider.set(provider);
     this.writeLocal('lastTrackedSymbol', symbol);
     this.writeLocal('lastProvider', provider);
     this.chartEpoch.update(n => n + 1);
@@ -341,9 +369,14 @@ export class MarketState {
 
   private loadHistory(symbol: string, provider: ProviderId, expectTicks = this.mode() === 'live'): void {
     this.loadingHistory.set(true);
-    this.api.getMarketHistory(symbol, provider, this.historyRange()).subscribe({
+    // Only the latest request may answer: an older symbol, provider or range is cancelled.
+    this.historyRequest?.unsubscribe();
+    const range = this.historyRange();
+    const requested = instrumentKey({ symbol, provider }) + '|' + range;
+    const current = () => this.activeKey + '|' + this.historyRange();
+    this.historyRequest = this.api.getMarketHistory(symbol, provider, range).subscribe({
       next: series => {
-        if (symbol !== this.trackedSymbol()) return;
+        if (isStaleResponse(requested, current())) return;
         this.loadingHistory.set(false);
         this.connecting.set(false);
         if (series.currency) this.currency.set(series.currency);
@@ -351,7 +384,7 @@ export class MarketState {
         if (expectTicks) this.armFirstTickTimeout(symbol);
       },
       error: () => {
-        if (symbol !== this.trackedSymbol()) return;
+        if (isStaleResponse(requested, current())) return;
         this.loadingHistory.set(false);
         this.connecting.set(false);
         this.notify.info(`No ${this.historyRange()} history from ${provider} for “${symbol}”.` + (expectTicks ? ' The chart will start with live ticks.' : ''));

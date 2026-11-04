@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, computed,
 import { DecimalPipe } from '@angular/common';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
+import { instrumentLabel } from '../core/instrument-ref';
 
 import { AuthState } from '../auth.service';
 import { Access } from '../core/access';
@@ -105,6 +106,12 @@ export class ShellComponent {
     return (email.split('@')[0] || 'FS').slice(0, 2).toUpperCase();
   });
 
+  /** Full name of the selected instrument, for the chip's tooltip and screen readers. */
+  readonly instrumentTitle = computed(() => instrumentLabel({
+    symbol: this.market.trackedSymbol(), provider: this.market.trackedProvider(),
+    name: this.market.trackedName() || undefined, exchange: this.market.trackedExchange() || undefined,
+  }));
+
   readonly priceChange = computed(() => this.market.dayChange() ?? this.market.rangeChange());
 
   constructor() {
@@ -125,6 +132,14 @@ export class ShellComponent {
       this.pageTitle.set(tab ?? (r.data?.['title'] as string) ?? 'FloweySales');
       this.navOpen.set(false);
       this.userMenuOpen.set(false);
+    });
+
+    // Keep the selection in the address so a copied link opens the same instrument.
+    effect(() => {
+      const symbol = this.market.trackedSymbol();
+      const provider = this.market.trackedProvider();
+      if (!symbol || !this.router.url.split('?')[0].match(/^\/(markets|financials|strategies|portfolio)$/)) return;
+      void this.router.navigate([], { queryParams: { symbol, provider }, queryParamsHandling: 'merge', replaceUrl: true });
     });
 
     // Lock background scroll while the mobile navigation drawer is open.
