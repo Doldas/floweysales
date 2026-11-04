@@ -2,7 +2,7 @@
  * Display helpers for the strategy backtest panel. Pure functions so they run
  * under node --test; the replay itself lives in the server (internal/backtest).
  */
-import type { BacktestParams, BacktestMetrics, BacktestPoint, BacktestResult, BacktestSegment, BatchCell, BatchSpread, BatchSummary, SensitivityResult, SensitivityVariant } from '../models';
+import type { BacktestParams, BacktestMetrics, BacktestPoint, BacktestRegime, BacktestResult, BacktestSegment, BacktestStress, BatchCell, BatchSpread, BatchSummary, SensitivityResult, SensitivityVariant } from '../models';
 
 export type Tone = 'pos' | 'neg' | 'mid';
 
@@ -13,6 +13,8 @@ export const WARNING_TEXTS: Record<string, string> = {
   short_history: 'Fewer than 24 rebalances fit the history, so the result says little about how the strategy behaves over time.',
   benchmark_unavailable: 'The benchmark could not be loaded, so the strategy is shown without a comparison.',
   symbols_unavailable: 'Some symbols had no price history and were left out of the universe.',
+  few_trades: 'Fewer than 30 trades: averages and hit rates are too noisy to say whether the ranking has an edge.',
+  few_periods_drive_result: 'The total return is zero or negative when the three best rebalance periods are left out, so the result leans on a few periods.',
 };
 
 export interface SegmentRow { period: string; cagr: string; benchmark: string; excess: string; excessTone: 'up' | 'down' | 'none'; drawdown: string }
@@ -28,6 +30,37 @@ export function segmentRows(segments: readonly BacktestSegment[] | undefined): S
     excess: pct(s.excess_cagr_pct),
     excessTone: s.excess_cagr_pct === undefined ? 'none' : s.excess_cagr_pct > 0 ? 'up' : 'down',
     drawdown: pct(s.max_drawdown_pct),
+  }));
+}
+
+export interface StressRow { name: string; period: string; days: number; ret: string; benchmark: string; excess: string; excessTone: 'up' | 'down' | 'none'; drawdown: string }
+
+/** Rows for the named stress windows. A window without a benchmark shows n/a, never 0. */
+export function stressRows(stress: readonly BacktestStress[] | undefined): StressRow[] {
+  return (stress ?? []).map(s => ({
+    name: s.name,
+    period: `${s.from} to ${s.to}`,
+    days: s.days,
+    ret: pct(s.return_pct),
+    benchmark: pct(s.benchmark_return_pct),
+    excess: pct(s.excess_pct),
+    excessTone: s.excess_pct === undefined ? 'none' : s.excess_pct > 0 ? 'up' : 'down',
+    drawdown: pct(s.max_drawdown_pct),
+  }));
+}
+
+export interface RegimeRow { name: string; days: number; share: string; cagr: string; benchmark: string; excess: string; excessTone: 'up' | 'down' | 'none' }
+
+/** Rows per benchmark regime. A regime too short for yearly figures shows n/a. */
+export function regimeRows(regimes: readonly BacktestRegime[] | undefined): RegimeRow[] {
+  return (regimes ?? []).map(r => ({
+    name: r.name,
+    days: r.days,
+    share: `${r.share_pct.toFixed(0)}%`,
+    cagr: pct(r.cagr_pct),
+    benchmark: pct(r.benchmark_cagr_pct),
+    excess: pct(r.excess_cagr_pct),
+    excessTone: r.excess_cagr_pct === undefined ? 'none' : r.excess_cagr_pct > 0 ? 'up' : 'down',
   }));
 }
 

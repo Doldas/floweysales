@@ -2,7 +2,7 @@
 //   node --test src/app/components/backtest-view.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { batchParams, exportUrl, savedLabel, sensitivityParams, singleParams, sensitivityHeadline, sensitivityRows, settingLabel, batchHeadline, batchRows, chartSummary, curvePath, metricTiles, periodLabel, segmentRows, warningText } from './backtest-view.ts';
+import { batchParams, exportUrl, savedLabel, sensitivityParams, singleParams, sensitivityHeadline, sensitivityRows, settingLabel, batchHeadline, batchRows, chartSummary, curvePath, metricTiles, periodLabel, regimeRows, segmentRows, stressRows, warningText } from './backtest-view.ts';
 import type { BacktestMetrics } from '../models';
 
 const metrics: BacktestMetrics = { cagr_pct: 12.4, volatility_pct: 18, sharpe: 0.9, sortino: 1.2, max_drawdown_pct: -22.5, calmar: 0.5,
@@ -119,4 +119,30 @@ test('segment rows sign the figures and never show a missing benchmark as zero',
   assert.equal(rows[1].excessTone, 'none');
   assert.equal(rows[1].cagr, '-4.0%');
   assert.deepEqual(segmentRows(undefined), []);
+});
+
+test('stress rows show totals and never turn a missing benchmark into zero', () => {
+  const rows = stressRows([
+    { name: '2020 pandemic crash', from: '2020-02-19', to: '2020-03-23', days: 33, return_pct: -12, max_drawdown_pct: -20, benchmark_return_pct: -20, excess_pct: 8 },
+    { name: '2022 rate-rise bear market', from: '2022-01-03', to: '2022-10-12', days: 282, return_pct: -5.5, max_drawdown_pct: -9.25 },
+  ]);
+  assert.deepEqual(rows[0], { name: '2020 pandemic crash', period: '2020-02-19 to 2020-03-23', days: 33, ret: '-12.0%', benchmark: '-20.0%', excess: '+8.0%', excessTone: 'up', drawdown: '-20.0%' });
+  assert.equal(rows[1].benchmark, 'n/a');
+  assert.equal(rows[1].excessTone, 'none');
+  assert.deepEqual(stressRows(undefined), []);
+});
+
+test('regime rows keep a thin regime free of yearly figures', () => {
+  const rows = regimeRows([
+    { id: 'uptrend_calm', name: 'Uptrend, calm', days: 400, share_pct: 66.67, cagr_pct: 14.2, benchmark_cagr_pct: 10.1, excess_cagr_pct: 4.1 },
+    { id: 'downtrend_volatile', name: 'Downtrend, volatile', days: 20, share_pct: 3.33 },
+  ]);
+  assert.deepEqual(rows[0], { name: 'Uptrend, calm', days: 400, share: '67%', cagr: '+14.2%', benchmark: '+10.1%', excess: '+4.1%', excessTone: 'up' });
+  assert.deepEqual([rows[1].cagr, rows[1].benchmark, rows[1].excess, rows[1].excessTone], ['n/a', 'n/a', 'n/a', 'none']);
+  assert.deepEqual(regimeRows(undefined), []);
+});
+
+test('count warnings have readable text', () => {
+  assert.match(warningText('few_trades'), /Fewer than 30 trades/);
+  assert.match(warningText('few_periods_drive_result'), /three best rebalance periods/);
 });
