@@ -5,6 +5,7 @@ import { MarketService, describeHttpError, type TrackedAsset } from '../services
 import { LiveSseService } from '../live.service';
 import { feedStatus } from './feed-status';
 import { instrumentFromQuery, instrumentKey, isStaleResponse, pickInitialInstrument } from './instrument-ref';
+import { RecentInstrument, addRecent, parseRecent } from './recent-instruments';
 import { OrdersState } from '../orders-state';
 import { NotifyService } from './notify.service';
 import {
@@ -57,6 +58,8 @@ export class MarketState {
   readonly providersLoaded = signal(false);
   readonly historyRanges = HISTORY_RANGES;
 
+  /** The instruments looked at last, newest first; kept in this browser only. */
+  readonly recent = signal<RecentInstrument[]>(parseRecent(this.readLocal('recentInstruments')));
   readonly trackedAssets = signal<TrackedAsset[]>([]);
   readonly trackedSymbol = signal('');
   readonly trackedName = signal('');
@@ -338,6 +341,8 @@ export class MarketState {
     this.trackedProvider.set(provider);
     this.writeLocal('lastTrackedSymbol', symbol);
     this.writeLocal('lastProvider', provider);
+    this.recent.set(addRecent(this.recent(), { symbol, provider, name: this.trackedName() || undefined, exchange: this.trackedExchange() || undefined }));
+    this.writeLocal('recentInstruments', JSON.stringify(this.recent()));
     this.chartEpoch.update(n => n + 1);
     this.historySeed.set(null);
     this.marketSeries.set(null);

@@ -33,13 +33,14 @@ let nextId = 0;
       </select>
     </div>
     @if (open()) {
-      <ul class="results" role="listbox" [id]="id + '-list'" aria-label="Ticker results">
+      <ul class="results" role="listbox" [id]="id + '-list'" [attr.aria-label]="showingRecent() ? 'Recent instruments' : 'Ticker results'">
+        @if (showingRecent()) { <li class="group" role="presentation">Recent</li> }
         @for (r of results(); track r.symbol + r.exchange; let i = $index) {
           <li role="option" [id]="id + '-opt-' + i" [attr.aria-selected]="i === active()" [class.active]="i === active()"
               (mousedown)="$event.preventDefault()" (click)="choose(r)" (mouseenter)="active.set(i)">
             <span class="r-sym">{{ r.symbol }}</span>
             <span class="r-name">{{ r.name }}</span>
-            <span class="r-type">{{ r.type }}@if (r.exchange) { · {{ r.exchange }} }</span>
+            <span class="r-type">{{ r.type }}@if (r.exchange) { · {{ r.exchange }} }@if (showingRecent()) { · {{ recentProvider(r) }} }</span>
           </li>
         } @empty {
           <li class="empty" role="presentation">
@@ -76,6 +77,7 @@ let nextId = 0;
     .r-sym { font-weight: 650; font-size: .85rem; }
     .r-name { font-size: .85rem; color: var(--fs-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .r-type { grid-column: 1 / -1; font-size: .72rem; color: var(--fs-muted); }
+    .results li.group { display: block; cursor: default; font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--fs-muted); padding: .2rem .6rem; }
     .results li.empty { display: block; cursor: default; color: var(--fs-muted); font-size: .82rem; }
   `],
 })
@@ -120,12 +122,28 @@ export class SymbolSearchComponent {
     inject(DestroyRef).onDestroy(() => sub.unsubscribe());
   }
 
+  /** With nothing typed, the dropdown offers the instruments looked at last. */
+  readonly showingRecent = computed(() => this.query().trim() === '' && this.results().length > 0);
+
   onFocus(): void {
-    if (this.query().trim()) this.open.set(true);
+    if (this.query().trim()) {
+      this.open.set(true);
+      return;
+    }
+    const recent = this.market.recent();
+    if (!recent.length) return;
+    this.results.set(recent.map(r => ({ symbol: r.symbol, name: r.name ?? '', type: 'Recent', exchange: r.exchange ?? '' })));
+    this.active.set(0);
+    this.open.set(true);
+  }
+
+  recentProvider(info: SymbolInfo): string {
+    return this.market.recent().find(r => r.symbol === info.symbol && (r.exchange ?? '') === info.exchange)?.provider ?? '';
   }
 
   onInput(value: string): void {
     this.query.set(value);
+    if (!value.trim()) this.results.set([]);
     this.open.set(!!value.trim());
     if (value.trim().length >= 2) this.typed.next(value);
     else this.results.set([]);
@@ -162,6 +180,11 @@ export class SymbolSearchComponent {
   }
 
   choose(info: SymbolInfo): void {
+    // A recent entry may belong to another provider; the same ticker elsewhere is another instrument.
+    if (this.showingRecent()) {
+      const provider = this.recentProvider(info);
+      if (provider && provider !== this.market.provider()) this.market.setProvider(provider as ProviderId);
+    }
     this.market.track(info);
     this.done();
   }
