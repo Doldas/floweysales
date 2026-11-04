@@ -2,6 +2,10 @@
 
 A chat becomes a **task** when `POST /api/ai/chat` carries `deliverables`, a list of up to 12 required parts of the answer (`["Latest price", "DCF", "Risk note"]`).
 
+## In the chat
+
+Under the composer, **Required parts** takes the deliverables, one per line (up to 12). A question sent with them is saved as a task, and a checklist card shows each part as done, reported missing or not yet reported while the run goes on. **Saved tasks** lists your tasks with their status, rounds, tool calls and last update (UTC), and offers **Resume** and **Delete**. Resume continues from the last checkpoint on the server; the chat then shows only the continuation, since the saved conversation stays on the server. The resumed run uses the default model and persona, not the ones chosen for the original question.
+
 ## What a task adds
 
 - **Checklist.** The agent ends its answer with `[done] <deliverable>` or `[missing] <deliverable> - <reason>` per line. A deliverable the answer leaves out counts as missing.
@@ -24,7 +28,7 @@ Statuses: `running`, `complete`, `incomplete`, `failed`, `cancelled`. A user kee
 
 ## Not covered yet
 
-The web UI does not show tasks, and the local-model VRAM benchmark from #5 is not built. `cmd/agent-eval` ([agent evaluation](agent-evaluation.md)) is its base.
+The local-model VRAM benchmark from #5 is not built. `cmd/agent-eval` ([agent evaluation](agent-evaluation.md)) is its base.
 
 ## Agent tools by role
 

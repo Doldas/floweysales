@@ -349,6 +349,9 @@ func (e *Engine) validateTeam(ctx context.Context, t *storage.SavedTeam) error {
 	if len(t.Members) == 0 || len(t.Members) > ai.MaxTeamMembers {
 		return fmt.Errorf("a team has 1 to %d members", ai.MaxTeamMembers)
 	}
+	if err := savedLimits(*t).validate(); err != nil {
+		return err
+	}
 	seen := map[string]bool{}
 	for _, m := range t.Members {
 		if persona.ByID(m.Persona) == nil {

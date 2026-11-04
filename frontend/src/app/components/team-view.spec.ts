@@ -89,3 +89,10 @@ test('a member\'s tool calls keep input, output, timing and who made them, match
   assert.equal(s.members[1].steps[0].error, 'filing not found');
   assert.equal(s.members[1].steps[0].actor, 'Beta', 'a call is traced to the member that made it');
 });
+
+test('the budget event is kept on the state, and a run without one has none', () => {
+  const summary = { requests: 3, prompt_tokens: 900, completion_tokens: 100, cost: null, unknown_requests: 1, tool_calls: 2, stopped_by: "the team's limit of 1000 tokens (1000 used)" };
+  const s = run([{ type: 'member_start', agent: 'a', name: 'Alpha' }, { type: 'budget', budget: summary }, { type: 'done' }]);
+  assert.deepEqual(s.budget, summary);
+  assert.equal(run([{ type: 'member_start', agent: 'a', name: 'Alpha' }, { type: 'done' }]).budget, undefined);
+});

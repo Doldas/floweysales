@@ -164,7 +164,7 @@ export class MarketService {
   deleteAdminProfile(id: number): Observable<unknown> { return this.http.delete(`/api/admin/ai/profiles/${id}`); }
   /** The user's saved agent teams. */
   getSavedTeams(): Observable<{ teams: SavedTeam[]; max: number }> { return this.http.get<{ teams: SavedTeam[]; max: number }>('/api/ai/teams'); }
-  saveTeam(t: { id?: number; name: string; chair: boolean; members: SavedTeamMember[] }): Observable<{ id: number }> {
+  saveTeam(t: { id?: number; name: string; chair: boolean; members: SavedTeamMember[]; max_tokens?: number | null; max_cost?: number | null; max_tool_calls?: number | null }): Observable<{ id: number }> {
     return t.id ? this.http.put<{ id: number }>(`/api/ai/teams/${t.id}`, t) : this.http.post<{ id: number }>('/api/ai/teams', t);
   }
   deleteTeam(id: number): Observable<unknown> { return this.http.delete(`/api/ai/teams/${id}`); }

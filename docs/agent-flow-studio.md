@@ -133,6 +133,10 @@ The panel shows the same example for each new secret.
 
 Admin API (SYS_ADMIN): `GET|POST /api/admin/flow-event-adapters`, `PUT|DELETE /api/admin/flow-event-adapters/{id}` (`name`, `payload_pointer`, `rate_per_minute`, `enabled`), `POST /api/admin/flow-event-adapters/{id}/rotate-secret`, `GET /api/admin/flow-event-adapters/{id}/deliveries` (latest 50).
 
+## Model profile and team for agent nodes
+
+An agent node can pick a **model profile** (`profile_id`) instead of a raw model name, and can **delegate to one of your saved teams** (`team_id`). Both are your choice, not an administrator's; the profiles are the ones the administrator prepared. See [Flow agent nodes](agent-personas.md#flow-agent-nodes) for the rules: the team is pinned, its members get research tools only, a disabled profile fails the node, and the choices are checked when the flow is saved and again at every run.
+
 ## Research tools for agent nodes
 
 A SYS_ADMIN can let an agent node gather its own evidence instead of answering from its prompt alone. In the node's settings, **Research tools** lists the grantable tools. Tick up to 8 and optionally set **Max tool calls** (1–16; default 6).

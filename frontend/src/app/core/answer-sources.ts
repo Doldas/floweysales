@@ -3,6 +3,8 @@
 export interface AnswerSource {
   id: string; tool: string; url?: string; title?: string; query?: string; class: string; access: 'listed' | 'read' | string;
   document_id?: string; published_at?: string; retrieved_at?: string; excerpt?: string;
+  /** The team member who retrieved it, when a delegated team did. */
+  member?: string;
 }
 export interface AnswerFinding { kind: string; sentence: string; source?: string; detail: string }
 
@@ -21,6 +23,11 @@ export function findingLabel(kind: string): string {
 /** Sources the agent opened, and search results it only saw as a title and snippet. */
 export function splitSources(list: readonly AnswerSource[]): { read: AnswerSource[]; listed: AnswerSource[] } {
   return { read: list.filter(s => s.access === 'read'), listed: list.filter(s => s.access !== 'read') };
+}
+
+/** Who retrieved a source, for the line under its title: a delegated team's member is named. */
+export function sourceOrigin(s: Pick<AnswerSource, 'member'>): string {
+  return s.member ? `retrieved by team member ${s.member}` : '';
 }
 
 /** One line for the panel header. A clean audit says what was checked, never that the answer is true. */

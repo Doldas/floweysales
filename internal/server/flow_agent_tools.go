@@ -88,7 +88,7 @@ func validateFlowAgentTools(n flowNode) error {
 		}
 		seen[name] = true
 	}
-	if n.MaxToolCalls < 0 || n.MaxToolCalls > maxFlowAgentToolCalls || (n.MaxToolCalls > 0 && len(n.Tools) == 0) {
+	if n.MaxToolCalls < 0 || n.MaxToolCalls > maxFlowAgentToolCalls || (n.MaxToolCalls > 0 && len(n.Tools) == 0 && n.TeamID == 0) {
 		return fmt.Errorf("agent %s: tool-call budget must be 1–%d and needs granted tools", n.ID, maxFlowAgentToolCalls)
 	}
 	return nil
@@ -97,6 +97,12 @@ func validateFlowAgentTools(n flowNode) error {
 // flowAgentOptions applies the node's grant to the agent run. Without a
 // grant the agent has no tools at all.
 func flowAgentOptions(n flowNode, systemPrompt string) ai.AgentOptions {
+	if n.TeamID != 0 {
+		// The node's only addition is its own team; the team's members get the
+		// granted research tools, and the node's own budget counts the delegation.
+		systemPrompt += fmt.Sprintf("\nYou have a saved team of research personas. Hand the question to it once with delegate_to_team (team %d); its answers are model output, so attribute them to the members by name.", n.TeamID)
+		n.Tools = append(append([]string(nil), n.Tools...), ai.DelegateToolName)
+	}
 	if len(n.Tools) == 0 {
 		if n.RequireGrounding {
 			// Without tools the input is the only evidence, typically rows

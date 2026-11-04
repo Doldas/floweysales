@@ -22,7 +22,7 @@ import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES, LEADERBOARD
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 import { formatUtcDateTime } from '../ui/datetime';
 
-interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'|'watchlist_quotes'|'technical_scan'|'fundamentals'|'sec_filings'|'news'|'leaderboard'|'screen'|'only_new'|'report_table'|'notify'|'insider_activity'|'macro_regime'|'portfolio_check'|'corporate_events'|'wealth_plan'|'backtest'; label:string; symbols?:string; universe?:string; strategy?:string; provider?:string; rule?:string; sort_by?:string; limit?:number; columns?:string; title?:string; key_fields?:string; cooldown_hours?:number; lookback_days?:number; forms?:string; kinds?:string; years?:number; channel?:'email'|'webhook'; subject?:string; skip_empty?:boolean; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number;persona?:string;require_grounding?:boolean; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
+interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'|'watchlist_quotes'|'technical_scan'|'fundamentals'|'sec_filings'|'news'|'leaderboard'|'screen'|'only_new'|'report_table'|'notify'|'insider_activity'|'macro_regime'|'portfolio_check'|'corporate_events'|'wealth_plan'|'backtest'; label:string; symbols?:string; universe?:string; strategy?:string; provider?:string; rule?:string; sort_by?:string; limit?:number; columns?:string; title?:string; key_fields?:string; cooldown_hours?:number; lookback_days?:number; forms?:string; kinds?:string; years?:number; channel?:'email'|'webhook'; subject?:string; skip_empty?:boolean; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; profile_id?:number; team_id?:number; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number;persona?:string;require_grounding?:boolean; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
 interface FlowEdge { from:string; to:string; from_port?:string; to_port?:string }
 interface FunctionDef { id:number; name:string; graph?:unknown }
 interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
@@ -162,13 +162,31 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
        }
        <label>Label <input [ngModel]="n.label" (ngModelChange)="updateNode('label',$event)" maxlength="100"></label>
        @if(n.type==='agent') {
-        <label>AI Model
+        @if(modelProfiles().length){
+         <label>Model profile
+          <select [ngModel]="n.profile_id||0" (ngModelChange)="setProfile(n.id,+$event)">
+           <option [ngValue]="0">None (use the model below)</option>
+           @for(p of modelProfiles();track p.id){<option [ngValue]="p.id">{{p.name}}{{p.is_default?' (default)':''}}</option>}
+          </select>
+         </label>
+         <p class="muted">Profiles are prepared by an administrator. If the profile is later disabled or deleted, this node fails with a message instead of using another model.</p>
+        }
+        @if(!n.profile_id){<label>AI Model
          <select [ngModel]="n.model||''" (ngModelChange)="updateNodeFor(n.id,'model',$event)">
           <option value="">System default ({{defaultAIModel()||'configured by administrator'}})</option>
           @for(model of availableModels();track model.model){<option [value]="model.model">{{model.label}} · {{model.model}}</option>}
          </select>
         </label>
-        <p class="muted">Leave blank to use the system default. Overrides use the configured AI provider endpoint; the named model must exist there.</p>
+        <p class="muted">Leave blank to use the system default. Overrides use the configured AI provider endpoint; the named model must exist there.</p>}
+        @if(savedTeams().length){
+         <label>Delegate to a saved team
+          <select [ngModel]="n.team_id||0" (ngModelChange)="setTeam(n.id,+$event)">
+           <option [ngValue]="0">None</option>
+           @for(t of savedTeams();track t.id){<option [ngValue]="t.id">{{t.name}}</option>}
+          </select>
+         </label>
+         <p class="muted">The agent hands its input to your team once, and cites the members by name. The team's members get research tools only, never your personal data. Its model profiles must support tools.</p>
+        }
         <label>Output format <select [ngModel]="n.output_mode||'markdown'" (ngModelChange)="updateNode('output_mode',$event)">
           <option value="markdown">Markdown / Default</option><option value="json">JSON only (strict validation)</option>
         </select></label>
@@ -977,6 +995,8 @@ export class FlowStudioComponent {
  readonly functions=signal<(FunctionDef&PublishState)[]>([]);
  readonly agentTools=signal<GrantableTool[]>([]);
  readonly personas=signal<{id:string;name:string;tagline:string}[]>([]);
+ readonly modelProfiles=signal<{id:number;name:string;is_default:boolean}[]>([]);
+ readonly savedTeams=signal<{id:number;name:string}[]>([]);
  readonly toolLimits=signal({max_tools:8,max_tool_calls:16,default_tool_calls:6});
  readonly toolLabel=toolLabel;
  readonly describeToolCall=describeToolCall;
@@ -1196,7 +1216,7 @@ export class FlowStudioComponent {
  constructor(){
   // Load the revision list of the selected call node's target for its pin selector.
   effect(()=>{const n=this.selectedNode();if(n?.type==='flow'&&n.flow_id)void this.loadTargetRevisions('flow',n.flow_id);if(n?.type==='function'&&n.function_id)void this.loadTargetRevisions('function',n.function_id)});
-  this.resetGraphHistory();this.savedSnapshot.set(this.currentSnapshot());void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN'){void this.loadFunctions();void this.loadAgentTools()}void this.loadModels();void this.loadPersonas();void this.loadProviders();
+  this.resetGraphHistory();this.savedSnapshot.set(this.currentSnapshot());void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN'){void this.loadFunctions();void this.loadAgentTools()}void this.loadModels();void this.loadPersonas();void this.loadChoices();void this.loadProviders();
     effect(()=>{
       const current=JSON.stringify(this.graph());
       if(current===this.lastGraphVersion||this.dragHistoryStart!==null)return;
@@ -1442,6 +1462,12 @@ export class FlowStudioComponent {
  addSubflow(){const n=this.graph().nodes;const id='flow-'+Date.now().toString(36);this.graph.update(g=>({...g,nodes:[...g.nodes,{id,type:'flow',label:'Call flow',flow_id:0,x:260+(n.length%4)*140,y:40+Math.floor(n.length/4)*100}]}));this.chosen.set(id)}
  updateFlowReference(target:number){this.graph.update(g=>({...g,nodes:g.nodes.map(n=>{if(n.id!==this.chosen())return n;const next={...n,flow_id:target};delete next.flow_revision;return next})}))}
  async loadPersonas(){try{const data=await this.request('/api/ai/personas');this.personas.set(data.personas||[])}catch{/* The character picker stays hidden. */}}
+ async loadChoices(){
+   try{const data=await this.request('/api/ai/profiles');this.modelProfiles.set(data.profiles||[])}catch{/* The profile picker stays hidden. */}
+   try{const data=await this.request('/api/ai/teams');this.savedTeams.set(data.teams||[])}catch{/* The team picker stays hidden. */}
+ }
+ setProfile(id:string,value:number){this.graph.update(g=>({...g,nodes:g.nodes.map(x=>{if(x.id!==id)return x;const {profile_id:_p,model:_m,...rest}=x;return value?{...rest,profile_id:value}:rest})}))}
+ setTeam(id:string,value:number){this.graph.update(g=>({...g,nodes:g.nodes.map(x=>{if(x.id!==id)return x;const {team_id:_t,...rest}=x;return value?{...rest,team_id:value}:rest})}))}
  setPersona(id:string,value:string){this.graph.update(g=>({...g,nodes:g.nodes.map(x=>{if(x.id!==id)return x;const {persona:_p,...rest}=x;return value?{...rest,persona:value}:rest})}))}
  async loadAgentTools(){try{const data=await this.request('/api/admin/flow-agent-tools');this.agentTools.set(data.tools||[]);this.toolLimits.set({max_tools:data.max_tools,max_tool_calls:data.max_tool_calls,default_tool_calls:data.default_tool_calls})}catch{/* Tool grants stay hidden when the catalogue is unavailable. */}}
  toggleAgentTool(id:string,name:string){

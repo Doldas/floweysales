@@ -61,6 +61,8 @@ type Event struct {
 	// and what the mechanical citation check found in the final answer.
 	Sources []sources.Source  `json:"sources,omitempty"`
 	Audit   []sources.Finding `json:"audit,omitempty"`
+	// Budget accompanies a "budget" event at the end of a team run.
+	Budget *BudgetSummary `json:"budget,omitempty"`
 }
 
 // AgentOptions tunes a run.
@@ -224,8 +226,23 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	// notices; the shared client is copied so concurrent runs do not mix them.
 	own := *client
 	own.Notice = func(text string) { emit(Event{Type: "notice", Content: text, Severity: "warning", Code: "notice"}) }
+	budget := budgetFrom(ctx)
+	if budget != nil {
+		own.OnUsage = func(model string, u *Usage) {
+			budget.Record(model, u)
+			if text := budget.BlindSpot(); text != "" {
+				emit(Event{Type: "notice", Severity: "warning", Code: "usage_unknown", Content: text})
+			}
+		}
+	}
 	client = &own
 	emit(Event{Type: "run_start", Model: client.Model})
+	// stopForBudget ends the run, clearly, when the team's budget is used up.
+	stopForBudget := func(step int, err error) error {
+		checkpoint(step, TaskIncomplete)
+		emit(Event{Type: "error", Code: "budget_reached", Severity: "warning", Error: err.Error() + ". The answer so far may be incomplete."})
+		return err
+	}
 
 	emptyReplies, nudges := 0, 0
 	for step := 1; step <= opts.MaxSteps; step++ {
@@ -234,6 +251,11 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 			// the loop would then cut off without one.
 			tools = nil
 			messages = append(messages, Message{Role: "user", Content: "The research budget is used up. Answer now with the results you have, and say what is missing."})
+		}
+		if budget != nil {
+			if err := budget.Check(); err != nil {
+				return stopForBudget(step-1, err)
+			}
 		}
 		roundEmit := emit
 		var held strings.Builder
@@ -345,6 +367,15 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 				messages = append(messages, refusal)
 				emit(Event{Type: "transcript_message", Message: &refusal})
 				continue
+			}
+			if budget != nil {
+				if err := budget.ReserveToolCall(); err != nil {
+					// Every tool call needs a reply; the check of the next round ends the run.
+					refusal := Message{Role: "tool", ToolCallID: tc.ID, Content: `{"error":"the team's tool-call limit was reached"}`}
+					messages = append(messages, refusal)
+					emit(Event{Type: "transcript_message", Message: &refusal})
+					continue
+				}
 			}
 			toolCalls++
 			callID := tc.ID
