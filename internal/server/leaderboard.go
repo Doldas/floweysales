@@ -325,6 +325,14 @@ func leaderboardGrade(score float64) string {
 // scoreLeaderboard ranks metric rows for a strategy. Rows with an error are
 // left out; the caller reports them separately.
 func scoreLeaderboard(rows []map[string]any, strategy leaderboardStrategy) []map[string]any {
+	return scoreLeaderboardDetailed(rows, strategy, false)
+}
+
+// scoreLeaderboardDetailed also attaches a "breakdown" to every entry when
+// explain is set: per factor its weight, score, caps and contribution to the
+// total, and per metric its value, percentile and weight. Scores are the same
+// either way.
+func scoreLeaderboardDetailed(rows []map[string]any, strategy leaderboardStrategy, explain bool) []map[string]any {
 	ranked := []map[string]any{}
 	for _, row := range rows {
 		if _, failed := row["error"]; !failed {
@@ -335,12 +343,22 @@ func scoreLeaderboard(rows []map[string]any, strategy leaderboardStrategy) []map
 	for i := range ranked {
 		factorScores[i] = map[string]float64{}
 	}
+	metricDetail := make([]map[string][]map[string]any, len(ranked))
+	for i := range ranked {
+		metricDetail[i] = map[string][]map[string]any{}
+	}
 	for _, factor := range leaderboardFactors {
 		sums, weights := make([]float64, len(ranked)), make([]float64, len(ranked))
 		for _, m := range leaderboardFactorMetrics[factor] {
 			for i, p := range percentiles(ranked, m.field, m.higher) {
 				sums[i] += p * m.weight
 				weights[i] += m.weight
+				if explain {
+					metricDetail[i][factor] = append(metricDetail[i][factor], map[string]any{
+						"field": m.field, "label": leaderboardMetricInfo[m.field].Label, "value": ranked[i][m.field],
+						"percentile": math.Round(p), "weight": m.weight, "higher_is_better": m.higher,
+					})
+				}
 			}
 		}
 		for i := range ranked {
@@ -353,20 +371,29 @@ func scoreLeaderboard(rows []map[string]any, strategy leaderboardStrategy) []map
 	for i, row := range ranked {
 		fs := factorScores[i]
 		// Hard caps keep a relative ranking honest about absolute problems.
-		capFactor := func(factor string, max float64) {
+		type capNote struct {
+			from, to float64
+			reason   string
+		}
+		caps := map[string]capNote{}
+		capFactor := func(factor string, max float64, reason string) {
 			if v, ok := fs[factor]; ok {
 				fs[factor] = math.Min(v, max)
+				if v > max {
+					caps[factor] = capNote{from: v, to: max, reason: reason}
+				}
 			}
 		}
 		if eps, ok := row["eps_ttm"].(float64); ok && eps <= 0 {
-			capFactor("value", 15)
+			capFactor("value", 15, leaderboardCapRules[0])
 		}
 		if rsi, ok := row["rsi14"].(float64); ok && rsi >= 75 {
-			capFactor("timing", 20)
+			capFactor("timing", 20, leaderboardCapRules[1])
 		}
 		if above, ok := row["above_sma200"].(bool); ok && !above {
-			capFactor("momentum", 35)
+			capFactor("momentum", 35, leaderboardCapRules[2])
 		}
+		factorsOut := []map[string]any{}
 		score, present := 0.0, 0
 		entry := map[string]any{"symbol": row["symbol"]}
 		for _, factor := range leaderboardFactors {
@@ -378,6 +405,17 @@ func scoreLeaderboard(rows []map[string]any, strategy leaderboardStrategy) []map
 				v = leaderboardMissingFactor
 			}
 			score += v * strategy.Weights[factor]
+			if explain {
+				f := map[string]any{"factor": factor, "weight": strategy.Weights[factor], "missing": !ok, "score": math.Round(v),
+					"contribution": math.Round(v*strategy.Weights[factor]*10) / 10, "metrics": metricDetail[i][factor]}
+				if c, capped := caps[factor]; capped {
+					f["capped_from"], f["cap_reason"] = math.Round(c.from), c.reason
+				}
+				factorsOut = append(factorsOut, f)
+			}
+		}
+		if explain {
+			entry["breakdown"] = map[string]any{"factors": factorsOut, "missing_factor_score": leaderboardMissingFactor, "total": math.Round(score*10) / 10}
 		}
 		score = math.Round(score*10) / 10
 		entry["score"] = score
@@ -731,7 +769,7 @@ func (e *Engine) registerLeaderboardRoutes() {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"universe": universe, "strategy": strategy.ID, "provider": provider.String(), "as_of": asOf,
 			"generated_at": time.Now().UTC().Format(time.RFC3339),
-			"rows":         scoreLeaderboard(rows, strategy), "unranked": splitLeaderboardRows(rows),
+			"rows":         scoreLeaderboardDetailed(rows, strategy, q.Get("explain") == "1"), "unranked": splitLeaderboardRows(rows),
 			"universes": leaderboardUniverses, "strategies": leaderboardStrategies,
 			"provenance": leaderboardProvenance(strategy, universe, symbols, rows),
 		})

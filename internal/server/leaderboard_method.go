@@ -45,17 +45,56 @@ func shortHash(v any) string {
 	return hex.EncodeToString(sum[:])[:16]
 }
 
+// leaderboardMetricInfo says in plain words what each metric is, for the
+// methodology panel; every metric in leaderboardFactorMetrics has one.
+var leaderboardMetricInfo = map[string]struct{ Label, Note string }{
+	"earnings_yield_pct":   {"Earnings yield", "Trailing twelve-month earnings per share divided by the price: the inverse of P/E."},
+	"peg":                  {"PEG ratio", "P/E divided by earnings growth. Lower means growth is cheaper."},
+	"operating_margin_pct": {"Operating margin", "Operating income as a share of revenue over the last four reported quarters."},
+	"net_margin_pct":       {"Net margin", "Net income as a share of revenue over the last four reported quarters."},
+	"fcf_margin_pct":       {"Free cash flow margin", "Free cash flow as a share of revenue over the last four reported quarters."},
+	"gross_margin_pct":     {"Gross margin", "Gross profit as a share of revenue."},
+	"profitable_quarters":  {"Profitable quarters", "How many of the recent reported quarters had positive net income."},
+	"revenue_growth_pct":   {"Revenue growth", "Trailing twelve-month revenue against the twelve months before."},
+	"eps_growth_pct":       {"EPS growth", "Trailing twelve-month earnings per share against the twelve months before."},
+	"revenue_accel_pct":    {"Revenue acceleration", "Whether revenue growth is speeding up or slowing down."},
+	"momentum_12_1_pct":    {"12-1 month momentum", "Price change over twelve months, skipping the latest month to avoid short-term reversal."},
+	"change_3m_pct":        {"3-month change", "Price change over the last three months."},
+	"trend_points":         {"Trend confirmation", "Points for being above the 200-day average, a bullish EMA stack and a bullish MACD."},
+	"pullback_fit":         {"Pullback fit", "How well the distance from the 52-week high fits a healthy dip (a modest pullback scores best)."},
+	"rsi_fit":              {"RSI fit", "How close RSI(14) is to a calm zone; overbought readings score low."},
+	"volatility_pct":       {"Volatility", "Annualized volatility of daily returns. Lower is better."},
+	"max_drawdown_pct":     {"Maximum drawdown", "The deepest peak-to-trough fall over the year of prices. A shallower fall is better."},
+}
+
+// leaderboardFactorInfo says what question each factor answers.
+var leaderboardFactorInfo = map[string]struct{ Label, Question string }{
+	"value":    {"Value", "Is the price low compared with earnings?"},
+	"quality":  {"Quality", "Does the business keep a healthy share of its sales as profit and cash?"},
+	"growth":   {"Growth", "Are sales and earnings growing, and is growth speeding up?"},
+	"momentum": {"Momentum", "Has the price been trending up, and is the trend confirmed?"},
+	"timing":   {"Entry timing", "Is the price pulled back from its high without being overbought?"},
+	"risk":     {"Low risk", "Is the price calm, with shallow falls?"},
+}
+
 // leaderboardMethodology describes the scoring rules a strategy was ranked with.
 func leaderboardMethodology(strategy leaderboardStrategy) map[string]any {
 	metrics := map[string][]map[string]any{}
 	for _, f := range leaderboardFactors {
 		for _, m := range leaderboardFactorMetrics[f] {
-			metrics[f] = append(metrics[f], map[string]any{"field": m.field, "higher_is_better": m.higher, "weight": m.weight})
+			info := leaderboardMetricInfo[m.field]
+			metrics[f] = append(metrics[f], map[string]any{"field": m.field, "label": info.Label, "note": info.Note, "higher_is_better": m.higher, "weight": m.weight})
 		}
 	}
+	factorInfo := map[string]map[string]string{}
+	for _, f := range leaderboardFactors {
+		factorInfo[f] = map[string]string{"label": leaderboardFactorInfo[f].Label, "question": leaderboardFactorInfo[f].Question}
+	}
 	body := map[string]any{
-		"version": leaderboardMethodologyVersion, "strategy": strategy.ID, "weights": strategy.Weights,
-		"factors": leaderboardFactors, "metrics": metrics, "caps": leaderboardCapRules, "missing_factor_score": leaderboardMissingFactor,
+		"version": leaderboardMethodologyVersion, "strategy": strategy.ID, "weights": strategy.Weights, "factor_info": factorInfo,
+		"scale":        "Each metric is turned into a percentile (0-100) within this list; a factor is the weighted average of its metrics' percentiles; the score is the weighted average of the factors.",
+		"missing_data": "A metric a company lacks is skipped. A factor with no data at all scores 40, below the median: unknown is not good.",
+		"factors":      leaderboardFactors, "metrics": metrics, "caps": leaderboardCapRules, "missing_factor_score": leaderboardMissingFactor,
 	}
 	body["hash"] = shortHash(body)
 	return body

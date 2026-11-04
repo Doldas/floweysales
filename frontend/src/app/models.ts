@@ -308,11 +308,36 @@ export interface LeaderboardRow {
   /** Competing explanations, separated by semicolons. */
   alternatives?: string;
   fundamentals_age_days?: number;
+  /** Present when the request asked to explain the score. */
+  breakdown?: LeaderboardBreakdown;
+}
+
+export interface LeaderboardMetricDetail {
+  field: string; label: string; value?: number | boolean | string; percentile: number; weight: number; higher_is_better: boolean;
+}
+export interface LeaderboardFactorDetail {
+  factor: string; weight: number; missing: boolean; score: number; contribution: number;
+  capped_from?: number; cap_reason?: string; metrics?: LeaderboardMetricDetail[];
+}
+export interface LeaderboardBreakdown { factors: LeaderboardFactorDetail[]; missing_factor_score: number; total: number }
+
+/** How a ranking is computed, as the server describes it. */
+export interface LeaderboardMethodMetric { field: string; label: string; note: string; higher_is_better: boolean; weight: number }
+export interface LeaderboardMethodology {
+  version: string; hash: string; strategy?: string;
+  weights?: Record<string, number>;
+  factors?: string[];
+  factor_info?: Record<string, { label: string; question: string }>;
+  metrics?: Record<string, LeaderboardMethodMetric[]>;
+  caps?: string[];
+  missing_factor_score?: number;
+  scale?: string;
+  missing_data?: string;
 }
 
 /** What a ranking was computed with, so it can be reproduced and judged. */
 export interface LeaderboardProvenance {
-  methodology: { version: string; hash: string };
+  methodology: LeaderboardMethodology;
   universe_id: string;
   universe_hash: string;
   inputs_hash: string;

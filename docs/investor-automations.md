@@ -234,10 +234,12 @@ Every ranking (`GET /api/market/leaderboard`, the `get_leaderboard` agent tool) 
 | Field | Meaning |
 | --- | --- |
 | `provenance.methodology` | `version` and `hash` of the factors, metrics, strategy weights, caps and the below-median value for missing factors. Any change to the rules changes the hash. |
+| `provenance.methodology` details | Also the plain-language description the Leaderboard panel shows above the table: `factor_info` (what each factor asks), `metrics` per factor (`label`, `note`, direction, weight), `caps`, `scale` and `missing_data`. |
 | `provenance.universe_hash` | Hash of the symbol list that was ranked. |
 | `provenance.inputs_hash` | Hash of the metric rows the scores came from. Same methodology, universe and inputs hash give the same scores. |
 | `provenance.price_dates` | Newest and oldest price date in the data. |
 | `provenance.disclaimer` | "Research suggestion, not personalized financial advice." Shown under the table. |
+| row `breakdown` | Only with `?explain=1`. Per factor: `weight`, `score`, `contribution` (score x weight; the contributions add up to the row score), `missing`, and `capped_from` with `cap_reason` when a cap applied; per metric: `value`, `percentile`, `weight`, direction. The Markets page always asks for it. |
 | row `confidence`, `confidence_note` | `high`, `medium` or `low` from factor coverage, universe size and input age, with the reason. |
 | row `fundamentals_age_days` | Age of the newest reported quarter at the price date (never the clock). Over 200 days adds the `stale_fundamentals` flag. |
 | row `alternatives` | Up to three competing explanations: a trend that may already be priced in, overbought entry, negative earnings, old fundamentals, and heavily weighted factors that score low or have no data. |

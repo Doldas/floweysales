@@ -37,3 +37,42 @@ test('alternatives and the stale-fundamentals flag', () => {
   assert.deepEqual(alternativeList({}), []);
   assert.equal(flagList({ flags: 'stale_fundamentals' })[0].label, 'Old fundamentals');
 });
+
+import { coverageSummary, metricValue, methodFactors, scoreSum } from './leaderboard-view.ts';
+
+const method = {
+  version: '2026-11-1', hash: 'abc', factors: ['value', 'quality', 'risk'],
+  weights: { value: 0.5, quality: 0.25, risk: 0 },
+  factor_info: { value: { label: 'Value', question: 'Is the price low?' }, quality: { label: 'Quality', question: 'Is it profitable?' }, risk: { label: 'Low risk', question: 'Is it calm?' } },
+  metrics: {
+    value: [{ field: 'earnings_yield_pct', label: 'Earnings yield', note: 'EPS / price', higher_is_better: true, weight: 1 }, { field: 'peg', label: 'PEG ratio', note: 'P/E / growth', higher_is_better: false, weight: 0.6 }],
+    quality: [{ field: 'net_margin_pct', label: 'Net margin', note: '', higher_is_better: true, weight: 1 }],
+  },
+};
+
+test('the methodology lists used factors by weight and names the unused ones', () => {
+  const { used, unused } = methodFactors(method);
+  assert.deepEqual(used.map(f => [f.label, f.weightPct]), [['Value', 50], ['Quality', 25]]);
+  assert.deepEqual(unused, ['Low risk']);
+  assert.deepEqual(used[0].metrics.map(m => [m.label, m.direction, m.shareOfFactorPct]), [['Earnings yield', 'higher is better', 63], ['PEG ratio', 'lower is better', 37]]);
+  assert.deepEqual(methodFactors(undefined), { used: [], unused: [] });
+});
+
+test('the score is shown as a sum that names missing data', () => {
+  const lines = scoreSum({ missing_factor_score: 40, total: 61.5, factors: [
+    { factor: 'value', weight: 0.5, score: 82, contribution: 41, missing: false },
+    { factor: 'quality', weight: 0.25, score: 40, contribution: 10, missing: true },
+    { factor: 'risk', weight: 0, score: 40, contribution: 0, missing: true },
+  ] });
+  assert.deepEqual(lines, ['Value 82 × 50% = 41.0', 'Quality 40 (no data, counted as 40) × 25% = 10.0']);
+  assert.deepEqual(scoreSum(undefined), []);
+});
+
+test('metric values and the coverage line stay honest', () => {
+  assert.equal(metricValue(4.678), '4.68');
+  assert.equal(metricValue(3), '3');
+  assert.equal(metricValue(true), 'true');
+  assert.equal(metricValue(undefined), '–');
+  assert.equal(coverageSummary([{ coverage_pct: 100 }, { coverage_pct: 50 }], 2), '2 ranked, 2 left out for lack of data; 1 have data for all six factors, and the average company has 75% of them.');
+  assert.equal(coverageSummary([], 3), 'None of the 3 companies had enough data to rank.');
+});
