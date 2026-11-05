@@ -78,7 +78,8 @@ summary:hover { background: var(--fs-surface-3); }
 .step-args { color: var(--fs-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; font-size: 0.78rem; }
 .step-actor { color: var(--fs-text-2); font-size: 0.72rem; white-space: nowrap; border: 1px solid var(--fs-border); border-radius: 999px; padding: 0 0.4rem; }
 .step-time { margin-left: auto; color: var(--fs-muted); font-size: 0.72rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.step-body { padding: 0.25rem 0.35rem 0.5rem 1.7rem; display: grid; gap: 0.4rem; min-width: 0; }
+.step-body { padding: 0.25rem 0.35rem 0.5rem 1.7rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.4rem; min-width: 0; }
+.step-body section { min-width: 0; max-width: 100%; }
 .step-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; font-size: 0.72rem; color: var(--fs-muted); }
 .step-meta code { font-size: 0.72rem; }
 .spacer { flex: 1 1 auto; }
@@ -87,7 +88,7 @@ h5 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color
 .out-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 0.2rem; h5 { margin: 0; margin-right: auto; } }
 .find { font-size: 0.74rem; padding: 0.1rem 0.4rem; border: 1px solid var(--fs-border-strong); border-radius: var(--bs-border-radius-sm); background: var(--fs-surface); color: var(--fs-text); min-width: 0; width: 9rem; }
 .step-note { margin: 0; font-size: 0.74rem; color: var(--fs-text-2); }
-.step-pre { margin: 0; max-height: 220px; overflow: auto; font-size: 0.74rem; background: var(--fs-sunken); border: 1px solid var(--fs-border); border-radius: var(--bs-border-radius); padding: 0.5rem 0.6rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.step-pre { margin: 0; min-width: 0; max-width: 100%; max-height: 220px; overflow: auto; font-size: 0.74rem; background: var(--fs-sunken); border: 1px solid var(--fs-border); border-radius: var(--bs-border-radius); padding: 0.5rem 0.6rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .step-pre:not(.is-clamped) { max-height: 60vh; }
 .step-pre.err { color: var(--fs-neg); }
   `],

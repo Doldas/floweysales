@@ -259,11 +259,11 @@ h2 { font-size: 1rem; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; al
 .badge-stance.fits { background: var(--fs-pos-soft); color: var(--fs-pos); }
 .badge-stance.partly, .badge-stance.insufficient_data { background: var(--fs-warn-soft); color: var(--fs-warn); }
 .badge-stance.does_not_fit { background: var(--fs-neg-soft); color: var(--fs-neg); }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: 1rem; align-items: start; }
-.grid .panel { margin-bottom: 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: 1rem; align-items: start; min-width: 0; }
+.grid .panel { margin-bottom: 0; min-width: 0; }
 .chair { border-color: var(--fs-accent); }
 .answer { font-size: 0.9rem; }
-.steps { font-size: 0.78rem; color: var(--fs-muted); summary { cursor: pointer; } ul { margin: 0.3rem 0 0; padding: 0; list-style: none; display: grid; gap: 2px; } .bad { color: var(--fs-neg); } }
+.steps { font-size: 0.78rem; color: var(--fs-muted); min-width: 0; max-width: 100%; summary { cursor: pointer; } ul { margin: 0.3rem 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; min-width: 0; } li { min-width: 0; max-width: 100%; } fs-tool-call { display: block; min-width: 0; max-width: 100%; } .bad { color: var(--fs-neg); } }
   `],
 })
 export class TeamPage {
