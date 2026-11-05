@@ -41,7 +41,7 @@ test('metricTiles signs, tones and absent benchmark', () => {
 });
 
 test('warning text knows every server warning and falls back readably', () => {
-  for (const id of ['survivorship_bias', 'price_index_benchmark', 'thin_fundamentals', 'short_history', 'benchmark_unavailable', 'symbols_unavailable']) {
+  for (const id of ['survivorship_bias', 'price_index_benchmark', 'thin_fundamentals', 'short_history', 'benchmark_unavailable', 'symbols_unavailable', 'slippage_not_modeled']) {
     assert.ok(warningText(id).length > 20, id);
   }
   assert.equal(warningText('odd_one'), 'odd one');
@@ -203,4 +203,14 @@ test('monteCarloParams sends the drawdown limit as a negative and leaves empty o
 
 test('savedLabel names a simulation', () => {
   assert.match(savedLabel({ name: 'Seq risk', kind: 'montecarlo', created_at: '2026-11-05T10:00:00Z' }), /Seq risk · simulation · 2026-11-05/);
+});
+
+test('slippage is sent only when set, for a single run and for a batch', () => {
+  const base = { universe: 'sp500', strategy: 'value', top: 10, rebalance: 'monthly' as const, years: 5 as const };
+  assert.ok(!('slippage_bps' in singleParams(base)));
+  assert.ok(!('slippage_bps' in singleParams({ ...base, slippage: 0 })));
+  assert.equal(singleParams({ ...base, slippage: 10 })['slippage_bps'], '10');
+  const batch = { universes: ['sp500'], periods: ['3'], strategy: 'value', top: 10, rebalance: 'monthly' };
+  assert.ok(!('slippage_bps' in batchParams(batch)));
+  assert.equal(batchParams({ ...batch, slippage: 25 })['slippage_bps'], '25');
 });

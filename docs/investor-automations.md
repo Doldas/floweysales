@@ -159,7 +159,7 @@ not forecasts or price targets and nothing here trades.
 A ranking nobody has tested is a guess, so the leaderboard can replay a
 strategy over the past. On **Markets → Leaderboard** choose *Backtest this
 strategy*, or call
-`GET /api/market/backtest?universe=…&strategy=…&top=10&rebalance=monthly|quarterly&cost_bps=10&years=3|5|10` (or `from=YYYY-MM-DD&to=YYYY-MM-DD`, UTC; the response carries `from`, `to`, `data_start`, `data_end` and a `notice` when the data is shorter than asked)
+`GET /api/market/backtest?universe=…&strategy=…&top=10&rebalance=monthly|quarterly&cost_bps=10&slippage_bps=0&years=3|5|10` (or `from=YYYY-MM-DD&to=YYYY-MM-DD`, UTC; the response carries `from`, `to`, `data_start`, `data_end` and a `notice` when the data is shorter than asked)
 (or `symbols=` with up to 25 tickers; readable by `research.read`).
 
 **Consecutive parts.** A backtest of at least about 1.5 years also returns `segments`: the period cut into three equal consecutive parts, each measured on its own (return per year, volatility, worst drop, Sharpe, and the benchmark's return and the excess when there is a benchmark), with `segment_summary` ("Beat the benchmark in 2 of 3 consecutive parts.") and a `segment_note`. This shows whether a result holds up over time or came from one stretch. It is **not** out-of-sample or walk-forward testing: nothing is fitted on one part and tested on another, and the factors and settings were chosen by someone who had seen the past. Neighbouring parts share their boundary day. A shorter period returns no parts rather than parts too short to mean anything. The parts appear under the chart and in the facts sheet of a saved-run summary.
@@ -187,7 +187,7 @@ date once `top` symbols have a year of prices. Every 21 trading days (63 for
 quarterly) the leaderboard scores the universe exactly as it does today, the
 best `top` companies are held at equal weight, and weights then drift with
 prices until the next rebalance. Each trade costs `cost_bps` per side (default
-10). The benchmark is held in full with no costs: SPY for the US universes,
+10) plus `slippage_bps` per side (0 to 100, default 0), the gap between the closing price and the fill. Both are charged on the traded share of the portfolio, so a strategy that trades more pays more; the first buy-in from cash pays on the whole portfolio. With no slippage the result carries the warning `slippage_not_modeled`. Slippage is a flat assumption, not an estimate from spreads or volume, which this app does not have. The benchmark is held in full with no costs: SPY for the US universes,
 `^OMX` for Sweden and `^STOXX50E` for Europe. Metrics are computed from the
 daily curve: yearly return (CAGR), volatility, Sharpe and Sortino (risk-free
 rate taken as 0), worst peak-to-trough fall, the share of rebalance periods

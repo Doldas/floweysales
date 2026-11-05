@@ -14,6 +14,7 @@ export const WARNING_TEXTS: Record<string, string> = {
   benchmark_unavailable: 'The benchmark could not be loaded, so the strategy is shown without a comparison.',
   symbols_unavailable: 'Some symbols had no price history and were left out of the universe.',
   few_trades: 'Fewer than 30 trades: averages and hit rates are too noisy to say whether the ranking has an edge.',
+  slippage_not_modeled: 'Slippage is zero: every trade is assumed to fill at the closing price. Real fills, especially in thin stocks, are worse, so treat the result as an upper bound.',
   few_periods_drive_result: 'The total return is zero or negative when the three best rebalance periods are left out, so the result leans on a few periods.',
 };
 
@@ -183,14 +184,17 @@ export function sensitivityHeadline(r: Pick<SensitivityResult, 'summary'>): stri
 /** Query parameters of a single backtest; a custom range replaces the preset length. */
 export function singleParams(p: BacktestParams): Record<string, string> {
   const params: Record<string, string> = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance };
+  if (p.slippage) params['slippage_bps'] = String(p.slippage);
   if (p.from) { params['from'] = p.from; if (p.to) params['to'] = p.to; } else params['years'] = String(p.years || 5);
   if (p.symbols?.length) params['symbols'] = p.symbols.join(',');
   else params['universe'] = p.universe;
   return params;
 }
 
-export function batchParams(p: { universes: string[]; periods: string[]; strategy: string; top: number; rebalance: string }): Record<string, string> {
-  return { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance, universes: p.universes.join(','), periods: p.periods.join(',') };
+export function batchParams(p: { universes: string[]; periods: string[]; strategy: string; top: number; rebalance: string; slippage?: number }): Record<string, string> {
+  const params: Record<string, string> = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance, universes: p.universes.join(','), periods: p.periods.join(',') };
+  if (p.slippage) params['slippage_bps'] = String(p.slippage);
+  return params;
 }
 
 export function sensitivityParams(p: BacktestParams): Record<string, string> {

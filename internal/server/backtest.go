@@ -35,6 +35,7 @@ type backtestRequest struct {
 	top        int
 	rebalance  int // trading days
 	costBps    float64
+	slippage   float64 // bps per side on top of costBps
 	years      int
 	from, to   time.Time // custom UTC window; zero when years is used
 	provider   market.Provider
@@ -126,6 +127,11 @@ func (e *Engine) parseBacktestQuery(q url.Values) (backtestRequest, error) {
 			return req, badRequest{errors.New("cost_bps must be a number from 0 to 100")}
 		}
 	}
+	if raw := q.Get("slippage_bps"); raw != "" {
+		if req.slippage, err = strconv.ParseFloat(raw, 64); err != nil || req.slippage < 0 || req.slippage > 100 {
+			return req, badRequest{errors.New("slippage_bps must be a number from 0 to 100")}
+		}
+	}
 	switch q.Get("years") {
 	case "", "3":
 	case "5", "10":
@@ -153,7 +159,7 @@ func (e *Engine) parseBacktestQuery(q url.Values) (backtestRequest, error) {
 func backtestKey(req backtestRequest) string {
 	sorted := append([]string(nil), req.symbols...)
 	sort.Strings(sorted)
-	return fmt.Sprintf("%s|%s|%s|%s|%d|%s|%g|%d", req.provider, strings.Join(sorted, ","), req.strategy.ID, req.benchmark, req.top, req.rebalLabel, req.costBps, req.years) + "|" + req.from.Format(strategyDateLayout) + "|" + req.to.Format(strategyDateLayout)
+	return fmt.Sprintf("%s|%s|%s|%s|%d|%s|%g|%g|%d", req.provider, strings.Join(sorted, ","), req.strategy.ID, req.benchmark, req.top, req.rebalLabel, req.costBps, req.slippage, req.years) + "|" + req.from.Format(strategyDateLayout) + "|" + req.to.Format(strategyDateLayout)
 }
 
 // leaderboardScorer ranks the symbols exactly as the leaderboard does, from
@@ -249,7 +255,7 @@ func (e *Engine) runBacktest(ctx context.Context, req backtestRequest) (backtest
 	if req.years > 0 {
 		start = time.Now().UTC().AddDate(-req.years, 0, 0)
 	}
-	cfg := backtest.Config{Start: start, End: end, TopN: req.top, RebalanceDays: req.rebalance, CostBps: req.costBps}
+	cfg := backtest.Config{Start: start, End: end, TopN: req.top, RebalanceDays: req.rebalance, CostBps: req.costBps, SlippageBps: req.slippage}
 	result, err := backtest.Run(cfg, series, fin, bench, e.leaderboardScorer(req.strategy))
 	if err != nil {
 		return backtestResponse{}, badRequest{err}
