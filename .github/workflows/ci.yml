@@ -239,7 +239,7 @@ jobs:
         run: |
           docker compose -f compose.yml config --quiet
           docker compose -f compose.deploy.yml config --quiet
-          bash -n scripts/auto-update.sh scripts/install-auto-update.sh
+          bash -n scripts/auto-update.sh scripts/install-auto-update.sh scripts/fetch-liquibase-jdbc.sh
       - name: Test host updater (backup, migrate, restart, rollback) with a stub engine
         run: bash scripts/test-auto-update.sh
       - name: Build production application image
