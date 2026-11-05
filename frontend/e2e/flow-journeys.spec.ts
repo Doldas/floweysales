@@ -28,7 +28,7 @@ test.describe('Flow Studio journeys and UX regression', () => {
     await expect(studio.getByLabel('Select flow for history').locator('option:checked'))
       .toHaveText('Filing summary');
 
-    const completed = studio.locator('details.flow-run').filter({ has: studio.locator('summary', { hasText: '#41' }) });
+    const completed = studio.locator('details.flow-run').filter({ has: page.locator('summary', { hasText: '#41' }) });
     await expect(completed).toContainText(/Success/i);
     await completed.locator('summary').click();
     await completed.getByRole('button', { name: 'Inspect nodes' }).click();
@@ -45,7 +45,7 @@ test.describe('Flow Studio journeys and UX regression', () => {
     await expect(studio.getByLabel('Select flow for history').locator('option:checked'))
       .toHaveText('Daily risk screen');
 
-    const failed = studio.locator('details.flow-run').filter({ has: studio.locator('summary', { hasText: '#52' }) });
+    const failed = studio.locator('details.flow-run').filter({ has: page.locator('summary', { hasText: '#52' }) });
     await expect(failed).toContainText(/Failed/i);
     await failed.locator('summary').click();
     await expect(failed.locator('[role="alert"]')).toContainText('Execution failed');
