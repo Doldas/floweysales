@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  capabilityLabels, compareVersions, compatibilityBadge, isDomainProvider, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt,
+  capabilityLabels, compareVersions, compatibilityBadge, isDomainProvider, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt, updateAllHeadline,
   type InstalledPlugin, type PluginManifest, type PluginOverview, type StorePlugin,
 } from './plugin-store.ts';
 
@@ -109,4 +109,11 @@ test('compatibility is stated in words and never inferred from being installed o
   // A running plugin that is incompatible is not reported as healthy, even with an update on offer.
   assert.equal(pluginStatus(row({ ...base, status: 'incompatible' }, { update_available: true, latest_version: '1.1.0' })).tone, 'warn');
   assert.equal(pluginStatus(row({ ...base, status: 'compatible' })).label, 'Installed · running');
+});
+
+test('update all reports every plugin and says the ones not updated keep their version', () => {
+  const r = (outcome: 'updated' | 'skipped' | 'failed') => ({ id: outcome, name: outcome, from: '1.0.0', to: '1.1.0', outcome, detail: '' });
+  const text = updateAllHeadline([r('updated'), r('failed'), r('skipped'), r('updated')]);
+  assert.match(text, /2 updated, 1 skipped, 1 failed/);
+  assert.match(text, /keep their installed version and settings/);
 });

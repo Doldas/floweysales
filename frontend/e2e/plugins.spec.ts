@@ -33,3 +33,16 @@ test('Settings → Updates previews each installed plugin against the new releas
   const finnhub = preview.getByRole('listitem', { name: 'Finnhub compatibility with the new version' });
   await expect(finnhub).toContainText('After: Incompatible');
 });
+
+test('Update all reports each plugin and keeps going after one fails', async ({ page }) => {
+  await page.route('**/api/admin/plugins/install', route =>
+    route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'Download failed.' }) }));
+  await open(page, 'settings');
+  await page.getByRole('tab', { name: /Plugins/ }).or(page.getByRole('button', { name: /Plugins/ })).first().click();
+  await page.getByRole('button', { name: /Update all/ }).click();
+
+  const summary = page.getByRole('region', { name: /Update all finished/ });
+  await expect(summary).toContainText('0 updated, 0 skipped, 1 failed');
+  const yahoo = summary.getByRole('listitem', { name: 'Yahoo Finance update result' });
+  await expect(yahoo).toContainText('1.0.0 → 1.1.0: Failed. Download failed. The installed version was kept.');
+});

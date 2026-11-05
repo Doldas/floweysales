@@ -49,7 +49,9 @@ An incompatible plugin is **kept, not run**. FloweySales never removes it, its s
 
 When **Settings → Updates** finds a newer version, it lists every installed plugin with its status **now** and **after** the update, the reason, and the store versions that speak the new protocol. The comparison uses the plugin protocol the new image declares in its `org.floweysales.plugin-protocol` label (the `PLUGIN_PROTOCOL` build argument, kept equal to the backend's protocol by a test). An image without the label is shown as **Unknown** for every plugin rather than assumed compatible, and a protocol-1 plugin is never marked compatible with a protocol-2 release. The preview changes nothing: no plugin is run, downloaded, removed or updated, and each one's binary, settings, data and approvals stay as they are. After the update runs, the status in Settings → Plugins is again established by a handshake.
 
-Not yet covered: minimum and maximum app versions in the manifest, staged updates with configuration rollback, a post-upgrade report, and a per-plugin summary for **Update all**.
+Not yet covered: minimum and maximum app versions in the manifest, staged updates with configuration rollback, and a post-upgrade report.
+
+**Update all** tries each plugin on its own and ends with a per-plugin result (updated, skipped or failed, with the reason). One failure or a terms prompt never stops the others, and a plugin that is not updated keeps its installed version and settings. Incompatible versions are never offered, and the backend refuses them even when called directly.
 
 ### Command line
 
