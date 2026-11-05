@@ -9,9 +9,7 @@ test.describe('Flow Studio journeys and UX regression', () => {
     const studio = page.locator('fse-flow-studio');
     await studio.getByRole('tab', { name: 'My Flows' }).click();
 
-    const flow = studio.locator('.overview-flow-card').filter({
-      has: studio.getByRole('heading', { name: 'Filing summary', exact: true }),
-    });
+    const flow = studio.locator('.overview-flow-card').filter({ hasText: 'Filing summary' });
     await expect(flow).toBeVisible();
     await expect(flow).toContainText('nodes');
     await flow.getByRole('button', { name: 'Edit' }).click();
@@ -42,9 +40,7 @@ test.describe('Flow Studio journeys and UX regression', () => {
     const studio = page.locator('fse-flow-studio');
     await studio.getByRole('tab', { name: 'My Flows' }).click();
 
-    const flow = studio.locator('.overview-flow-card').filter({
-      has: studio.getByRole('heading', { name: 'Daily risk screen', exact: true }),
-    });
+    const flow = studio.locator('.overview-flow-card').filter({ hasText: 'Daily risk screen' });
     await flow.getByRole('button', { name: 'History' }).click();
     await expect(studio.getByLabel('Select flow for history')).toHaveValue('8');
 
@@ -59,9 +55,7 @@ test.describe('Flow Studio journeys and UX regression', () => {
     await open(page, 'flows');
     const studio = page.locator('fse-flow-studio');
     await studio.getByRole('tab', { name: 'My Flows' }).click();
-    await studio.locator('.overview-flow-card').filter({
-      has: studio.getByRole('heading', { name: 'Earnings preview draft', exact: true }),
-    }).getByRole('button', { name: 'Edit' }).click();
+    await studio.locator('.overview-flow-card').filter({ hasText: 'Earnings preview draft' }).getByRole('button', { name: 'Edit' }).click();
 
     await expect(studio.getByLabel('Flow name')).toHaveValue('Earnings preview draft');
     await expect(studio.getByRole('button', { name: 'Save flow' })).toBeVisible();
