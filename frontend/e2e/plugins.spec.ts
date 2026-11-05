@@ -15,3 +15,34 @@ test('Settings → Plugins states compatibility with this FloweySales for each i
   await expect(finnhub).toContainText('Never checked');
   await expect(finnhub.getByRole('button', { name: 'Verify now' })).toBeEnabled();
 });
+
+test('Settings → Updates previews each installed plugin against the new release before anything is approved', async ({ page }) => {
+  await open(page, 'settings');
+  await page.getByRole('tab', { name: /Updates/ }).or(page.getByRole('button', { name: /Updates/ })).first().click();
+
+  const preview = page.getByRole('region', { name: 'Installed plugins and this update' });
+  await expect(preview).toContainText('2 installed plugins: 1 need an update, 1 incompatible. None is removed or updated');
+  await expect(preview).toContainText('the new version speaks 2');
+
+  const yahoo = preview.getByRole('listitem', { name: 'Yahoo Finance compatibility with the new version' });
+  await expect(yahoo).toContainText('Now: Compatible');
+  await expect(yahoo).toContainText('After: Needs update');
+  await expect(yahoo).toContainText('Compatible version: 2.0.0');
+  await expect(yahoo).toContainText('saved settings, data and approvals stay');
+
+  const finnhub = preview.getByRole('listitem', { name: 'Finnhub compatibility with the new version' });
+  await expect(finnhub).toContainText('After: Incompatible');
+});
+
+test('Update all reports each plugin and keeps going after one fails', async ({ page }) => {
+  await page.route('**/api/admin/plugins/install', route =>
+    route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'Download failed.' }) }));
+  await open(page, 'settings');
+  await page.getByRole('tab', { name: /Plugins/ }).or(page.getByRole('button', { name: /Plugins/ })).first().click();
+  await page.getByRole('button', { name: /Update all/ }).click();
+
+  const summary = page.getByRole('region', { name: /Update all finished/ });
+  await expect(summary).toContainText('0 updated, 0 skipped, 1 failed');
+  const yahoo = summary.getByRole('listitem', { name: 'Yahoo Finance update result' });
+  await expect(yahoo).toContainText('1.0.0 → 1.1.0: Failed. Download failed. The installed version was kept.');
+});

@@ -47,6 +47,12 @@ SYS_ADMIN can open **Settings → Updates** to:
   commits and the **Liquibase migration files** the update adds from the
   GitHub compare API. `UPDATE_CHECK_INTERVAL_HOURS` (default 12 in
   `compose.deploy.yml`, 0 = only on click) also checks in the background;
+- see how each **installed plugin** fares with the new version before you
+  approve it (status now and after, reason, compatible store versions). The
+  new image declares its plugin protocol in the
+  `org.floweysales.plugin-protocol` label; without it the result is
+  *Unknown*. Plugins live in the `plugins_data` volume, which an update never
+  touches. See [plugins](plugins.md#compatibility-with-this-floweysales);
 - **Download and install update**: after confirmation the app writes
   `update-control/inbox/request.json`. The host path unit starts the updater,
   which reports each step back to `update-control/status.json`; the page shows
