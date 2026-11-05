@@ -151,6 +151,9 @@ jobs:
       - name: Install headless Chromium for responsive layout tests
         working-directory: frontend
         run: npx playwright install --with-deps chromium
+      - name: Playwright Flow Studio journeys (desktop and phone)
+        working-directory: frontend
+        run: npx playwright test --config playwright.config.ts e2e/flow-journeys.spec.ts
       - name: Test Samsung S24, phones, tablets and desktop in Chromium
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 --directory www/browser >/tmp/floweysales-frontend-server.log 2>&1 &
@@ -172,6 +175,16 @@ jobs:
           done
           npm run smoke:a11y --prefix frontend
           npm run smoke:flow-editor --prefix frontend
+      - name: Upload Playwright journey failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-flow-journeys-${{ github.run_id }}
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 2
       - uses: actions/upload-artifact@v7
         with:
           name: frontend-preview
