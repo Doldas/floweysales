@@ -468,6 +468,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
       <span class="muted" role="status">{{hasUnsavedChanges()?'Unsaved changes':'All changes saved'}}</span>
      <button class="btn btn-sm btn-outline-secondary" (click)="run()" [disabled]="busy()||!selectedId()" [title]="!selectedId()?'Save the flow once to test it':hasUnsavedChanges()?'Runs the graph shown here, including unsaved edits, as a draft test. Nothing is saved.':currentFlow()?.active_revision?'Runs the active revision':'Runs the saved draft'">{{hasUnsavedChanges()?'Test unsaved draft':'Run now'}}</button>
      @if(currentFlow()?.active_revision&&currentFlow()?.has_unpublished_changes){<button class="btn btn-sm btn-outline-secondary" (click)="run('draft')" [disabled]="busy()||hasUnsavedChanges()" title="Run the saved draft without publishing it. Unsaved edits use Test unsaved draft.">Run draft</button>}
+     @if(busy()){<fs-progress-status stage="Sending the request to the server"/>}
      <label>Event value <input [ngModel]="triggerValue()" (ngModelChange)="triggerValue.set($event)" placeholder="Value matching trigger type"></label>
      <button class="btn btn-sm btn-outline-secondary" (click)="emitEvent()" [disabled]="busy()||!eventKey()">Trigger event</button>
      <button class="btn btn-sm btn-outline-secondary" (click)="refresh()">Refresh</button>

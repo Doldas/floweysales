@@ -129,7 +129,7 @@ const H_EQUITY = 160;
 
         @if (loading()) {
           <div [attr.aria-busy]="true">
-            <fs-progress-status stage="Replaying the strategy" />
+            <fs-progress-status stage="Replaying the strategy" [cancellable]="true" (cancel)="cancelRun()" />
             <fs-skeleton shape="block" height="9rem" aria-hidden="true" />
           </div>
         }
@@ -425,6 +425,12 @@ export class StrategiesPage {
       next: r => { this.result.set(r); this.loading.set(false); },
       error: err => { this.error.set(describeHttpError(err)); this.result.set(null); this.loading.set(false); },
     });
+  }
+
+  cancelRun(): void {
+    this.request?.unsubscribe();
+    this.loading.set(false);
+    this.error.set('The test was cancelled. Run it again when you are ready.');
   }
 
   save(asNew: boolean): void {

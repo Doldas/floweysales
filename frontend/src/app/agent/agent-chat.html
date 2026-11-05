@@ -54,12 +54,12 @@
         <div class="bubble"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> Planning the next step…</div>
       </div>
     } @else if (currentStep(); as step) {
-      <div class="working" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Using {{ toolLabel(step.name || 'tool') }}…@if (step.progress) { <span class="text-muted">{{ step.progress }}</span> }</div>
+      <div class="working">@for (k of [step.id]; track k) { <fs-progress-status [stage]="'Using ' + toolLabel(step.name || 'tool') + (step.progress ? ' · ' + step.progress : '')" [since]="step.startedAt ?? null" /> }</div>
     }
 
     @if (session.runStatus(); as status) {
       <div class="working" role="status">
-        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> {{ status }}
+        <fs-progress-status [stage]="status" />
         @if (session.runStatusDetail(); as detail) { <details class="status-detail"><summary>Details</summary><code>{{ detail }}</code></details> }
       </div>
     }
