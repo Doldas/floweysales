@@ -69,8 +69,8 @@ func TestPDFTextReadsATextLayerAndRejectsGarbage(t *testing.T) {
 func TestReadPageStatusErrorExplainsSEC403WithoutClaimingToRead(t *testing.T) {
 	tests := []struct {
 		name, target string
-		status int
-		want string
+		status       int
+		want         string
 	}{
 		{"SEC", "https://www.sec.gov/Archives/edgar/data/1/example.htm", http.StatusForbidden, "get_sec_section"},
 		{"SEC host suffix", "https://data.sec.gov/submissions/CIK0000000001.json", http.StatusForbidden, "get_sec_section"},
