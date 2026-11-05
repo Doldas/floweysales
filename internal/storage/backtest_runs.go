@@ -23,7 +23,7 @@ var (
 type BacktestRun struct {
 	ID        int64     `json:"id"`
 	Name      string    `json:"name"`
-	Kind      string    `json:"kind"` // single | batch | sensitivity
+	Kind      string    `json:"kind"` // single | batch | sensitivity | montecarlo
 	Query     string    `json:"query"`
 	Result    string    `json:"-"`
 	CreatedAt time.Time `json:"created_at"`

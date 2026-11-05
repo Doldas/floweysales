@@ -63,6 +63,9 @@ func metricLines(prefix string, raw json.RawMessage) []string {
 // behind it (rebalances for one backtest, completed cells or variants
 // otherwise). Missing figures are left out, never written as zero.
 func backtestFacts(run storage.BacktestRun) (string, int, error) {
+	if run.Kind == "montecarlo" {
+		return montecarloFacts(run)
+	}
 	var doc struct {
 		Universe, Strategy, From, To, Period string
 		Metrics                              json.RawMessage

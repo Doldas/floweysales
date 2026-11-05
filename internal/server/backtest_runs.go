@@ -60,8 +60,10 @@ func (e *Engine) computeBacktestRun(ctx context.Context, kind string, q url.Valu
 		return e.runBacktestBatch(ctx, q)
 	case "sensitivity":
 		return e.runSensitivity(ctx, q)
+	case "montecarlo":
+		return e.runMonteCarlo(ctx, q)
 	}
-	return nil, badRequest{errors.New("kind must be single, batch or sensitivity")}
+	return nil, badRequest{errors.New("kind must be single, batch, sensitivity or montecarlo")}
 }
 
 // savedBacktest is what a saved run returns: the run, its query and the result.
@@ -214,6 +216,9 @@ var backtestCSVMetrics = []string{"cagr_pct", "excess_cagr_pct", "max_drawdown_p
 // backtestRunCSV flattens a saved run to a table: one row per cell or variant,
 // one row for a single backtest. Missing figures are empty, never zero.
 func backtestRunCSV(run storage.BacktestRun) ([][]string, error) {
+	if run.Kind == "montecarlo" {
+		return montecarloCSV(run)
+	}
 	type metricsMap = map[string]*float64
 	cellMetrics := func(raw json.RawMessage) []string {
 		var m metricsMap

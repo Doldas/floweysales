@@ -163,10 +163,10 @@ func isOwnSettingsRoute(method, path string) bool {
 	return false
 }
 
-// isBacktestReadPath matches the backtest and its two robustness checks, which
+// isBacktestReadPath matches the backtest and its robustness checks, which
 // replay public prices and keep nothing.
 func isBacktestReadPath(path string) bool {
-	return path == "/api/market/backtest" || path == "/api/market/backtest/batch" || path == "/api/market/backtest/progress" || path == "/api/market/backtest/sensitivity"
+	return path == "/api/market/backtest" || path == "/api/market/backtest/batch" || path == "/api/market/backtest/progress" || path == "/api/market/backtest/sensitivity" || path == "/api/market/backtest/montecarlo"
 }
 
 // isBacktestRunRoute matches a user's saved backtests: listing, saving,

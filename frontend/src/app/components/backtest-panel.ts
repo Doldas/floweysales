@@ -3,14 +3,14 @@ import { FormsModule } from '@angular/forms';
 import type { Subscription } from 'rxjs';
 
 import { MarketService, describeHttpError } from '../services';
-import type { BacktestParams, BacktestResult, BacktestSummary, BatchResult, SavedBacktest, SensitivityResult } from '../models';
+import type { BacktestParams, BacktestResult, BacktestSummary, BatchResult, MonteCarloResult, SavedBacktest, SensitivityResult } from '../models';
 import type { Provenance } from '../core/provenance';
 import { SourceComponent } from '../ui/source';
 import { SkeletonComponent } from '../ui/skeleton';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import { PROGRESS_POLL_MS, newRunId, parseRunProgress, type RunProgress } from '../ui/run-progress';
 import { periodError } from '../core/strategy-period';
-import { batchHeadline, batchParams, batchRows, exportUrl, savedLabel, sensitivityHeadline, sensitivityParams, sensitivityRows, singleParams, chartSummary, curvePath, metricTiles, regimeRows, segmentRows, stressRows, warningText } from './backtest-view';
+import { MONTE_CARLO_DEFAULTS, monteCarloError, monteCarloHeadline, monteCarloParams, monteCarloRows, type MonteCarloSettings, batchHeadline, batchParams, batchRows, exportUrl, savedLabel, sensitivityHeadline, sensitivityParams, sensitivityRows, singleParams, chartSummary, curvePath, metricTiles, regimeRows, segmentRows, stressRows, warningText } from './backtest-view';
 
 const CHART_W = 640;
 const CHART_H = 220;
@@ -261,6 +261,56 @@ const CHART_H = 220;
       }
     </div>
 
+    <div class="bt-sens bt-mc">
+      <h4 class="h6 mb-1">How wide was the range of outcomes?</h4>
+      <p class="bt-note">Reshuffles and redraws the days of this backtest into many simulated paths. It shows how much the result depended on the order and mix of days; it does not predict returns. Same settings and seed give the same numbers.</p>
+      <div class="bt-mc-form">
+        <label>Method
+          <select class="form-select form-select-sm" [ngModel]="mc().method" (ngModelChange)="setMc('method', $event)" name="mc-method">
+            <option value="block">Block bootstrap (keeps streaks)</option>
+            <option value="bootstrap">Bootstrap (independent days)</option>
+            <option value="shuffle">Shuffle (same days, new order)</option>
+          </select>
+        </label>
+        <label>Runs <input class="form-control form-control-sm" type="number" min="100" max="20000" step="100" [ngModel]="mc().runs" (ngModelChange)="setMc('runs', $event)" name="mc-runs"></label>
+        <label>Seed <input class="form-control form-control-sm" type="number" min="0" step="1" [ngModel]="mc().seed" (ngModelChange)="setMc('seed', $event)" name="mc-seed"></label>
+        <label>Alert at a fall of (%) <input class="form-control form-control-sm" type="number" min="1" max="100" placeholder="off" [ngModel]="mc().drawdownLimit" (ngModelChange)="setMc('drawdownLimit', $event)" name="mc-limit"></label>
+        <label>Slippage (bps per side) <input class="form-control form-control-sm" type="number" min="0" max="100" placeholder="none" [ngModel]="mc().slippage" (ngModelChange)="setMc('slippage', $event)" name="mc-slip"></label>
+        <label>Extra cost (bps per year) <input class="form-control form-control-sm" type="number" min="0" max="1000" placeholder="none" [ngModel]="mc().extraCost" (ngModelChange)="setMc('extraCost', $event)" name="mc-cost"></label>
+        <label>Volatility
+          <select class="form-select form-select-sm" [ngModel]="mc().volatility" (ngModelChange)="setMc('volatility', $event)" name="mc-vol">
+            <option value="1">As observed</option>
+            <option value="1.25">25% higher</option>
+            <option value="1.5">50% higher</option>
+            <option value="2">Double</option>
+          </select>
+        </label>
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-primary mt-2" (click)="runMonteCarlo()" [disabled]="mcLoading() || (years() === 0 && !from())">{{ mcLoading() ? 'Simulating…' : 'Run simulation' }}</button>
+      @if (mcError(); as err) { <p class="text-danger small mt-2" role="alert">{{ err }}</p> }
+      @if (mcResult(); as m) {
+        <div class="mt-2" aria-live="polite">
+          @for (line of mcHeadline(); track line) { <p class="mb-1 small">{{ line }}</p> }
+          <p class="bt-note mb-1">Simulated, not observed. The “Happened” column is the replayed history; the other columns are percentiles of simulated paths.</p>
+          <div class="fs-scroll-x">
+            <table class="table table-sm align-middle mb-2">
+              <caption class="visually-hidden">Simulated outcomes with the observed result for comparison</caption>
+              <thead><tr><th scope="col">Figure</th><th scope="col" class="num">Happened</th><th scope="col" class="num">5th</th><th scope="col" class="num">25th</th><th scope="col" class="num">Median</th><th scope="col" class="num">75th</th><th scope="col" class="num">95th</th></tr></thead>
+              <tbody>
+                @for (r of mcRows(); track r.id) {
+                  <tr><th scope="row">{{ r.label }}</th><td class="num">{{ r.observed }}</td><td class="num">{{ r.p5 }}</td><td class="num">{{ r.p25 }}</td><td class="num">{{ r.p50 }}</td><td class="num">{{ r.p75 }}</td><td class="num">{{ r.p95 }}</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <h5 class="h6 mb-1">What this assumes</h5>
+          <ul class="bt-limits small">@for (a of m.simulation.assumptions; track a) { <li>{{ a }}</li> }</ul>
+          <h5 class="h6 mb-1">What it cannot tell you</h5>
+          <ul class="bt-limits small">@for (l of m.simulation.limitations; track l) { <li>{{ l }}</li> }</ul>
+        </div>
+      }
+    </div>
+
     <div class="bt-saved">
       <h4 class="h6 mb-1">Saved results</h4>
       <p class="bt-note">Saving stores the question and the server's answer, so you can reopen it or download it with its parameters. Dates are UTC.</p>
@@ -269,6 +319,7 @@ const CHART_H = 220;
         <button type="button" class="btn btn-sm btn-outline-secondary" (click)="save('single')" [disabled]="!canSave('single')">Save backtest</button>
         <button type="button" class="btn btn-sm btn-outline-secondary" (click)="save('batch')" [disabled]="!canSave('batch')">Save markets and periods</button>
         <button type="button" class="btn btn-sm btn-outline-secondary" (click)="save('sensitivity')" [disabled]="!canSave('sensitivity')">Save settings check</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" (click)="save('montecarlo')" [disabled]="!canSave('montecarlo')">Save simulation</button>
       </div>
       @if (savedError(); as err) { <p class="text-danger small" role="alert">{{ err }}</p> }
       @if (saved().length) {
@@ -327,6 +378,7 @@ const CHART_H = 220;
 .bt-warnings { font-size: 0.8rem; margin: 0; ul { padding-left: 1.1rem; margin-top: 0.25rem; } }
 .bt-foot { display: flex; }
 .bt-robust { border-top: 1px solid var(--fs-border); padding-top: 0.75rem; summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; } }
+.bt-mc-form { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; label { font-size: 0.75rem; color: var(--fs-muted); display: grid; gap: 0.15rem; min-width: 8rem; } }
 .bt-pick { border: 0; padding: 0; margin: 0.5rem 0; display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; legend { font-size: 0.75rem; color: var(--fs-muted); float: none; width: auto; margin: 0; } label { font-size: 0.85rem; display: inline-flex; gap: 0.35rem; align-items: center; } }
 .bt-batch-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-bottom: 0.5rem; }
 .bt-batch p { font-size: 0.85rem; }
@@ -390,8 +442,13 @@ export class BacktestPanelComponent {
   readonly sensLoading = signal(false);
   readonly sensError = signal('');
   private sensRequest?: Subscription;
+  readonly mc = signal<MonteCarloSettings>({ ...MONTE_CARLO_DEFAULTS });
+  readonly mcResult = signal<MonteCarloResult | null>(null);
+  readonly mcLoading = signal(false);
+  readonly mcError = signal('');
+  private mcRequest?: Subscription;
   // What each result was asked for, so saving stores exactly that question.
-  private lastParams: { single?: Record<string, string>; batch?: Record<string, string>; sensitivity?: Record<string, string> } = {};
+  private lastParams: { single?: Record<string, string>; batch?: Record<string, string>; sensitivity?: Record<string, string>; montecarlo?: Record<string, string> } = {};
   savedLoaded = false;
   readonly saved = signal<SavedBacktest[]>([]);
   readonly saveName = signal('');
@@ -402,9 +459,11 @@ export class BacktestPanelComponent {
   readonly openedRun = signal<{ name: string; kind: SavedBacktest['kind']; provenance: Provenance } | null>(null);
   readonly summaryLoading = signal<number | null>(null);
   readonly label = savedLabel;
-  readonly kindLabel = (k: SavedBacktest['kind']): string => (k === 'batch' ? 'markets-and-periods result' : k === 'sensitivity' ? 'settings check' : 'backtest');
+  readonly kindLabel = (k: SavedBacktest['kind']): string => (k === 'batch' ? 'markets-and-periods result' : k === 'sensitivity' ? 'settings check' : k === 'montecarlo' ? 'simulation' : 'backtest');
   readonly exportHref = exportUrl;
   readonly sensRows = computed(() => sensitivityRows(this.sens()?.variants ?? []));
+  readonly mcRows = computed(() => (this.mcResult() ? monteCarloRows(this.mcResult()!) : []));
+  readonly mcHeadline = computed(() => (this.mcResult() ? monteCarloHeadline(this.mcResult()!) : []));
   readonly sensHeadline = computed(() => (this.sens() ? sensitivityHeadline(this.sens()!) : []));
   /** The current universe first, then the other leaderboard universes. */
   readonly marketChoices = computed(() => {
@@ -425,11 +484,11 @@ export class BacktestPanelComponent {
   readonly summary = computed(() => (this.result() ? chartSummary(this.result()!) : ''));
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => { this.request?.unsubscribe(); this.batchRequest?.unsubscribe(); this.sensRequest?.unsubscribe(); this.stopProgress(); });
+    inject(DestroyRef).onDestroy(() => { this.request?.unsubscribe(); this.batchRequest?.unsubscribe(); this.sensRequest?.unsubscribe(); this.mcRequest?.unsubscribe(); this.stopProgress(); });
     // The market being viewed is ticked by default; a switch resets the batch.
     effect(() => {
       const u = this.universe();
-      untracked(() => { this.pickedMarkets.set(u === 'custom' ? [] : [u]); this.batch.set(null); this.batchError.set(''); this.sens.set(null); this.sensError.set(''); this.openedRun.set(null); });
+      untracked(() => { this.pickedMarkets.set(u === 'custom' ? [] : [u]); this.batch.set(null); this.batchError.set(''); this.sens.set(null); this.sensError.set(''); this.mcResult.set(null); this.mcError.set(''); this.openedRun.set(null); });
     });
     // Runs once inputs are set, and again when the board switches universe or strategy.
     effect(() => {
@@ -462,7 +521,7 @@ export class BacktestPanelComponent {
 
   /** Whether the result of this kind is on screen and a name is given. */
   canSave(kind: SavedBacktest['kind']): boolean {
-    const have = kind === 'single' ? this.result() : kind === 'batch' ? this.batch() : this.sens();
+    const have = kind === 'single' ? this.result() : kind === 'batch' ? this.batch() : kind === 'montecarlo' ? this.mcResult() : this.sens();
     return !!have && !!this.lastParams[kind] && !!this.saveName().trim();
   }
 
@@ -493,6 +552,7 @@ export class BacktestPanelComponent {
         this.openedRun.set(full.provenance ? { name: full.name, kind: full.kind, provenance: full.provenance } : null);
         if (full.kind === 'batch') this.batch.set(full.result as BatchResult);
         else if (full.kind === 'sensitivity') this.sens.set(full.result as SensitivityResult);
+        else if (full.kind === 'montecarlo') this.mcResult.set(full.result as MonteCarloResult);
         else { this.result.set(full.result as BacktestResult); this.error.set(''); }
       },
       error: err => this.savedError.set(describeHttpError(err)),
@@ -544,6 +604,27 @@ export class BacktestPanelComponent {
     clearInterval(this.progressTimer);
     this.progressTimer = undefined;
     this.batchProgress.set(null);
+  }
+
+  setMc<K extends keyof MonteCarloSettings>(key: K, value: MonteCarloSettings[K] | number | null): void {
+    this.mc.update(m => ({ ...m, [key]: value === null || value === undefined ? '' : String(value) }));
+  }
+
+  runMonteCarlo(): void {
+    const bad = monteCarloError(this.mc());
+    this.mcError.set(bad);
+    if (bad) return;
+    this.mcRequest?.unsubscribe();
+    this.mcLoading.set(true);
+    const params = monteCarloParams({
+      universe: this.universe(), strategy: this.strategy(), symbols: this.symbols(),
+      top: this.top(), rebalance: this.rebalance(), years: this.years(),
+      ...(this.years() === 0 ? { from: this.from(), to: this.to() || undefined } : {}),
+    }, this.mc());
+    this.mcRequest = this.api.backtestMonteCarlo(params).subscribe({
+      next: res => { this.lastParams.montecarlo = params; this.openedRun.set(null); this.mcResult.set(res); this.mcLoading.set(false); },
+      error: err => { this.mcError.set(describeHttpError(err)); this.mcLoading.set(false); },
+    });
   }
 
   runSensitivity(): void {

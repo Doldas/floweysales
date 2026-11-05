@@ -2,7 +2,7 @@
 title: Strategies and backtests
 order: 5
 summary: Test rule strategies on one instrument, backtest leaderboard strategies, check how settings and periods change the result, and save and export runs.
-last-reviewed: 2026-11-04
+last-reviewed: 2026-11-05
 ---
 
 # Strategies and backtests
@@ -83,11 +83,23 @@ Under **Test across markets and periods**, tick up to four lists and any of 3, 5
 
 **Run sensitivity** changes one setting at a time around the current backtest: trading cost (0, 10, 25 and 50 basis points), number of holdings (5, 10 and 15) and rebalance interval. It reports how wide the return range is and, when there is one, the lowest cost at which the excess return disappears. It needs a 3Y, 5Y or 10Y period, not custom dates.
 
+### How wide was the range of outcomes?
+
+**Run simulation** redraws the days of the backtest into many simulated paths, to show how much the result depended on the order and mix of days it happened to get. It does not predict returns, and it never changes the backtest figures above it.
+
+- **Method.** *Block bootstrap* draws runs of 21 consecutive days, which keeps some of the clustering of calm and stormy stretches. *Bootstrap* draws single days independently and tends to understate deep falls. *Shuffle* replays the same days in a new order, so the total return is the same in every path and only the worst fall varies: it shows sequence risk, not return risk.
+- **Runs and seed.** 100 to 20,000 paths (2,000 by default), each as long as the replayed period. The seed (42 by default) makes a run repeatable: the same settings and seed give the same numbers while the price data is the same. Change the seed to see how much the percentiles themselves move.
+- **Stress choices.** *Alert at a fall of* gives the share of paths that fell that far at some point. *Slippage* (basis points per side) is turned into a yearly cost at the turnover the replay showed; *Extra cost* takes a yearly cost directly; *Volatility* widens each day's distance from the average. These are assumptions you pick, listed under "What this assumes", not things that were observed.
+- **Reading the table.** The "Happened" column is the replay. The 5th to 95th columns are percentiles of the simulated paths: the 5th is the level that 5% of paths fell below. The text above the table says what share of paths ended in a loss, breached your limit, or lost everything.
+- **When it refuses.** Fewer than 126 replayed days (about half a year), or days that all have the same return, are not simulated. The panel says why instead of showing percentiles that rest on nothing.
+
+Only days that happened can be drawn, so a fall worse than any in the replay cannot appear, and the biases of the backtest itself (today's list of companies, approximate costs) carry over. **Save simulation** stores the settings, seed, model version, data dates and assumptions with the result.
+
 ## Saved runs
 
 Saving stores the question and the server's answer, so you can reopen it, summarize it or download it later. You can keep up to 30 saved runs; name each one (up to 80 characters).
 
-- **Save backtest**, **Save markets and periods** and **Save settings check** save the current single backtest, batch or sensitivity result.
+- **Save backtest**, **Save markets and periods**, **Save settings check** and **Save simulation** save the current single backtest, batch, sensitivity or simulation result.
 - **Open** shows a saved result again exactly as the server recorded it, with a source badge that tells where it came from: the method and its version, when the result was produced, the data provider and the last price date where they were recorded. Re-running the same question later can give a different result, because prices and reports change.
 - **Summarize** asks the model for a short written summary. The server builds a fact sheet from the stored result and checks that every figure in the summary appears in it. If the check fails twice, you get the fact sheet and a note instead of an unchecked text. The check is mechanical and does not judge the wording. Short samples get a note that the evidence is thin. A summary needs an AI model to be configured.
 - **CSV** and **JSON** download the run. JSON holds the parameters, the provenance and the result. CSV flattens it to a table with one row per backtest, market and period, or setting, with empty cells where a figure is unknown. Dates are UTC.

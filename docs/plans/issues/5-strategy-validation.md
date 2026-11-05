@@ -96,3 +96,7 @@ which is the most important test here.
 ## Out of scope
 
 Optimizers that search for the best parameters. They raise overfitting risk, and the plan's aim is the opposite.
+
+## Follow-up: Monte Carlo (#254)
+
+Delivered for the leaderboard backtest: `internal/montecarlo` (bootstrap, block bootstrap, shuffle; seeded; refuses sparse or constant input), `GET /api/market/backtest/montecarlo`, a panel under the settings check, and saved runs of kind `montecarlo`. Not yet: the Strategies page (`internal/strategy.Run` computes a daily equity series but returns only a thinned curve, so it needs to hand over the full daily returns, as `backtest.Result.DailyReturns` does), execution-delay and concentration stress, and trade-level resampling.

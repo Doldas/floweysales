@@ -116,6 +116,9 @@ type Result struct {
 	RegimeUnlabeled int      `json:"regime_unlabeled_days,omitempty"`
 	RegimeNote      string   `json:"regime_note"`
 	WalkForwardNote string   `json:"walk_forward_note"`
+	// DailyReturns are the replayed strategy's returns for every day after the first, in order. They feed
+	// resampling and are left out of the JSON, which carries the thinned Curve.
+	DailyReturns []float64 `json:"-"`
 }
 
 const dateLayout = "2006-01-02"
@@ -413,6 +416,7 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 	warnings = append(warnings, countWarnings(trades, conc)...)
 	res := Result{Config: cfg, Metrics: metrics, Curve: thin(curve, maxCurvePoints), Rebalances: rebalances, Warnings: warnings,
 		Trades: trades, Concentration: conc, StressNote: StressNote, RegimeNote: RegimeNote, WalkForwardNote: WalkForwardNote}
+	res.DailyReturns = dailyReturns(curveEquity)
 	dates := make([]string, len(curve))
 	for i, p := range curve {
 		dates[i] = p.Date
@@ -425,6 +429,18 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 		res.Regimes, res.RegimeUnlabeled = regimeResults(benchTable.px, regimeLabels(benchTable.px), first, curveEquity)
 	}
 	return res, nil
+}
+
+// dailyReturns turns an equity curve into its day-over-day returns.
+func dailyReturns(eq []float64) []float64 {
+	if len(eq) < 2 {
+		return nil
+	}
+	out := make([]float64, len(eq)-1)
+	for i := 1; i < len(eq); i++ {
+		out[i-1] = eq[i]/eq[i-1] - 1
+	}
+	return out
 }
 
 // thin keeps at most max points, evenly spaced, always ending on the last.
