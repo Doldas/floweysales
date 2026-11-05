@@ -57,6 +57,44 @@ func (g GitHub) client() *http.Client {
 	return &http.Client{Timeout: 15 * time.Second}
 }
 
+// BranchHead returns the commit currently at a branch tip. It does not
+// identify the running binary, nor does it prove a container was published.
+// Missing/invalid GitHub responses are returned as errors, never guessed.
+func (g GitHub) BranchHead(ctx context.Context, repo, branch string) (string, error) {
+	if !ValidRepository(repo) || branch != "main" {
+		return "", fmt.Errorf("invalid repository or branch")
+	}
+	apiBase := "https://api.github.com"
+	if g.BaseURL != "" {
+		apiBase = strings.TrimRight(g.BaseURL, "/")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiBase+"/repos/"+repo+"/branches/main", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	res, err := g.client().Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GitHub main branch returned HTTP %d", res.StatusCode)
+	}
+	var body struct {
+		Commit struct {
+			SHA string `json:"sha"`
+		} `json:"commit"`
+	}
+	if err := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&body); err != nil {
+		return "", fmt.Errorf("invalid GitHub main branch response: %w", err)
+	}
+	if !commitPattern.MatchString(body.Commit.SHA) {
+		return "", fmt.Errorf("GitHub main branch returned an invalid commit")
+	}
+	return body.Commit.SHA, nil
+}
+
 // Compare lists commits and added migration files between two commits.
 func (g GitHub) Compare(ctx context.Context, repo, base, head string) (Changes, error) {
 	if !ValidRepository(repo) || !commitPattern.MatchString(base) || !commitPattern.MatchString(head) {
