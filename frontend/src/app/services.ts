@@ -7,7 +7,7 @@ import {
   FinancialsResponse,
   HistorySeries,
   BacktestParams,
-  BacktestResult, BatchResult, SensitivityResult, SavedBacktest, BacktestSummary,
+  BacktestResult, BatchResult, SensitivityResult, MonteCarloResult, SavedBacktest, BacktestSummary,
   LeaderboardResponse,
   RankingPreferences,
   RankingPreferencesResponse,
@@ -130,6 +130,10 @@ export class MarketService {
   }
 
   /** One setting at a time (trading cost, holdings, rebalance) around a base backtest. */
+  backtestMonteCarlo(params: Record<string, string>): Observable<MonteCarloResult> {
+    return this.http.get<MonteCarloResult>('/api/market/backtest/montecarlo', { params });
+  }
+
   backtestSensitivity(params: Record<string, string>): Observable<SensitivityResult> {
     return this.http.get<SensitivityResult>('/api/market/backtest/sensitivity', { params });
   }

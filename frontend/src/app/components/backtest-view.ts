@@ -2,7 +2,7 @@
  * Display helpers for the strategy backtest panel. Pure functions so they run
  * under node --test; the replay itself lives in the server (internal/backtest).
  */
-import type { BacktestParams, BacktestMetrics, BacktestPoint, BacktestRegime, BacktestResult, BacktestSegment, BacktestStress, BatchCell, BatchSpread, BatchSummary, SensitivityResult, SensitivityVariant } from '../models';
+import type { BacktestParams, BacktestMetrics, BacktestPoint, BacktestRegime, BacktestResult, BacktestSegment, BacktestStress, BatchCell, BatchSpread, BatchSummary, MonteCarloResult, MonteCarloDist, SensitivityResult, SensitivityVariant } from '../models';
 
 export type Tone = 'pos' | 'neg' | 'mid';
 
@@ -205,6 +205,63 @@ export function exportUrl(id: number, format: 'csv' | 'json'): string {
 
 /** "Momentum spread" with its kind and UTC date, for the saved list. */
 export function savedLabel(r: { name: string; kind: string; created_at: string }): string {
-  const kind = r.kind === 'batch' ? 'markets and periods' : r.kind === 'sensitivity' ? 'settings' : 'single run';
+  const kind = r.kind === 'batch' ? 'markets and periods' : r.kind === 'sensitivity' ? 'settings' : r.kind === 'montecarlo' ? 'simulation' : 'single run';
   return `${r.name} · ${kind} · ${r.created_at.slice(0, 10)}`;
+}
+
+/** What the user typed into the simulation form; empty strings mean "use the default". */
+export interface MonteCarloSettings { method: string; runs: string; seed: string; drawdownLimit: string; slippage: string; extraCost: string; volatility: string }
+
+export const MONTE_CARLO_DEFAULTS: MonteCarloSettings = { method: 'block', runs: '2000', seed: '42', drawdownLimit: '', slippage: '', extraCost: '', volatility: '1' };
+
+/** A message for the first setting the server would refuse, or '' when all are fine. Mirrors internal/montecarlo. */
+export function monteCarloError(s: MonteCarloSettings): string {
+  const num = (raw: string): number => (raw.trim() === '' ? NaN : Number(raw));
+  const runs = num(s.runs);
+  if (!Number.isInteger(runs) || runs < 100 || runs > 20000) return 'Runs must be a whole number from 100 to 20000.';
+  const seed = num(s.seed);
+  if (!Number.isInteger(seed) || seed < 0) return 'Seed must be a whole number, 0 or more.';
+  if (s.drawdownLimit.trim() !== '' && !(num(s.drawdownLimit) > 0 && num(s.drawdownLimit) <= 100)) return 'Drawdown limit must be a percentage above 0 and up to 100.';
+  if (s.slippage.trim() !== '' && !(num(s.slippage) >= 0 && num(s.slippage) <= 100)) return 'Slippage must be from 0 to 100 basis points per side.';
+  if (s.extraCost.trim() !== '' && !(num(s.extraCost) >= 0 && num(s.extraCost) <= 1000)) return 'Extra cost must be from 0 to 1000 basis points per year.';
+  const vol = num(s.volatility);
+  if (!(vol >= 0.5 && vol <= 3)) return 'Volatility scale must be from 0.5 to 3.';
+  return '';
+}
+
+/** Query parameters of a simulation: the backtest's own, then the simulation settings. The drawdown limit is typed as a positive loss and sent as a negative percentage. */
+export function monteCarloParams(p: BacktestParams, s: MonteCarloSettings): Record<string, string> {
+  const params: Record<string, string> = { ...singleParams(p), method: s.method, runs: s.runs.trim(), seed: s.seed.trim(), volatility_scale: s.volatility.trim() };
+  if (s.drawdownLimit.trim() !== '') params['drawdown_limit'] = String(-Math.abs(Number(s.drawdownLimit)));
+  if (s.slippage.trim() !== '') params['slippage_bps'] = s.slippage.trim();
+  if (s.extraCost.trim() !== '') params['extra_cost_bps'] = s.extraCost.trim();
+  return params;
+}
+
+export interface MonteCarloRow { id: string; label: string; observed: string; p5: string; p25: string; p50: string; p75: string; p95: string }
+
+const plain = (v: number): string => `${v > 0 ? '+' : ''}${v.toFixed(1)}%`;
+
+/** Rows of the simulated distributions with the observed figure alongside. Percentiles are of simulated paths, never of the observed history. */
+export function monteCarloRows(r: Pick<MonteCarloResult, 'simulation'>): MonteCarloRow[] {
+  const s = r.simulation;
+  const row = (id: string, label: string, observed: number, d: MonteCarloDist): MonteCarloRow =>
+    ({ id, label, observed: plain(observed), p5: plain(d.p5), p25: plain(d.p25), p50: plain(d.p50), p75: plain(d.p75), p95: plain(d.p95) });
+  return [
+    row('return', `Total return over ${s.config.horizon_days} trading days`, s.observed.total_return_pct, s.terminal_return_pct),
+    row('drawdown', 'Worst fall from a peak', s.observed.max_drawdown_pct, s.max_drawdown_pct),
+  ];
+}
+
+/** Lines above the table: the probabilities, each said to be of simulated paths. */
+export function monteCarloHeadline(r: Pick<MonteCarloResult, 'simulation'>): string[] {
+  const s = r.simulation;
+  const lines = [
+    `${s.config.runs} simulated paths (${s.config.method}, seed ${s.config.seed}, model ${s.model_version}). In ${s.prob_loss_pct.toFixed(1)}% of them the strategy ended below where it began.`,
+  ];
+  if (s.prob_breach_pct !== undefined && s.config.drawdown_limit_pct !== undefined) {
+    lines.push(`In ${s.prob_breach_pct.toFixed(1)}% of them a fall of ${Math.abs(s.config.drawdown_limit_pct)}% or more happened at some point.`);
+  }
+  if (s.prob_ruin_pct > 0) lines.push(`In ${s.prob_ruin_pct.toFixed(1)}% of them everything was lost.`);
+  return lines;
 }

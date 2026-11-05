@@ -2,7 +2,7 @@
 //   node --test src/app/components/backtest-view.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { batchParams, exportUrl, savedLabel, sensitivityParams, singleParams, sensitivityHeadline, sensitivityRows, settingLabel, batchHeadline, batchRows, chartSummary, curvePath, metricTiles, periodLabel, regimeRows, segmentRows, stressRows, warningText } from './backtest-view.ts';
+import { MONTE_CARLO_DEFAULTS, monteCarloError, monteCarloHeadline, monteCarloParams, monteCarloRows, batchParams, exportUrl, savedLabel, sensitivityParams, singleParams, sensitivityHeadline, sensitivityRows, settingLabel, batchHeadline, batchRows, chartSummary, curvePath, metricTiles, periodLabel, regimeRows, segmentRows, stressRows, warningText } from './backtest-view.ts';
 import type { BacktestMetrics } from '../models';
 
 const metrics: BacktestMetrics = { cagr_pct: 12.4, volatility_pct: 18, sharpe: 0.9, sortino: 1.2, max_drawdown_pct: -22.5, calmar: 0.5,
@@ -145,4 +145,62 @@ test('regime rows keep a thin regime free of yearly figures', () => {
 test('count warnings have readable text', () => {
   assert.match(warningText('few_trades'), /Fewer than 30 trades/);
   assert.match(warningText('few_periods_drive_result'), /three best rebalance periods/);
+});
+
+const sim = {
+  simulation: {
+    model_version: 'mc-1', observed_days: 1096, observed: { days: 1096, total_return_pct: 40.2, max_drawdown_pct: -18.4 },
+    config: { method: 'block', runs: 2000, horizon_days: 1096, seed: 42, drawdown_limit_pct: -20, volatility_scale: 1 },
+    terminal_return_pct: { p5: -12.3, p25: 8, p50: 31.5, p75: 55, p95: 98.25 }, max_drawdown_pct: { p5: -41, p25: -30, p50: -22, p75: -16, p95: -9 },
+    prob_loss_pct: 12.5, prob_breach_pct: 61.2, prob_ruin_pct: 0, assumptions: [], limitations: [],
+  },
+};
+
+test('monteCarloRows put the observed figure beside signed percentiles', () => {
+  const rows = monteCarloRows(sim);
+  assert.equal(rows[0].label, 'Total return over 1096 trading days');
+  assert.deepEqual([rows[0].observed, rows[0].p5, rows[0].p50, rows[0].p95], ['+40.2%', '-12.3%', '+31.5%', '+98.3%']);
+  assert.deepEqual([rows[1].observed, rows[1].p5, rows[1].p95], ['-18.4%', '-41.0%', '-9.0%']);
+});
+
+test('monteCarloHeadline names the seed, says simulated and skips absent probabilities', () => {
+  const lines = monteCarloHeadline(sim);
+  assert.match(lines[0], /2000 simulated paths \(block, seed 42, model mc-1\)/);
+  assert.match(lines[0], /12\.5% of them the strategy ended below where it began/);
+  assert.match(lines[1], /61\.2% of them a fall of 20% or more/);
+  assert.equal(lines.length, 2);
+  const none = monteCarloHeadline({ simulation: { ...sim.simulation, prob_breach_pct: undefined, prob_ruin_pct: 3.5 } });
+  assert.equal(none.length, 2);
+  assert.match(none[1], /3\.5% of them everything was lost/);
+});
+
+test('monteCarloError mirrors the server limits', () => {
+  assert.equal(monteCarloError(MONTE_CARLO_DEFAULTS), '');
+  const bad = (patch: object) => monteCarloError({ ...MONTE_CARLO_DEFAULTS, ...patch });
+  assert.match(bad({ runs: '50' }), /Runs/);
+  assert.match(bad({ runs: '' }), /Runs/);
+  assert.match(bad({ seed: '-1' }), /Seed/);
+  assert.match(bad({ seed: '1.5' }), /Seed/);
+  assert.match(bad({ drawdownLimit: '0' }), /Drawdown/);
+  assert.match(bad({ drawdownLimit: '150' }), /Drawdown/);
+  assert.match(bad({ slippage: '-1' }), /Slippage/);
+  assert.match(bad({ extraCost: '5000' }), /Extra cost/);
+  assert.match(bad({ volatility: '0' }), /Volatility/);
+  assert.equal(bad({ drawdownLimit: '20', slippage: '5', extraCost: '25', volatility: '1.5' }), '');
+});
+
+test('monteCarloParams sends the drawdown limit as a negative and leaves empty options out', () => {
+  const base = { universe: 'sp500', strategy: 'value', top: 10, rebalance: 'monthly' as const, years: 5 };
+  const p = monteCarloParams(base, { ...MONTE_CARLO_DEFAULTS, drawdownLimit: '20', slippage: '5' });
+  assert.equal(p['drawdown_limit'], '-20');
+  assert.equal(p['slippage_bps'], '5');
+  assert.equal(p['method'], 'block');
+  assert.equal(p['seed'], '42');
+  assert.equal(p['years'], '5');
+  assert.ok(!('extra_cost_bps' in p));
+  assert.ok(!('drawdown_limit' in monteCarloParams(base, MONTE_CARLO_DEFAULTS)));
+});
+
+test('savedLabel names a simulation', () => {
+  assert.match(savedLabel({ name: 'Seq risk', kind: 'montecarlo', created_at: '2026-11-05T10:00:00Z' }), /Seq risk · simulation · 2026-11-05/);
 });

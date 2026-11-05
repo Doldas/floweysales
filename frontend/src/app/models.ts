@@ -517,9 +517,29 @@ export interface SensitivityResult {
   summary: { completed: number; failed: number; cagr_pct?: BatchSpread; excess_cagr_pct?: BatchSpread; positive_excess: number; with_benchmark: number; cost_break_even_bps?: number; notes: string[] };
 }
 
+/** Percentiles of one simulated figure, in percent of the starting value. */
+export interface MonteCarloDist { p5: number; p25: number; p50: number; p75: number; p95: number }
+export interface MonteCarloSimulation {
+  model_version: string;
+  config: { method: string; runs: number; horizon_days: number; seed: number; block_days?: number; drawdown_limit_pct?: number; extra_cost_bps_per_year?: number; volatility_scale: number };
+  observed_days: number;
+  observed: { days: number; total_return_pct: number; max_drawdown_pct: number };
+  terminal_return_pct: MonteCarloDist; max_drawdown_pct: MonteCarloDist;
+  prob_loss_pct: number; prob_breach_pct?: number; prob_ruin_pct: number;
+  assumptions: string[]; limitations: string[];
+}
+/** GET /api/market/backtest/montecarlo: simulated outcomes next to the unchanged observed metrics. */
+export interface MonteCarloResult {
+  universe: string; strategy: string; benchmark?: string; provider: string; generated_at: string; backtest_generated_at: string;
+  from: string; to?: string; data_start?: string; data_end?: string;
+  backtest_metrics: BacktestMetrics; backtest_warnings: string[];
+  simulation: MonteCarloSimulation;
+  slippage_bps?: number; slippage_drag_bps_per_year?: number; notes: string[];
+}
+
 /** A saved backtest as listed; GET /api/market/backtest/runs/{id} adds its result. */
 export interface BacktestSummary { run_id: number; verified: boolean; summary?: string; facts: string; notes: string[]; reason?: string; attempts: number; citations: string }
-export interface SavedBacktest { id: number; name: string; kind: 'single' | 'batch' | 'sensitivity'; query: string; created_at: string; provenance?: Provenance }
+export interface SavedBacktest { id: number; name: string; kind: 'single' | 'batch' | 'sensitivity' | 'montecarlo'; query: string; created_at: string; provenance?: Provenance }
 
 export interface BacktestParams {
   universe: string;
