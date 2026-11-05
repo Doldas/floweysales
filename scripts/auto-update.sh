@@ -38,6 +38,7 @@ HEALTH_TIMEOUT="${UPDATE_HEALTH_TIMEOUT:-90}"
 TAG="$(env_value FLOWEYSALES_TAG)"; TAG="${TAG:-stable}"
 APP_PORT_VALUE="$(env_value APP_PORT)"; APP_PORT_VALUE="${APP_PORT_VALUE:-8080}"
 APP_IMAGE="ghcr.io/doldas/floweysales:$TAG"
+MIGRATION_IMAGE="ghcr.io/doldas/floweysales-migrate:$TAG"
 HEALTH_URL="${UPDATE_HEALTH_URL:-http://127.0.0.1:$APP_PORT_VALUE/healthz}"
 
 compose() { "$ENGINE_BIN" compose -f compose.deploy.yml "$@"; }
@@ -128,12 +129,23 @@ log "Pulling app and migration images only (MySQL excluded)..."
 run compose pull app migrate
 NEW_ID="$(image_id "$APP_IMAGE")"
 TO_COMMIT="$(image_commit "$APP_IMAGE")"
-
 if [[ -n "$PREVIOUS_ID" && "$NEW_ID" == "$PREVIOUS_ID" ]]; then
   log "Already running the latest image; nothing to do."
   write_status up_to_date "Already running the latest $TAG image" finished
   write_agent
   exit 0
+fi
+
+MIGRATION_COMMIT="$(image_commit "$MIGRATION_IMAGE")"
+# Never migrate using a different app revision. Tags (including stable) can
+# advance independently, so the two published images must match by commit.
+if [[ -n "$TO_COMMIT" && -n "$MIGRATION_COMMIT" && "$TO_COMMIT" != "$MIGRATION_COMMIT" ]]; then
+  CURRENT_STATE="verifying release image compatibility"
+  log "App revision $TO_COMMIT differs from migration revision $MIGRATION_COMMIT; refusing to migrate"
+  false # handled by on_error; no backup/migration/restart performed
+fi
+if [[ -z "$TO_COMMIT" || -z "$MIGRATION_COMMIT" ]]; then
+  log "WARNING: revision label missing on app or migration image; revision compatibility cannot be verified"
 fi
 
 if [[ "$BACKUPS" == true ]]; then

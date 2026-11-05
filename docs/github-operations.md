@@ -26,7 +26,7 @@ Pages only serves `site/`: a static project page. The backend, local model, priv
 
 ## CI / pre-release
 
-The `CI` workflow builds and tests Go, vet/race checks and Angular. Artifacts: backend + MCP binaries and a frontend preview bundle. The `Release build` workflow builds platform-specific binaries on `v*` tags; artifacts are for download from the Actions run, not an automatic production deployment. Version tagging should only happen after passing checks and human review.
+The `CI` workflow builds and tests Go, vet/race checks and Angular. Artifacts: backend + MCP binaries and a frontend preview bundle. The `Release build and publish` workflow, triggered by validated `vMAJOR.MINOR.PATCH[-rc.N]` tags on `main`, produces durable GitHub Release binaries/checksums and **matching versioned GHCR app and migration images**. The separate SDK release workflow handles `pluginsdk/v*` tags and checks official plugin consumers. Neither workflow deploys to running servers. Promotion of versioned images to the mutable `stable` channel is a separate, manually dispatched workflow (`Promote tested release to stable containers`) that should use GitHub Environment reviewer protection. See the full [release and rollback policy](releasing.md). Version tagging and stable promotion require passing checks and human review.
 
 ## Issue tracking and project board
 

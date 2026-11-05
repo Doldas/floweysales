@@ -1,0 +1,74 @@
+name: Plugin SDK release
+
+on:
+  push:
+    tags:
+      - 'pluginsdk/v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sdk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Verify SDK SemVer tag and main ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF_NAME" =~ ^pluginsdk/v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$ ]] || {
+            echo "::error::Expected pluginsdk/vMAJOR.MINOR.PATCH[-rc.N]"; exit 1;
+          }
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::SDK release must be on main"; exit 1; }
+          grep -q '^module github.com/Doldas/floweysales/pluginsdk$' pluginsdk/go.mod
+          # A v2 SDK must change its Go module path before publishing.
+          version="${GITHUB_REF_NAME#pluginsdk/v}"
+          major="${version%%.*}"
+          [[ "$major" -lt 2 ]] || { echo "::error::Go v2+ needs /v2 module path"; exit 1; }
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: pluginsdk/go.mod
+          cache: false # pluginsdk is dependency-free and has no go.sum
+      - name: Validate SDK module and conformance fixtures
+        working-directory: pluginsdk
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          go vet ./...
+          go test -race -count=1 ./...
+      - name: Validate backend protocol contract
+        run: go test ./...
+      - name: Checkout official plugin consumers
+        uses: actions/checkout@v7
+        with:
+          repository: Doldas/floweysales-plugins
+          path: official-plugins
+      - name: Verify plugins against this exact SDK commit
+        working-directory: official-plugins
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod edit -replace=github.com/Doldas/floweysales/pluginsdk="$GITHUB_WORKSPACE/pluginsdk"
+          go mod tidy
+          go vet ./...
+          go test -race -count=1 ./...
+      - name: Publish SDK release record
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          [[ "$GITHUB_REF_NAME" == *-rc.* ]] && args+=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes "${args[@]}"
+          echo 'Next: update official plugin go.mod to this tagged SDK via reviewed PR.'

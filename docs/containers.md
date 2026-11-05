@@ -70,3 +70,18 @@ restore process, session protection and separate user-owned portfolios.
 Provider keys and AI server secrets must never be committed or logged.
 
 For SYS_ADMIN-managed AI model settings see `docs/database-and-auth.md`.
+
+## Published release images and opt-in updates
+
+The release workflow publishes **both** the application and Liquibase migration images to GHCR with matching immutable version tags, for example `v0.6.0`. Prefer pinned versions for reproducible deployments:
+
+```sh
+# Set FLOWEYSALES_TAG=vX.Y.Z in the private .env first.
+docker compose -f compose.deploy.yml pull app migrate
+# Back up your data and use the checked host updater for the migration/restart.
+bash scripts/auto-update.sh
+```
+
+The app's `stable` tag is advanced **only** through the manually approved GitHub workflow `Promote tested release to stable containers`; publishing a release candidate or stable GitHub Release does not automatically change running containers. The host updater checks for new app images, backs up MySQL, applies forward-only Liquibase migrations and verifies the app's health. It refuses to run migrations if **known app and migration image commit labels conflict**. Settings → Updates and the optional timer use the same host-side procedure (see `scripts/install-auto-update.sh`).
+
+**Do not use** `docker compose down -v` to update; it destroys persistent data. A rolled-back application image does not undo the database migration: migrations must remain backward compatible or require a separately tested restore plan. Review [the release policy](releasing.md) and rehearse upgrades/rollback in an isolated environment before production.
