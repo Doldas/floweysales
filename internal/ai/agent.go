@@ -448,6 +448,9 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 			callArgs := tc.Function.Arguments
 			if bad, isBad := badArgs[tc.ID]; isBad {
 				err = fmt.Errorf("the arguments of this call were not valid JSON (%s). Send the call again with one complete, valid JSON object", clip(bad, 160))
+			} else if noTools {
+				// A model run without tools may still invent a call; it is never executed.
+				err = fmt.Errorf("tool %s is not available: this run has no tools", tc.Function.Name)
 			} else if granted != nil && !granted[tc.Function.Name] {
 				err = fmt.Errorf("tool %s is not granted to this agent", tc.Function.Name)
 			} else if perr := ValidateToolArgs(tc.Function.Name, tc.Function.Arguments); perr != nil {

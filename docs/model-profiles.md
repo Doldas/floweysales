@@ -9,7 +9,7 @@ A **SYS_ADMIN** prepares a few named model choices on the configured endpoint, s
 | `name`, `description` | What users see. Names are unique. |
 | `model` | A model of the default endpoint: the server's default model or one in the model catalog (Settings → API integrations). |
 | `fallback_model` | Optional. If the endpoint says the model is not available (404, "model not found"), the run continues with this one, and says so. A switch is not counted as a failed attempt. |
-| `supports_tools`, `context_window`, `cost_input_per_mtok`, `cost_output_per_mtok` | What is known. Unknown is `null` and is shown as unknown, never as zero. A model with `supports_tools: false` runs without tools, and its card says so. |
+| `supports_tools`, `context_window`, `cost_input_per_mtok`, `cost_output_per_mtok` | What is known. Unknown is `null` and is shown as unknown, never as zero. A model with `supports_tools: false` runs without tools, and its card says so; if it invents a tool call anyway, the call is refused and never executed. |
 | `max_steps`, `max_tool_calls` | Lower a run's budgets for this profile (never raise them past the server limits). |
 | `enabled`, `is_default`, `position` | Disabled profiles are hidden. One profile can be the default; it applies when a user picks none. |
 
@@ -41,4 +41,5 @@ A team run can carry ceilings, chosen by the user: **tokens** (prompt plus compl
 - The model client asks the endpoint for token usage (`stream_options.include_usage`) and reads `usage` from the reply. An endpoint that rejects the option is asked again without it.
 - **Cost** is computed from the prices an administrator entered in the model profiles, per model. A model without both prices, or an endpoint that reports no usage, makes the cost **unknown**: it is shown as unknown, never as zero.
 - **Without usage figures the token and cost ceilings cannot be enforced.** The run says so in a notice and carries on; only the tool-call ceiling and the time limits hold. Local servers differ in whether they report usage. This has been tested against recorded replies, not against a live provider.
+- A fallback model is priced by its own profile: give it one (it may be disabled), or the cost of the run is unknown.
 - Tokens of a failed attempt that the endpoint never reported are not counted.
