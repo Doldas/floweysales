@@ -42,3 +42,7 @@ backups/
 # Playwright
 frontend/playwright-report/
 frontend/test-results/
+
+# Locally downloaded, SHA256-pinned Liquibase JDBC dependency
+# (restored via Actions cache, never checked into git)
+docker/vendor/
