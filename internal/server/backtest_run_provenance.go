@@ -17,6 +17,7 @@ const backtestMethodVersion = "1"
 var backtestMethodFormula = map[string]string{
 	"single":      "Rank the universe by the strategy's factors at each rebalance date using only data reported by then, hold the top names, subtract trading cost, compare with the benchmark.",
 	"batch":       "The single backtest repeated for each universe and period; the summary is the minimum, median and maximum over the cells that completed.",
+	"montecarlo":  "The daily returns of the single backtest are resampled with a seeded generator into simulated paths; the summary is percentiles over those paths, not observed results.",
 	"sensitivity": "The single backtest repeated with one setting changed at a time; the summary is the spread over the variants that completed.",
 }
 
