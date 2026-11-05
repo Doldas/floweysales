@@ -2,9 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Real end-to-end workflow runs use ONLY explicit, disabled, disposable [E2E]
 // fixtures in the autotest account. No arbitrary saved flow is ever executed.
-// Configure their IDs in the protected live-e2e environment variable.
-const flowIds = (process.env.LIVE_E2E_FLOW_IDS ?? '')
-  .split(',').map(s => s.trim()).filter(Boolean);
+// Workflow fixtures are discovered from the real account on each run.
+// No manually maintained GitHub flow IDs or names are necessary.
 
 type Flow = {
   id: number;
@@ -34,27 +33,58 @@ async function login(page: Page): Promise<void> {
   expect((await session.json())?.user?.email).toBe(email);
 }
 
-test.describe('Real saved workflows — isolated test fixtures only', () => {
+test.describe('Discover and inspect real Flow Studio workflows', () => {
+  test('browse every visible flow in the UI without running it', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'live-desktop', 'Browse all flows once on desktop');
+    test.setTimeout(360_000);
+    await login(page);
+    await page.goto('/#/flows');
+    await expect(page.getByRole('heading', { name: 'Agent flows' })).toBeVisible();
+    await page.getByRole('tab', { name: 'My Flows' }).click();
+    const cards = page.locator('.overview-flow-card');
+    const total = await cards.count();
+    console.log(`Flow Studio discovery: ${total} visible saved flow(s)`);
+
+    for (let i = 0; i < total; i++) {
+      const card = cards.nth(i);
+      const name = (await card.locator('h3').innerText()).trim();
+      // Open via the same Edit/History actions a human uses. Nothing is
+      // saved, published or executed during the discovery walkthrough.
+      await card.getByRole('button', { name: 'Edit', exact: true }).click();
+      await expect(page.getByRole('tab', { name: 'Flow editor' })).toHaveAttribute('aria-selected', 'true');
+      await expect(page.getByLabel('Flow name')).toHaveValue(name);
+      await expect(page.getByRole('group', { name: 'Flow canvas: nodes and directed connections' })).toBeVisible();
+      await page.getByRole('tab', { name: 'My Flows' }).click();
+      await expect(cards).toHaveCount(total);
+
+      await cards.nth(i).getByRole('button', { name: 'History', exact: true }).click();
+      await expect(page.getByRole('tab', { name: 'Run history' })).toHaveAttribute('aria-selected', 'true');
+      await expect(page.getByLabel('Select flow for history')).toBeVisible();
+      await page.getByRole('tab', { name: 'My Flows' }).click();
+    }
+    expect(await cards.count()).toBe(total);
+    console.log(`Flow Studio walkthrough: inspected editor and history for ${total} flow(s)`);
+  });
+});
+
+test.describe('Execute explicitly safe [E2E] workflows discovered automatically', () => {
   test.skip(process.env.LIVE_E2E_WORKFLOWS !== 'true', 'Real workflow execution requires manual opt-in');
-  test.skip(flowIds.length === 0, 'Add LIVE_E2E_FLOW_IDS to the protected live-e2e environment');
 
   test('execute and verify up to two isolated workflows via UI and real run history', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'live-desktop', 'Execute real workflows on desktop only to prevent duplicate runs');
-    expect(flowIds.length).toBeLessThanOrEqual(2);
-    expect(new Set(flowIds).size).toBe(flowIds.length);
-
     test.setTimeout(360_000);
     await login(page);
     const list = await page.request.get('/api/admin/flows');
     expect(list.ok(), 'Account needs permission to read its [E2E] flow fixtures').toBe(true);
     const flows: Flow[] = (await list.json()).flows ?? [];
+    const fixtures = flows.filter(f => f.name.startsWith('[E2E] ')).sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id);
+    expect(fixtures.length, 'Create at least one disabled [E2E] flow in My Flows before opting in to live executions').toBeGreaterThan(0);
+    expect(fixtures.length, 'At most two [E2E] flows may be executed per run to bound model usage').toBeLessThanOrEqual(2);
+    const names = fixtures.map(f => f.name);
+    expect(new Set(names).size, 'Each [E2E] fixture name must be unique for unambiguous UI selection').toBe(names.length);
 
-    for (const rawId of flowIds) {
-      expect(rawId).toMatch(/^[1-9][0-9]*$/);
-      const id = Number(rawId);
-      const flow = flows.find(f => f.id === id);
-      expect(flow, `Fixture ${id} is missing; nothing will be created automatically`).toBeTruthy();
-      if (!flow) return;
+    for (const flow of fixtures) {
+      const id = flow.id;
       expect(flow.name, 'Only explicit [E2E] prefixed test fixtures may run').toMatch(/^\[E2E\] /);
       expect(flow.enabled, 'Fixtures must not be enabled as automations').toBe(false);
       expect(flow.interval_minutes).toBe(0);
