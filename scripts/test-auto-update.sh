@@ -23,7 +23,13 @@ case "$*" in
   "image inspect --format {{.Id}} "*) tag_id;;
   "image inspect --format {{ index .Config.Labels \"org.opencontainers.image.revision\" }} "*)
     target="${*: -1}"; [[ "$target" == sha256:* ]] || target="$(tag_id)"
-    [[ "$target" == sha256:old ]] && echo "$OLD_COMMIT" || echo "$NEW_COMMIT";;
+    if [[ "$SCENARIO" == mismatch && "${*: -1}" == *floweysales-migrate:* ]]; then
+      echo "$OTHER_COMMIT"
+    elif [[ "$target" == sha256:old ]]; then
+      echo "$OLD_COMMIT"
+    else
+      echo "$NEW_COMMIT"
+    fi;;
   "compose -f compose.deploy.yml exec -T mysql "*)
     [[ "$SCENARIO" == backupfail ]] && { echo "mysqldump: access denied" >&2; exit 2; }
     echo "-- MySQL dump";;
@@ -61,7 +67,7 @@ run_scenario() { # scenario [with_request]
     echo '{"id":"abc123","requested_by":1,"requested_at":"2026-10-25T09:00:00Z","expected_commit":"'"$NEW"'"}' > "$project/update-control/inbox/request.json"
   fi
   set +e
-  SCENARIO="$scenario" OLD_COMMIT="$OLD" NEW_COMMIT="$NEW" PATH="$work/bin:$PATH" XDG_RUNTIME_DIR="$project" \
+  SCENARIO="$scenario" OLD_COMMIT="$OLD" NEW_COMMIT="$NEW" OTHER_COMMIT=3333333333333333333333333333333333333333 PATH="$work/bin:$PATH" XDG_RUNTIME_DIR="$project" \
     UPDATE_ENGINE_BIN="$work/bin/fake-engine" UPDATE_HEALTH_TIMEOUT=1 UPDATE_HEALTH_INTERVAL=0.1 \
     bash "$project/scripts/auto-update.sh" > "$project/out.log" 2>&1
   code=$?
@@ -98,6 +104,12 @@ ls "$project"/backups/*.sql.gz >/dev/null 2>&1 && fail "empty backup left behind
 run_scenario migratefail
 [[ $code -ne 0 && "$(status_field state)" == failed ]] || fail "migration failure not reported"
 called "up -d" && fail "restarted after a failed migration"
+
+run_scenario mismatch
+[[ $code -ne 0 && "$(status_field state)" == failed ]] || fail "release mismatch not rejected"
+called "migrate update" && fail "mismatched revisions ran migrations"
+called "up -d" && fail "mismatched revisions restarted app"
+grep -q "differs from migration revision" "$project/update-control/status.json" || fail "revision mismatch missing from status"
 grep -q "changeset failed" "$project/update-control/status.json" || fail "log tail missing from status"
 
 run_scenario unhealthy
