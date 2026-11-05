@@ -34,7 +34,7 @@ The optional **run_workflows** performs **up to two real saved Flow Studio execu
 
 **Different angles to cover incrementally:** deterministic node chaining, branching/merge, invalid-graph validation (without executing), agent-to-output, explicit saved versus draft behavior (#273), trace auditability and retry/timeout cases. The first PR adds the framework plus a real persisted execution check; do not interpret this as full coverage of all Flow Studio features.
 
-A Playwright job runs against the *currently deployed* version. The job's checkout SHA is the test code revision, **not proof that the deployment is on the same version**.
+A Playwright job runs against the *currently deployed* version. The job's checkout SHA is the test code revision, **not proof that the deployment is on the same version**. The suite therefore checks `/healthz`, reads the commit the deployed image reports in `/api/about`, prints it in the log and fails if the build reports none. Set the `expect_commit` input (or `LIVE_E2E_EXPECT_COMMIT` locally) to also fail unless the instance runs that commit, for example after a deploy.
 
 ## Safety and failure evidence
 
@@ -66,4 +66,4 @@ Only use the live test account, never a personal/admin account. The URL is hardc
 
 ## Follow-ups
 
-See #274. Extend coverage only with stable, idempotent and observable test fixtures, redaction guarantees, a version marker for the deployed binary, bounded costs, permission checks, optional daily/scheduled smoke, and clean test data lifecycle. Destructive E2E must use a **separate disposable staging instance**, never this deployed production-like endpoint.
+See #274. Extend coverage only with stable, idempotent and observable test fixtures, redaction guarantees, bounded costs, permission checks, optional daily/scheduled smoke, and clean test data lifecycle. Destructive E2E must use a **separate disposable staging instance**, never this deployed production-like endpoint.
