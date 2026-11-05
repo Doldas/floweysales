@@ -17,9 +17,17 @@ export interface PluginManifest {
   /** A tab of interactive tools; a plugin with tools may have no market-data provider. */
   tools?: { tab?: { label?: string }; tools?: { id: string; label: string }[] };
 }
+export type CompatibilityStatus = 'compatible' | 'incompatible' | 'needs_update' | 'unknown';
+/** Whether an installed plugin works with the running FloweySales, and what that rests on. */
+export interface PluginCompatibility {
+  status: CompatibilityStatus; reason: string; plugin_protocol: number; app_protocol: number; evidence: string;
+  checked_at?: string; affects?: string[]; compatible_versions?: string[];
+}
 export interface InstalledPlugin {
   manifest: PluginManifest; installed_at: string; source: string; sha256: string; running: boolean;
   last_error?: string; env: PluginEnvVar[]; ready: boolean; latest_version?: string; update_available: boolean; log: string[];
+  /** Absent only in data from an older server. */
+  compatibility?: PluginCompatibility;
 }
 export interface StorePlugin {
   manifest: PluginManifest; released_at?: string; notes?: string; versions: string[]; latest_version?: string;
@@ -81,10 +89,23 @@ export function pluginRows(o: PluginOverview): PluginRow[] {
     Number(!a.installed) - Number(!b.installed) || a.manifest.name.localeCompare(b.manifest.name));
 }
 
+/** Label, tone and icon of a compatibility status; text always carries the meaning, never colour alone. */
+export function compatibilityBadge(c: PluginCompatibility | undefined): { label: string; tone: PluginTone; icon: string } {
+  switch (c?.status) {
+    case 'compatible': return { label: 'Compatible', tone: 'ok', icon: 'bi-check-circle' };
+    case 'incompatible': return { label: 'Incompatible', tone: 'warn', icon: 'bi-x-octagon' };
+    case 'needs_update': return { label: 'Needs update', tone: 'warn', icon: 'bi-arrow-up-circle' };
+    default: return { label: 'Not verified', tone: 'muted', icon: 'bi-question-circle' };
+  }
+}
+
 /** Short status for a row. */
 export function pluginStatus(row: PluginRow): { label: string; tone: PluginTone } {
   const i = row.installed;
   if (i) {
+    const c = i.compatibility;
+    if (c?.status === 'needs_update') return { label: `Not run: incompatible with this FloweySales. Update to ${c.compatible_versions?.[0] ?? 'a compatible version'}.`, tone: 'warn' };
+    if (c?.status === 'incompatible') return { label: 'Not run: incompatible with this FloweySales. Settings and data are kept.', tone: 'warn' };
     if (i.update_available && i.latest_version) return { label: `Update to ${i.latest_version} available`, tone: 'update' };
     if (!i.ready) return { label: 'Needs configuration', tone: 'warn' };
     if (i.last_error) return { label: 'Failed to start', tone: 'warn' };

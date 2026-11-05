@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  capabilityLabels, compareVersions, isDomainProvider, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt,
+  capabilityLabels, compareVersions, compatibilityBadge, isDomainProvider, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt,
   type InstalledPlugin, type PluginManifest, type PluginOverview, type StorePlugin,
 } from './plugin-store.ts';
 
@@ -88,4 +88,25 @@ test('domain capabilities have labels and a provider type', () => {
   assert.equal(isDomainProvider({ type: 'tax' }), true);
   assert.equal(isDomainProvider({ type: 'market' }), false);
   assert.equal(isDomainProvider({}), false);
+});
+
+test('compatibility is stated in words and never inferred from being installed or running', () => {
+  assert.deepEqual(compatibilityBadge(undefined), { label: 'Not verified', tone: 'muted', icon: 'bi-question-circle' });
+  const base = { reason: '', plugin_protocol: 1, app_protocol: 1, evidence: '' };
+  assert.equal(compatibilityBadge({ ...base, status: 'compatible' }).label, 'Compatible');
+  assert.equal(compatibilityBadge({ ...base, status: 'unknown' }).label, 'Not verified');
+  assert.equal(compatibilityBadge({ ...base, status: 'incompatible' }).tone, 'warn');
+  assert.equal(compatibilityBadge({ ...base, status: 'needs_update' }).label, 'Needs update');
+
+  const m = manifest('yahoo', 'Yahoo Finance');
+  const row = (compatibility: InstalledPlugin['compatibility'], extra: Partial<InstalledPlugin> = {}) =>
+    ({ id: 'yahoo', manifest: m, installed: installed(m, { running: true, compatibility, ...extra }), trackers: [] });
+  const incompatible = pluginStatus(row({ ...base, status: 'incompatible', plugin_protocol: 7 }));
+  assert.equal(incompatible.tone, 'warn');
+  assert.match(incompatible.label, /incompatible.*Settings and data are kept/);
+  const needsUpdate = pluginStatus(row({ ...base, status: 'needs_update', compatible_versions: ['1.1.0', '1.0.0'] }));
+  assert.match(needsUpdate.label, /Update to 1\.1\.0/);
+  // A running plugin that is incompatible is not reported as healthy, even with an update on offer.
+  assert.equal(pluginStatus(row({ ...base, status: 'incompatible' }, { update_available: true, latest_version: '1.1.0' })).tone, 'warn');
+  assert.equal(pluginStatus(row({ ...base, status: 'compatible' })).label, 'Installed · running');
 });

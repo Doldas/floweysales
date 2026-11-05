@@ -735,3 +735,172 @@ func TestSavedSettingEnablesPluginAndEnvironmentWins(t *testing.T) {
 		t.Fatalf("removing the saved key must disable it again: %+v", caps)
 	}
 }
+
+// rewriteInstalledProtocol changes the recorded protocol of an installed plugin
+// in installed.json, as a FloweySales upgrade that changes the protocol would.
+func rewriteInstalledProtocol(t *testing.T, dir string, protocol int) {
+	t.Helper()
+	path := filepath.Join(dir, "installed.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st stateFile
+	if err := json.Unmarshal(raw, &st); err != nil {
+		t.Fatal(err)
+	}
+	for i := range st.Plugins {
+		st.Plugins[i].Manifest.Protocol = protocol
+	}
+	out, _ := json.Marshal(st)
+	if err := os.WriteFile(path, out, 0o640); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCompatibilityIsUnknownUntilVerifiedAndThenEvidenceBased(t *testing.T) {
+	store := newFakeStore(t)
+	store.publish(fakeManifest("1.0.0"), fakeRelease(t, fakeManifest("1.0.0")))
+	key := "k"
+	dir := t.TempDir()
+	m := openManager(t, store, dir, &key)
+	ctx := context.Background()
+	if _, err := m.Install(ctx, "fake", "", false); err != nil {
+		t.Fatal(err)
+	}
+	// The install handshake is evidence.
+	got := m.Overview().Installed[0].Compatibility
+	if got.Status != CompatCompatible || got.CheckedAt == nil || got.PluginProtocol != 1 || got.AppProtocol != ProtocolVersion {
+		t.Fatalf("after install: %+v", got)
+	}
+
+	// A fresh process has no evidence yet and says so rather than claiming compatibility.
+	m.Close()
+	reopened := openManager(t, store, dir, &key)
+	got = reopened.Overview().Installed[0].Compatibility
+	if got.Status != CompatUnknown || got.CheckedAt != nil || !strings.Contains(got.Reason, "not verified") {
+		t.Fatalf("before verification: %+v", got)
+	}
+	verified, err := reopened.Verify(ctx, "fake")
+	if err != nil || verified.Status != CompatCompatible || verified.CheckedAt == nil {
+		t.Fatalf("verify: %+v %v", verified, err)
+	}
+	if _, err := reopened.Verify(ctx, "nope"); !errors.Is(err, ErrNotInstalled) {
+		t.Fatalf("verify of a missing plugin: %v", err)
+	}
+
+	// A binary that changed on disk is reported, and the installation is kept.
+	reopened.mu.Lock()
+	reopened.stopLocked("fake")
+	reopened.mu.Unlock()
+	path := filepath.Join(reopened.Dir(), filepath.FromSlash(reopened.Installed()[0].Binary))
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+		if err == nil {
+			_, err = f.WriteString("x")
+			f.Close()
+		}
+		if err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal(err)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	changed, err := reopened.Verify(ctx, "fake")
+	if err != nil || changed.Status != CompatIncompatible || !strings.Contains(changed.Reason, "changed on disk") || len(changed.Affects) == 0 {
+		t.Fatalf("changed binary: %+v %v", changed, err)
+	}
+	if len(reopened.InstalledAll()) != 1 {
+		t.Fatal("a failed verification must not remove the plugin")
+	}
+}
+
+func TestIncompatiblePluginIsKeptNotRunAndCanBeUpdated(t *testing.T) {
+	store := newFakeStore(t)
+	store.publish(fakeManifest("1.0.0"), fakeRelease(t, fakeManifest("1.0.0")))
+	key := "k"
+	dir := t.TempDir()
+	m := openManager(t, store, dir, &key)
+	ctx := context.Background()
+	if _, err := m.Install(ctx, "fake", "", false); err != nil {
+		t.Fatal(err)
+	}
+	m.Close()
+
+	// The app is upgraded to a protocol the installed plugin does not speak.
+	rewriteInstalledProtocol(t, dir, 7)
+	reopened := openManager(t, store, dir, &key)
+	if len(reopened.Installed()) != 0 {
+		t.Fatal("an incompatible plugin must not be listed as runnable")
+	}
+	if all := reopened.InstalledAll(); len(all) != 1 || all[0].Manifest.ID != "fake" {
+		t.Fatalf("an upgrade must not drop the plugin: %+v", all)
+	}
+	if _, err := reopened.Quote(ctx, "FAKE", "NVDA"); err == nil || !strings.Contains(err.Error(), "incompatible") {
+		t.Fatalf("an incompatible plugin ran: %v", err)
+	}
+	got := reopened.Overview().Installed[0].Compatibility
+	if got.Status != CompatIncompatible || got.PluginProtocol != 7 || !strings.Contains(got.Reason, "protocol 7") || len(got.Affects) == 0 {
+		t.Fatalf("incompatible: %+v", got)
+	}
+
+	// Another change to the installed set must keep it in installed.json.
+	store.publish(toolsManifest("1.0.0"), fakeRelease(t, toolsManifest("1.0.0")))
+	if _, err := reopened.Install(ctx, toolsManifest("1.0.0").ID, "", false); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(dir, "installed.json"))
+	if !strings.Contains(string(raw), `"id":"fake"`) && !strings.Contains(string(raw), `"id": "fake"`) {
+		t.Fatalf("installed.json lost the incompatible plugin: %s", raw)
+	}
+
+	// A compatible store version turns it into "needs update"; updating restores it.
+	store.publish(fakeManifest("1.1.0"), fakeRelease(t, fakeManifest("1.1.0")))
+	if _, err := reopened.RefreshStore(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var fakeStatus Compatibility
+	for _, p := range reopened.Overview().Installed {
+		if p.Manifest.ID == "fake" {
+			fakeStatus = p.Compatibility
+		}
+	}
+	if fakeStatus.Status != CompatNeedsUpdate || len(fakeStatus.CompatibleVersions) == 0 || fakeStatus.CompatibleVersions[0] != "1.1.0" {
+		t.Fatalf("needs update: %+v", fakeStatus)
+	}
+	if _, err := reopened.Install(ctx, "fake", "", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reopened.Quote(ctx, "FAKE", "NVDA"); err != nil {
+		t.Fatalf("updated plugin does not run: %v", err)
+	}
+	for _, p := range reopened.Overview().Installed {
+		if p.Manifest.ID == "fake" && p.Compatibility.Status != CompatCompatible {
+			t.Fatalf("after update: %+v", p.Compatibility)
+		}
+	}
+
+	// Removing an incompatible plugin stays possible.
+	if err := reopened.Uninstall(toolsManifest("1.0.0").ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestIncompatibleStoreVersionsAreNeverInstalled(t *testing.T) {
+	store := newFakeStore(t)
+	future := fakeManifest("2.0.0")
+	future.Protocol = 2
+	store.publish(fakeManifest("1.0.0"), fakeRelease(t, fakeManifest("1.0.0")))
+	store.publish(future, fakeRelease(t, future))
+	m := openManager(t, store, t.TempDir(), nil)
+	ctx := context.Background()
+	if _, err := m.Install(ctx, "fake", "2.0.0", false); err == nil || !strings.Contains(err.Error(), "newer FloweySales") {
+		t.Fatalf("explicit incompatible version: %v", err)
+	}
+	if got, err := m.Install(ctx, "fake", "", false); err != nil || got.Manifest.Version != "1.0.0" {
+		t.Fatalf("latest must skip the incompatible release: %+v %v", got, err)
+	}
+}

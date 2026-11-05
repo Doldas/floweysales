@@ -108,9 +108,11 @@ function pluginManifest(id, version = '1.0.0') {
 const pluginOverview = {
   platform: 'linux-amd64', protocol: 1, store_url: 'https://doldas.github.io/floweysales-plugins/index.json', dir: '/plugins',
   installed: [
-    { manifest: pluginManifest('yahoo'), installed_at: '2026-10-30T10:00:00Z', source: 'store', sha256: 'a'.repeat(64), running: true, env: [], ready: true, latest_version: '1.1.0', update_available: true, log: ['started'] },
+    { manifest: pluginManifest('yahoo'), installed_at: '2026-10-30T10:00:00Z', source: 'store', sha256: 'a'.repeat(64), running: true, env: [], ready: true, latest_version: '1.1.0', update_available: true, log: ['started'],
+      compatibility: { status: 'compatible', reason: 'Works with this FloweySales.', plugin_protocol: 1, app_protocol: 1, evidence: 'Declared protocol matches and the plugin answered a handshake.', checked_at: '2026-10-31T08:05:00Z' } },
     { manifest: pluginManifest('finnhub'), installed_at: '2026-10-30T10:00:00Z', source: 'store', sha256: 'b'.repeat(64), running: false,
-      env: [{ name: 'FINNHUB_API_KEY', secret: true, required: true, description: 'Finnhub API token', configured: false }], ready: false, latest_version: '1.0.0', update_available: false, log: [] },
+      env: [{ name: 'FINNHUB_API_KEY', secret: true, required: true, description: 'Finnhub API token', configured: false }], ready: false, latest_version: '1.0.0', update_available: false, log: [],
+      compatibility: { status: 'unknown', reason: 'Compatibility is not verified yet.', plugin_protocol: 1, app_protocol: 1, evidence: 'Declared protocol matches; no handshake has been run since FloweySales started.' } },
   ],
   store: { checked_at: '2026-10-31T08:00:00Z', plugins: [
     { manifest: pluginManifest('yahoo', '1.1.0'), versions: ['1.1.0', '1.0.0'], latest_version: '1.1.0', installable: true, installed_version: '1.0.0', update_available: true, released_at: '2026-10-31T07:00:00Z', notes: 'Faster search.' },

@@ -74,6 +74,7 @@ type Manager struct {
 	installed map[string]InstalledPlugin // by plugin id
 	procs     map[string]*process
 	failures  map[string]startFailure
+	checks    map[string]compatCheck // last handshake per plugin id
 
 	storeMu  sync.Mutex
 	snapshot *storeSnapshot
@@ -118,7 +119,7 @@ func Open(cfg Config) (*Manager, error) {
 		return nil, fmt.Errorf("create plugin directory: %w", err)
 	}
 	m := &Manager{cfg: cfg, store: store, http: client, installed: map[string]InstalledPlugin{},
-		saved: map[string]string{}, procs: map[string]*process{}, failures: map[string]startFailure{}}
+		saved: map[string]string{}, procs: map[string]*process{}, failures: map[string]startFailure{}, checks: map[string]compatCheck{}}
 	raw, err := os.ReadFile(m.statePath())
 	switch {
 	case errors.Is(err, os.ErrNotExist):
@@ -130,7 +131,10 @@ func Open(cfg Config) (*Manager, error) {
 			return nil, fmt.Errorf("installed.json is corrupt: %w", err)
 		}
 		for _, p := range st.Plugins {
-			if p.Manifest.Validate() == nil && validBinaryPath(p.Binary) {
+			// A plugin this build cannot run (for example after a protocol change)
+			// is kept, not dropped: it is reported as incompatible and not run, and
+			// installed.json keeps it so a rollback or an update can bring it back.
+			if ValidPluginID(p.Manifest.ID) && validBinaryPath(p.Binary) {
 				m.installed[p.Manifest.ID] = p
 			}
 		}
@@ -166,8 +170,21 @@ func (m *Manager) saveLocked() error {
 	return os.Rename(tmp, m.statePath())
 }
 
-// Installed lists installed plugins sorted by id.
+// Installed lists the installed plugins this build can run, sorted by id.
+// Plugins kept but incompatible are only in InstalledAll.
 func (m *Manager) Installed() []InstalledPlugin {
+	all := m.InstalledAll()
+	out := all[:0]
+	for _, p := range all {
+		if declaredProblem(p) == "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// InstalledAll lists every installed plugin, runnable or not, sorted by id.
+func (m *Manager) InstalledAll() []InstalledPlugin {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := make([]InstalledPlugin, 0, len(m.installed))
@@ -230,6 +247,9 @@ func (m *Manager) env(manifest *Manifest) (env []string, missing []string) {
 // (after re-verifying the binary's checksum) when needed.
 func (m *Manager) process(p InstalledPlugin) (*process, error) {
 	id := p.Manifest.ID
+	if problem := declaredProblem(p); problem != "" {
+		return nil, fmt.Errorf("plugin %s is incompatible with this FloweySales and is not run (it stays installed): %s", id, problem)
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if proc := m.procs[id]; proc != nil && proc.alive() {
@@ -494,6 +514,7 @@ func (m *Manager) installBinary(ctx context.Context, data []byte, expected *Mani
 	m.mu.Lock()
 	previous, hadPrevious := m.installed[id]
 	m.installed[id] = entry
+	m.checks[id] = compatCheck{at: time.Now().UTC()} // the staged handshake just succeeded
 	if err := m.saveLocked(); err != nil {
 		if hadPrevious {
 			m.installed[id] = previous
@@ -567,6 +588,7 @@ func (m *Manager) Uninstall(id string) error {
 		return ErrNotInstalled
 	}
 	delete(m.installed, id)
+	delete(m.checks, id)
 	if err := m.saveLocked(); err != nil {
 		m.installed[id] = previous
 		m.mu.Unlock()
@@ -663,6 +685,8 @@ type InstalledStatus struct {
 	LatestVersion   string      `json:"latest_version,omitempty"`
 	UpdateAvailable bool        `json:"update_available"`
 	Log             []string    `json:"log"`
+	// Compatibility states whether the plugin works with the running FloweySales.
+	Compatibility Compatibility `json:"compatibility"`
 }
 
 // StorePlugin is a store entry annotated for this backend.
@@ -702,7 +726,7 @@ func (m *Manager) Overview() Overview {
 	out := Overview{Platform: Platform(), Protocol: ProtocolVersion, StoreURL: m.cfg.StoreURL, Dir: m.cfg.Dir,
 		Installed: []InstalledStatus{}, Store: StoreStatus{Plugins: []StorePlugin{}}}
 	snap := m.cachedStore()
-	installed := m.Installed()
+	installed := m.InstalledAll()
 	installedVersion := map[string]string{}
 	for _, p := range installed {
 		installedVersion[p.Manifest.ID] = p.Manifest.Version
@@ -737,7 +761,7 @@ func (m *Manager) Overview() Overview {
 		latest[sp.Manifest.ID] = sp
 	}
 	for _, p := range installed {
-		st := InstalledStatus{Manifest: p.Manifest, InstalledAt: p.InstalledAt, Source: p.Source, SHA256: p.SHA256, Env: []EnvStatus{}, Log: []string{}}
+		st := InstalledStatus{Manifest: p.Manifest, InstalledAt: p.InstalledAt, Source: p.Source, SHA256: p.SHA256, Env: []EnvStatus{}, Log: []string{}, Compatibility: m.assess(p, snap)}
 		_, missing := m.env(&p.Manifest)
 		st.Ready = len(missing) == 0
 		for _, e := range p.Manifest.Env {
