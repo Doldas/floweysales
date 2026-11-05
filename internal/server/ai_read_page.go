@@ -97,6 +97,19 @@ func pdfText(data []byte) (text string, err error) {
 	return strings.TrimSpace(crawlerSpaces.ReplaceAllString(b.String(), " ")), nil
 }
 
+// readPageStatusError gives the agent a useful recovery path without
+// interpreting a search hit as a successfully read primary source. Some sites,
+// notably SEC EDGAR, block ordinary automated page downloads.
+func readPageStatusError(status int, target *url.URL) error {
+	if status == http.StatusForbidden && (strings.EqualFold(target.Hostname(), "sec.gov") || strings.HasSuffix(strings.ToLower(target.Hostname()), ".sec.gov")) {
+		return errors.New("SEC EDGAR denied this page request (HTTP 403). The search hit is only a snippet, not a read filing. Use get_sec_filings/get_sec_facts or get_sec_section for official SEC data; do not claim this page was read")
+	}
+	if status == http.StatusForbidden || status == http.StatusTooManyRequests {
+		return fmt.Errorf("HTTP status %d: the site is denying automated page access; try another public source and do not treat this search snippet as verified page content", status)
+	}
+	return fmt.Errorf("HTTP status %d", status)
+}
+
 // readPublicPage fetches an HTML, plain-text or PDF page, following at most
 // readPageMaxHops redirects. It returns the body and the address finally read.
 func readPublicPage(ctx context.Context, raw string) (string, string, bool, error) {
@@ -135,7 +148,7 @@ func readPublicPage(ctx context.Context, raw string) (string, string, bool, erro
 		defer closeClient()
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			return "", "", false, fmt.Errorf("HTTP status %d", resp.StatusCode)
+			return "", "", false, readPageStatusError(resp.StatusCode, u)
 		}
 		kind := strings.ToLower(strings.Split(resp.Header.Get("Content-Type"), ";")[0])
 		isPDF := strings.Contains(kind, "application/pdf")
