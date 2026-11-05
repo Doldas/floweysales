@@ -38,11 +38,15 @@ test.describe('Discover and inspect real Flow Studio workflows', () => {
     test.skip(testInfo.project.name !== 'live-desktop', 'Browse all flows once on desktop');
     test.setTimeout(360_000);
     await login(page);
+    const listing = await page.request.get('/api/admin/flows');
+    expect(listing.ok(), 'Autotest account must be able to list its saved flows').toBe(true);
+    const listedFlows: Flow[] = (await listing.json()).flows ?? [];
     await page.goto('/#/flows');
     await expect(page.getByRole('heading', { name: 'Agent flows' })).toBeVisible();
     await page.getByRole('tab', { name: 'My Flows' }).click();
     const cards = page.locator('.overview-flow-card');
-    const total = await cards.count();
+    await expect(cards).toHaveCount(listedFlows.length, { timeout: 20_000 });
+    const total = listedFlows.length;
     console.log(`Flow Studio discovery: ${total} visible saved flow(s)`);
 
     for (let i = 0; i < total; i++) {
