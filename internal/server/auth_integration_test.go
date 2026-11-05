@@ -130,9 +130,9 @@ func TestMySQLAuthGate(t *testing.T) {
 	// Research Agent must remain configured for an ordinary signed-in user.
 	// Server endpoint credentials are redacted, but readiness is not.
 	for _, tc := range []struct {
-		name         string
-		cookie       *http.Cookie
-		admin        bool
+		name   string
+		cookie *http.Cookie
+		admin  bool
 	}{
 		{name: "admin", cookie: cookies[0], admin: true},
 		{name: "user", cookie: userCookie, admin: false},
@@ -144,11 +144,11 @@ func TestMySQLAuthGate(t *testing.T) {
 				t.Fatalf("config returned %d", res.StatusCode)
 			}
 			var cfg struct {
-				Configured    bool   `json:"configured"`
-				BaseURL       string `json:"base_url"`
-				Model         string `json:"model"`
-				CanConfigure  bool   `json:"can_configure"`
-				HasServerKey  bool   `json:"has_server_key"`
+				Configured   bool   `json:"configured"`
+				BaseURL      string `json:"base_url"`
+				Model        string `json:"model"`
+				CanConfigure bool   `json:"can_configure"`
+				HasServerKey bool   `json:"has_server_key"`
 			}
 			if err := json.NewDecoder(res.Body).Decode(&cfg); err != nil {
 				t.Fatal(err)
