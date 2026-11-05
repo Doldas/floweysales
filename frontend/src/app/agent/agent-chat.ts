@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, effect, inject, input, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, effect, inject, input, signal, viewChild, OnInit } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 import { EVIDENCE_MODES, auditSummary, findingLabel, removedSummary, safeUrl, settingsSummary, sourceOrigin, splitSources } from '../core/answer-sources';
@@ -26,7 +26,7 @@ type Block = { kind: 'user' | 'assistant'; entry: ChatEntry } | { kind: 'steps';
   templateUrl: './agent-chat.html',
   styleUrl: './agent-chat.scss',
 })
-export class AgentChatComponent {
+export class AgentChatComponent implements OnInit {
   readonly session = inject(AgentSession);
   readonly findingLabel = findingLabel;
   readonly evidenceModes = EVIDENCE_MODES;
@@ -50,6 +50,31 @@ export class AgentChatComponent {
   readonly variant = input<'dock' | 'page'>('dock');
 
   readonly draft = signal('');
+
+  /**
+   * Whether the model, persona and evidence controls are expanded. An explicit
+   * toggle wins and is remembered; otherwise roomy layouts start expanded and
+   * the dock and phones start collapsed so the conversation keeps the space.
+   */
+  readonly settingsOpen = signal(false);
+  private static readonly settingsKey = 'fs.agent.settingsOpen';
+  readonly modelLabel = computed(() => this.chosenProfile()?.name || this.session.model() || 'Default model');
+  readonly personaLabel = computed(() => this.session.personas().find(p => p.id === this.session.persona())?.name ?? 'Research analyst');
+  readonly evidenceLabel = computed(() => EVIDENCE_MODES.find(m => m.id === this.session.evidenceMode())?.label ?? 'Standard');
+
+  toggleSettings(): void {
+    const open = !this.settingsOpen();
+    this.settingsOpen.set(open);
+    try { localStorage.setItem(AgentChatComponent.settingsKey, open ? '1' : '0'); } catch { /* storage is optional */ }
+  }
+
+  private defaultSettingsOpen(): boolean {
+    try {
+      const stored = localStorage.getItem(AgentChatComponent.settingsKey);
+      if (stored === '1' || stored === '0') return stored === '1';
+    } catch { /* storage is optional */ }
+    return this.variant() === 'page' && typeof matchMedia === 'function' && matchMedia('(min-width: 992px) and (min-height: 640px)').matches;
+  }
   private readonly mdCache = new Map<string, SafeHtml>();
 
   readonly blocks = computed<Block[]>(() => {
@@ -94,6 +119,8 @@ export class AgentChatComponent {
 
   /** The profile chosen now, for the line under the select. */
   readonly chosenProfile = computed(() => this.session.profiles().find(p => p.id === this.session.profileId()) ?? this.session.profiles().find(p => p.is_default));
+
+  ngOnInit(): void { this.settingsOpen.set(this.defaultSettingsOpen()); }
 
   constructor() {
     void this.session.loadConfig();
