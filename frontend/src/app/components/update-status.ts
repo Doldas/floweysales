@@ -65,3 +65,31 @@ export function stepProgress(state: string | undefined): { label: string; progre
     return { label: step.label, progress };
   });
 }
+
+export interface PreflightPlugin {
+  id: string; name: string; version: string;
+  current: string; target: string; reason: string; update?: string[]; preserved: string;
+}
+
+/** Text for a compatibility status; the meaning never rests on colour alone. */
+export function preflightStatusLabel(status: string | undefined): string {
+  switch (status) {
+    case 'compatible': return 'Compatible';
+    case 'incompatible': return 'Incompatible';
+    case 'needs_update': return 'Needs update';
+    default: return 'Unknown';
+  }
+}
+
+/** One line for the plugin preview card: what the update means for installed plugins. */
+export function preflightHeadline(plugins: PreflightPlugin[]): string {
+  if (!plugins.length) return 'No plugins are installed, so this update does not affect any.';
+  const count = (status: string) => plugins.filter(p => p.target === status).length;
+  const parts = [
+    [count('compatible'), 'compatible'],
+    [count('needs_update'), 'need an update'],
+    [count('incompatible'), 'incompatible'],
+    [count('unknown'), 'not verifiable yet'],
+  ].filter(([n]) => (n as number) > 0).map(([n, label]) => `${n} ${label}`);
+  return `${plugins.length} installed plugin${plugins.length === 1 ? '' : 's'}: ${parts.join(', ')}. None is removed or updated by this update.`;
+}

@@ -1,16 +1,16 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
-import { comparisonLabel, isUpdateRunning, shortCommit, stateLabel, stepProgress } from './update-status';
+import { comparisonLabel, isUpdateRunning, preflightHeadline, preflightStatusLabel, shortCommit, stateLabel, stepProgress, type PreflightPlugin } from './update-status';
 import { formatUtcDateTime } from '../ui/datetime';
 import { SkeletonComponent } from '../ui/skeleton';
 import { ProgressStatusComponent } from '../ui/progress-status';
 
-interface ImageInfo { image: string; tag: string; digest: string; commit?: string; created?: string }
+interface ImageInfo { image: string; tag: string; digest: string; commit?: string; created?: string; plugin_protocol?: number }
 interface Commit { sha: string; title: string; url?: string }
 interface Changes { status: string; commits: Commit[]; total_commits: number; migrations: string[]; compare_url?: string }
 interface CheckResult { comparison: string; latest?: ImageInfo; changes?: Changes; changes_error?: string; error?: string; checked_at: string }
 interface Agent { engine: string; installed_at?: string; last_run_at?: string; timer: boolean; backups: boolean }
 interface Status { state: string; message?: string; request_id?: string; trigger?: string; started_at?: string; finished_at?: string; from_commit?: string; to_commit?: string; backup?: string; log_tail?: string[] }
-interface Overview { current: { commit?: string; build_time?: string; image: string; tag: string }; check?: CheckResult; can_apply: boolean; agent?: Agent; agent_error?: string; status: Status; status_error?: string }
+interface Overview { current: { commit?: string; build_time?: string; image: string; tag: string }; check?: CheckResult; can_apply: boolean; agent?: Agent; agent_error?: string; status: Status; status_error?: string; plugin_preflight?: { app_protocol: number; target_protocol: number; plugins: PreflightPlugin[] } }
 
 /** Polling interval while an update runs; the API is briefly unreachable during the restart. */
 const POLL_MS = 3000;
@@ -69,6 +69,26 @@ docker compose -f compose.deploy.yml up -d app</pre>
     <ul class="commits">@for(m of ch.migrations;track m){<li><code>{{m}}</code></li>}</ul>
    } @else {<p>No new database migrations.</p>}
   }
+  @if(o.plugin_preflight;as pf){
+   <section class="preflight" aria-labelledby="preflight-title">
+    <h4 id="preflight-title">Installed plugins and this update</h4>
+    <p>{{preflightHeadline(pf.plugins)}}</p>
+    <p class="muted">Plugin protocol: this version speaks {{pf.app_protocol}}; the new version {{pf.target_protocol?('speaks '+pf.target_protocol):'does not declare one, so compatibility is shown as unknown'}}. Compatibility with the new version is judged from what it declares; each plugin is verified with a handshake once it runs.</p>
+    @if(pf.plugins.length){
+    <ul class="plugin-list">
+     @for(p of pf.plugins;track p.id){
+      <li [attr.aria-label]="p.name+' compatibility with the new version'">
+       <strong>{{p.name}}</strong> <span class="muted">{{p.version}}</span>
+       <span class="pill">Now: {{preflightStatusLabel(p.current)}}</span>
+       <span class="pill" [class.bad]="p.target==='incompatible'||p.target==='needs_update'">After: {{preflightStatusLabel(p.target)}}</span>
+       <span class="detail">{{p.reason}}@if(p.update?.length){ Compatible version{{p.update!.length===1?'':'s'}}: {{p.update!.join(', ')}}. Updating stays your decision.}</span>
+       <span class="detail muted">{{p.preserved}}</span>
+      </li>
+     }
+    </ul>
+    }
+   </section>
+  }
   @if(o.check?.changes_error){<p class="muted">The change list is unavailable ({{o.check?.changes_error}}); the image can still be installed.</p>}
   @if(o.check?.comparison!=='up_to_date' && o.check?.comparison!=='newer_than_latest'){
    <div class="actions">
@@ -124,6 +144,12 @@ docker compose -f compose.deploy.yml up -d app</pre>
  .steps li.done{color:var(--fs-text)}.steps li.done::marker{content:'✓  '}
  .steps li.active{font-weight:600;color:var(--fs-text)}.steps li.active::marker{content:'●  '}
  .steps li.pending{opacity:.6}
+ .preflight{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--fs-border);border-radius:7px}
+ .plugin-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+ .plugin-list li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+ .plugin-list .detail{flex-basis:100%}
+ .pill{padding:1px 8px;border:1px solid var(--fs-border);border-radius:999px;font-size:12px}
+ .pill.bad{border-color:color-mix(in srgb, var(--fs-warn) 60%, transparent);background:var(--fs-warn-soft)}
  a{color:var(--fs-accent-text)}
  `],
 })
@@ -138,6 +164,8 @@ export class UpdateSettingsComponent {
  readonly stateLabel = stateLabel;
  readonly shortCommit = shortCommit;
  readonly stepProgress = stepProgress;
+ readonly preflightHeadline = preflightHeadline;
+ readonly preflightStatusLabel = preflightStatusLabel;
  private timer: ReturnType<typeof setTimeout> | undefined;
 
  constructor() {

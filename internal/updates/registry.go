@@ -12,12 +12,17 @@ import (
 	"net/url"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
 
 // RevisionLabel is the OCI label carrying the git commit an image was built from.
 const RevisionLabel = "org.opencontainers.image.revision"
+
+// PluginProtocolLabel carries the plugin wire protocol a release speaks, so
+// the update preview can judge installed plugins before the release runs.
+const PluginProtocolLabel = "org.floweysales.plugin-protocol"
 
 const maxRegistryBody = 1 << 20
 
@@ -33,6 +38,8 @@ type ImageInfo struct {
 	Digest  string `json:"digest"`
 	Commit  string `json:"commit,omitempty"`
 	Created string `json:"created,omitempty"`
+	// PluginProtocol is 0 when the image does not declare one.
+	PluginProtocol int `json:"plugin_protocol,omitempty"`
 }
 
 // Registry reads public image metadata from an OCI distribution registry
@@ -171,6 +178,9 @@ func (r Registry) Lookup(ctx context.Context, image, tag string) (ImageInfo, err
 	info.Created = config.Created
 	if commit := config.Config.Labels[RevisionLabel]; commitPattern.MatchString(commit) {
 		info.Commit = commit
+	}
+	if n, err := strconv.Atoi(config.Config.Labels[PluginProtocolLabel]); err == nil && n > 0 {
+		info.PluginProtocol = n
 	}
 	return info, nil
 }

@@ -157,3 +157,61 @@ func (m *Manager) VerifyAll(ctx context.Context) {
 		_, _ = m.Verify(ctx, p.Manifest.ID)
 	}
 }
+
+// PreflightEntry compares one installed plugin with an app release that is
+// about to be installed. Current is how it fares today; Target is judged from
+// what the release declares, never from a handshake with a binary that is not running yet.
+type PreflightEntry struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	// Current is the status against the running FloweySales.
+	Current string `json:"current"`
+	// Target is compatible, needs_update, incompatible or unknown.
+	Target string `json:"target"`
+	Reason string `json:"reason"`
+	// Update lists store versions that speak the target protocol, newest first.
+	Update []string `json:"update,omitempty"`
+	// Preserved says what the upgrade leaves untouched.
+	Preserved string `json:"preserved"`
+}
+
+// Preflight compares every installed plugin with a target release that speaks
+// targetProtocol (0 when the release does not say). Installed plugins are
+// inventoried and judged; nothing is changed, executed or downloaded.
+func (m *Manager) Preflight(targetProtocol int) []PreflightEntry {
+	snap := m.cachedStore()
+	installed := m.InstalledAll()
+	out := make([]PreflightEntry, 0, len(installed))
+	for _, p := range installed {
+		cur := m.assess(p, snap)
+		e := PreflightEntry{ID: p.Manifest.ID, Name: p.Manifest.Name, Version: p.Manifest.Version, Current: cur.Status,
+			Preserved: "Binary, version, saved settings, data and approvals stay as they are."}
+		switch {
+		case targetProtocol <= 0:
+			e.Target = CompatUnknown
+			e.Reason = "The new release does not declare which plugin protocol it speaks, so compatibility is not assumed."
+		case p.Manifest.Protocol == targetProtocol:
+			e.Target = CompatCompatible
+			e.Reason = fmt.Sprintf("Speaks protocol %d, which the new release speaks. It is verified with a handshake once the new version runs.", targetProtocol)
+		default:
+			e.Target = CompatIncompatible
+			e.Reason = fmt.Sprintf("Speaks protocol %d; the new release speaks %d. It stays installed but is not run until updated.", p.Manifest.Protocol, targetProtocol)
+			if snap != nil {
+				if entry, ok := snap.index.find(p.Manifest.ID); ok {
+					for _, v := range entry.Versions {
+						if _, has := v.Artifacts[Platform()]; has && v.Manifest.Protocol == targetProtocol {
+							e.Update = append(e.Update, v.Manifest.Version)
+						}
+					}
+					sort.Slice(e.Update, func(i, j int) bool { return CompareVersions(e.Update[i], e.Update[j]) > 0 })
+				}
+			}
+			if len(e.Update) > 0 {
+				e.Target = CompatNeedsUpdate
+			}
+		}
+		out = append(out, e)
+	}
+	return out
+}

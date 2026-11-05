@@ -299,7 +299,14 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     '/api/admin/users/list': { users: [{ id: 1, email, role, active: true }] },
     '/api/admin/roles': { roles: [{ name: 'SYS_ADMIN', permissions: [] }, { name: 'USER', permissions: ['research.read', 'ai.chat'] }], permissions: ['research.read', 'ai.chat', 'flows.read', 'flows.write', 'flows.run'] },
     '/api/admin/settings/smtp': { configuration: {}, has_password: false },
-    '/api/admin/updates': { current: { commit: 'abc123def456', image: 'ghcr.io/doldas/floweysales', tag: 'latest' }, can_apply: false, status: { state: 'idle' } },
+    '/api/admin/updates': {
+      current: { commit: 'abc123def456', image: 'ghcr.io/doldas/floweysales', tag: 'latest' }, can_apply: false, status: { state: 'idle' },
+      check: { comparison: 'update_available', checked_at: '2026-11-05T08:00:00Z', latest: { image: 'ghcr.io/doldas/floweysales', tag: 'latest', digest: 'sha256:x', commit: 'fedcba987654', plugin_protocol: 2 } },
+      plugin_preflight: { app_protocol: 1, target_protocol: 2, plugins: [
+        { id: 'yahoo', name: 'Yahoo Finance', version: '1.2.0', current: 'compatible', target: 'needs_update', reason: 'Speaks protocol 1; the new release speaks 2. It stays installed but is not run until updated.', update: ['2.0.0'], preserved: 'Binary, version, saved settings, data and approvals stay as they are.' },
+        { id: 'finnhub', name: 'Finnhub', version: '0.9.0', current: 'unknown', target: 'incompatible', reason: 'Speaks protocol 1; the new release speaks 2. It stays installed but is not run until updated.', preserved: 'Binary, version, saved settings, data and approvals stay as they are.' },
+      ] },
+    },
     '/api/ai/profiles': { profiles: mockProfiles },
     '/api/admin/ai/profiles': { profiles: mockProfiles.map(p => ({ ...p, enabled: true, position: 0 })), max: 20 },
     '/api/ai/teams': { teams: [{ id: 3, name: 'Value panel', chair: true, members: [{ persona: 'owner', profile_id: 2 }, { persona: 'teacher', profile_id: null }] }], max: 20 },
