@@ -12,6 +12,5 @@ COPY docker/mysql-connector-j-9.5.0.sha256 /tmp/mysql-connector.sha256
 RUN set -eu; \
     expected="$(cut -d' ' -f1 /tmp/mysql-connector.sha256)"; \
     actual="$(sha256sum /liquibase/internal/lib/mysql-connector-j-9.5.0.jar | cut -d' ' -f1)"; \
-    test "$actual" = "$expected"; \
-    rm /tmp/mysql-connector.sha256
+    test "$actual" = "$expected"
 COPY db/changelog/ /liquibase/changelog/
