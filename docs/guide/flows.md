@@ -55,7 +55,7 @@ A run that is interrupted resumes from its last checkpoint, so completed steps a
 
 ## Versions: draft, publish, roll back
 
-**Save** writes the editable draft. **Publish revision** freezes the draft as a numbered revision, which becomes the active one. Scheduled and event runs always use the active revision; **Run draft** tests unpublished edits. Activating an older revision rolls back immediately. A flow that was never published runs its draft.
+**Save** writes the editable draft. **Publish revision** freezes the draft as a numbered revision, which becomes the active one. Scheduled and event runs always use the active revision; **Run draft** tests the saved, unpublished draft, and **Test unsaved draft** runs what is currently in the editor without saving it (shown in Run history as a *draft test*). Activating an older revision rolls back immediately. A flow that was never published runs its draft.
 
 ## Read a run
 

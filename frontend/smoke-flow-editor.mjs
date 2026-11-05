@@ -154,6 +154,19 @@ try {
   const run = state.requests.find(r => r.pathname.endsWith('/run'));
   check('run targets the active revision', run?.body?.target === 'active', JSON.stringify(run?.body));
 
+  // 6b. Unsaved edits: Run tests exactly what the editor shows, without saving.
+  await studio.getByLabel('Flow name').fill('E2E filing review (edited)');
+  await studio.getByRole('button', { name: 'Test unsaved draft', exact: true }).waitFor();
+  const requestsBefore = state.requests.length;
+  await studio.getByRole('button', { name: 'Test unsaved draft', exact: true }).click();
+  await studio.getByText('Draft test queued with your unsaved edits').waitFor();
+  const draftTest = state.requests.slice(requestsBefore).find(r => r.pathname.endsWith('/run'));
+  check('unsaved run is a draft test carrying the editor graph', draftTest?.body?.target === 'draft' && Array.isArray(draftTest?.body?.graph?.nodes), JSON.stringify(draftTest?.body)?.slice(0, 120));
+  check('unsaved run saves nothing', !state.requests.slice(requestsBefore).some(r => r.method === 'PUT' || (r.method === 'POST' && r.pathname === '/api/admin/flows')));
+  check('edits stay unsaved after a draft test', await studio.getByText('Unsaved changes').isVisible());
+  await studio.getByLabel('Flow name').fill('E2E filing review');
+  await studio.getByText('All changes saved').waitFor();
+
   // 7. Inspect: the run's node trace lists the agent's tool calls.
   await studio.getByRole('tab', { name: 'Run history', exact: true }).click();
   await studio.getByRole('button', { name: 'Refresh history' }).click();
