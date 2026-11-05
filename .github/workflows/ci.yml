@@ -197,9 +197,9 @@ jobs:
             echo "::warning::Migration image build attempt $attempt failed. Retrying after a backoff."
             sleep $((attempt * 15))
           done
-          docker compose -f compose.identity.yml --profile migration run --no-build --rm migrate validate
-          docker compose -f compose.identity.yml --profile migration run --no-build --rm migrate update
-          docker compose -f compose.identity.yml --profile migration run --no-build --rm migrate status --verbose
+          docker compose -f compose.identity.yml --profile migration run --rm migrate validate
+          docker compose -f compose.identity.yml --profile migration run --rm migrate update
+          docker compose -f compose.identity.yml --profile migration run --rm migrate status --verbose
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
