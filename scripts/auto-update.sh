@@ -129,6 +129,13 @@ log "Pulling app and migration images only (MySQL excluded)..."
 run compose pull app migrate
 NEW_ID="$(image_id "$APP_IMAGE")"
 TO_COMMIT="$(image_commit "$APP_IMAGE")"
+if [[ -n "$PREVIOUS_ID" && "$NEW_ID" == "$PREVIOUS_ID" ]]; then
+  log "Already running the latest image; nothing to do."
+  write_status up_to_date "Already running the latest $TAG image" finished
+  write_agent
+  exit 0
+fi
+
 MIGRATION_COMMIT="$(image_commit "$MIGRATION_IMAGE")"
 # Never migrate using a different app revision. Tags (including stable) can
 # advance independently, so the two published images must match by commit.
@@ -139,13 +146,6 @@ if [[ -n "$TO_COMMIT" && -n "$MIGRATION_COMMIT" && "$TO_COMMIT" != "$MIGRATION_C
 fi
 if [[ -z "$TO_COMMIT" || -z "$MIGRATION_COMMIT" ]]; then
   log "WARNING: revision label missing on app or migration image; revision compatibility cannot be verified"
-fi
-
-if [[ -n "$PREVIOUS_ID" && "$NEW_ID" == "$PREVIOUS_ID" ]]; then
-  log "Already running the latest image; nothing to do."
-  write_status up_to_date "Already running the latest $TAG image" finished
-  write_agent
-  exit 0
 fi
 
 if [[ "$BACKUPS" == true ]]; then
