@@ -1,8 +1,10 @@
 import { expect, open, test } from './fixtures';
 
 test.describe('model profiles', () => {
-  test('a user picks a profile by name for the research agent', async ({ page }) => {
+  test('a user picks a profile by name for the research agent', async ({ page, isMobile }) => {
     await open(page, 'agent');
+    // On phones the agent settings start collapsed; the open state is remembered across the reload below.
+    if (isMobile) await page.locator('.settings-toggle').click();
     const select = page.getByLabel('Model', { exact: true });
     await expect(select).toBeVisible();
     await expect(select.locator('option').first()).toHaveText('Default profile (Fast and cheap)');

@@ -29,6 +29,43 @@ test.describe('research agent', () => {
   });
 });
 
+test.describe('agent settings', () => {
+  test('start collapsed on phones and expanded with room to spare, keeping the active policy visible', async ({ page, isMobile }) => {
+    await open(page, 'agent');
+    const toggle = page.locator('.settings-toggle');
+    await expect(toggle).toHaveAttribute('aria-expanded', isMobile ? 'false' : 'true');
+    await expect(toggle).toContainText('Standard');
+    await expect(page.getByLabel('Evidence', { exact: true })).toBeVisible({ visible: !isMobile });
+  });
+
+  test('every control stays reachable, nothing is lost, and the choice is remembered', async ({ page, isMobile }) => {
+    await open(page, 'agent');
+    const toggle = page.locator('.settings-toggle');
+    if (isMobile) await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByLabel('Evidence', { exact: true })).toBeVisible();
+    await expect(page.getByText('Required parts (optional)')).toBeVisible();
+    await expect(page.getByText('Evidence settings', { exact: true })).toBeVisible();
+
+    // A strict mode stays readable in the summary once the panel is closed.
+    await page.getByLabel('Evidence', { exact: true }).selectOption({ index: 1 });
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByLabel('Evidence', { exact: true })).toBeHidden();
+    await expect(toggle).not.toContainText('Standard');
+
+    await page.reload();
+    await page.locator('#main-content > *:not(router-outlet)').first().waitFor();
+    await expect(page.locator('.settings-toggle')).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('keep the composer in view on a phone', async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'Phone layout only.');
+    await open(page, 'agent');
+    await expect(page.getByRole('textbox', { name: 'Message the research agent' })).toBeInViewport();
+  });
+});
+
 test.describe('tool call inspection', () => {
   test('a chat tool call shows its input, output and a way to copy and find', async ({ page }) => {
     await open(page);

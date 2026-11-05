@@ -140,3 +140,23 @@
 .task-compose, .task-list { font-size: 0.78rem; margin-bottom: 0.4rem; summary { cursor: pointer; color: var(--fs-muted); } textarea { margin: 0.3rem 0; } }
 .task-list ul { list-style: none; margin: 0.3rem 0 0; padding: 0; display: grid; gap: 0.5rem; max-height: 14rem; overflow: auto; li { display: grid; gap: 0.15rem; border-top: 1px solid var(--fs-border); padding-top: 0.4rem; overflow-wrap: anywhere; } }
 .task-actions { display: flex; gap: 0.4rem; }
+
+// ------------------------------------------------------------ collapsible agent settings
+
+.settings-bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; min-width: 0; }
+.settings-toggle {
+  display: flex; align-items: center; gap: 0.45rem; flex: 1 1 auto; min-width: 0; min-height: 2.25rem; padding: 0.3rem 0.6rem; text-align: left;
+  border: 1px solid var(--fs-border); border-radius: var(--bs-border-radius); background: var(--fs-surface-2); color: var(--fs-text-2); font-size: 0.78rem;
+  &:hover { border-color: var(--fs-accent); }
+  &:focus-visible { box-shadow: var(--fs-focus); outline: none; }
+  .bi { flex: none; color: var(--fs-muted); }
+  .settings-label { flex: none; font-weight: 600; color: var(--fs-text); }
+  .settings-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fs-muted); }
+  .settings-summary strong { font-weight: 650; color: var(--fs-text-2); &.is-strict { color: var(--fs-accent-text); } }
+}
+.settings-flag { flex: none; font-size: 0.72rem; color: var(--fs-muted); }
+.settings-panel { max-height: 45dvh; overflow-y: auto; margin-bottom: 0.4rem; padding-bottom: 0.1rem; }
+@media (max-width: 575.98px) {
+  // On phones the label gives way to the summary, which is what the user needs to read.
+  .settings-toggle .settings-label { display: none; }
+}
