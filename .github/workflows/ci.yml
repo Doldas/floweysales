@@ -132,6 +132,9 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frozen dependencies
         run: npm ci --prefix frontend
+      - name: Validate live E2E suite discovery without contacting the deployed instance
+        working-directory: frontend
+        run: npx playwright test --config playwright.live.config.ts --list
       - name: Dates are UTC and numbers en-US (no browser-dependent formatting)
         run: bash scripts/check-utc-formatting.sh
       - name: Unit tests for Flow Studio helpers
