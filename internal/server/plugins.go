@@ -21,6 +21,13 @@ func (e *Engine) ConfigurePlugins(m *plugins.Manager, defaultProvider market.Pro
 	e.plugins = m
 	e.providers = m
 	e.defaultProvider = defaultProvider
+	// Verify what is installed against this build in the background, so
+	// Settings → Plugins can say "compatible" from evidence rather than assume it.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		m.VerifyAll(ctx)
+	}()
 }
 
 const pluginEnvKind = "plugin_env:" // prefix of the integration name; the whole name fits 32 characters
@@ -145,6 +152,24 @@ func (e *Engine) registerPluginRoutes() {
 		_, _ = e.plugins.RefreshStore(ctx)
 		writeJSON(w, http.StatusOK, e.pluginOverview())
 	})
+	e.mux.HandleFunc("POST /api/admin/plugins/{id}/verify", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := e.pluginAdmin(w, r); !ok {
+			return
+		}
+		id := r.PathValue("id")
+		if !plugins.ValidPluginID(id) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid plugin id"})
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		if _, err := e.plugins.Verify(ctx, id); errors.Is(err, plugins.ErrNotInstalled) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+			return
+		}
+		e.clearProviderCaches()
+		writeJSON(w, http.StatusOK, e.pluginOverview())
+	})
 	e.mux.HandleFunc("POST /api/admin/plugins/install", func(w http.ResponseWriter, r *http.Request) {
 		user, ok := e.pluginAdmin(w, r)
 		if !ok {
@@ -251,7 +276,7 @@ func (e *Engine) registerPluginRoutes() {
 		id := r.PathValue("id")
 		var provider market.Provider
 		found := false
-		for _, p := range e.plugins.Installed() {
+		for _, p := range e.plugins.InstalledAll() {
 			if p.Manifest.ID == id {
 				found, provider = true, market.Provider(p.Manifest.Provider.ID)
 			}

@@ -34,6 +34,19 @@ last lines it logged.
 - Because installing runs downloaded code, these routes require
   authentication (`AUTH_ENABLED=true`) and a SYS_ADMIN session, like updates.
 
+### Compatibility with this FloweySales
+
+Every installed plugin shows one of four states in **Settings → Plugins**, with the reason, the protocol on both sides, what the claim rests on and when it was last checked:
+
+- **Compatible**: the declared protocol matches and the plugin answered a handshake (without any of its secrets) that agrees with what is installed.
+- **Not verified**: nothing contradicts compatibility, but no handshake has run since FloweySales started. Installed or running is not treated as verified. The server verifies all plugins in the background after startup, and **Verify now** (`POST /api/admin/plugins/{id}/verify`) checks one on demand.
+- **Needs update**: the plugin cannot run here, and the store lists a version that can. Nothing is updated without your action.
+- **Incompatible**: the plugin cannot run here (for example it speaks another protocol, its manifest is no longer accepted, or the binary changed on disk) and no compatible version is known.
+
+An incompatible plugin is **kept, not run**. FloweySales never removes it, its settings or its data on its own, and `installed.json` keeps it, so a rollback or a later update brings it back. Its provider and tools tab are unavailable meanwhile, and it can still be uninstalled. Installing, updating, choosing another version and sideloading all refuse a version that does not speak this protocol, in the backend and the CLI as well as the UI.
+
+Not yet covered: a before/after comparison against a target FloweySales version in Settings → Updates, minimum and maximum app versions in the manifest, and an upgrade preflight report.
+
 ### Command line
 
 On servers without authentication, or without a browser, use the backend

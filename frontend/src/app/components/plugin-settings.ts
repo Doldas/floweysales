@@ -5,7 +5,7 @@ import { formatUtcDateTime } from '../ui/datetime';
 import { SkeletonComponent } from '../ui/skeleton';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import {
-  capabilityLabels, isDomainProvider, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt,
+  capabilityLabels, compatibilityBadge, isDomainProvider, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt,
   type PluginOverview, type PluginRow,
 } from './plugin-store';
 
@@ -75,6 +75,14 @@ type View = 'all' | 'installed' | 'available';
      @if (!row.manifest.provider.capabilities?.length) { @for (t of toolLabels(row.manifest); track t) { <li>{{ t }}</li> } }
     </ul>
     <p class="status" [attr.data-tone]="status(row).tone" role="status">{{ status(row).label }}</p>
+    @if (row.installed?.compatibility; as c) {
+     <section class="compat" [attr.data-tone]="compat(c).tone" [attr.aria-label]="'Compatibility of ' + row.manifest.name">
+      <p><i class="bi" [class]="compat(c).icon" aria-hidden="true"></i> <strong>{{ compat(c).label }}</strong> with this FloweySales · {{ c.reason }}</p>
+      @if (c.affects?.length) { <ul class="small">@for (a of c.affects; track a) { <li>{{ a }}</li> }</ul> }
+      <p class="muted small">{{ c.evidence }} {{ c.checked_at ? 'Checked ' + when(c.checked_at) + '.' : 'Never checked in this session.' }}</p>
+      <button type="button" class="btn btn-sm btn-outline-secondary" (click)="verify(row)" [disabled]="busy()">Verify now</button>
+     </section>
+    }
 
     @if (row.installed; as i) {
      @if (i.env.length) {
@@ -106,6 +114,9 @@ type View = 'all' | 'installed' | 'available';
       @if (row.installed.update_available && row.installed.latest_version) {
        <button class="btn btn-sm btn-primary" (click)="install(row, row.installed.latest_version)" [disabled]="busy()">Update to {{ row.installed.latest_version }}</button>
       }
+      @if (!(row.installed.update_available && row.installed.latest_version) && row.installed.compatibility?.status === 'needs_update' && row.installed.compatibility?.compatible_versions?.length) {
+       <button class="btn btn-sm btn-primary" (click)="install(row, row.installed.compatibility?.compatible_versions?.[0])" [disabled]="busy()">Update to {{ row.installed.compatibility?.compatible_versions?.[0] }}</button>
+      }
       <button class="btn btn-sm btn-outline-danger" (click)="uninstall(row)" [disabled]="busy()">Uninstall</button>
      } @else if (row.store?.installable) {
       <button class="btn btn-sm btn-primary" (click)="install(row, row.store?.latest_version)" [disabled]="busy()">Install</button>
@@ -130,6 +141,7 @@ type View = 'all' | 'installed' | 'available';
       @if (row.installed; as i) {
        <dt>Installed</dt><dd>{{ when(i.installed_at) }} from {{ i.source === 'file' ? 'a local file' : 'the store' }}</dd>
        <dt>SHA-256</dt><dd><code>{{ i.sha256 }}</code></dd>
+       @if (i.compatibility; as c) { <dt>Protocol</dt><dd>plugin {{ c.plugin_protocol }} · FloweySales {{ c.app_protocol }}</dd> }
       }
       @if (row.store?.released_at) { <dt>Released</dt><dd>{{ when(row.store!.released_at!) }}</dd> }
      </dl>
@@ -196,6 +208,10 @@ floweysales_backend plugins update</pre>
  .status[data-tone=ok]{border-color:color-mix(in srgb, var(--fs-pos) 50%, transparent);background:var(--fs-pos-soft)}
  .status[data-tone=update]{border-color:var(--fs-accent)}
  .status[data-tone=warn]{border-color:color-mix(in srgb, var(--fs-warn) 55%, transparent);background:var(--fs-warn-soft)}
+ .compat{display:flex;flex-direction:column;gap:6px;align-items:flex-start;padding:8px 10px;border:1px solid var(--fs-border);border-radius:7px}
+ .compat[data-tone=ok]{border-color:color-mix(in srgb, var(--fs-pos) 50%, transparent)}
+ .compat[data-tone=warn]{border-color:color-mix(in srgb, var(--fs-warn) 55%, transparent);background:var(--fs-warn-soft)}
+ .compat ul{margin:0;padding-left:18px}
  .env{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:14px}
  .env i{margin-right:6px}
  .envform{display:flex;gap:6px;margin:4px 0 0 22px;max-width:520px}
@@ -234,6 +250,7 @@ export class PluginSettingsComponent {
  readonly toolLabels = toolLabels;
  readonly isDomainProvider = isDomainProvider;
  readonly status = pluginStatus;
+ readonly compat = compatibilityBadge;
 
  readonly rows = computed(() => { const o = this.overview(); return o ? pluginRows(o) : []; });
  readonly visible = computed(() => this.rows().filter(r =>
@@ -276,6 +293,15 @@ export class PluginSettingsComponent {
    }
   } catch (e) { this.message.set(String((e as Error).message ?? e)); }
   finally { this.busy.set(false); }
+ }
+
+ async verify(row: PluginRow): Promise<void> {
+  this.busy.set(true); this.working.set(row.id); this.message.set('');
+  try {
+   this.overview.set(await this.api<PluginOverview>('/api/admin/plugins/' + encodeURIComponent(row.id) + '/verify', { method: 'POST' }));
+   this.message.set(`${row.manifest.name} was checked against this FloweySales.`);
+  } catch (e) { this.message.set(String((e as Error).message ?? e)); }
+  finally { this.busy.set(false); this.working.set(''); }
  }
 
  async install(row: PluginRow, version?: string, acceptTerms = false): Promise<void> {
