@@ -127,6 +127,44 @@ func TestMySQLAuthGate(t *testing.T) {
 		t.Fatal("user session cookie missing")
 	}
 	userCookie := userCookies[0]
+	// Research Agent must remain configured for an ordinary signed-in user.
+	// Server endpoint credentials are redacted, but readiness is not.
+	for _, tc := range []struct {
+		name         string
+		cookie       *http.Cookie
+		admin        bool
+	}{
+		{name: "admin", cookie: cookies[0], admin: true},
+		{name: "user", cookie: userCookie, admin: false},
+	} {
+		t.Run("ai-config-"+tc.name, func(t *testing.T) {
+			res := request("GET", "/api/ai/config", nil, tc.cookie, "")
+			defer res.Body.Close()
+			if res.StatusCode != http.StatusOK {
+				t.Fatalf("config returned %d", res.StatusCode)
+			}
+			var cfg struct {
+				Configured    bool   `json:"configured"`
+				BaseURL       string `json:"base_url"`
+				Model         string `json:"model"`
+				CanConfigure  bool   `json:"can_configure"`
+				HasServerKey  bool   `json:"has_server_key"`
+			}
+			if err := json.NewDecoder(res.Body).Decode(&cfg); err != nil {
+				t.Fatal(err)
+			}
+			if !cfg.Configured || cfg.Model != "test-model" {
+				t.Fatalf("AI readiness must match server configuration: configured=%v model=%q", cfg.Configured, cfg.Model)
+			}
+			if tc.admin {
+				if cfg.BaseURL == "" || !cfg.CanConfigure {
+					t.Fatal("admin must be able to view/configure AI endpoint")
+				}
+			} else if cfg.BaseURL != "" || cfg.CanConfigure || cfg.HasServerKey {
+				t.Fatal("ordinary user must not receive AI endpoint, credentials or configuration rights")
+			}
+		})
+	}
 	// A new user cannot log in until their one-time invitation is accepted.
 	inviteToken, err := auth.InviteUser(t.Context(), "invited@example.test")
 	if err != nil {
