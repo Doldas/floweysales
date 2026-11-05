@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -61,5 +63,31 @@ func TestPDFTextReadsATextLayerAndRejectsGarbage(t *testing.T) {
 		if _, err := pdfText(bad); err == nil {
 			t.Errorf("%q should not parse", bad)
 		}
+	}
+}
+
+func TestReadPageStatusErrorExplainsSEC403WithoutClaimingToRead(t *testing.T) {
+	tests := []struct {
+		name, target string
+		status int
+		want string
+	}{
+		{"SEC", "https://www.sec.gov/Archives/edgar/data/1/example.htm", http.StatusForbidden, "get_sec_section"},
+		{"SEC host suffix", "https://data.sec.gov/submissions/CIK0000000001.json", http.StatusForbidden, "get_sec_section"},
+		{"Other site forbidden", "https://example.org/report", http.StatusForbidden, "automated page access"},
+		{"Rate limited", "https://example.org/report", http.StatusTooManyRequests, "automated page access"},
+		{"Other HTTP error", "https://example.org/report", http.StatusBadGateway, "HTTP status 502"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			target, err := url.Parse(tc.target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			message := readPageStatusError(tc.status, target).Error()
+			if !strings.Contains(message, tc.want) {
+				t.Fatalf("expected %q in %q", tc.want, message)
+			}
+		})
 	}
 }
