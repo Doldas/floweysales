@@ -635,6 +635,9 @@ func (e *Engine) flowChoicesAvailable(ctx context.Context, userID int64, graph f
 	return nil
 }
 
+// flowDraftRunBodyLimit fits a graph as large as a save accepts (20000 bytes) plus the envelope.
+const flowDraftRunBodyLimit = 24000
+
 // flowMaxIntervalMinutes is the longest schedule: 30 days, the monthly playbooks.
 const flowMaxIntervalMinutes = 43200
 
@@ -978,9 +981,13 @@ func (e *Engine) registerFlowRoutes() {
 		}
 		// An optional {"target":"draft"} runs unpublished edits; the default
 		// is the active revision (or the draft of a never-published flow).
-		r.Body = http.MaxBytesReader(w, r.Body, 1024)
+		// {"target":"draft","graph":{...}} tests the editor's unsaved graph:
+		// it is validated like a save, snapshotted into the run and never stored
+		// as the flow, so saved drafts, revisions and schedules stay untouched.
+		r.Body = http.MaxBytesReader(w, r.Body, flowDraftRunBodyLimit)
 		var request struct {
-			Target string `json:"target"`
+			Target string          `json:"target"`
+			Graph  json.RawMessage `json:"graph"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil && !errors.Is(err, io.EOF) {
 			writeJSON(w, 400, map[string]string{"error": "Invalid run request"})
@@ -989,6 +996,14 @@ func (e *Engine) registerFlowRoutes() {
 		if request.Target != "" && request.Target != "active" && request.Target != "draft" {
 			writeJSON(w, 400, map[string]string{"error": "target must be active or draft"})
 			return
+		}
+		unsaved := len(request.Graph) > 0 && string(request.Graph) != "null"
+		if unsaved && request.Target != "draft" {
+			writeJSON(w, 400, map[string]string{"error": "An unsaved graph can only be run with target draft"})
+			return
+		}
+		if unsaved && !e.flowAuthorized(w, r, "flows.write") {
+			return // Running a graph of your own making needs the same right as saving it.
 		}
 		var f storage.AgentFlow
 		var revision *int
@@ -1006,6 +1021,25 @@ func (e *Engine) registerFlowRoutes() {
 			writeJSON(w, 503, map[string]string{"error": "Flow storage unavailable"})
 			return
 		}
+		trigger := "manual"
+		if unsaved {
+			f.Graph = request.Graph
+			trigger = "draft test"
+			graph, _, err := validateFlow(f)
+			if err != nil {
+				writeJSON(w, 400, map[string]string{"error": err.Error()})
+				return
+			}
+			tester, _ := e.currentUser(r)
+			if err := e.flowChoicesAvailable(r.Context(), e.flowChoiceOwner(r.Context(), f.ID, tester.ID), graph); err != nil {
+				writeJSON(w, 400, map[string]string{"error": err.Error()})
+				return
+			}
+			if err := e.checkCallReferences(r.Context(), graph); err != nil {
+				writeReferenceError(w, err)
+				return
+			}
+		}
 		current, _ := e.currentUser(r)
 		if current.Role != identity.RoleSysAdmin {
 			graph, _, err := validateFlow(f)
@@ -1018,7 +1052,7 @@ func (e *Engine) registerFlowRoutes() {
 				return
 			}
 		}
-		runID, err := e.enqueueFlow(r.Context(), f, revision, "manual", "")
+		runID, err := e.enqueueFlow(r.Context(), f, revision, trigger, "")
 		if errors.Is(err, storage.ErrFlowQueueFull) {
 			writeJSON(w, 429, map[string]string{"error": err.Error()})
 			return
@@ -1027,7 +1061,7 @@ func (e *Engine) registerFlowRoutes() {
 			writeJSON(w, 503, map[string]string{"error": "Could not queue the run"})
 			return
 		}
-		writeJSON(w, 202, map[string]any{"status": "queued", "flow_id": id, "run_id": runID, "flow_revision": revision})
+		writeJSON(w, 202, map[string]any{"status": "queued", "flow_id": id, "run_id": runID, "flow_revision": revision, "draft_test": unsaved})
 	})
 	e.mux.HandleFunc("POST /api/admin/flow-events/{key}", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {

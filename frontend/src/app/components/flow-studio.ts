@@ -466,8 +466,8 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
      <button class="btn btn-sm btn-outline-secondary" type="button" (click)="redoGraph()" [disabled]="!canRedo()||busy()" aria-label="Redo graph change" title="Redo (Ctrl/Cmd+Shift+Z or Ctrl+Y)">↷ Redo</button>
      <button class="btn btn-sm btn-primary" (click)="save()" [disabled]="busy()">Save flow</button>
       <span class="muted" role="status">{{hasUnsavedChanges()?'Unsaved changes':'All changes saved'}}</span>
-     <button class="btn btn-sm btn-outline-secondary" (click)="run()" [disabled]="busy()||!selectedId()" [title]="currentFlow()?.active_revision?'Runs the active revision':'Runs the saved draft'">Run now</button>
-     @if(currentFlow()?.active_revision&&currentFlow()?.has_unpublished_changes){<button class="btn btn-sm btn-outline-secondary" (click)="run('draft')" [disabled]="busy()||hasUnsavedChanges()" title="Test unpublished edits without publishing them">Run draft</button>}
+     <button class="btn btn-sm btn-outline-secondary" (click)="run()" [disabled]="busy()||!selectedId()" [title]="!selectedId()?'Save the flow once to test it':hasUnsavedChanges()?'Runs the graph shown here, including unsaved edits, as a draft test. Nothing is saved.':currentFlow()?.active_revision?'Runs the active revision':'Runs the saved draft'">{{hasUnsavedChanges()?'Test unsaved draft':'Run now'}}</button>
+     @if(currentFlow()?.active_revision&&currentFlow()?.has_unpublished_changes){<button class="btn btn-sm btn-outline-secondary" (click)="run('draft')" [disabled]="busy()||hasUnsavedChanges()" title="Run the saved draft without publishing it. Unsaved edits use Test unsaved draft.">Run draft</button>}
      <label>Event value <input [ngModel]="triggerValue()" (ngModelChange)="triggerValue.set($event)" placeholder="Value matching trigger type"></label>
      <button class="btn btn-sm btn-outline-secondary" (click)="emitEvent()" [disabled]="busy()||!eventKey()">Trigger event</button>
      <button class="btn btn-sm btn-outline-secondary" (click)="refresh()">Refresh</button>
@@ -1693,7 +1693,13 @@ export class FlowStudioComponent {
  async run(target:'active'|'draft'='active'){
    const issues=this.graphIssues();
    if(issues.length){this.message.set('Resolve '+issues.length+' graph issue(s) before running.');return}
-   if(this.hasUnsavedChanges()){this.message.set('Save current edits before running.');return}
-   this.busy.set(true);try{const queued=await this.request('/api/admin/flows/'+this.selectedId()+'/run',{method:'POST',body:JSON.stringify({target})});this.historyFlowId.set(this.selectedId());this.message.set('Agent run queued ('+runRevisionLabel(queued.flow_revision)+'); open Run history to see its progress');setTimeout(()=>void this.refreshRuns(),3000)}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
+   // Unsaved edits run as a draft test of exactly what the editor shows; nothing is saved.
+   const unsaved=this.hasUnsavedChanges();
+   const graph=this.graph();
+   if(unsaved){
+     const effects=capabilityManifest(graph.nodes);
+     if(effects.length&&!confirm('This unsaved draft contains nodes that can act outside the flow ('+effects.map(e=>e.label||e.capability).join(', ')+'). Approval-gated actions still pause for approval. Run the test anyway?'))return;
+   }
+   this.busy.set(true);try{const queued=await this.request('/api/admin/flows/'+this.selectedId()+'/run',{method:'POST',body:JSON.stringify(unsaved?{target:'draft',graph}:{target})});this.historyFlowId.set(this.selectedId());this.message.set(unsaved?'Draft test queued with your unsaved edits; the saved flow is unchanged. Open Run history to see its progress':'Agent run queued ('+runRevisionLabel(queued.flow_revision)+'); open Run history to see its progress');setTimeout(()=>void this.refreshRuns(),3000)}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
  async emitEvent(){this.busy.set(true);try{const definition=this.triggers().find(t=>t.event_key===this.eventKey());if(!definition)throw Error('Create the custom trigger first');let value:string|number|boolean=this.triggerValue();if(definition.payload_type==='number'){value=Number(value);if(!Number.isFinite(value))throw Error('Event requires a finite number')}if(definition.payload_type==='boolean'){if(value!=='true'&&value!=='false')throw Error('Use true or false for a boolean event');value=value==='true'}const data=await this.request('/api/admin/flow-events/'+encodeURIComponent(this.eventKey()),{method:'POST',body:JSON.stringify({value})});this.message.set(data.started+' flow(s) triggered');}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
 }

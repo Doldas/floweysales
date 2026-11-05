@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 
 	"testing"
 
@@ -195,6 +197,39 @@ func TestMySQLAuthGate(t *testing.T) {
 	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/runs/%d/retry", flowID, int64(queuedRun)), nil, userCookie, ""), http.StatusConflict)
 	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/runs/%d/cancel", flowID, int64(queuedRun)), nil, otherCookies[0], ""), http.StatusNotFound)
 	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/runs/%d/cancel", flowID, int64(queuedRun)), nil, userCookie, ""), http.StatusOK)
+	// A draft test runs the editor's unsaved graph: it is queued with that graph as
+	// its snapshot, labelled as a draft test, and the saved flow is left unchanged.
+	editedGraph := map[string]any{
+		"nodes": []map[string]any{{"id": "start", "type": "trigger", "label": "Start", "x": 20, "y": 20}, {"id": "agent", "type": "agent", "label": "Research", "prompt": "UNSAVED edit of the prompt", "x": 200, "y": 20}},
+		"edges": []map[string]string{{"from": "start", "to": "agent"}},
+	}
+	draftResponse := request("POST", fmt.Sprintf("/api/admin/flows/%d/run", flowID), map[string]any{"target": "draft", "graph": editedGraph}, userCookie, "")
+	var draftRun map[string]any
+	if err := json.NewDecoder(draftResponse.Body).Decode(&draftRun); err != nil {
+		t.Fatal(err)
+	}
+	draftResponse.Body.Close()
+	draftRunID, _ := draftRun["run_id"].(float64)
+	if draftResponse.StatusCode != http.StatusAccepted || draftRun["draft_test"] != true || draftRunID <= 0 {
+		t.Fatalf("unsaved draft should be queued as a draft test: %d %v", draftResponse.StatusCode, draftRun)
+	}
+	snapshotResponse := request("GET", fmt.Sprintf("/api/admin/flows/%d/runs/%d/snapshot", flowID, int64(draftRunID)), nil, userCookie, "")
+	snapshotBody, _ := io.ReadAll(snapshotResponse.Body)
+	snapshotResponse.Body.Close()
+	if !strings.Contains(string(snapshotBody), "UNSAVED edit of the prompt") {
+		t.Fatalf("run snapshot should hold the unsaved graph: %s", snapshotBody)
+	}
+	storedResponse := request("GET", "/api/admin/flows", nil, userCookie, "")
+	storedBody, _ := io.ReadAll(storedResponse.Body)
+	storedResponse.Body.Close()
+	if strings.Contains(string(storedBody), "UNSAVED edit of the prompt") {
+		t.Fatalf("a draft test must not save the flow: %s", storedBody)
+	}
+	brokenGraph := map[string]any{"nodes": []map[string]any{{"id": "start", "type": "trigger", "label": "Start", "x": 20, "y": 20}}, "edges": []map[string]string{{"from": "start", "to": "missing"}}}
+	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/run", flowID), map[string]any{"target": "draft", "graph": brokenGraph}, userCookie, ""), http.StatusBadRequest)
+	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/run", flowID), map[string]any{"graph": editedGraph}, userCookie, ""), http.StatusBadRequest)
+	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/run", flowID), map[string]any{"target": "draft", "graph": editedGraph}, otherCookies[0], ""), http.StatusNotFound)
+	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/runs/%d/cancel", flowID, int64(draftRunID)), nil, userCookie, ""), http.StatusOK)
 	// Only safe research routes are available to USER. No orders or global changes.
 	assert(request("GET", "/api/ai/tools", nil, userCookie, ""), http.StatusOK)
 	assert(request("GET", "/api/orders", nil, userCookie, ""), http.StatusForbidden)
