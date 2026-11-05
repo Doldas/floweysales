@@ -101,8 +101,7 @@
       <div class="topbar-title" aria-live="polite">{{ pageTitle() }}</div>
 
       @if (market.trackedSymbol()) {
-        <a routerLink="/markets" class="instrument-chip" [class.is-ignored]="instrumentUse() === 'ignored'" [title]="instrumentTitle()"
-           [attr.aria-label]="instrumentTitle()">
+        <a routerLink="/markets" class="instrument-chip" [class.is-ignored]="instrumentUse() === 'ignored'" [title]="instrumentTitle()">
           <span class="chip-sym">{{ market.trackedSymbol() }}</span>
           @if (market.trackedName()) { <span class="chip-name">{{ market.trackedName() }}</span> }
           <span class="chip-meta">{{ market.trackedExchange() ? market.trackedExchange() + ' · ' : '' }}{{ market.trackedProvider() }}</span>
