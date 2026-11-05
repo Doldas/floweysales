@@ -154,3 +154,13 @@ export function uninstallPrompt(row: PluginRow): string {
   const n = row.trackers.length;
   return `${base} ${n} active tracker${n === 1 ? '' : 's'} (${row.trackers.join(', ')}) will stop receiving prices until it is installed again; their history is kept.`;
 }
+
+/** Outcome of one plugin in "Update all". */
+export interface UpdateResult { id: string; name: string; from: string; to: string; outcome: 'updated' | 'skipped' | 'failed'; detail: string }
+
+/** Headline for a finished "Update all": every plugin is counted, a failure never hides the others. */
+export function updateAllHeadline(results: UpdateResult[]): string {
+  const n = (o: UpdateResult['outcome']) => results.filter(r => r.outcome === o).length;
+  const parts = [`${n('updated')} updated`, `${n('skipped')} skipped`, `${n('failed')} failed`];
+  return `Update all finished: ${parts.join(', ')}. Plugins that were not updated keep their installed version and settings.`;
+}

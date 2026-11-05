@@ -5,8 +5,8 @@ import { formatUtcDateTime } from '../ui/datetime';
 import { SkeletonComponent } from '../ui/skeleton';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import {
-  capabilityLabels, compatibilityBadge, isDomainProvider, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt,
-  type PluginOverview, type PluginRow,
+  capabilityLabels, compatibilityBadge, isDomainProvider, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt, updateAllHeadline,
+  type PluginOverview, type PluginRow, type UpdateResult,
 } from './plugin-store';
 
 type View = 'all' | 'installed' | 'available';
@@ -177,6 +177,14 @@ floweysales_backend plugins update</pre>
   } @else { <div [attr.aria-busy]="true"><fs-progress-status stage="Loading plugins" /><fs-skeleton shape="rows" [rows]="3" aria-hidden="true" /></div> }
  }
  @if (message()) { <p role="status" class="result">{{ message() }}</p> }
+ @if (updateResults().length) {
+  <section class="result" aria-labelledby="update-all-title">
+   <h3 id="update-all-title">{{ updateAllHeadline(updateResults()) }}</h3>
+   <ul>@for (r of updateResults(); track r.id) {
+    <li [attr.aria-label]="r.name + ' update result'"><strong>{{ r.name }}</strong> {{ r.from }} → {{ r.to }}: {{ r.outcome === 'updated' ? 'Updated' : r.outcome === 'skipped' ? 'Skipped' : 'Failed' }}. {{ r.detail }}</li>
+   }</ul>
+  </section>
+ }
 
  <dialog #termsDialog aria-labelledby="plugin-terms-title" (close)="termsClosed()">
   <h3 id="plugin-terms-title">Terms for {{ pending()?.row?.manifest?.name }}</h3>
@@ -238,6 +246,8 @@ export class PluginSettingsComponent {
  readonly busy = signal(false);
  readonly working = signal('');
  readonly message = signal('');
+ readonly updateResults = signal<UpdateResult[]>([]);
+ readonly updateAllHeadline = updateAllHeadline;
  readonly error = signal('');
  readonly filter = signal('');
  readonly view = signal<View>('all');
@@ -334,7 +344,30 @@ export class PluginSettingsComponent {
  termsClosed(): void { this.pending.set(null); }
 
  async updateAll(): Promise<void> {
-  for (const row of this.updatable()) await this.install(row, row.installed?.latest_version);
+  this.busy.set(true); this.message.set(''); this.updateResults.set([]);
+  const results: UpdateResult[] = [];
+  try {
+   // Each plugin is tried on its own: one failure or refusal never stops the others.
+   for (const row of this.updatable()) {
+    const to = row.installed?.latest_version ?? '';
+    const base = { id: row.id, name: row.manifest.name, from: row.installed?.manifest.version ?? row.manifest.version, to };
+    this.working.set(row.id);
+    try {
+     const res = await this.api<{ overview: PluginOverview }>('/api/admin/plugins/install', { method: 'POST', body: JSON.stringify({ id: row.id, version: to, accept_terms: false }) });
+     this.overview.set(res.overview);
+     results.push({ ...base, outcome: 'updated', detail: 'Settings and data were kept.' });
+    } catch (e) {
+     const err = e as Error & { status?: number; body?: { terms?: string } };
+     if (err.status === 409 && err.body?.terms) results.push({ ...base, outcome: 'skipped', detail: 'New terms need your acceptance; update it on its own.' });
+     else results.push({ ...base, outcome: 'failed', detail: `${err.message} The installed version was kept.` });
+    }
+   }
+  } finally {
+   this.updateResults.set(results);
+   this.market.refreshProviders();
+   void this.tools.refresh();
+   this.busy.set(false); this.working.set('');
+  }
  }
 
  async saveEnv(row: PluginRow, name: string, input: HTMLInputElement): Promise<void> {
