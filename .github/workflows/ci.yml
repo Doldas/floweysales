@@ -132,6 +132,9 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frozen dependencies
         run: npm ci --prefix frontend
+      - name: Validate live E2E suite discovery without contacting the deployed instance
+        working-directory: frontend
+        run: npx playwright test --config playwright.live.config.ts --list
       - name: Dates are UTC and numbers en-US (no browser-dependent formatting)
         run: bash scripts/check-utc-formatting.sh
       - name: Unit tests for Flow Studio helpers
@@ -180,7 +183,21 @@ jobs:
           MYSQL_ROOT_PASSWORD: ci-only-root-password
         run: |
           docker compose -f compose.identity.yml up -d mysql
-          docker compose -f compose.identity.yml --profile migration run --build --rm migrate validate
+          # Maven Central can return transient HTTP 429 while fetching the
+          # pinned MySQL JDBC driver during Docker ADD. Retry the image build,
+          # not schema updates (which must execute exactly once).
+          for attempt in 1 2 3 4; do
+            if docker compose -f compose.identity.yml --profile migration build migrate; then
+              break
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo "::error::Migration image build failed after 4 attempts (check Maven Central HTTP 429/rate limits)."
+              exit 1
+            fi
+            echo "::warning::Migration image build attempt $attempt failed. Retrying after a backoff."
+            sleep $((attempt * 15))
+          done
+          docker compose -f compose.identity.yml --profile migration run --rm migrate validate
           docker compose -f compose.identity.yml --profile migration run --rm migrate update
           docker compose -f compose.identity.yml --profile migration run --rm migrate status --verbose
       - uses: actions/setup-go@v7
