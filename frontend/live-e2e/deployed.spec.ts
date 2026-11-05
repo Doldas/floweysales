@@ -24,8 +24,11 @@ async function login(page: Page): Promise<void> {
   const data = await session.json();
   expect(data?.user?.email, 'Authenticated user must be the designated autotest account').toBe(email);
 
+  // A hash-only navigation does not restart Angular auth initialization.
+  // Reload the document so the app hydrates its user state from the new cookie.
   await page.goto('/#/');
-  await expect(page.getByRole('heading', { name: 'Sign in' })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toHaveCount(0, { timeout: 20_000 });
 }
 
 test.describe('Deployed FloweySales — real backend, read-only account', () => {
