@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"floweysales/internal/identity"
+	"floweysales/internal/plugins"
 	"floweysales/internal/updates"
 )
 
@@ -45,6 +46,15 @@ type updateOverview struct {
 	AgentError  string               `json:"agent_error,omitempty"`
 	Status      updates.Status       `json:"status"`
 	StatusError string               `json:"status_error,omitempty"`
+	// PluginPreflight compares installed plugins with the available release.
+	PluginPreflight *pluginPreflight `json:"plugin_preflight,omitempty"`
+}
+
+// pluginPreflight is the before/after compatibility preview shown before an update is approved.
+type pluginPreflight struct {
+	AppProtocol    int                      `json:"app_protocol"`
+	TargetProtocol int                      `json:"target_protocol"` // 0: the release does not declare one
+	Plugins        []plugins.PreflightEntry `json:"plugins"`
 }
 
 func (e *Engine) updateOverview() updateOverview {
@@ -63,6 +73,10 @@ func (e *Engine) updateOverview() updateOverview {
 		out.StatusError = err.Error()
 	}
 	out.Status = status
+	if e.plugins != nil && out.Check != nil && out.Check.Latest != nil {
+		target := out.Check.Latest.PluginProtocol
+		out.PluginPreflight = &pluginPreflight{AppProtocol: plugins.ProtocolVersion, TargetProtocol: target, Plugins: e.plugins.Preflight(target)}
+	}
 	out.CanApply = out.Check != nil && out.Check.CanApply() && out.Agent != nil && !updates.Running(status.State)
 	return out
 }

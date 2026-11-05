@@ -3,7 +3,7 @@
 // No extra test dependencies are required.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { comparisonLabel, isUpdateRunning, shortCommit, stateLabel, stepProgress } from './update-status.ts';
+import { comparisonLabel, isUpdateRunning, preflightHeadline, preflightStatusLabel, shortCommit, stateLabel, stepProgress, type PreflightPlugin } from './update-status.ts';
 
 test('queued and in-flight states count as running', () => {
   for (const state of ['queued', 'pulling', 'backing_up', 'migrating', 'restarting', 'verifying']) {
@@ -37,4 +37,20 @@ test('step progress marks earlier steps done and later ones pending', () => {
   assert.deepEqual(stepProgress('migrating').map(s => s.progress), ['done', 'done', 'active', 'pending', 'pending']);
   assert.deepEqual(stepProgress('succeeded').map(s => s.progress), ['done', 'done', 'done', 'done', 'done']);
   assert.deepEqual(stepProgress('queued').map(s => s.progress), ['pending', 'pending', 'pending', 'pending', 'pending']);
+});
+
+const plugin = (target: string): PreflightPlugin => ({ id: target, name: target, version: '1.0.0', current: 'compatible', target, reason: '', preserved: '' });
+
+test('preflight headline counts plugins by their status after the update and never claims a removal', () => {
+  assert.match(preflightHeadline([]), /No plugins are installed/);
+  const text = preflightHeadline([plugin('compatible'), plugin('compatible'), plugin('incompatible'), plugin('unknown')]);
+  assert.match(text, /^4 installed plugins: 2 compatible, 1 incompatible, 1 not verifiable yet\./);
+  assert.match(text, /None is removed or updated/);
+  assert.equal(preflightHeadline([plugin('needs_update')]).startsWith('1 installed plugin: 1 need an update'), true);
+});
+
+test('preflight status labels are text, and anything unrecognised is Unknown', () => {
+  assert.equal(preflightStatusLabel('compatible'), 'Compatible');
+  assert.equal(preflightStatusLabel('needs_update'), 'Needs update');
+  assert.equal(preflightStatusLabel(undefined), 'Unknown');
 });

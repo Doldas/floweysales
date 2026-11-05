@@ -904,3 +904,59 @@ func TestIncompatibleStoreVersionsAreNeverInstalled(t *testing.T) {
 		t.Fatalf("latest must skip the incompatible release: %+v %v", got, err)
 	}
 }
+
+func TestPreflightJudgesInstalledPluginsAgainstTheTargetRelease(t *testing.T) {
+	store := newFakeStore(t)
+	store.publish(fakeManifest("1.0.0"), fakeRelease(t, fakeManifest("1.0.0")))
+	m := openManager(t, store, t.TempDir(), nil)
+	ctx := context.Background()
+	if _, err := m.Install(ctx, "fake", "", false); err != nil {
+		t.Fatal(err)
+	}
+	one := func(target int) PreflightEntry {
+		t.Helper()
+		got := m.Preflight(target)
+		if len(got) != 1 || got[0].ID != "fake" {
+			t.Fatalf("preflight: %+v", got)
+		}
+		return got[0]
+	}
+
+	// A release that does not say what it speaks is never assumed compatible.
+	if e := one(0); e.Target != CompatUnknown || e.Current == "" || !strings.Contains(e.Reason, "not assumed") {
+		t.Fatalf("undeclared: %+v", e)
+	}
+	// The same protocol stays compatible; nothing is changed.
+	if e := one(ProtocolVersion); e.Target != CompatCompatible || !strings.Contains(e.Preserved, "settings") {
+		t.Fatalf("same protocol: %+v", e)
+	}
+	// A newer protocol breaks it; with no matching store version it is incompatible but kept.
+	if e := one(ProtocolVersion + 1); e.Target != CompatIncompatible || len(e.Update) != 0 || !strings.Contains(e.Reason, "stays installed") {
+		t.Fatalf("newer protocol, no update: %+v", e)
+	}
+	if len(m.InstalledAll()) != 1 {
+		t.Fatal("preflight changed the installation")
+	}
+
+	// A store version that speaks the target protocol turns it into "needs update".
+	next := fakeManifest("2.0.0")
+	next.Protocol = ProtocolVersion + 1
+	store.publish(next, fakeRelease(t, next))
+	if _, err := m.RefreshStore(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if e := one(ProtocolVersion + 1); e.Target != CompatNeedsUpdate || len(e.Update) != 1 || e.Update[0] != "2.0.0" {
+		t.Fatalf("needs update: %+v", e)
+	}
+}
+
+func TestDockerfileDeclaresPluginProtocol(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "Dockerfile"))
+	if err != nil {
+		t.Skip("Dockerfile not available")
+	}
+	want := fmt.Sprintf(`ARG PLUGIN_PROTOCOL="%d"`, ProtocolVersion)
+	if !strings.Contains(string(raw), want) || !strings.Contains(string(raw), `org.floweysales.plugin-protocol="${PLUGIN_PROTOCOL}"`) {
+		t.Fatalf("Dockerfile must declare %s and label the image with it", want)
+	}
+}

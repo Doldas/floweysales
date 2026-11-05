@@ -37,7 +37,10 @@ ENTRYPOINT ["/app/migrate-sqlite"]
 FROM debian:bookworm-slim AS runtime
 ARG GIT_COMMIT=""
 ARG BUILD_TIME=""
+# Must equal plugins.ProtocolVersion; TestDockerfileDeclaresPluginProtocol keeps them in step.
+ARG PLUGIN_PROTOCOL="1"
 LABEL org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.floweysales.plugin-protocol="${PLUGIN_PROTOCOL}" \
       org.opencontainers.image.created="${BUILD_TIME}" \
       org.opencontainers.image.source="https://github.com/Doldas/floweysales"
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
