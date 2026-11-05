@@ -38,7 +38,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: pluginsdk/go.mod
-          cache-dependency-path: pluginsdk/go.sum
+          cache: false # pluginsdk is dependency-free and has no go.sum
       - name: Validate SDK module and conformance fixtures
         working-directory: pluginsdk
         run: |
