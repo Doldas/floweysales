@@ -2,7 +2,7 @@
 title: What's new
 order: 13
 summary: What changed in the November 2026 release, and what is still not available.
-last-reviewed: 2026-11-04
+last-reviewed: 2026-11-06
 ---
 
 # What's new
@@ -24,6 +24,9 @@ last-reviewed: 2026-11-04
 
 **Leaderboard**
 - A method panel with a fingerprint, origin of each company on the list, bias statements, a coverage-by-region view, and your own objective and constraints. See [Leaderboard](leaderboard.md).
+
+**Files**
+- Markdown files have Edit source, Preview, Rich text and (on wide screens) Split views, with a visible saved or unsaved state. A folder's `README.md` is shown as its overview. See [More areas](more-areas.md).
 
 **Documentation**
 - This guide, a tutorial, and a weekly check of outside links.
