@@ -68,6 +68,10 @@ func validateFlowApproval(n flowNode) error {
 func (e *Engine) performSideEffect(ctx context.Context, f storage.AgentFlow, n flowNode, depth int, payload, contentType string,
 	apply func(payload string) (string, error)) (string, error) {
 	capability, target := flowCapability(n)
+	if flowSimulated(ctx) {
+		// A draft test never applies, audits or parks a side effect for approval.
+		return simulatedSideEffect(capability, target, payload), nil
+	}
 	runID, _ := ctx.Value(flowTraceRunKey{}).(int64)
 	effect := storage.NewFlowSideEffect{RunID: runID, FlowID: f.ID, FlowName: f.Name, NodeID: n.ID, NodeLabel: n.Label,
 		Capability: capability, Target: target, Payload: payload, ContentType: contentType}

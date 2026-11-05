@@ -198,11 +198,15 @@ func (e *Engine) runClaimedFlow(workerCtx context.Context, c *storage.ClaimedFlo
 		finish("", errors.New("run graph snapshot is missing"), "")
 		return
 	}
+	if c.FlowID < 0 && c.FlowName == "" {
+		c.FlowName = flowDraftName // A never-saved flow has no stored row to name it.
+	}
 	if c.FlowName == "" {
 		finish("", errors.New("the flow was deleted before this run started"), "")
 		return
 	}
 	f := storage.AgentFlow{ID: c.FlowID, Name: c.FlowName, Graph: c.Graph}
+	draftTest := c.Trigger == triggerDraftTest || c.Trigger == triggerDraftTestLive
 
 	ctx, cancel := context.WithTimeout(workerCtx, flowRunTimeout)
 	defer cancel()
@@ -255,6 +259,20 @@ func (e *Engine) runClaimedFlow(workerCtx context.Context, c *storage.ClaimedFlo
 		}
 	}
 	runCtx := context.WithValue(ctx, flowTraceRunKey{}, c.RunID)
+	if c.Trigger == triggerDraftTest {
+		runCtx = withFlowSimulation(runCtx)
+	}
+	if draftTest && c.Checkpoint == nil {
+		note := "Draft test of graph snapshot " + flowSnapshotHash(c.Graph) + ". Nothing is saved or published, and no schedule or trigger changes."
+		if c.Trigger == triggerDraftTest {
+			note += " Side effects are simulated."
+		} else {
+			note += " Confirmed side effects run for real."
+		}
+		if err := e.db.AppendAgentFlowRunStep(ctx, c.RunID, "flow", "Draft test", "INFO", note); err != nil {
+			log.Printf("[Flows] Draft note for run %d not saved: %v", c.RunID, err)
+		}
+	}
 	runCtx = context.WithValue(runCtx, flowCheckpointKey{}, checkpointer)
 	runCtx = context.WithValue(runCtx, flowAttemptKey{}, c.Attempt)
 	runCtx = context.WithValue(runCtx, flowEventDepthKey{}, c.EventDepth)
