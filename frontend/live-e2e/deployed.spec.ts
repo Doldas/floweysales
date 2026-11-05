@@ -50,6 +50,26 @@ test.describe('Deployed FloweySales — real backend, read-only account', () => 
     expect(errors, 'Uncaught browser exceptions during read-only navigation').toEqual([]);
   });
 
+  test('the deployed build is healthy and identifies itself', async ({ page }, testInfo) => {
+    const health = await page.request.get('/healthz', { failOnStatusCode: false });
+    expect(health.ok(), `Health check failed (HTTP ${health.status()}); the deployment or its database is down`).toBeTruthy();
+
+    // The checkout SHA only says which test code ran. The commit baked into the
+    // deployed image says what these results are about.
+    const about = await (await page.request.get('/api/about')).json();
+    expect(about.name).toBe('FloweySales');
+    const commit = String(about.commit ?? '');
+    expect(commit, 'The deployed build reports no commit (development build?), so the results cannot be tied to a version').toMatch(/^[0-9a-f]{7,40}$/);
+    testInfo.annotations.push({ type: 'deployed-commit', description: commit });
+    console.log(`Deployed commit: ${commit}${about.build_time ? ` (built ${about.build_time})` : ''}`);
+
+    // Optional gate for after-deploy runs: fail if the instance is not on the expected version.
+    const expected = (process.env.LIVE_E2E_EXPECT_COMMIT ?? '').trim().toLowerCase();
+    if (expected) {
+      expect(commit.startsWith(expected) || expected.startsWith(commit), `Deployed commit ${commit} is not the expected ${expected}`).toBeTruthy();
+    }
+  });
+
   test('research agent is configured on the deployed instance', async ({ page }) => {
     await page.goto('/#/agent');
     await expect(page.getByRole('heading', { name: 'Research Agent' })).toBeVisible();
