@@ -69,8 +69,11 @@ test.describe('Discover and inspect real Flow Studio workflows', () => {
       await expect(page.getByRole('tab', { name: 'Run history' })).toHaveAttribute('aria-selected', 'true');
       await expect(page.getByLabel('Select flow for history')).toBeVisible();
       await page.getByRole('tab', { name: 'My Flows' }).click();
+      // Angular re-creates overview cards after tab switching; wait for
+      // rendering rather than reading their count synchronously.
+      await expect(cards).toHaveCount(total);
     }
-    expect(await cards.count()).toBe(total);
+    await expect(cards).toHaveCount(total);
     console.log(`Flow Studio walkthrough: inspected editor and history for ${total} flow(s)`);
   });
 });
