@@ -42,6 +42,13 @@ SYS_ADMIN can open **Settings → Updates** to:
 
 - see the running build (commit and build time baked into the image) and the
   update channel (`FLOWEYSALES_TAG`, usually `stable`);
+- after **Check for updates**, see the live GitHub `main` commit linked to its
+  GitHub page. This is distinct from the running binary's embedded commit and
+  from the commit stamped on the published `stable` container image. A
+  source-based deployment can therefore show `Installed: unknown` while
+  `GitHub main` is known; the main SHA is **not** used to pretend an unknown
+  local build was deployed. If GitHub cannot be reached, the UI reports the
+  lookup problem without blocking container update checks;
 - **Check for updates**: the app reads the commit of the image the tag points
   to from GHCR (anonymous, public metadata) and, when it differs, lists the
   commits and the **Liquibase migration files** the update adds from the

@@ -84,6 +84,10 @@ func fakeRegistry(t *testing.T, commit string) (*httptest.Server, *atomic.Int32)
 func fakeGitHub(t *testing.T, status string) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/repos/Doldas/floweysales/branches/main" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"commit": map[string]string{"sha": newCommit}})
+			return
+		}
 		if r.URL.Path != "/repos/Doldas/floweysales/compare/"+oldCommit+"..."+newCommit {
 			http.NotFound(w, r)
 			return
@@ -118,6 +122,24 @@ func newTestService(t *testing.T, current, latest, compareStatus, controlDir str
 	return svc, hits
 }
 
+func TestGitHubBranchHead(t *testing.T) {
+	server := fakeGitHub(t, "ahead")
+	github := GitHub{BaseURL: server.URL}
+	commit, err := github.BranchHead(context.Background(), "Doldas/floweysales", "main")
+	if err != nil || commit != newCommit {
+		t.Fatalf("main commit: %q, %v", commit, err)
+	}
+	if _, err := github.BranchHead(context.Background(), "Doldas/floweysales", "feature"); err == nil {
+		t.Fatal("unexpected branch accepted")
+	}
+
+	unavailable := httptest.NewServer(http.NotFoundHandler())
+	defer unavailable.Close()
+	if _, err := (GitHub{BaseURL: unavailable.URL}).BranchHead(context.Background(), "Doldas/floweysales", "main"); err == nil {
+		t.Fatal("missing branch must fail rather than fabricate a commit")
+	}
+}
+
 func TestLookupReadsRevisionFromPlatformManifest(t *testing.T) {
 	srv, _ := fakeRegistry(t, newCommit)
 	info, err := Registry{BaseURL: srv.URL}.Lookup(context.Background(), "ghcr.io/doldas/floweysales", "stable")
@@ -138,6 +160,9 @@ func TestLookupReadsRevisionFromPlatformManifest(t *testing.T) {
 func TestCheckReportsUpdateWithChangesAndMigrations(t *testing.T) {
 	svc, _ := newTestService(t, oldCommit, newCommit, "ahead", "")
 	result := svc.Check(context.Background())
+	if result.MainCommit != newCommit || result.MainError != "" {
+		t.Fatalf("latest main must be independent and available: %+v", result)
+	}
 	if result.Comparison != UpdateAvailable || !result.CanApply() || result.Changes == nil {
 		t.Fatalf("expected update: %+v", result)
 	}

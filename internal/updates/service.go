@@ -42,6 +42,8 @@ type Build struct {
 // CheckResult is the outcome of the most recent check.
 type CheckResult struct {
 	Comparison   string     `json:"comparison"`
+	MainCommit   string     `json:"main_commit,omitempty"` // latest GitHub main, not necessarily published/deployed
+	MainError    string     `json:"main_error,omitempty"`
 	Latest       *ImageInfo `json:"latest,omitempty"`
 	Changes      *Changes   `json:"changes,omitempty"`
 	ChangesError string     `json:"changes_error,omitempty"`
@@ -147,6 +149,13 @@ func (s *Service) Check(ctx context.Context) CheckResult {
 
 func (s *Service) evaluate(ctx context.Context) CheckResult {
 	result := CheckResult{CheckedAt: s.now().UTC().Format(time.RFC3339)}
+	// Main is independent of the published image and of the installed binary.
+	// Failure to read GitHub must not prevent an otherwise valid image check.
+	if main, err := s.github.BranchHead(ctx, s.cfg.Repository, "main"); err == nil {
+		result.MainCommit = main
+	} else {
+		result.MainError = err.Error()
+	}
 	latest, err := s.registry.Lookup(ctx, s.cfg.Image, s.cfg.Tag)
 	if err != nil {
 		result.Comparison = CheckFailed

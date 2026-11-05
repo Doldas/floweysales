@@ -7,7 +7,7 @@ import { ProgressStatusComponent } from '../ui/progress-status';
 interface ImageInfo { image: string; tag: string; digest: string; commit?: string; created?: string; plugin_protocol?: number }
 interface Commit { sha: string; title: string; url?: string }
 interface Changes { status: string; commits: Commit[]; total_commits: number; migrations: string[]; compare_url?: string }
-interface CheckResult { comparison: string; latest?: ImageInfo; changes?: Changes; changes_error?: string; error?: string; checked_at: string }
+interface CheckResult { comparison: string; main_commit?: string; main_error?: string; latest?: ImageInfo; changes?: Changes; changes_error?: string; error?: string; checked_at: string }
 interface Agent { engine: string; installed_at?: string; last_run_at?: string; timer: boolean; backups: boolean }
 interface Status { state: string; message?: string; request_id?: string; trigger?: string; started_at?: string; finished_at?: string; from_commit?: string; to_commit?: string; backup?: string; log_tail?: string[] }
 interface Overview { current: { commit?: string; build_time?: string; image: string; tag: string }; check?: CheckResult; can_apply: boolean; agent?: Agent; agent_error?: string; status: Status; status_error?: string; plugin_preflight?: { app_protocol: number; target_protocol: number; plugins: PreflightPlugin[] } }
@@ -34,6 +34,12 @@ const POLL_MS = 3000;
    @if(o.check;as c){
     <p role="status" class="result" [class.available]="c.comparison==='update_available'" [class.problem]="c.comparison==='check_failed'">{{comparisonLabel(c.comparison)}}</p>
     @if(c.error){<p class="warning">{{c.error}}</p>}
+    <dl>
+     <dt>GitHub main</dt>
+     <dd>@if(c.main_commit){<a [href]="'https://github.com/Doldas/floweysales/commit/'+c.main_commit" target="_blank" rel="noopener noreferrer"><code>{{shortCommit(c.main_commit)}}</code></a>} @else {<span>Unavailable</span>}</dd>
+    </dl>
+    <p class="muted">Latest commit on the main branch, not the currently installed version or necessarily the published image.</p>
+    @if(c.main_error){<p class="muted">Could not read main: {{c.main_error}}</p>}
     <p class="muted">Last checked {{when(c.checked_at)}}</p>
    } @else {<p class="muted">{{comparisonLabel(undefined)}}</p>}
   </div>
