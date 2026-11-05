@@ -2,7 +2,7 @@
  * Display helpers for the Markets leaderboard. Pure functions so they run
  * under node --test; the scoring itself lives in the server (leaderboard.go).
  */
-import type { LeaderboardBreakdown, LeaderboardMethodology, LeaderboardRow, LeaderboardSelection, RankingPreferences } from '../models';
+import type { IndexInfo, LeaderboardBreakdown, LeaderboardMethodology, LeaderboardRow, LeaderboardSelection, RankingPreferences } from '../models';
 
 export const FACTOR_LABELS: Record<string, string> = {
   value: 'Value', quality: 'Quality', growth: 'Growth', momentum: 'Momentum', timing: 'Entry timing', risk: 'Low risk',
@@ -105,7 +105,7 @@ export function coverageSummary(rows: Pick<LeaderboardRow, 'coverage_pct'>[], un
 }
 
 export const SOURCE_KIND_LABEL: Record<string, string> = {
-  curated: 'Hand-picked by the maintainers', disclosure: 'Public disclosure', custom: 'Supplied by you',
+  curated: 'Hand-picked by the maintainers', disclosure: 'Public disclosure', custom: 'Supplied by you', index: 'Published market index',
 };
 
 export function sourceKindLabel(kind: string | undefined): string {
@@ -202,4 +202,26 @@ export function formToPreferences(f: PreferencesForm): { prefs?: RankingPreferen
 /** True when the ranking mixes data ages, or its newest price or list review is old: the statements are then shown as a warning. */
 export function dataAgeIsWarning(age: { mixed: boolean; list_stale?: boolean; newest_price_age_days?: number } | undefined): boolean {
   return !!age && (age.mixed || !!age.list_stale || (age.newest_price_age_days ?? 0) > 5);
+}
+
+/** The provenance of an index, one labeled fact per row. Missing facts say so; none is filled in. */
+export function indexFacts(i: IndexInfo): { label: string; value: string; link?: string | null }[] {
+  const known = (v: string | null | undefined, whenMissing: string) => (v && v.trim() ? v : whenMissing);
+  return [
+    { label: 'Provider', value: i.provider },
+    { label: 'Methodology', value: i.methodology.summary, link: recordLink(i.methodology.url) },
+    { label: 'Constituent source', value: known(i.constituent_source.name, 'Not recorded'), link: recordLink(i.constituent_source.url) },
+    { label: 'As of (UTC)', value: known(i.as_of, 'No list loaded') },
+    { label: 'Securities', value: i.available ? `${i.count} (index name says ${i.nominal_count})` : `None loaded (index name says ${i.nominal_count})` },
+    { label: 'Exclusions', value: i.exclusions },
+    { label: 'Share classes', value: i.share_class_policy },
+    { label: 'Currency', value: `${i.currency}; ${i.benchmark_note}` },
+    { label: 'Licensing', value: i.licensing + (i.constituent_source.license_verified ? ' Licence verified.' : '') },
+    { label: 'History', value: (i.history.point_in_time ? 'Point-in-time membership. ' : 'Current members only. ') + i.history.note },
+  ];
+}
+
+/** The line shown on an index button: count and date, or "unavailable". */
+export function indexBadge(i: IndexInfo): string {
+  return i.available ? `${i.count} · ${i.as_of ?? 'undated'}${i.stale ? ' · stale' : ''}` : 'unavailable';
 }
