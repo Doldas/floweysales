@@ -16,7 +16,7 @@ on:
         type: boolean
         default: false
       run_workflows:
-        description: 'Execute up to TWO isolated, preconfigured [E2E] Flow Studio fixtures (may incur model cost)'
+        description: 'Auto-discover and execute up to TWO safe [E2E] flows (may incur model cost)'
         required: true
         type: boolean
         default: false
@@ -60,7 +60,6 @@ jobs:
           LIVE_E2E_EXPECT_COMMIT: ${{ inputs.expect_commit }}
           LIVE_E2E_AI: ${{ inputs.run_ai_probe }}
           LIVE_E2E_WORKFLOWS: ${{ inputs.run_workflows }}
-          LIVE_E2E_FLOW_IDS: ${{ vars.LIVE_E2E_FLOW_IDS }}
         run: |
           set -euo pipefail
           test -n "$LIVE_E2E_EMAIL" || { echo "::error::Configure live-e2e environment secret LIVE_E2E_EMAIL"; exit 1; }
