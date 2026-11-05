@@ -87,6 +87,13 @@ jobs:
           git diff --exit-code -- go.mod || { echo "::error::Run go mod tidy in pluginsdk."; exit 1; }
           go vet ./...
           go test -race -count=1 ./...
+      - name: Restore pinned MySQL JDBC dependency cache for Go storage tests
+        uses: actions/cache@v4
+        with:
+          path: docker/vendor/mysql-connector-j-9.5.0.jar
+          key: jdbc-linux-9.5.0-${{ hashFiles('docker/mysql-connector-j-9.5.0.sha256') }}
+      - name: Verify or fetch pinned MySQL JDBC dependency for Go storage tests
+        run: bash scripts/fetch-liquibase-jdbc.sh
       - name: Start disposable Liquibase-backed MySQL for storage tests
         env:
           MYSQL_PASSWORD: ci-only-identity-password
@@ -177,15 +184,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Restore pinned MySQL JDBC dependency cache
+        uses: actions/cache@v4
+        with:
+          path: docker/vendor/mysql-connector-j-9.5.0.jar
+          key: jdbc-linux-9.5.0-${{ hashFiles('docker/mysql-connector-j-9.5.0.sha256') }}
+      - name: Verify or fetch pinned MySQL JDBC dependency
+        run: bash scripts/fetch-liquibase-jdbc.sh
       - name: Validate and apply MySQL identity schema
         env:
           MYSQL_PASSWORD: ci-only-identity-password
           MYSQL_ROOT_PASSWORD: ci-only-root-password
         run: |
           docker compose -f compose.identity.yml up -d mysql
-          # Maven Central can return transient HTTP 429 while fetching the
-          # pinned MySQL JDBC driver during Docker ADD. Retry the image build,
-          # not schema updates (which must execute exactly once).
+          # Connector/J has already been SHA256-verified and cached above.
+          # Retry only transient Docker build failures, never schema updates.
           for attempt in 1 2 3 4; do
             if docker compose -f compose.identity.yml --profile migration build migrate; then
               break
@@ -233,12 +246,24 @@ jobs:
         run: |
           docker compose -f compose.yml config --quiet
           docker compose -f compose.deploy.yml config --quiet
-          bash -n scripts/auto-update.sh scripts/install-auto-update.sh
+          bash -n scripts/auto-update.sh scripts/install-auto-update.sh scripts/fetch-liquibase-jdbc.sh
       - name: Test host updater (backup, migrate, restart, rollback) with a stub engine
         run: bash scripts/test-auto-update.sh
       - name: Build production application image
         run: docker build -t floweysales:ci .
+      - name: Restore pinned MySQL JDBC dependency cache
+        uses: actions/cache@v4
+        with:
+          path: docker/vendor/mysql-connector-j-9.5.0.jar
+          key: jdbc-linux-9.5.0-${{ hashFiles('docker/mysql-connector-j-9.5.0.sha256') }}
+      - name: Verify or fetch pinned MySQL JDBC dependency
+        run: bash scripts/fetch-liquibase-jdbc.sh
       - name: Build packaged Liquibase migration image
         run: docker build -f docker/liquibase.Dockerfile -t floweysales-migrate:ci .
+      - name: Verify JDBC checksum inside built migration container
+        run: |
+          expected="$(cut -d' ' -f1 docker/mysql-connector-j-9.5.0.sha256)"
+          actual="$(docker run --rm --entrypoint sha256sum floweysales-migrate:ci /liquibase/internal/lib/mysql-connector-j-9.5.0.jar | cut -d' ' -f1)"
+          test "$actual" = "$expected"
       - name: Build opt-in read-only legacy importer
         run: docker build --target legacy-importer -t floweysales-legacy-import:ci .

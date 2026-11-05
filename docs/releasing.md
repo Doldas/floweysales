@@ -59,3 +59,34 @@ A `pluginsdk/v*` tag must never trigger the application `v*` workflow. SDK chang
 ## Open follow-up work
 
 This is the **first implementation slice**, not completion of all #265/#266 criteria. Future work should add automated migration-upgrade matrix testing, stronger supply-chain attestations and signing, explicit compatibility manifest/validation, a container release rehearsal with real disposable MySQL, release-aware update UX and disaster recovery drills. Until those tests are implemented, tag and promotion remain human-reviewed.
+
+## Cached and verified MySQL JDBC dependency (#276)
+
+Liquibase 5.0 does not bundle Connector/J. To avoid Maven Central HTTP 429
+when BuildKit evaluates a remote `ADD`, migration images now `COPY` the
+locally prepared, **SHA256-pinned** Connector/J 9.5.0 JAR.
+
+For a **local migration image build**, run this once before Docker Compose or
+direct Docker builds:
+
+```sh
+bash scripts/fetch-liquibase-jdbc.sh
+docker compose -f compose.identity.yml --profile migration build migrate
+# Or: docker build -f docker/liquibase.Dockerfile -t floweysales-migrate:local .
+```
+
+The preparation script verifies existing bytes against the committed
+`docker/mysql-connector-j-9.5.0.sha256` and **does not contact Maven Central
+on a valid cache hit**. On a miss it downloads the exact pinned version, checks
+the downloaded SHA256 before atomically installing it, and fails closed if
+anything differs. The image Dockerfile verifies the checksum again during
+build. Do not commit the JAR to Git: `docker/vendor/` is ignored.
+
+CI and release containers use the same script and an exact-key GitHub Actions
+cache. Cache keys include the pinned checksum file, so intentional driver
+upgrades require explicitly updating the version, checksum and references.
+Do not substitute upstream-provided, mutable checksums for the reviewed pin.
+The cache contains only public verified dependencies, never DB data, tokens or
+secrets. The schema `validate`, `update` and `status` tests still run against
+a new database even on cache hits. A cold runner can still need Maven access;
+release operators should confirm the dependency was cached before tagging.

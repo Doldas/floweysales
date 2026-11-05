@@ -100,6 +100,13 @@ jobs:
           build-args: |
             GIT_COMMIT=${{ github.sha }}
           provenance: true
+      - name: Restore pinned JDBC cache for migration image
+        uses: actions/cache@v4
+        with:
+          path: docker/vendor/mysql-connector-j-9.5.0.jar
+          key: jdbc-linux-9.5.0-${{ hashFiles('docker/mysql-connector-j-9.5.0.sha256') }}
+      - name: Verify or fetch MySQL Connector/J
+        run: bash scripts/fetch-liquibase-jdbc.sh
       - name: Publish matching Liquibase migration container
         uses: docker/build-push-action@v6
         with:
