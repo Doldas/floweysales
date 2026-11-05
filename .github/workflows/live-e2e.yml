@@ -1,0 +1,65 @@
+name: Live Playwright E2E (deployed FloweySales)
+
+# Explicitly opted in. Never run production-account browser tests from PRs,
+# forks, dependency updates or automatic deployment jobs.
+on:
+  workflow_dispatch:
+    inputs:
+      run_ai_probe:
+        description: 'Make ONE real AI request using the autotest account (may incur cost)'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: floweysales-live-e2e
+  cancel-in-progress: false
+
+jobs:
+  live-playwright:
+    name: Real deployed app — desktop + mobile
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: live-e2e
+      url: https://floweysales.gamitronservers.com/
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frozen frontend test dependencies
+        run: npm ci --prefix frontend
+      - name: Install Chromium browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: List live tests without accessing the remote server
+        working-directory: frontend
+        run: npx playwright test --config playwright.live.config.ts --list
+      - name: Run real-server Playwright browser tests
+        working-directory: frontend
+        env:
+          CI: 'true'
+          LIVE_E2E_EMAIL: ${{ secrets.LIVE_E2E_EMAIL }}
+          LIVE_E2E_PASSWORD: ${{ secrets.LIVE_E2E_PASSWORD }}
+          LIVE_E2E_AI: ${{ inputs.run_ai_probe }}
+        run: |
+          set -euo pipefail
+          test -n "$LIVE_E2E_EMAIL" || { echo "::error::Configure live-e2e environment secret LIVE_E2E_EMAIL"; exit 1; }
+          test -n "$LIVE_E2E_PASSWORD" || { echo "::error::Configure live-e2e environment secret LIVE_E2E_PASSWORD"; exit 1; }
+          npx playwright test --config playwright.live.config.ts
+      - name: Upload test report and failure screenshots/video
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: live-playwright-report-${{ github.run_id }}
+          path: |
+            frontend/live-report/
+            frontend/live-test-results/
+          if-no-files-found: ignore
+          retention-days: 2
