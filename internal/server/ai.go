@@ -221,11 +221,14 @@ func (e *Engine) registerAIRoutes() {
 			u, _ := e.currentUser(r)
 			role = u.Role
 		}
+		// Report server readiness separately from the admin-only endpoint.
+		// Redacting base_url must not disable Research Agent for other roles.
+		configured := baseURL != "" && model != ""
 		if role != identity.RoleSysAdmin {
 			baseURL = ""
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"configured":     baseURL != "",
+			"configured":     configured,
 			"base_url":       baseURL,
 			"model":          model,
 			"max_steps":      maxSteps,
