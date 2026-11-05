@@ -87,6 +87,13 @@ jobs:
           git diff --exit-code -- go.mod || { echo "::error::Run go mod tidy in pluginsdk."; exit 1; }
           go vet ./...
           go test -race -count=1 ./...
+      - name: Restore pinned MySQL JDBC dependency cache for Go storage tests
+        uses: actions/cache@v4
+        with:
+          path: docker/vendor/mysql-connector-j-9.5.0.jar
+          key: jdbc-linux-9.5.0-${{ hashFiles('docker/mysql-connector-j-9.5.0.sha256') }}
+      - name: Verify or fetch pinned MySQL JDBC dependency for Go storage tests
+        run: bash scripts/fetch-liquibase-jdbc.sh
       - name: Start disposable Liquibase-backed MySQL for storage tests
         env:
           MYSQL_PASSWORD: ci-only-identity-password
