@@ -197,18 +197,19 @@ jobs:
           MYSQL_ROOT_PASSWORD: ci-only-root-password
         run: |
           docker compose -f compose.identity.yml up -d mysql
-          # Connector/J has already been SHA256-verified and cached above.
-          # Retry only transient Docker build failures, never schema updates.
-          for attempt in 1 2 3 4; do
+          # Connector/J has already been SHA256-verified and cached above, so the
+          # build no longer contacts Maven Central. One retry remains for
+          # transient base-image pulls; schema updates are never retried.
+          for attempt in 1 2; do
             if docker compose -f compose.identity.yml --profile migration build migrate; then
               break
             fi
-            if [ "$attempt" -eq 4 ]; then
-              echo "::error::Migration image build failed after 4 attempts (check Maven Central HTTP 429/rate limits)."
+            if [ "$attempt" -eq 2 ]; then
+              echo "::error::Migration image build failed after 2 attempts (the JDBC jar is cached; check the base image pull)."
               exit 1
             fi
             echo "::warning::Migration image build attempt $attempt failed. Retrying after a backoff."
-            sleep $((attempt * 15))
+            sleep 15
           done
           docker compose -f compose.identity.yml --profile migration run --rm migrate validate
           docker compose -f compose.identity.yml --profile migration run --rm migrate update
