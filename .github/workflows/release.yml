@@ -1,15 +1,34 @@
-name: Release build
+name: Release build and publish
 
 on:
   push:
     tags: ['v*']
-  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Validate tag, main ancestry and updater tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$ ]] || { echo 'Invalid app release tag'; exit 1; }
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo 'Tag must point to a main commit'; exit 1; }
+          bash scripts/test-auto-update.sh
+
   binaries:
+    needs: validate
     name: build-${{ matrix.os }}-${{ matrix.arch }}
     runs-on: ubuntu-latest
     strategy:
@@ -53,4 +72,78 @@ jobs:
         with:
           name: release-${{ matrix.os }}-${{ matrix.arch }}
           path: dist/
+          if-no-files-found: error
           retention-days: 30
+
+  containers:
+    needs: [validate, binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish versioned application container
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/doldas/floweysales:${{ github.ref_name }}
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+          provenance: true
+      - name: Publish matching Liquibase migration container
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/liquibase.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/doldas/floweysales-migrate:${{ github.ref_name }}
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+          provenance: true
+      - name: Verify multi-platform manifests
+        run: |
+          docker buildx imagetools inspect "ghcr.io/doldas/floweysales:$GITHUB_REF_NAME"
+          docker buildx imagetools inspect "ghcr.io/doldas/floweysales-migrate:$GITHUB_REF_NAME"
+
+  github-release:
+    needs: [binaries, containers]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Generate and verify combined checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum floweysales_* > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+      - name: Publish durable GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          [[ "$GITHUB_REF_NAME" == *-rc.* ]] && args+=(--prerelease)
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes "${args[@]}"
+          fi
+          gh release upload "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+          echo 'The mutable stable container tag is deliberately NOT advanced by this workflow.'
