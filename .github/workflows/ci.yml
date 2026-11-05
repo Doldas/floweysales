@@ -151,6 +151,19 @@ jobs:
       - name: Install headless Chromium for responsive layout tests
         working-directory: frontend
         run: npx playwright install --with-deps chromium
+      - name: Playwright visual evidence (desktop and phone)
+        working-directory: frontend
+        run: npx playwright test --config playwright.config.ts e2e/visual-evidence.spec.ts
+      - name: Upload Playwright HTML report, screenshots, video and traces
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-visual-evidence-${{ github.run_id }}
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 2
       - name: Test Samsung S24, phones, tablets and desktop in Chromium
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 --directory www/browser >/tmp/floweysales-frontend-server.log 2>&1 &
