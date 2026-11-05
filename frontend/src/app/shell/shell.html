@@ -120,7 +120,7 @@
 
       <div class="topbar-actions">
         <fs-feed-status class="topbar-status" />
-        <button type="button" class="btn btn-outline-secondary btn-sm palette-trigger" (click)="palette.open()" title="Command palette (Ctrl K)">
+        <button type="button" class="btn btn-outline-secondary btn-sm palette-trigger wide-only" (click)="palette.open()" title="Command palette (Ctrl K)">
           <i class="bi bi-command" aria-hidden="true"></i>
           <span class="palette-label">Search or run…</span>
           <span class="fs-kbd palette-kbd">Ctrl K</span>
@@ -129,10 +129,27 @@
                 aria-controls="fs-agent-dock" aria-label="Toggle research agent">
           <i class="bi bi-stars" aria-hidden="true"></i><span class="agent-label">Agent</span>
         </button>
-        <button type="button" class="btn btn-ghost btn-icon" (click)="theme.toggle()"
+        <button type="button" class="btn btn-ghost btn-icon wide-only" (click)="theme.toggle()"
                 [attr.aria-label]="theme.theme() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'">
           <i class="bi" [class.bi-sun]="theme.theme() === 'dark'" [class.bi-moon-stars]="theme.theme() === 'light'" aria-hidden="true"></i>
         </button>
+        <div class="more-menu">
+          <button type="button" class="btn btn-ghost btn-icon" (click)="moreOpen.update(v => !v)" [attr.aria-expanded]="moreOpen()"
+                  aria-haspopup="menu" aria-label="More actions">
+            <i class="bi bi-three-dots" aria-hidden="true"></i>
+          </button>
+          @if (moreOpen()) {
+            <div class="dropdown-menu show more-dropdown" role="menu">
+              <button type="button" class="dropdown-item" role="menuitem" (click)="palette.open(); moreOpen.set(false)">
+                <i class="bi bi-command me-2" aria-hidden="true"></i>Search or run…
+              </button>
+              <button type="button" class="dropdown-item" role="menuitem" (click)="theme.toggle(); moreOpen.set(false)">
+                <i class="bi me-2" [class.bi-sun]="theme.theme() === 'dark'" [class.bi-moon-stars]="theme.theme() === 'light'" aria-hidden="true"></i>
+                {{ theme.theme() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme' }}
+              </button>
+            </div>
+          }
+        </div>
         @if (auth.enabled() && auth.user()) {
           <div class="user-menu">
             <button type="button" class="avatar-btn" (click)="userMenuOpen.update(v => !v)" [attr.aria-expanded]="userMenuOpen()"
@@ -170,6 +187,12 @@
             <i class="bi bi-x-lg" aria-hidden="true"></i>
           </button>
         </div>
+        @if (market.trackedSymbol()) {
+          <button type="button" class="picker-favorite" (click)="market.toggleFavoriteSelected()" [attr.aria-pressed]="market.selectedFavorite()">
+            <i class="bi" [class.bi-star-fill]="market.selectedFavorite()" [class.bi-star]="!market.selectedFavorite()" aria-hidden="true"></i>
+            <span>{{ market.selectedFavorite() ? 'Remove ' + market.trackedSymbol() + ' from favorites' : 'Add ' + market.trackedSymbol() + ' to favorites' }}</span>
+          </button>
+        }
         @if (instrumentUse() === 'ignored') { <p class="picker-note">The current page does not use the selected instrument.</p> }
         <fs-symbol-search (chosen)="pickerOpen.set(false)" />
       </div>

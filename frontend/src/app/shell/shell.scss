@@ -179,6 +179,13 @@
 .chip-note { font-size: 0.68rem; color: var(--fs-muted); flex: 0 0 auto; font-style: italic; }
 .star-btn { flex: 0 0 auto; color: var(--fs-muted); &[aria-pressed='true'] { color: var(--bs-warning); } }
 .picker-open { display: none; }
+.more-menu { display: none; position: relative; }
+.more-dropdown { position: absolute; right: 0; top: calc(100% + 0.4rem); min-width: 230px; max-width: calc(100vw - 1.5rem); }
+.picker-favorite {
+  display: flex; align-items: center; gap: 0.6rem; min-height: 2.75rem; padding: 0.5rem 0.75rem; text-align: left;
+  border: 1px solid var(--fs-border); border-radius: var(--bs-border-radius); background: var(--fs-surface-2); color: var(--fs-text);
+  &[aria-pressed='true'] .bi { color: var(--bs-warning); }
+}
 .picker-sheet {
   position: fixed; inset: 0; z-index: 1075; display: flex; flex-direction: column; gap: 0.75rem;
   padding: 0.75rem 1rem; background: var(--fs-bg); overflow: auto;
@@ -265,15 +272,25 @@
 }
 
 @media (max-width: 767.98px) {
+  // The page is named by the content heading and the active navigation entry; the title stays for screen readers.
+  .topbar-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  // Favoriting lives in the instrument picker here, so the star never competes with the ticker.
+  .star-btn { display: none; }
   .topbar-search { display: none; }
   .picker-open { display: inline-flex; }
   .instrument-chip .chip-name, .instrument-chip .chip-meta, .instrument-chip .chip-note { display: none; }
   .topbar-actions { margin-left: auto; gap: 0.35rem; }
 }
 
+@media (max-width: 575.98px) {
+  // Low-frequency actions collapse into one menu so the ticker keeps its room.
+  .wide-only { display: none; }
+  .more-menu { display: block; }
+}
+
 @media (max-width: 419.98px) {
   .agent-label { display: none; }
-  // Room for the star and picker buttons on a 320px phone.
   .fs-topbar { gap: 0.3rem; }
-  .topbar-title { flex: 0 1 auto; }
+  .instrument-chip { flex: 0 1 auto; }
+  .instrument-chip .chip-sym { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }

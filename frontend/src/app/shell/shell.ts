@@ -53,6 +53,8 @@ export class ShellComponent {
 
   readonly navOpen = signal(false);
   readonly userMenuOpen = signal(false);
+  /** Overflow menu for the low-frequency header actions on phone widths. */
+  readonly moreOpen = signal(false);
   readonly pageTitle = signal('Command Center');
   /** Whether the current page follows the selected instrument (route `data.instrument`); unknown pages say nothing. */
   readonly instrumentUse = signal<'used' | 'ignored' | null>(null);
@@ -140,6 +142,7 @@ export class ShellComponent {
       this.instrumentUse.set(use === 'used' || use === 'ignored' ? use : null);
       this.navOpen.set(false);
       this.userMenuOpen.set(false);
+      this.moreOpen.set(false);
       this.pickerOpen.set(false);
     });
 
@@ -175,6 +178,7 @@ export class ShellComponent {
     if (key === 'escape') {
       this.navOpen.set(false);
       this.userMenuOpen.set(false);
+      this.moreOpen.set(false);
       this.pickerOpen.set(false);
     }
   }
@@ -187,6 +191,8 @@ export class ShellComponent {
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
-    if (!(event.target as Element | null)?.closest('.user-menu')) this.userMenuOpen.set(false);
+    const target = event.target as Element | null;
+    if (!target?.closest('.user-menu')) this.userMenuOpen.set(false);
+    if (!target?.closest('.more-menu')) this.moreOpen.set(false);
   }
 }
