@@ -90,3 +90,9 @@ The cache contains only public verified dependencies, never DB data, tokens or
 secrets. The schema `validate`, `update` and `status` tests still run against
 a new database even on cache hits. A cold runner can still need Maven access;
 release operators should confirm the dependency was cached before tagging.
+
+### Cache scope and measured effect
+
+- **Poisoning:** GitHub Actions caches are scoped by branch. A pull request writes only to its own scope and cannot overwrite the default-branch cache that tag and release builds restore from. Because the script re-verifies the SHA256 of every restored jar, even a tampered cache entry is discarded and refetched, so the cache never decides what is trusted. Docker layer caches (`type=gha`) are intentionally not used: the migration image is tiny, and only the jar was a remote dependency.
+- **Measured (2026-11-05, CI runs on this repository):** every run after the cache was introduced restored the jar and logged `Verified cached MySQL Connector/J 9.5.0; no external request needed.` The verify-or-fetch step takes 0 s and cache restore 0-2 s. `identity-schema` takes about 60 s and `container-image` about 91 s, unchanged between runs, because the jar was never the slow part; the gain is that the Maven Central 429 failure mode is gone. Of the CI runs on `main` after #278, all succeeded.
+- **Retries:** the migration image build keeps one retry for transient base-image pulls (reduced from four, with a message that no longer blames Maven Central).
