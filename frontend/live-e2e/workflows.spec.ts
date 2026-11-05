@@ -31,6 +31,10 @@ async function login(page: Page): Promise<void> {
   const session = await page.request.get('/api/auth/me');
   expect(session.ok()).toBe(true);
   expect((await session.json())?.user?.email).toBe(email);
+  // A hash-route navigation alone leaves the SPA in the signed-out state
+  // established on initial load. Force a document reload after API login.
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toHaveCount(0, { timeout: 20_000 });
 }
 
 test.describe('Discover and inspect real Flow Studio workflows', () => {
@@ -42,7 +46,7 @@ test.describe('Discover and inspect real Flow Studio workflows', () => {
     expect(listing.ok(), 'Autotest account must be able to list its saved flows').toBe(true);
     const listedFlows: Flow[] = (await listing.json()).flows ?? [];
     await page.goto('/#/flows');
-    await expect(page.getByRole('heading', { name: 'Agent flows' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'My Flows' })).toBeVisible();
     await page.getByRole('tab', { name: 'My Flows' }).click();
     const cards = page.locator('.overview-flow-card');
     await expect(cards).toHaveCount(listedFlows.length, { timeout: 20_000 });
@@ -105,6 +109,7 @@ test.describe('Execute explicitly safe [E2E] workflows discovered automatically'
       const oldIds = new Set<number>(((await previous.json()).runs ?? []).map((r: Run) => r.id));
 
       await page.goto('/#/flows');
+      await page.getByRole('tab', { name: 'My Flows' }).click();
       const card = page.locator('.overview-flow-card').filter({ has: page.getByRole('heading', { name: flow.name, exact: true }) });
       await expect(card).toBeVisible();
       await card.getByRole('button', { name: 'Run now' }).click();
