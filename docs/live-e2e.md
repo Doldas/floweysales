@@ -14,8 +14,8 @@ The live tests are a **manual GitHub Actions workflow**, not a deployment. They 
 3. Within that environment, configure **two environment secrets** (not repo files and not PR variables):
    - `LIVE_E2E_EMAIL`: test user's login email.
    - `LIVE_E2E_PASSWORD`: test user's password.
-4. In the same environment add a **non-secret variable** `LIVE_E2E_FLOW_IDS` containing the IDs of one or two dedicated disabled `[E2E]` Flow Studio fixtures, e.g. `41,42`. Each must have a name beginning `[E2E] `, no schedule/event trigger, and only approved node types: trigger, constant, transform, json_get, condition, merge, output or agent (agent nodes without tool grants). Suitable fixture angles: deterministic data transformation with expected result, and an AI research-to-output chain with a real model. Do not put real private financial data into fixture inputs. The fixture must already exist; tests never generate arbitrary flows or edit user flows.
-5. After the live test workflow has been merged to `main`, go to **Actions → Live Playwright E2E (deployed FloweySales) → Run workflow**, select `main`. Keep **run_ai_probe = false** for the first rehearsal.
+4. **No flow IDs or GitHub flow-name variables needed.** Playwright automatically browses **every saved flow visible in My Flows** (opens editor and history without running). To opt into actual executions, create **one or two** disabled test flows whose names begin `[E2E] `; names must be unique, with no schedule/event trigger, and only safe node types: trigger, constant, transform, json_get, condition, merge, output or agent (agent nodes without tool grants). Example names: `[E2E] Simple transform` and `[E2E] AI research chain`. The runner discovers them through the real API and uses their IDs internally. Do not put sensitive financial data into fixture inputs. The fixtures must already exist; tests never create or edit user flows.
+5. After the live test workflow has been merged to `main`, go to **Actions → Live Playwright E2E (deployed FloweySales) → Run workflow**, select `main`. Keep **run_ai_probe = false** and **run_workflows = false** for the first rehearsal; all saved flows will still be browsed read-only.
 6. Check the job's **live step-by-step GitHub Actions logs**, annotations and the short-lived `live-playwright-report-<run-id>` artifact for JUnit/HTML results and failure screenshots/video.
 
 **Never paste a password in an issue, commit, PR comment or chat.** GitHub secrets and environment access must be restricted to trusted maintainers.
@@ -27,10 +27,11 @@ Default: desktop Chromium and an emulated Pixel 7 viewport, **one worker at a ti
 - Login with the real `/api/auth/login` endpoint; verify the session with `/api/auth/me`.
 - Load Help, Research Agent and Markets through the real running app and detect uncaught page exceptions.
 - Verify Research Agent shows a configured model and an enabled message composer.
+- **Automatically inspect every saved flow** in the autotest user's My Flows list on desktop. Open each flow's editor, verify its name and canvas render, then open its run history. This is non-executing UI inspection, regardless of the flow's name or contents. No manual list of IDs is needed.
 
 The optional **run_ai_probe** performs a **two-turn real Research Agent conversation** on desktop, checks both answers and confirms the interaction completes. This requires maintainer opt-in for each run and uses the real configured model. Research Agent may persist conversation history: do not assume this is read-only. Prompts alone are not a security boundary. Keep the test user's available tools, permissions and costs limited.
 
-The optional **run_workflows** performs **up to two real saved Flow Studio executions** (desktop only) against IDs provided via `LIVE_E2E_FLOW_IDS`. Before running anything, the tests verify each is explicitly named `[E2E]`, disabled, unscheduled and made exclusively from the allowed node types listed above, with no agent tool grants. Playwright presses **Run now** in the real UI; it then polls the real `/api/admin/flows/{id}/runs` endpoint until `SUCCESS`, checks that the run is new, and verifies node-step traces exist. A failing run, missing history, wrong fixture or unexpected node type fails the job and needs investigation. Never use production/user flows as fixtures. A graph could still be configured to consume significant AI tokens, so use small prompts and narrow timeouts in the fixtures.
+The optional **run_workflows** automatically selects **one or two real saved Flow Studio fixtures** (desktop only) based on their unique `[E2E] ` names, without any GitHub flow ID configuration. Before running anything, the tests verify each is explicitly named `[E2E]`, disabled, unscheduled and made exclusively from the allowed node types listed above, with no agent tool grants. Playwright presses **Run now** in the real UI; it then polls the real `/api/admin/flows/{id}/runs` endpoint until `SUCCESS`, checks that the run is new, and verifies node-step traces exist. A failing run, missing history, wrong fixture or unexpected node type fails the job and needs investigation. Never use production/user flows as fixtures. A graph could still be configured to consume significant AI tokens, so use small prompts and narrow timeouts in the fixtures.
 
 **Different angles to cover incrementally:** deterministic node chaining, branching/merge, invalid-graph validation (without executing), agent-to-output, explicit saved versus draft behavior (#273), trace auditability and retry/timeout cases. The first PR adds the framework plus a real persisted execution check; do not interpret this as full coverage of all Flow Studio features.
 
@@ -59,7 +60,7 @@ npx playwright test --config playwright.live.config.ts
 # To enable a real two-turn conversation:
 LIVE_E2E_AI=true npx playwright test --config playwright.live.config.ts
 # To run approved [E2E] fixture workflows (up to two):
-LIVE_E2E_FLOW_IDS=41,42 LIVE_E2E_WORKFLOWS=true npx playwright test --config playwright.live.config.ts
+LIVE_E2E_WORKFLOWS=true npx playwright test --config playwright.live.config.ts
 ```
 
 Only use the live test account, never a personal/admin account. The URL is hardcoded in `playwright.live.config.ts` and cannot be redirected to an arbitrary host by a PR variable.
