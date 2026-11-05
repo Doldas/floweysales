@@ -2,7 +2,7 @@
 title: Flow Studio
 order: 6
 summary: Build saved, repeatable research automations with agents, data steps and approvals, and understand what runs when and who may do what.
-last-reviewed: 2026-11-04
+last-reviewed: 2026-11-06
 ---
 
 # Flow Studio
@@ -41,7 +41,7 @@ A flow has exactly one trigger and 2 to 16 nodes with 1 to 32 connections, and i
 - **Data and investor nodes:** watchlist quotes, technical scan, fundamentals, SEC filings, news headlines, leaderboard, backtest, insider activity, macro regime, corporate events, portfolio check and wealth plan. These produce rows from provider data computed on the server.
 - **Logic and shaping:** If / Else, Merge, JSON field, Loop, Value, Transform, Screen (keep rows that match a rule), Only new since last run, Report table and Output. Any node can be set to skip when its input is empty.
 - **Web:** HTTP JSON/XML, web crawler and web search.
-- **Notify, Write file and Emit event:** change something outside the run and are reserved for administrators. See [Approvals](#approvals-and-the-inbox).
+- **Notify, Write file and Emit event:** change something outside the run and are reserved for administrators. See [Approvals](#approvals-and-the-inbox). An email from a Notify node uses the shared FloweySales design: Markdown (headings, emphasis, lists, tables), JSON and XML output are shown as readable sections, and the message includes the flow, run and send time in UTC. If a result is too long for one email, the message says how much is shown and where the full output is. See [Email rendering](../email-rendering.md).
 
 ## Run a flow
 
