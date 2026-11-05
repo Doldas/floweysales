@@ -104,13 +104,13 @@ ls "$project"/backups/*.sql.gz >/dev/null 2>&1 && fail "empty backup left behind
 run_scenario migratefail
 [[ $code -ne 0 && "$(status_field state)" == failed ]] || fail "migration failure not reported"
 called "up -d" && fail "restarted after a failed migration"
+grep -q "changeset failed" "$project/update-control/status.json" || fail "log tail missing from status"
 
 run_scenario mismatch
 [[ $code -ne 0 && "$(status_field state)" == failed ]] || fail "release mismatch not rejected"
 called "migrate update" && fail "mismatched revisions ran migrations"
 called "up -d" && fail "mismatched revisions restarted app"
 grep -q "differs from migration revision" "$project/update-control/status.json" || fail "revision mismatch missing from status"
-grep -q "changeset failed" "$project/update-control/status.json" || fail "log tail missing from status"
 
 run_scenario unhealthy
 [[ $code -ne 0 && "$(status_field state)" == rolled_back ]] || fail "expected rolled_back, got $(status_field state)"
