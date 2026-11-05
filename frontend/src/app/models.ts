@@ -547,6 +547,8 @@ export interface BacktestParams {
   symbols?: string[];
   top: number;
   rebalance: 'monthly' | 'quarterly';
+  /** Slippage in basis points per side; absent or 0 means none is modeled. */
+  slippage?: number;
   /** A preset length, or 0 when from/to are used. */
   years: 3 | 5 | 10 | 0;
   from?: string;

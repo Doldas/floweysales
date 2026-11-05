@@ -36,7 +36,9 @@ const (
 	WarnFewTrades      = "few_trades"
 	WarnFewPeriodsLead = "few_periods_drive_result"
 	// Added by the caller, which knows what it could not fetch.
-	WarnNoBenchmark    = "benchmark_unavailable"
+	WarnNoBenchmark = "benchmark_unavailable"
+	// Added when no slippage was asked for: fills are assumed at the closing price.
+	WarnNoSlippage     = "slippage_not_modeled"
 	WarnSymbolsMissing = "symbols_unavailable"
 )
 
@@ -48,6 +50,7 @@ var WarningTexts = map[string]string{
 	WarnShortHistory:   "Fewer than 24 rebalances fit the history, so the result says little about how the strategy behaves over time.",
 	WarnFewTrades:      "Fewer than 30 trades: averages and hit rates are too noisy to say whether the ranking has an edge.",
 	WarnFewPeriodsLead: "The total return is zero or negative when the three best rebalance periods are left out, so the result leans on a few periods.",
+	WarnNoSlippage:     "Slippage is zero: every trade is assumed to fill at the closing price. Real fills, especially in thin stocks, are worse, so treat the result as an upper bound.",
 	WarnNoBenchmark:    "The benchmark could not be loaded, so the strategy is shown without a comparison.",
 	WarnSymbolsMissing: "Some symbols had no price history and were left out of the universe.",
 }
@@ -58,6 +61,7 @@ type Config struct {
 	TopN          int       // 1–25 holdings, equal weight
 	RebalanceDays int       // 21 (monthly) or 63 (quarterly); default 21
 	CostBps       float64   // per side, default 10
+	SlippageBps   float64   // per side, on top of CostBps: the gap between the closing price and the fill; default 0
 	ReportLagDays int       // default 60: a quarter counts from period_end+lag
 }
 
@@ -190,6 +194,9 @@ func (c Config) withDefaults() Config {
 	}
 	if c.CostBps < 0 {
 		c.CostBps = 0
+	}
+	if c.SlippageBps < 0 {
+		c.SlippageBps = 0
 	}
 	if c.ReportLagDays <= 0 {
 		c.ReportLagDays = 60
@@ -343,7 +350,7 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 			if len(held) == 0 {
 				traded = 0
 			}
-			equity *= 1 - traded*cfg.CostBps/10000
+			equity *= 1 - traded*(cfg.CostBps+cfg.SlippageBps)/10000
 			weights = next
 			turnover := round2(traded / 2 * 100)
 			if len(equityAt) == 0 {
@@ -412,6 +419,9 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 	}
 	if len(rebalances) < shortHistory {
 		warnings = append(warnings, WarnShortHistory)
+	}
+	if cfg.SlippageBps == 0 {
+		warnings = append(warnings, WarnNoSlippage)
 	}
 	warnings = append(warnings, countWarnings(trades, conc)...)
 	res := Result{Config: cfg, Metrics: metrics, Curve: thin(curve, maxCurvePoints), Rebalances: rebalances, Warnings: warnings,

@@ -85,7 +85,7 @@ func TestBacktestValidationAndCache(t *testing.T) {
 	for _, query := range []string{
 		"symbols=UP,FLAT&top=0", "symbols=UP,FLAT&top=26", "symbols=UP,FLAT&top=3", "symbols=UP,FLAT&top=x",
 		"symbols=UP,FLAT&rebalance=weekly", "symbols=UP,FLAT&years=4", "symbols=UP,FLAT&years=1", "symbols=UP,FLAT&to=2024-01-01", "symbols=UP,FLAT&from=2024-02-30",
-		"symbols=UP,FLAT&from=2024-06-01&to=2024-01-01", "symbols=UP,FLAT&from=1980-01-01", "symbols=UP,FLAT&cost_bps=-1",
+		"symbols=UP,FLAT&from=2024-06-01&to=2024-01-01", "symbols=UP,FLAT&from=1980-01-01", "symbols=UP,FLAT&cost_bps=-1", "symbols=UP,FLAT&slippage_bps=-1", "symbols=UP,FLAT&slippage_bps=101", "symbols=UP,FLAT&slippage_bps=x",
 		"symbols=UP,FLAT&strategy=yolo", "universe=mars",
 	} {
 		if code, _ := getBacktest(e, query); code != http.StatusBadRequest {
@@ -147,5 +147,39 @@ func TestBacktestTenYearsSaysWhenDataIsShorter(t *testing.T) {
 	notice, _ := body["notice"].(string)
 	if !strings.Contains(notice, "data starts") || body["data_start"] == "" {
 		t.Fatalf("a 10-year ask on 4 years of data needs a notice: %q", notice)
+	}
+}
+
+func TestBacktestSlippageChangesTheResultAndTheCacheKey(t *testing.T) {
+	e := backtestEngine(t)
+	q := "symbols=UP,FLAT&top=1&benchmark=SPY"
+	code, base := getBacktest(e, q)
+	if code != http.StatusOK {
+		t.Fatalf("status %d: %v", code, base)
+	}
+	code, slip := getBacktest(e, q+"&slippage_bps=100")
+	if code != http.StatusOK {
+		t.Fatalf("status %d: %v", code, slip)
+	}
+	if len(e.backtestCache) != 2 {
+		t.Fatalf("slippage must be part of the cache key, cache holds %d", len(e.backtestCache))
+	}
+	last := func(b map[string]any) float64 {
+		c := b["curve"].([]any)
+		return c[len(c)-1].(map[string]any)["equity"].(float64)
+	}
+	if last(slip) >= last(base) {
+		t.Fatalf("100 bps of slippage on the buy-in must lower the final equity: %v vs %v", last(slip), last(base))
+	}
+	has := func(b map[string]any) bool {
+		for _, w := range b["warnings"].([]any) {
+			if w == "slippage_not_modeled" {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(base) || has(slip) {
+		t.Fatalf("the not-modeled warning belongs to the run without slippage: %v / %v", base["warnings"], slip["warnings"])
 	}
 }

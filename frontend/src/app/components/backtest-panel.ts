@@ -36,6 +36,9 @@ const CHART_H = 220;
         <button type="button" [attr.aria-pressed]="rebalance() === 'monthly'" (click)="set('rebalance', 'monthly')">Monthly</button>
         <button type="button" [attr.aria-pressed]="rebalance() === 'quarterly'" (click)="set('rebalance', 'quarterly')">Quarterly</button>
       </div>
+      <div class="fs-segmented" role="group" aria-label="Slippage per side">
+        @for (n of slippageOptions; track n) { <button type="button" [attr.aria-pressed]="slippage() === n" (click)="set('slippage', n)">{{ n === 0 ? 'No slippage' : n + ' bps' }}</button> }
+      </div>
       <div class="fs-segmented" role="group" aria-label="Period">
         <button type="button" [attr.aria-pressed]="years() === 3" (click)="set('years', 3)">3Y</button>
         <button type="button" [attr.aria-pressed]="years() === 5" (click)="set('years', 5)">5Y</button>
@@ -414,6 +417,8 @@ export class BacktestPanelComponent {
 
   readonly top = signal<number>(10);
   readonly rebalance = signal<BacktestParams['rebalance']>('monthly');
+  readonly slippageOptions = [0, 5, 10, 25];
+  readonly slippage = signal(0);
   readonly years = signal<BacktestParams['years']>(5);
   readonly from = signal('');
   readonly to = signal('');
@@ -497,8 +502,9 @@ export class BacktestPanelComponent {
     });
   }
 
-  set(key: 'top' | 'rebalance' | 'years', value: number | string): void {
+  set(key: 'top' | 'rebalance' | 'years' | 'slippage', value: number | string): void {
     if (key === 'top') this.top.set(value as number);
+    else if (key === 'slippage') this.slippage.set(value as number);
     else if (key === 'rebalance') this.rebalance.set(value as BacktestParams['rebalance']);
     else this.years.set(value as BacktestParams['years']);
     this.customError.set('');
@@ -580,7 +586,7 @@ export class BacktestPanelComponent {
     this.batchRequest?.unsubscribe();
     this.batchLoading.set(true);
     this.batchError.set('');
-    const params = batchParams({ universes: this.pickedMarkets(), periods: this.pickedPeriods(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance() });
+    const params = batchParams({ universes: this.pickedMarkets(), periods: this.pickedPeriods(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(), slippage: this.slippage() });
     const runId = newRunId();
     this.startProgress(runId);
     this.batchRequest = this.api.backtestBatch(params, runId).subscribe({
@@ -618,7 +624,7 @@ export class BacktestPanelComponent {
     this.mcLoading.set(true);
     const params = monteCarloParams({
       universe: this.universe(), strategy: this.strategy(), symbols: this.symbols(),
-      top: this.top(), rebalance: this.rebalance(), years: this.years(),
+      top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), years: this.years(),
       ...(this.years() === 0 ? { from: this.from(), to: this.to() || undefined } : {}),
     }, this.mc());
     this.mcRequest = this.api.backtestMonteCarlo(params).subscribe({
@@ -632,7 +638,7 @@ export class BacktestPanelComponent {
     this.sensRequest?.unsubscribe();
     this.sensLoading.set(true);
     this.sensError.set('');
-    const params = sensitivityParams({ universe: this.universe(), symbols: this.symbols(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(), years: this.years() });
+    const params = sensitivityParams({ universe: this.universe(), symbols: this.symbols(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), years: this.years() });
     this.sensRequest = this.api.backtestSensitivity(params).subscribe({
       next: res => { this.lastParams.sensitivity = params; this.openedRun.set(null); this.sens.set(res); this.sensLoading.set(false); },
       error: err => { this.sensError.set(describeHttpError(err)); this.sensLoading.set(false); },
@@ -651,7 +657,7 @@ export class BacktestPanelComponent {
     this.error.set('');
     const params = singleParams({
       universe: this.universe(), strategy: this.strategy(), symbols: this.symbols(),
-      top: this.top(), rebalance: this.rebalance(), years: this.years(),
+      top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), years: this.years(),
       ...(this.years() === 0 ? { from: this.from(), to: this.to() || undefined } : {}),
     });
     this.request = this.api.backtest(params).subscribe({

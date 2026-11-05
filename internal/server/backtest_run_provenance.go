@@ -12,7 +12,7 @@ import (
 
 // backtestMethodVersion must change when the backtest rules change, so a saved
 // run says which rules produced it.
-const backtestMethodVersion = "1"
+const backtestMethodVersion = "2"
 
 var backtestMethodFormula = map[string]string{
 	"single":      "Rank the universe by the strategy's factors at each rebalance date using only data reported by then, hold the top names, subtract trading cost, compare with the benchmark.",

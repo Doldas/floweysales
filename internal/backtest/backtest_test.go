@@ -192,3 +192,78 @@ func TestCurveIsThinned(t *testing.T) {
 		t.Fatalf("%d curve points", len(res.Curve))
 	}
 }
+
+func hasWarning(r Result, id string) bool {
+	for _, w := range r.Warnings {
+		if w == id {
+			return true
+		}
+	}
+	return false
+}
+
+// A scorer that flips its pick at every rebalance, so every rebalance sells one holding and buys the other.
+func flipping() Scorer {
+	n := 0
+	return func(time.Time, map[string]market.HistorySeries, map[string]market.FinancialsResponse) ([]string, float64) {
+		n++
+		if n%2 == 0 {
+			return []string{"B", "A"}, 100
+		}
+		return []string{"A", "B"}, 100
+	}
+}
+
+func TestSlippageIsChargedLikeACostOnEachTrade(t *testing.T) {
+	cost, err := Run(Config{Start: t0, TopN: 1, CostBps: 40}, twoSymbols(), nil, nil, flipping())
+	if err != nil {
+		t.Fatal(err)
+	}
+	slip, err := Run(Config{Start: t0, TopN: 1, CostBps: 10, SlippageBps: 30}, twoSymbols(), nil, nil, flipping())
+	if err != nil {
+		t.Fatal(err)
+	}
+	free, _ := Run(Config{Start: t0, TopN: 1, CostBps: 10}, twoSymbols(), nil, nil, flipping())
+	last := func(r Result) float64 { return r.Curve[len(r.Curve)-1].Equity }
+	if last(cost) != last(slip) {
+		t.Fatalf("10 bps cost + 30 bps slippage must equal 40 bps cost: %v vs %v", last(slip), last(cost))
+	}
+	if last(slip) >= last(free) {
+		t.Fatal("slippage must lower the final equity")
+	}
+	if slip.Config.SlippageBps != 30 {
+		t.Fatalf("the slippage used must be reported: %+v", slip.Config)
+	}
+}
+
+func TestSlippageOnABuyAndHoldIsOneEntry(t *testing.T) {
+	// One buy-in from cash and no later trades: the only slippage is on the first day, 50 bps of the whole portfolio.
+	res, err := Run(Config{Start: t0, TopN: 1, CostBps: 0, SlippageBps: 50}, twoSymbols(), nil, nil, always("A"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := res.Curve[0].Equity; got != 99.5 {
+		t.Fatalf("first day equity %v, want 99.5", got)
+	}
+}
+
+func TestNegativeSlippageIsTreatedAsNone(t *testing.T) {
+	res, err := Run(Config{Start: t0, TopN: 1, SlippageBps: -20}, twoSymbols(), nil, nil, always("A"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Config.SlippageBps != 0 || !hasWarning(res, WarnNoSlippage) {
+		t.Fatalf("a negative slippage must not add return: %+v %v", res.Config, res.Warnings)
+	}
+}
+
+func TestSlippageWarningOnlyWhenNoneIsModeled(t *testing.T) {
+	none, _ := Run(Config{Start: t0, TopN: 1}, twoSymbols(), nil, nil, always("A"))
+	some, _ := Run(Config{Start: t0, TopN: 1, SlippageBps: 5}, twoSymbols(), nil, nil, always("A"))
+	if !hasWarning(none, WarnNoSlippage) || hasWarning(some, WarnNoSlippage) {
+		t.Fatalf("none: %v some: %v", none.Warnings, some.Warnings)
+	}
+	if WarningTexts[WarnNoSlippage] == "" {
+		t.Fatal("the warning needs text")
+	}
+}

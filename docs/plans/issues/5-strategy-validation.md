@@ -100,3 +100,7 @@ Optimizers that search for the best parameters. They raise overfitting risk, and
 ## Follow-up: Monte Carlo (#254)
 
 Delivered for the leaderboard backtest: `internal/montecarlo` (bootstrap, block bootstrap, shuffle; seeded; refuses sparse or constant input), `GET /api/market/backtest/montecarlo`, a panel under the settings check, and saved runs of kind `montecarlo`. Not yet: the Strategies page (`internal/strategy.Run` computes a daily equity series but returns only a thinned curve, so it needs to hand over the full daily returns, as `backtest.Result.DailyReturns` does), execution-delay and concentration stress, and trade-level resampling.
+
+## Follow-up: slippage in the leaderboard backtest (#252)
+
+`backtest.Config.SlippageBps` (request `slippage_bps`, 0–100) is charged per side next to `CostBps`, on every traded share. Zero keeps the old numbers and adds the warning `slippage_not_modeled`. Saved-run method version is now 2. Not yet: slippage in `internal/strategy` (the Strategies page still says it is not modeled), spread- or volume-based slippage, and a slippage grid in the settings check.

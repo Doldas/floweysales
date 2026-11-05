@@ -59,7 +59,7 @@ Open the leaderboard on the Markets page, choose a list and a strategy, and pres
 
 ### How the replay works
 
-Each month (or each quarter) the strategy ranks the list as it would have looked on that day and holds the top companies with equal weights. A reported quarter is used only after it would have been public, with a default 60-day lag after the period end. Trading cost is 10 basis points per side by default. The benchmark is the list's index: SPY for the US lists, ^OMX for Sweden and ^STOXX50E for the European list. It is a price index without dividends.
+Each month (or each quarter) the strategy ranks the list as it would have looked on that day and holds the top companies with equal weights. A reported quarter is used only after it would have been public, with a default 60-day lag after the period end. Trading cost is 10 basis points per side by default. The **Slippage** buttons add 5, 10 or 25 basis points per side on top, charged on every trade, to stand for fills worse than the closing price; with *No slippage* the result warns that it assumes closing-price fills and is an upper bound. The batch and the settings check use the slippage you picked. The benchmark is the list's index: SPY for the US lists, ^OMX for Sweden and ^STOXX50E for the European list. It is a price index without dividends.
 
 Controls: **Top 5, 10 or 15** holdings, **monthly or quarterly** rebalancing, and a period of **3Y, 5Y, 10Y** or **Custom** dates (UTC). The first run of a list takes a while; repeats are quick.
 
