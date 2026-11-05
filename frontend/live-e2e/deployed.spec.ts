@@ -57,22 +57,48 @@ test.describe('Deployed FloweySales — real backend, read-only account', () => 
     await expect(page.getByRole('textbox', { name: 'Message the research agent' })).toBeEnabled();
   });
 
-  test('optional bounded real-model question — explicitly opted in', async ({ page }, testInfo) => {
-    test.skip(process.env.LIVE_E2E_AI !== 'true', 'Real AI requests are opt-in only');
-    test.skip(testInfo.project.name !== 'live-desktop', 'Run AI probe on desktop once, not on both devices');
+  test('real multi-turn Research Agent conversation — explicitly opted in', async ({ page }, testInfo) => {
+    test.skip(process.env.LIVE_E2E_AI !== 'true', 'Real AI conversation tests require explicit opt-in');
+    test.skip(testInfo.project.name !== 'live-desktop', 'Send real AI messages on desktop only to avoid duplicate costs');
 
-    test.setTimeout(120_000);
+    test.setTimeout(240_000);
     await page.goto('/#/agent');
+    await expect(page.getByRole('heading', { name: 'Research Agent' })).toBeVisible();
     const composer = page.getByRole('textbox', { name: 'Message the research agent' });
     await expect(composer).toBeEnabled();
 
-    // A short question that should not need provider tools or write actions.
-    // Use a test-only user with no permission to run flows, modify settings,
-    // send notifications or access sensitive workspaces.
-    await composer.fill('Autotest check: explain in one brief sentence what a moving average is. Do not call tools, modify data, or start any workflows.');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    // These are real submitted messages to the configured model. The account
+    // must lack permissions for side-effecting tools and see only test data.
+    // Tests verify response relevance, a follow-up in the same conversation,
+    // completion, and the absence of UI-visible errors without requiring an
+    // exact (necessarily nondeterministic) AI answer.
+    async function sendAndExpectAnswer(prompt: string, expected: RegExp, sequence: number): Promise<void> {
+      const messages = page.locator('.msg.msg-agent .bubble');
+      const before = await messages.count();
+      await composer.fill(prompt);
+      await page.getByRole('button', { name: 'Send', exact: true }).click();
+      await expect(page.locator('.msg.msg-user .bubble').last()).toContainText(prompt, { timeout: 10_000 });
+      await expect.poll(() => messages.count(), { timeout: 100_000 }).toBeGreaterThan(before);
+      const answer = messages.last();
+      await expect(answer).toContainText(expected, { timeout: 100_000 });
+      await expect(page.getByRole('button', { name: 'Stop the agent' })).toHaveCount(0, { timeout: 100_000 });
+      await expect(page.locator('[role="alert"].alert-danger')).toHaveCount(0);
+      // Report only a generic success marker; never print model replies or
+      // private tool outputs into GitHub Actions logs.
+      console.log(`Real AI conversation turn ${sequence}: response received and completed`);
+    }
 
-    await expect(page.locator('.msg.msg-agent .bubble').last()).toContainText(/\S/, { timeout: 95_000 });
-    await expect(page.locator('[role="alert"].alert-danger')).toHaveCount(0);
+    await sendAndExpectAnswer(
+      'In a short paragraph, explain what a simple moving average (SMA) means for stock prices. This is a test conversation. Do not use tools or change any data.',
+      /moving average|\bSMA\b|average.*price/i,
+      1,
+    );
+    await sendAndExpectAnswer(
+      'Follow-up to my previous question: how does a 20-day SMA differ from a 50-day SMA? Answer briefly. Do not use tools or change any data.',
+      /20.day|50.day|twenty.day|fifty.day/i,
+      2,
+    );
+    await expect(page.locator('.msg.msg-user .bubble')).toHaveCount(2);
+    await expect(page.locator('.msg.msg-agent .bubble')).toHaveCount(2);
   });
 });
