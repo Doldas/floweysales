@@ -15,7 +15,7 @@ import (
 )
 
 // A sensitivity run changes one setting at a time around a base backtest: the
-// trading cost, the number of holdings and the rebalance interval. It shows how
+// trading cost, the slippage, the fill delay, the number of holdings and the rebalance interval. It shows how
 // much the result leans on a setting, which a single run cannot.
 
 const (
@@ -24,7 +24,7 @@ const (
 )
 
 type sensitivityVariant struct {
-	Parameter string            `json:"parameter"` // cost_bps | top | rebalance
+	Parameter string            `json:"parameter"` // cost_bps | slippage_bps | delay_days | top | rebalance
 	Value     string            `json:"value"`
 	Base      bool              `json:"base,omitempty"`
 	Metrics   *backtest.Metrics `json:"metrics,omitempty"`
@@ -86,12 +86,20 @@ func (e *Engine) runSensitivity(ctx context.Context, q url.Values) (sensitivityR
 	if err != nil {
 		return sensitivityResponse{}, badRequest{fmt.Errorf("tops: %w", err)}
 	}
+	slips, err := floatList(q.Get("slippages"), []float64{0, 10, 25})
+	if err != nil {
+		return sensitivityResponse{}, badRequest{fmt.Errorf("slippages: %w", err)}
+	}
+	delaysF, err := floatList(q.Get("delays"), []float64{0, 1, 2})
+	if err != nil {
+		return sensitivityResponse{}, badRequest{fmt.Errorf("delays: %w", err)}
+	}
 	period := "years=" + strconv.Itoa(baseReq.years)
 	if baseReq.years == 0 {
 		period = baseReq.from.Format(strategyDateLayout) + ".." + baseReq.to.Format(strategyDateLayout)
 	}
 	out := sensitivityResponse{Universe: baseReq.universe, Strategy: baseReq.strategy.ID, Period: period, GeneratedAt: time.Now().UTC().Format(time.RFC3339),
-		Base: map[string]string{"cost_bps": fmt.Sprint(baseReq.costBps), "top": strconv.Itoa(baseReq.top), "rebalance": baseReq.rebalLabel}}
+		Base: map[string]string{"cost_bps": fmt.Sprint(baseReq.costBps), "slippage_bps": fmt.Sprint(baseReq.slippage), "delay_days": strconv.Itoa(baseReq.delay), "top": strconv.Itoa(baseReq.top), "rebalance": baseReq.rebalLabel}}
 
 	type variant struct {
 		parameter, value string
@@ -117,6 +125,16 @@ func (e *Engine) runSensitivity(ctx context.Context, q url.Values) (sensitivityR
 	for _, c := range costs {
 		if c != baseReq.costBps {
 			add("cost_bps", fmt.Sprint(c), with("cost_bps", fmt.Sprint(c)))
+		}
+	}
+	for _, c := range slips {
+		if c != baseReq.slippage {
+			add("slippage_bps", fmt.Sprint(c), with("slippage_bps", fmt.Sprint(c)))
+		}
+	}
+	for _, d := range delaysF {
+		if n := int(d); n != baseReq.delay {
+			add("delay_days", strconv.Itoa(n), with("delay_days", strconv.Itoa(n)))
 		}
 	}
 	skipped := 0
@@ -188,6 +206,7 @@ func (e *Engine) runSensitivity(ctx context.Context, q url.Values) (sensitivityR
 func sensitivityNotes(r sensitivityResponse, skippedTops int) []string {
 	notes := []string{
 		"One setting changes at a time; combinations of changes were not tested.",
+		"Slippage and fill delay are tested here because instant, frictionless fills are the assumption a replay leans on most. A result that vanishes with a day of delay or a little slippage was not tradable as measured.",
 		"Every variant replays the same period and the same universe, so they share the same survivorship bias and the same market path.",
 	}
 	if skippedTops > 0 {

@@ -36,6 +36,7 @@ type backtestRequest struct {
 	rebalance  int // trading days
 	costBps    float64
 	slippage   float64 // bps per side on top of costBps
+	delay      int     // trading days between the ranking and the fill
 	years      int
 	from, to   time.Time // custom UTC window; zero when years is used
 	provider   market.Provider
@@ -57,6 +58,9 @@ type backtestResponse struct {
 	DataEnd   string `json:"data_end,omitempty"`
 	// Notice says when the tested period is shorter than the one asked for.
 	Notice string `json:"notice,omitempty"`
+	// BenchmarkInfo defines what the comparison index is and is not; Currencies lists the quote currencies seen.
+	BenchmarkInfo *benchmarkInfo `json:"benchmark_info,omitempty"`
+	Currencies    []string       `json:"currencies,omitempty"`
 	backtest.Result
 }
 
@@ -132,6 +136,11 @@ func (e *Engine) parseBacktestQuery(q url.Values) (backtestRequest, error) {
 			return req, badRequest{errors.New("slippage_bps must be a number from 0 to 100")}
 		}
 	}
+	if raw := q.Get("delay_days"); raw != "" {
+		if req.delay, err = strconv.Atoi(raw); err != nil || req.delay < 0 || req.delay > backtest.MaxDelayDays {
+			return req, badRequest{fmt.Errorf("delay_days must be a whole number from 0 to %d", backtest.MaxDelayDays)}
+		}
+	}
 	switch q.Get("years") {
 	case "", "3":
 	case "5", "10":
@@ -159,7 +168,7 @@ func (e *Engine) parseBacktestQuery(q url.Values) (backtestRequest, error) {
 func backtestKey(req backtestRequest) string {
 	sorted := append([]string(nil), req.symbols...)
 	sort.Strings(sorted)
-	return fmt.Sprintf("%s|%s|%s|%s|%d|%s|%g|%g|%d", req.provider, strings.Join(sorted, ","), req.strategy.ID, req.benchmark, req.top, req.rebalLabel, req.costBps, req.slippage, req.years) + "|" + req.from.Format(strategyDateLayout) + "|" + req.to.Format(strategyDateLayout)
+	return fmt.Sprintf("%s|%s|%s|%s|%d|%s|%g|%g|%d|%d", req.provider, strings.Join(sorted, ","), req.strategy.ID, req.benchmark, req.top, req.rebalLabel, req.costBps, req.slippage, req.years, req.delay) + "|" + req.from.Format(strategyDateLayout) + "|" + req.to.Format(strategyDateLayout)
 }
 
 // leaderboardScorer ranks the symbols exactly as the leaderboard does, from
@@ -199,7 +208,7 @@ func (e *Engine) leaderboardScorer(strategy leaderboardStrategy) backtest.Scorer
 
 // backtestData fetches prices and financials for the symbols with bounded
 // concurrency. Symbols that fail are returned in missing, not as an error.
-func (e *Engine) backtestData(ctx context.Context, provider market.Provider, symbols []string, rng string) (series map[string]market.HistorySeries, fin map[string]market.FinancialsResponse, missing []string) {
+func (e *Engine) backtestData(ctx context.Context, provider market.Provider, symbols []string, rng string) (series map[string]market.HistorySeries, fin map[string]market.FinancialsResponse, missing []string, fellBack int) {
 	series, fin = map[string]market.HistorySeries{}, map[string]market.FinancialsResponse{}
 	var mu sync.Mutex
 	slots := make(chan struct{}, flowSymbolFetches)
@@ -214,7 +223,7 @@ func (e *Engine) backtestData(ctx context.Context, provider market.Provider, sym
 				return
 			}
 			defer func() { <-slots }()
-			s, err := e.flowHistory(ctx, symbol, provider, rng)
+			s, shallow, err := e.backtestHistory(ctx, symbol, provider, rng)
 			var f market.FinancialsResponse
 			ferr := errors.New("no prices")
 			if err == nil && len(s.Points) > 0 {
@@ -222,6 +231,9 @@ func (e *Engine) backtestData(ctx context.Context, provider market.Provider, sym
 			}
 			mu.Lock()
 			defer mu.Unlock()
+			if shallow {
+				fellBack++
+			}
 			if err != nil || len(s.Points) == 0 {
 				missing = append(missing, symbol)
 				return
@@ -234,28 +246,46 @@ func (e *Engine) backtestData(ctx context.Context, provider market.Provider, sym
 	}
 	wg.Wait()
 	sort.Strings(missing)
-	return series, fin, missing
+	return series, fin, missing, fellBack
+}
+
+// backtestHistory reads one symbol's bars. With the MAX range it asks for the longest daily history and
+// falls back to ten years, reporting shallow when it had to.
+func (e *Engine) backtestHistory(ctx context.Context, symbol string, p market.Provider, rng string) (s market.HistorySeries, shallow bool, err error) {
+	if rng != market.RangeMAX {
+		s, err = e.flowHistory(ctx, symbol, p, rng)
+		return s, false, err
+	}
+	s, deepOK, err := deepHistory(func(r string) (market.HistorySeries, error) { return e.flowHistory(ctx, symbol, p, r) }, market.Range10Y)
+	return s, !deepOK, err
 }
 
 func (e *Engine) runBacktest(ctx context.Context, req backtestRequest) (backtestResponse, error) {
 	// The first year of bars is only warm-up, so a five-year test needs ten.
-	rng := market.Range5Y
-	if req.years >= 5 || req.years == 0 {
-		rng = market.Range10Y
-	}
-	series, fin, missing := e.backtestData(ctx, req.provider, req.symbols, rng)
-	if err := ctx.Err(); err != nil {
-		return backtestResponse{}, err
-	}
-	var bench *market.HistorySeries
-	if s, err := e.flowHistory(ctx, req.benchmark, req.provider, rng); err == nil && len(s.Points) > 1 {
-		bench = &s
-	}
 	start, end := req.from, req.to
 	if req.years > 0 {
 		start = time.Now().UTC().AddDate(-req.years, 0, 0)
 	}
-	cfg := backtest.Config{Start: start, End: end, TopN: req.top, RebalanceDays: req.rebalance, CostBps: req.costBps, SlippageBps: req.slippage}
+	rng := market.Range5Y
+	if req.years >= 5 || req.years == 0 {
+		rng = market.Range10Y
+	}
+	// A start more than nine years back needs more than the 10-year window once the warm-up year is counted.
+	if !start.IsZero() && start.Before(time.Now().UTC().AddDate(-deepHistoryYears, 0, 0)) {
+		rng = market.RangeMAX
+	}
+	series, fin, missing, fellBack := e.backtestData(ctx, req.provider, req.symbols, rng)
+	if err := ctx.Err(); err != nil {
+		return backtestResponse{}, err
+	}
+	var bench *market.HistorySeries
+	if s, shallow, err := e.backtestHistory(ctx, req.benchmark, req.provider, rng); err == nil && len(s.Points) > 1 {
+		bench = &s
+		if shallow {
+			fellBack++
+		}
+	}
+	cfg := backtest.Config{Start: start, End: end, TopN: req.top, RebalanceDays: req.rebalance, CostBps: req.costBps, SlippageBps: req.slippage, DelayDays: req.delay}
 	result, err := backtest.Run(cfg, series, fin, bench, e.leaderboardScorer(req.strategy))
 	if err != nil {
 		return backtestResponse{}, badRequest{err}
@@ -274,8 +304,21 @@ func (e *Engine) runBacktest(ctx context.Context, req backtestRequest) (backtest
 	}
 	res.DataStart, res.DataEnd = seriesDates(series)
 	res.Notice = backtestNotice(start, end, res.DataStart, res.DataEnd, result)
+	if rng == market.RangeMAX {
+		if note := depthNotice(fellBack); note != "" {
+			res.Notice = strings.TrimSpace(res.Notice + " " + note)
+		}
+	}
 	if bench != nil {
 		res.Benchmark = req.benchmark
+	}
+	var mixed, differs bool
+	res.Currencies, res.BenchmarkInfo, mixed, differs = currencyAndBenchmark(series, bench, req.benchmark, req.universe)
+	if mixed {
+		res.Warnings = append(res.Warnings, backtest.WarnMixedCurrency)
+	}
+	if differs {
+		res.Warnings = append(res.Warnings, backtest.WarnBenchCurrency)
 	}
 	return res, nil
 }

@@ -23,6 +23,8 @@ func TestAllowedAPI(t *testing.T) {
 		{identity.RoleUser, http.MethodGet, "/api/strategies", true},
 		{identity.RoleUser, http.MethodPost, "/api/strategies", true},
 		{identity.RoleUser, http.MethodPost, "/api/strategies/backtest", true},
+		{identity.RoleUser, http.MethodPost, "/api/strategies/walkforward", true},
+		{identity.RoleUser, http.MethodGet, "/api/strategies/walkforward", false},
 		{identity.RoleUser, http.MethodPut, "/api/strategies/7", true},
 		{identity.RoleUser, http.MethodDelete, "/api/strategies/7", true},
 		{identity.RoleUser, http.MethodGet, "/api/strategies/backtest", false},

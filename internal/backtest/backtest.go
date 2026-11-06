@@ -40,6 +40,13 @@ const (
 	// Added when no slippage was asked for: fills are assumed at the closing price.
 	WarnNoSlippage     = "slippage_not_modeled"
 	WarnSymbolsMissing = "symbols_unavailable"
+	// Added when a trade is decided from a day's close and filled at that same close.
+	WarnSameCloseFill = "same_close_fill"
+	// Added by the caller, which knows the currencies of the series.
+	WarnMixedCurrency = "mixed_currencies"
+	WarnBenchCurrency = "benchmark_currency_differs"
+	// Always: what the replay does not model about real execution.
+	WarnExecutionGaps = "execution_not_modeled"
 )
 
 // WarningTexts explains each warning id in plain words.
@@ -53,6 +60,10 @@ var WarningTexts = map[string]string{
 	WarnNoSlippage:     "Slippage is zero: every trade is assumed to fill at the closing price. Real fills, especially in thin stocks, are worse, so treat the result as an upper bound.",
 	WarnNoBenchmark:    "The benchmark could not be loaded, so the strategy is shown without a comparison.",
 	WarnSymbolsMissing: "Some symbols had no price history and were left out of the universe.",
+	WarnSameCloseFill:  "The ranking is computed from a day's closing prices and the trades fill at that same close, which no one can do exactly. Set a fill delay to fill at a later close instead.",
+	WarnMixedCurrency:  "The symbols trade in different currencies. Returns are in each local currency and are not converted, so the portfolio return mixes currencies.",
+	WarnBenchCurrency:  "The benchmark is quoted in a different currency than the symbols. The comparison ignores exchange-rate moves, so the excess return is not like for like.",
+	WarnExecutionGaps:  "Not modeled: bid-ask spread, order size against traded volume, partial fills, market impact, taxes and dividends. Cost and slippage are flat per-side rates.",
 }
 
 type Config struct {
@@ -63,6 +74,40 @@ type Config struct {
 	CostBps       float64   // per side, default 10
 	SlippageBps   float64   // per side, on top of CostBps: the gap between the closing price and the fill; default 0
 	ReportLagDays int       // default 60: a quarter counts from period_end+lag
+	// DelayDays is the number of trading days between the day a ranking is computed and the close it
+	// fills at (0 to MaxDelayDays; default 0: the same close). A delay shows how much a result leans on instant fills.
+	DelayDays int
+}
+
+// MaxDelayDays is the longest fill delay accepted.
+const MaxDelayDays = 5
+
+// Assumption states one execution assumption of a replay: what it is, its value, and whether it is modeled.
+type Assumption struct {
+	Name    string `json:"name"`
+	Value   string `json:"value"`
+	Modeled bool   `json:"modeled"`
+}
+
+// ExecutionAssumptions lists, in words, how the replay turns a ranking into fills. It is built from the
+// configuration actually used, so a saved result states what produced it.
+func ExecutionAssumptions(cfg Config) []Assumption {
+	cfg = cfg.withDefaults()
+	fill := "the same day's close as the ranking"
+	if cfg.DelayDays > 0 {
+		fill = fmt.Sprintf("the close %d trading day(s) after the ranking", cfg.DelayDays)
+	}
+	return []Assumption{
+		{"Fill price", fill, true},
+		{"Trading cost", fmt.Sprintf("%g bps per side on traded value", cfg.CostBps), true},
+		{"Slippage", fmt.Sprintf("%g bps per side on traded value", cfg.SlippageBps), cfg.SlippageBps > 0},
+		{"Weights", fmt.Sprintf("equal weight, top %d, rebalanced every %d trading days", cfg.TopN, cfg.RebalanceDays), true},
+		{"Report timing", fmt.Sprintf("a quarter counts %d days after its period end", cfg.ReportLagDays), true},
+		{"Bid-ask spread", "not modeled beyond the flat slippage", false},
+		{"Liquidity and order size", "not modeled: any size fills in full at the price", false},
+		{"Partial fills and market impact", "not modeled", false},
+		{"Dividends and taxes", "not modeled: prices are used as given", false},
+	}
 }
 
 // Scorer ranks the symbols as of a date from point-in-time data and returns
@@ -104,6 +149,8 @@ type Result struct {
 	Curve      []Point     `json:"curve"` // one point per trading day, thinned to ≤ 400 points
 	Rebalances []Rebalance `json:"rebalances"`
 	Warnings   []string    `json:"warnings"`
+	// Execution states how fills were assumed, from the configuration used.
+	Execution []Assumption `json:"execution_assumptions"`
 	// Segments are consecutive parts of the period measured on their own; empty when the period is too short.
 	Segments       []Segment `json:"segments,omitempty"`
 	SegmentSummary string    `json:"segment_summary,omitempty"`
@@ -201,6 +248,9 @@ func (c Config) withDefaults() Config {
 	if c.ReportLagDays <= 0 {
 		c.ReportLagDays = 60
 	}
+	if c.DelayDays < 0 {
+		c.DelayDays = 0
+	}
 	return c
 }
 
@@ -214,6 +264,9 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 	}
 	if score == nil {
 		return Result{}, errors.New("no scorer")
+	}
+	if cfg.DelayDays > MaxDelayDays {
+		return Result{}, fmt.Errorf("fill delay must be from 0 to %d trading days", MaxDelayDays)
 	}
 
 	symbols := make([]string, 0, len(series))
@@ -295,6 +348,8 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 	rebalIdx := []int{} // curve index of each rebalance
 	curveEquity := make([]float64, 0, len(cal)-first)
 	turnoverSum, coverageSum := 0.0, 0.0
+	var pendingRank []string
+	pendingCoverage, pendingAt := 0.0, -1
 	for i := first; i < len(cal); i++ {
 		if i > first {
 			portfolio := 0.0
@@ -320,7 +375,13 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 				}
 				cutSeries[sym], cutFin[sym] = PointInTime(cal[i], series[sym], fin[sym], cfg.ReportLagDays)
 			}
-			ranked, coverage := score(cal[i], cutSeries, cutFin)
+			// The ranking sees data up to this close; the fill happens DelayDays closes later.
+			pendingRank, pendingCoverage = score(cal[i], cutSeries, cutFin)
+			pendingAt = i + cfg.DelayDays
+		}
+		if pendingAt == i {
+			ranked, coverage := pendingRank, pendingCoverage
+			pendingAt = -1
 			held := make([]string, 0, cfg.TopN)
 			for _, sym := range ranked {
 				if len(held) == cfg.TopN {
@@ -423,8 +484,12 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 	if cfg.SlippageBps == 0 {
 		warnings = append(warnings, WarnNoSlippage)
 	}
+	if cfg.DelayDays == 0 {
+		warnings = append(warnings, WarnSameCloseFill)
+	}
+	warnings = append(warnings, WarnExecutionGaps)
 	warnings = append(warnings, countWarnings(trades, conc)...)
-	res := Result{Config: cfg, Metrics: metrics, Curve: thin(curve, maxCurvePoints), Rebalances: rebalances, Warnings: warnings,
+	res := Result{Config: cfg, Metrics: metrics, Curve: thin(curve, maxCurvePoints), Rebalances: rebalances, Warnings: warnings, Execution: ExecutionAssumptions(cfg),
 		Trades: trades, Concentration: conc, StressNote: StressNote, RegimeNote: RegimeNote, WalkForwardNote: WalkForwardNote}
 	res.DailyReturns = dailyReturns(curveEquity)
 	dates := make([]string, len(curve))

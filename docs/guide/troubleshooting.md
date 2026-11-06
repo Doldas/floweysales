@@ -2,7 +2,7 @@
 title: Troubleshooting and FAQ
 order: 14
 summary: Common questions about empty screens, stale prices, missing companies and AI answers.
-last-reviewed: 2026-11-04
+last-reviewed: 2026-11-06
 ---
 
 # Troubleshooting and FAQ
@@ -24,6 +24,12 @@ last-reviewed: 2026-11-04
 **The agent says it could not find a source.** In evidence-only or primary-only mode the agent holds back claims it cannot support. Loosen the evidence setting or ask a narrower question. See [Research Agent](agents.md).
 
 **Summarize is unavailable.** A summary needs an AI model to be configured by an administrator.
+
+**My paper portfolio or market history is gone after a restart.** The SQLite file that holds them is set by `SQLITE_STORAGE_PATH`; the example configuration uses `:memory:`, which keeps nothing. See [Install, run and back up](install-and-run.md#what-to-back-up).
+
+**Saved API keys stopped working after a move or restore.** Credentials are encrypted with the secrets key. Restore the key that was used when they were saved, or enter the credentials again.
+
+**A term is unclear.** See the [Glossary](glossary.md).
 
 **Can FloweySales place a trade?** No screen in the guide places orders.
 
