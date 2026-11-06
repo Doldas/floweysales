@@ -4,6 +4,7 @@ import { UpdateSettingsComponent } from './update-settings';
 import { PluginSettingsComponent } from './plugin-settings';
 import { TradingSettingsComponent } from './trading-settings';
 import { ModelProfilesSettingsComponent } from './model-profiles-settings';
+import { VisionSettingsComponent } from './vision-settings';
 import { FormsModule } from '@angular/forms';
 
 interface AIConfig {base_url:string;model:string;max_steps:number;max_tool_calls:number;configured:boolean}
@@ -13,7 +14,7 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
 @Component({
  selector:'fse-api-settings', host:{class:'fs-native-forms'},
  standalone:true,
- imports:[FormsModule,AdminAccessSettingsComponent,UpdateSettingsComponent,PluginSettingsComponent,TradingSettingsComponent,ModelProfilesSettingsComponent],
+ imports:[FormsModule,AdminAccessSettingsComponent,UpdateSettingsComponent,PluginSettingsComponent,TradingSettingsComponent,ModelProfilesSettingsComponent,VisionSettingsComponent],
  template:`
  <div class="api-settings">
   @if(!encryptionReady()){
@@ -85,6 +86,7 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
     </div>
     <p class="muted">Used by the research agent's web search and the Flow Studio web search node. Crawling public HTML pages does not require a search API key.</p>
    </div>
+   <fse-vision-settings></fse-vision-settings>
    <div class="card">
     <h3>SEC EDGAR contact</h3>
     <p>Status: <strong>{{secStatus()}}</strong></p>
