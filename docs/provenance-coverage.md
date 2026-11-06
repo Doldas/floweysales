@@ -29,10 +29,12 @@ a maintainer has run it with access and written a reviewed list into `universes.
 ## Index universes (#258)
 
 The Leaderboard has an **Index** selector for S&P 500, Nasdaq-100 and OMX Stockholm 30 (OMXS30). The registry is data
-(`internal/server/indices.json`, served by `GET /api/market/indices`). **All three are currently unavailable:** no
-constituent list has been verified as legally usable, so none is shown, none is guessed, and ranking an unavailable index
+(`internal/server/indices.json`, served by `GET /api/market/indices`) and **carries no members**: FloweySales ships no licensed
+constituent list. Each index is `unavailable` until a user supplies a list of their own (CSV import, or a fetch with their own
+Financial Modeling Prep key; `internal/indexsource`, `internal/server/index_sources.go`), and is then available to that user only.
+The list is stored per user (table `index_sources`) and never committed. Ranking an index the caller has not supplied
 (`GET /api/market/leaderboard?universe=index_sp500`) returns 422 with the reason. The hand-picked "Swedish large caps" list is
-not OMXS30 and is not presented as it.
+not OMXS30 and is not presented as it. See [universe-coverage.md](universe-coverage.md#user-supplied-index-constituents-258).
 
 Each index records provider, methodology (summary and link), constituent source, retrieval and as-of dates (UTC), nominal and
 actual security counts, exclusions, share-class policy, currency and benchmark convention, licensing limits, and whether
@@ -40,11 +42,12 @@ membership history is point-in-time. Validation (`validateIndex`, run at startup
 available without a verified licence, an https source, an as-of date, well-formed unique constituents (by ISIN or
 exchange-qualified symbol, never ticker alone) whose exchange suffix matches the index country.
 
-To enable an index a maintainer must: confirm in writing that the constituent list may be stored and shown (licence or an
-openly licensed source), add `constituents` (with ISINs where available), set `status` to `available`, `as_of`,
-`constituent_source.url`, `retrieved_at` and `license_verified`, and describe the verification in the PR. An available list is
-only current members, so the panel warns about survivorship bias; list freshness over 100 days is flagged stale.
+A maintainer does not enable an index by committing a list; the registry stays empty. A user's own list is validated at import
+(duplicates, symbol and exchange format, count against the nominal size, as-of date, licence confirmation) and shown with its
+provider, as-of date, count, the licence text they confirmed and whether past membership is known. Freshness over 100 days is
+flagged stale. A list with only current members warns about survivorship bias; a list with add/remove records feeds each
+backtest rebalance with that date's members and says where it had to fall back to today's.
 
-Not done yet: point-in-time membership, using an index as a backtest benchmark across currencies and total return, and a
+Not done yet: using an index as a backtest benchmark across currencies and total return, and a
 combined-universe mode in the UI (`combineIndexes` deduplicates by canonical identity and reports overlap, and is tested, but
 is not wired to an endpoint).

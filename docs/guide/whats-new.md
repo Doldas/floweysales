@@ -49,7 +49,7 @@ last-reviewed: 2026-11-06
 
 - Markets in Asia, Africa, South America and Oceania. A region is added only after a provider's prices and reports for it have been checked.
 - Walk-forward testing of leaderboard strategies. The factor rankings have no fitted parameters to fit.
-- Point-in-time lists of index members, so survivorship bias is stated but not measured.
+- A bundled list of index members. FloweySales ships none; you supply your own (see [Leaderboard](leaderboard.md)). Past membership is known only for a list fetched with your own FMP key, and only as far as FMP's records go.
 - Bid-ask spread, order size against traded volume, partial fills and market impact in backtests.
 - A quote time and delay from every provider. Providers that do not send them show them as unknown.
 - Price history beyond what the provider returns as daily bars.
