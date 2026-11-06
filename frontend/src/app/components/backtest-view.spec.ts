@@ -2,7 +2,7 @@
 //   node --test src/app/components/backtest-view.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MONTE_CARLO_DEFAULTS, monteCarloError, monteCarloHeadline, monteCarloParams, monteCarloRows, batchParams, exportUrl, savedLabel, sensitivityParams, singleParams, sensitivityHeadline, sensitivityRows, settingLabel, batchHeadline, batchRows, chartSummary, curvePath, metricTiles, periodLabel, regimeRows, segmentRows, stressRows, warningText } from './backtest-view.ts';
+import { assumptionRows, benchmarkLines, MONTE_CARLO_DEFAULTS, monteCarloError, monteCarloHeadline, monteCarloParams, monteCarloRows, batchParams, exportUrl, savedLabel, sensitivityParams, singleParams, sensitivityHeadline, sensitivityRows, settingLabel, batchHeadline, batchRows, chartSummary, curvePath, metricTiles, periodLabel, regimeRows, segmentRows, stressRows, warningText } from './backtest-view.ts';
 import type { BacktestMetrics } from '../models';
 
 const metrics: BacktestMetrics = { cagr_pct: 12.4, volatility_pct: 18, sharpe: 0.9, sortino: 1.2, max_drawdown_pct: -22.5, calmar: 0.5,
@@ -213,4 +213,42 @@ test('slippage is sent only when set, for a single run and for a batch', () => {
   const batch = { universes: ['sp500'], periods: ['3'], strategy: 'value', top: 10, rebalance: 'monthly' };
   assert.ok(!('slippage_bps' in batchParams(batch)));
   assert.equal(batchParams({ ...batch, slippage: 25 })['slippage_bps'], '25');
+});
+
+test('settingLabel names slippage and fill delay variants', () => {
+  assert.equal(settingLabel({ parameter: 'slippage_bps', value: '25' }), 'Slippage 25 bps per side');
+  assert.equal(settingLabel({ parameter: 'delay_days', value: '2' }), 'Fill delay 2 trading day(s)');
+});
+
+test('a fill delay is sent only when set', () => {
+  const base = { universe: 'sp500', strategy: 'value', top: 10, rebalance: 'monthly' as const, years: 5 as const };
+  assert.ok(!('delay_days' in singleParams(base)));
+  assert.equal(singleParams({ ...base, delay: 2 })['delay_days'], '2');
+  const batch = { universes: ['sp500'], periods: ['3'], strategy: 'value', top: 10, rebalance: 'monthly' };
+  assert.ok(!('delay_days' in batchParams(batch)));
+  assert.equal(batchParams({ ...batch, delay: 1 })['delay_days'], '1');
+});
+
+test('assumptionRows say what is not modeled', () => {
+  const rows = assumptionRows([{ name: 'Slippage', value: '0 bps per side on traded value', modeled: false }, { name: 'Trading cost', value: '10 bps', modeled: true }]);
+  assert.deepEqual(rows.map(r => r.status), ['not modeled', 'modeled']);
+  assert.deepEqual(assumptionRows(undefined), []);
+});
+
+test('benchmarkLines define the benchmark and never guess a currency', () => {
+  assert.deepEqual(benchmarkLines(undefined), []);
+  const known = benchmarkLines({ symbol: 'SPY', source: 'universe_default', basis: 'Closing prices; dividends are not added.', currency: 'USD', first_bar: '2016-01-04', last_bar: '2026-11-05', currency_comparable: true });
+  assert.match(known[0], /SPY \(the list's own index\)/);
+  assert.match(known[1], /Quoted in USD; bars 2016-01-04 to 2026-11-05/);
+  assert.equal(known[2], 'Same currency as the symbols.');
+  const unknown = benchmarkLines({ symbol: 'X', source: 'chosen', basis: 'b', currency_comparable: false, note: 'could not be checked' });
+  assert.match(unknown[0], /chosen by you/);
+  assert.match(unknown[1], /did not state; bars dates not reported/);
+  assert.equal(unknown[2], 'could not be checked');
+});
+
+test('the new execution warnings have readable text', () => {
+  for (const id of ['same_close_fill', 'mixed_currencies', 'benchmark_currency_differs', 'execution_not_modeled']) {
+    assert.ok(!warningText(id).includes('_'), id);
+  }
 });

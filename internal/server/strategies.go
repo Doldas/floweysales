@@ -112,6 +112,8 @@ type strategyBacktestRequest struct {
 	From       string             `json:"from"`  // optional UTC date, YYYY-MM-DD; with To it replaces Range
 	To         string             `json:"to"`    // optional UTC date, YYYY-MM-DD
 	CostBps    *float64           `json:"cost_bps"`
+	// SlippageBps is the per-side gap between the rule price and the fill, on top of the cost. Default 0.
+	SlippageBps *float64 `json:"slippage_bps"`
 }
 
 type strategyBacktestResponse struct {
@@ -126,6 +128,8 @@ type strategyBacktestResponse struct {
 	DataEnd   string `json:"data_end"`
 	// Notice says when the data does not cover the period that was asked for.
 	Notice string `json:"notice,omitempty"`
+	// Parameters are the numbers of the strategy that a walk-forward fit can change.
+	Parameters []strategy.Param `json:"parameters"`
 	strategy.Result
 }
 
@@ -155,7 +159,11 @@ func strategyPeriod(rng, fromText, toText string, now time.Time) (label, fetch s
 		if !from.IsZero() && !to.IsZero() && !from.Before(to) {
 			return "", "", from, to, errors.New("from must be before to")
 		}
-		return "CUSTOM", market.Range10Y, from, to, nil
+		fetch = market.Range10Y
+		if from.IsZero() || from.Before(now.AddDate(-deepHistoryYears, 0, 0)) {
+			fetch = market.RangeMAX // see deepHistory: used only when the provider serves daily bars
+		}
+		return "CUSTOM", fetch, from, to, nil
 	}
 	switch strings.ToUpper(strings.TrimSpace(rng)) {
 	case "":
@@ -172,7 +180,7 @@ func strategyPeriod(rng, fromText, toText string, now time.Time) (label, fetch s
 	case "YTD":
 		return "YTD", market.Range10Y, time.Date(now.Year(), 1, 1, 0, 0, 0, 0, time.UTC), to, nil
 	case "MAX":
-		return "MAX", market.Range10Y, from, to, nil
+		return "MAX", market.RangeMAX, from, to, nil
 	}
 	return "", "", from, to, errors.New("range must be 1Y, 3Y, 5Y, 10Y, YTD or MAX, or give from and to dates")
 }
@@ -313,21 +321,22 @@ func (e *Engine) registerStrategyRoutes() {
 	})
 }
 
-func (e *Engine) runStrategyBacktest(ctx context.Context, u identity.User, req strategyBacktestRequest) (strategyBacktestResponse, int, error) {
-	var zero strategyBacktestResponse
-	symbol, err := market.CanonicalSymbol(req.Symbol)
-	if err != nil {
-		return zero, http.StatusBadRequest, errors.New("choose an instrument to test on")
-	}
-	rng, fetch, from, to, err := strategyPeriod(req.Range, req.From, req.To, time.Now())
-	if err != nil {
-		return zero, http.StatusBadRequest, err
-	}
-	cost := 10.0
+// strategyCosts returns the cost and slippage of a request, with the defaults filled in.
+func strategyCosts(req strategyBacktestRequest) (cost, slippage float64) {
+	cost = 10
 	if req.CostBps != nil {
 		cost = *req.CostBps
 	}
+	if req.SlippageBps != nil {
+		slippage = *req.SlippageBps
+	}
+	return cost, slippage
+}
 
+// resolveStrategy finds the rules a request asks for: an unsaved definition, a saved strategy or a preset.
+func (e *Engine) resolveStrategy(ctx context.Context, u identity.User, req strategyBacktestRequest) (strategy.Strategy, int, error) {
+	var zero strategy.Strategy
+	var err error
 	var def strategy.Strategy
 	switch {
 	case req.Definition != nil:
@@ -348,25 +357,57 @@ func (e *Engine) runStrategyBacktest(ctx context.Context, u identity.User, req s
 			return zero, http.StatusBadRequest, errors.New("unknown strategy")
 		}
 	}
+	return def, http.StatusOK, nil
+}
+
+// strategySeries reads the bars a request needs. With the longest history it falls back to ten years
+// when the provider cannot give daily bars, and says so in note.
+func (e *Engine) strategySeries(ctx context.Context, symbol string, provider market.Provider, fetch string) (series market.HistorySeries, note string, err error) {
+	if fetch != market.RangeMAX {
+		series, err = e.strategyBars(ctx, symbol, provider, fetch)
+		return series, "", err
+	}
+	series, deepOK, err := deepHistory(func(r string) (market.HistorySeries, error) { return e.strategyBars(ctx, symbol, provider, r) }, market.Range10Y)
+	if err == nil && !deepOK {
+		note = depthNotice(1)
+	}
+	return series, note, err
+}
+
+func (e *Engine) runStrategyBacktest(ctx context.Context, u identity.User, req strategyBacktestRequest) (strategyBacktestResponse, int, error) {
+	var zero strategyBacktestResponse
+	symbol, err := market.CanonicalSymbol(req.Symbol)
+	if err != nil {
+		return zero, http.StatusBadRequest, errors.New("choose an instrument to test on")
+	}
+	rng, fetch, from, to, err := strategyPeriod(req.Range, req.From, req.To, time.Now())
+	if err != nil {
+		return zero, http.StatusBadRequest, err
+	}
+	cost, slippage := strategyCosts(req)
+	def, status, err := e.resolveStrategy(ctx, u, req)
+	if err != nil {
+		return zero, status, err
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	provider := e.parseProvider(req.Provider)
-	series, err := e.strategyBars(ctx, symbol, provider, fetch)
+	series, depth, err := e.strategySeries(ctx, symbol, provider, fetch)
 	if err != nil {
 		return zero, providerErrorStatus(err), err
 	}
-	result, err := strategy.Run(def, series.Points, strategy.Config{CostBps: cost, From: from, To: to})
+	result, err := strategy.Run(def, series.Points, strategy.Config{CostBps: cost, SlippageBps: slippage, From: from, To: to})
 	if err != nil {
 		return zero, http.StatusUnprocessableEntity, err
 	}
 	resp := strategyBacktestResponse{Symbol: symbol, Provider: series.Provider, Range: rng,
-		GeneratedAt: time.Now().UTC().Format(time.RFC3339), Result: result}
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339), Result: result, Parameters: strategy.Parameters(def)}
 	if n := len(result.Curve); n > 0 {
 		resp.From, resp.To = result.Curve[0].Date, result.Curve[n-1].Date
 	}
 	resp.DataStart, resp.DataEnd = barDates(series.Points)
-	resp.Notice = strategyCoverageNotice(from, to, resp.DataStart, resp.DataEnd)
+	resp.Notice = strings.TrimSpace(strategyCoverageNotice(from, to, resp.DataStart, resp.DataEnd) + " " + depth)
 	return resp, http.StatusOK, nil
 }
 

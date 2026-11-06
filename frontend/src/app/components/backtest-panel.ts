@@ -10,7 +10,7 @@ import { SkeletonComponent } from '../ui/skeleton';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import { PROGRESS_POLL_MS, newRunId, parseRunProgress, type RunProgress } from '../ui/run-progress';
 import { periodError } from '../core/strategy-period';
-import { MONTE_CARLO_DEFAULTS, monteCarloError, monteCarloHeadline, monteCarloParams, monteCarloRows, type MonteCarloSettings, batchHeadline, batchParams, batchRows, exportUrl, savedLabel, sensitivityHeadline, sensitivityParams, sensitivityRows, singleParams, chartSummary, curvePath, metricTiles, regimeRows, segmentRows, stressRows, warningText } from './backtest-view';
+import { assumptionRows, benchmarkLines, DELAY_OPTIONS, MONTE_CARLO_DEFAULTS, monteCarloError, monteCarloHeadline, monteCarloParams, monteCarloRows, type MonteCarloSettings, batchHeadline, batchParams, batchRows, exportUrl, savedLabel, sensitivityHeadline, sensitivityParams, sensitivityRows, singleParams, chartSummary, curvePath, metricTiles, regimeRows, segmentRows, stressRows, warningText } from './backtest-view';
 
 const CHART_W = 640;
 const CHART_H = 220;
@@ -38,6 +38,9 @@ const CHART_H = 220;
       </div>
       <div class="fs-segmented" role="group" aria-label="Slippage per side">
         @for (n of slippageOptions; track n) { <button type="button" [attr.aria-pressed]="slippage() === n" (click)="set('slippage', n)">{{ n === 0 ? 'No slippage' : n + ' bps' }}</button> }
+      </div>
+      <div class="fs-segmented" role="group" aria-label="Fill delay">
+        @for (n of delayOptions; track n) { <button type="button" [attr.aria-pressed]="delay() === n" (click)="set('delay', n)" [title]="n === 0 ? 'Fill at the same close the ranking is computed from' : 'Fill ' + n + ' trading day(s) after the ranking'">{{ n === 0 ? 'Same-day fill' : n + 'd delay' }}</button> }
       </div>
       <div class="fs-segmented" role="group" aria-label="Period">
         <button type="button" [attr.aria-pressed]="years() === 3" (click)="set('years', 3)">3Y</button>
@@ -160,6 +163,17 @@ const CHART_H = 220;
       </p>
     }
     @if (r.walk_forward_note) { <p class="bt-note">{{ r.walk_forward_note }}</p> }
+
+    @if (assumptions(r).length) {
+      <details class="bt-assume">
+        <summary>How fills were assumed</summary>
+        <ul class="mb-1">
+          @for (a of assumptions(r); track a.name) { <li><strong>{{ a.name }}:</strong> {{ a.value }} <span class="bt-tag" [class.off]="!a.modeled">{{ a.status }}</span></li> }
+        </ul>
+        @for (line of benchmarkText(r); track line) { <p class="bt-note">{{ line }}</p> }
+        @if (r.currencies?.length) { <p class="bt-note">Quote currencies of the symbols: {{ r.currencies!.join(', ') }}. Prices are not converted.</p> }
+      </details>
+    }
 
     <div class="bt-warnings alert alert-warning" role="note">
       <strong>Read this before trusting the result</strong>
@@ -369,6 +383,8 @@ const CHART_H = 220;
 .bt-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .bt-custom { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.6rem; padding: 0 1rem 0.5rem; label { font-size: 0.75rem; color: var(--fs-muted); display: grid; gap: 0.15rem; } }
 .bt-note { font-size: 0.75rem; color: var(--fs-muted); margin: 0; }
+.bt-assume { font-size: 0.8rem; margin: 0.5rem 0; ul { padding-left: 1.1rem; } summary { cursor: pointer; } }
+.bt-tag { font-size: 0.7rem; border: 1px solid var(--fs-border); border-radius: 999px; padding: 0 0.4rem; color: var(--fs-muted); &.off { color: var(--fs-warn, var(--fs-muted)); } }
 .bt-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.6rem; }
 .bt-tiles .fs-kpi { padding: 0.7rem 0.85rem; .fs-kpi-value { font-size: 1.15rem; } }
 .fs-kpi[data-tone='pos'] .fs-kpi-value { color: var(--fs-pos); }
@@ -414,11 +430,15 @@ export class BacktestPanelComponent {
   readonly w = CHART_W;
   readonly h = CHART_H;
   readonly warningText = warningText;
+  readonly assumptions = (r: BacktestResult) => assumptionRows(r.execution_assumptions);
+  readonly benchmarkText = (r: BacktestResult) => benchmarkLines(r.benchmark_info);
 
   readonly top = signal<number>(10);
   readonly rebalance = signal<BacktestParams['rebalance']>('monthly');
   readonly slippageOptions = [0, 5, 10, 25];
   readonly slippage = signal(0);
+  readonly delayOptions = DELAY_OPTIONS;
+  readonly delay = signal(0);
   readonly years = signal<BacktestParams['years']>(5);
   readonly from = signal('');
   readonly to = signal('');
@@ -502,8 +522,9 @@ export class BacktestPanelComponent {
     });
   }
 
-  set(key: 'top' | 'rebalance' | 'years' | 'slippage', value: number | string): void {
+  set(key: 'top' | 'rebalance' | 'years' | 'slippage' | 'delay', value: number | string): void {
     if (key === 'top') this.top.set(value as number);
+    else if (key === 'delay') this.delay.set(value as number);
     else if (key === 'slippage') this.slippage.set(value as number);
     else if (key === 'rebalance') this.rebalance.set(value as BacktestParams['rebalance']);
     else this.years.set(value as BacktestParams['years']);
@@ -586,7 +607,7 @@ export class BacktestPanelComponent {
     this.batchRequest?.unsubscribe();
     this.batchLoading.set(true);
     this.batchError.set('');
-    const params = batchParams({ universes: this.pickedMarkets(), periods: this.pickedPeriods(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(), slippage: this.slippage() });
+    const params = batchParams({ universes: this.pickedMarkets(), periods: this.pickedPeriods(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), delay: this.delay() });
     const runId = newRunId();
     this.startProgress(runId);
     this.batchRequest = this.api.backtestBatch(params, runId).subscribe({
@@ -624,7 +645,7 @@ export class BacktestPanelComponent {
     this.mcLoading.set(true);
     const params = monteCarloParams({
       universe: this.universe(), strategy: this.strategy(), symbols: this.symbols(),
-      top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), years: this.years(),
+      top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), delay: this.delay(), years: this.years(),
       ...(this.years() === 0 ? { from: this.from(), to: this.to() || undefined } : {}),
     }, this.mc());
     this.mcRequest = this.api.backtestMonteCarlo(params).subscribe({
@@ -638,7 +659,7 @@ export class BacktestPanelComponent {
     this.sensRequest?.unsubscribe();
     this.sensLoading.set(true);
     this.sensError.set('');
-    const params = sensitivityParams({ universe: this.universe(), symbols: this.symbols(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), years: this.years() });
+    const params = sensitivityParams({ universe: this.universe(), symbols: this.symbols(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), delay: this.delay(), years: this.years() });
     this.sensRequest = this.api.backtestSensitivity(params).subscribe({
       next: res => { this.lastParams.sensitivity = params; this.openedRun.set(null); this.sens.set(res); this.sensLoading.set(false); },
       error: err => { this.sensError.set(describeHttpError(err)); this.sensLoading.set(false); },
@@ -657,7 +678,7 @@ export class BacktestPanelComponent {
     this.error.set('');
     const params = singleParams({
       universe: this.universe(), strategy: this.strategy(), symbols: this.symbols(),
-      top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), years: this.years(),
+      top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), delay: this.delay(), years: this.years(),
       ...(this.years() === 0 ? { from: this.from(), to: this.to() || undefined } : {}),
     });
     this.request = this.api.backtest(params).subscribe({

@@ -11,10 +11,11 @@ import {
 import { AgentSession } from '../core/agent-session';
 import { MarketState } from '../core/market-state';
 import { PERIOD_PRESETS, parseSavedPeriods, periodError, periodRequest, withSavedPeriod, type PeriodChoice, type SavedPeriod } from '../core/strategy-period';
+import { FIT_FOLD_CHOICES, FIT_MAX_PARAMS, FIT_MODES, FIT_OBJECTIVES, fitHeadline, fitProblem, fitRequest, fitRows, toggleParam } from '../core/strategy-fit';
 import { todayUtc } from '../ui/datetime';
 import { SkeletonComponent } from '../ui/skeleton';
 import { ProgressStatusComponent } from '../ui/progress-status';
-import type { Persona, SavedStrategy, StrategyCatalog, StrategyDef, StrategyRunRequest, StrategyRunResult } from '../models';
+import type { FitMode, FitObjective, FitResult, Persona, SavedStrategy, StrategyCatalog, StrategyDef, StrategyRunRequest, StrategyRunResult } from '../models';
 import { MarketService, describeHttpError } from '../services';
 import { SymbolSearchComponent } from '../shell/symbol-search';
 
@@ -121,6 +122,9 @@ const H_EQUITY = 160;
             <label class="cost">Cost per side
               <input type="number" class="form-control form-control-sm" min="0" max="200" step="1" [value]="cost()" (change)="cost.set(+$any($event.target).value || 0)" /> bps
             </label>
+            <label class="cost">Slippage per side
+              <input type="number" class="form-control form-control-sm" min="0" max="200" step="1" [value]="slippage()" (change)="slippage.set(+$any($event.target).value || 0)" /> bps
+            </label>
             <button type="button" class="btn btn-primary" [disabled]="loading() || !market.trackedSymbol() || blocked().length > 0 || !!periodProblem()" (click)="run()">
               <i class="bi bi-play-fill"></i> Run test
             </button>
@@ -139,7 +143,7 @@ const H_EQUITY = 160;
         @if (result(); as r) {
           <section class="card panel" aria-label="Result">
             <div class="panel-head">
-              <div><h2>Result · {{ r.symbol }}</h2><p class="muted">{{ r.from }} to {{ r.to }}, daily bars from {{ r.provider }}, costs {{ r.config.cost_bps }} bps per side.</p></div>
+              <div><h2>Result · {{ r.symbol }}</h2><p class="muted">{{ r.from }} to {{ r.to }}, daily bars from {{ r.provider }}, costs {{ r.config.cost_bps }} bps and slippage {{ r.config.slippage_bps ?? 0 }} bps per side.</p></div>
               <button type="button" class="btn btn-sm btn-outline-secondary" (click)="agent.ask(prompt(r))"><i class="bi bi-stars"></i> Assess</button>
             </div>
             <p class="now" [class.hit]="r.latest.entry_signal && !r.latest.in_position">{{ now(r) }}</p>
@@ -204,6 +208,73 @@ const H_EQUITY = 160;
               </div>
             }
 
+            <section class="fit" aria-labelledby="fit-title">
+              <h3 id="fit-title" class="h6 mt-3">Walk-forward fit</h3>
+              <p class="text-muted small mb-2">Choose up to {{ maxFit }} numbers of this strategy, such as an average's period. Each fold picks the best values on a training window and measures them on the window after it, which the choice never saw. This is the only test here that fits anything, so read its warnings.</p>
+              @if (r.parameters?.length) {
+                <fieldset class="fit-params">
+                  <legend class="visually-hidden">Numbers to fit</legend>
+                  @for (p of r.parameters; track p.path) {
+                    <label class="fit-param">
+                      <input type="checkbox" [checked]="fitParams().includes(p.path)" [disabled]="!fitParams().includes(p.path) && fitParams().length >= maxFit" (change)="toggleFit(p.path)" />
+                      {{ p.label }} <span class="text-muted">(now {{ p.value }})</span>
+                    </label>
+                  }
+                </fieldset>
+                <div class="fit-controls">
+                  <label>Folds
+                    <select class="form-select form-select-sm" [value]="fitFolds()" (change)="fitFolds.set(+$any($event.target).value)">
+                      @for (n of foldChoices; track n) { <option [value]="n">{{ n }}</option> }
+                    </select>
+                  </label>
+                  <label>Training window
+                    <select class="form-select form-select-sm" [value]="fitMode()" (change)="fitMode.set($any($event.target).value)">
+                      @for (m of fitModes; track m.id) { <option [value]="m.id" [title]="m.hint">{{ m.label }}</option> }
+                    </select>
+                  </label>
+                  <label>Pick the best by
+                    <select class="form-select form-select-sm" [value]="fitObjective()" (change)="fitObjective.set($any($event.target).value)">
+                      @for (o of fitObjectives; track o.id) { <option [value]="o.id">{{ o.label }}</option> }
+                    </select>
+                  </label>
+                  <button type="button" class="btn btn-sm btn-outline-primary" [disabled]="fitLoading() || !!fitIssue()" (click)="runFit()">
+                    <i class="bi bi-arrow-right-circle"></i> Run walk-forward fit
+                  </button>
+                </div>
+                @if (fitIssue() && fitParams().length === 0) { <p class="text-muted small mb-0">{{ fitIssue() }}</p> }
+              } @else {
+                <p class="text-muted small mb-0">This strategy has no numbers a fit can change.</p>
+              }
+              @if (fitLoading()) { <div [attr.aria-busy]="true"><fs-progress-status stage="Fitting each fold" /></div> }
+              @if (fitError(); as err) { <p class="text-danger small" role="alert">{{ err }}</p> }
+              @if (fit(); as f) {
+                @for (line of fitText(); track line) { <p class="mb-1">{{ line }}</p> }
+                <div class="fs-scroll-x">
+                  <table class="table table-sm align-middle">
+                    <caption class="visually-hidden">Walk-forward folds</caption>
+                    <thead><tr><th scope="col">Fold</th><th scope="col">Trained on</th><th scope="col">Chosen</th><th scope="col" class="text-end">Training return</th><th scope="col">Tested on</th><th scope="col" class="text-end">Test return</th><th scope="col" class="text-end">Your numbers</th><th scope="col" class="text-end">Buy and hold</th><th scope="col" class="text-end">Trades</th></tr></thead>
+                    <tbody>
+                      @for (row of fitTable(); track row.fold) {
+                        <tr>
+                          <td>{{ row.fold }}</td><td>{{ row.train }}</td><td>{{ row.chosen }}@if (row.skipped) { <div class="text-muted small">{{ row.skipped }}</div> }</td>
+                          <td class="text-end">{{ row.trainReturn }}</td><td>{{ row.test }}</td><td class="text-end">{{ row.testReturn }}</td><td class="text-end">{{ row.unfitted }}</td><td class="text-end">{{ row.buyHold }}</td><td class="text-end">{{ row.testTrades }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+                <div class="alert alert-warning" role="note">
+                  <strong>Read this before trusting the fit</strong>
+                  <ul class="mb-0">
+                    @if (f.notice) { <li>{{ f.notice }}</li> }
+                    @for (w of f.warnings; track w) { <li>{{ f.warning_texts[w] ?? w }}</li> }
+                    <li>{{ f.note }}</li>
+                    <li>Past results do not predict future ones.</li>
+                  </ul>
+                </div>
+              }
+            </section>
+
             <button type="button" class="btn btn-sm btn-ghost" (click)="showTrades.set(!showTrades())" [attr.aria-expanded]="showTrades()">{{ showTrades() ? 'Hide' : 'Show' }} {{ r.trades.length }} trades</button>
             @if (showTrades()) {
               <div class="fs-scroll-x">
@@ -256,6 +327,10 @@ const H_EQUITY = 160;
 .cost { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--fs-muted); input { width: 5rem; } }
 .now { font-size: 0.88rem; margin: 0; }
 .now.hit { color: var(--fs-pos); font-weight: 600; }
+.fit { display: grid; gap: 0.4rem; }
+.fit-params { display: grid; gap: 0.2rem; border: 0; padding: 0; margin: 0; }
+.fit-param { font-size: 0.85rem; display: flex; gap: 0.4rem; align-items: center; }
+.fit-controls { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-end; label { font-size: 0.78rem; color: var(--fs-muted); display: grid; gap: 0.15rem; } }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.6rem; }
 .tiles .fs-kpi { padding: 0.7rem 0.85rem; .fs-kpi-value { font-size: 1.1rem; } }
 .fs-kpi[data-tone='pos'] .fs-kpi-value { color: var(--fs-pos); }
@@ -306,6 +381,23 @@ export class StrategiesPage {
   /** Why the custom dates cannot be sent, or ''. */
   readonly periodProblem = computed(() => this.range() === 'CUSTOM' ? periodError(this.from(), this.to(), this.today) : '');
   readonly cost = signal(10);
+  readonly slippage = signal(0);
+  // Walk-forward fit: the numbers chosen, how it is cut and scored, and the last answer.
+  readonly maxFit = FIT_MAX_PARAMS;
+  readonly foldChoices = FIT_FOLD_CHOICES;
+  readonly fitModes = FIT_MODES;
+  readonly fitObjectives = FIT_OBJECTIVES;
+  readonly fitParams = signal<string[]>([]);
+  readonly fitFolds = signal(4);
+  readonly fitMode = signal<FitMode>('rolling');
+  readonly fitObjective = signal<FitObjective>('return');
+  readonly fit = signal<FitResult | null>(null);
+  readonly fitLoading = signal(false);
+  readonly fitError = signal('');
+  private fitSub?: Subscription;
+  readonly fitIssue = computed(() => fitProblem(this.fitParams(), this.result()?.parameters));
+  readonly fitTable = computed(() => fitRows(this.fit()?.folds));
+  readonly fitText = computed(() => (this.fit() ? fitHeadline(this.fit()!) : []));
   readonly result = signal<StrategyRunResult | null>(null);
   /** The request behind the shown result, so a robustness run asks the same question. */
   readonly lastRequest = signal<StrategyRunRequest | null>(null);
@@ -423,11 +515,29 @@ export class StrategiesPage {
     this.request?.unsubscribe();
     this.loading.set(true);
     this.error.set('');
-    const common = { symbol, provider: this.market.provider(), ...periodRequest(this.range(), this.from(), this.to()), cost_bps: this.cost() };
+    const common = { symbol, provider: this.market.provider(), ...periodRequest(this.range(), this.from(), this.to()), cost_bps: this.cost(), slippage_bps: this.slippage() };
     const req = this.isPreset() ? { ...common, strategy_id: this.draftId()! } : { ...common, definition: d };
+    this.fitSub?.unsubscribe();
+    this.fit.set(null);
+    this.fitError.set('');
+    this.fitLoading.set(false);
     this.request = this.api.runStrategy(req).subscribe({
-      next: r => { this.lastRequest.set(req); this.result.set(r); this.loading.set(false); },
+      next: r => { this.lastRequest.set(req); this.result.set(r); this.fitParams.set(this.fitParams().filter(p => r.parameters?.some(a => a.path === p))); this.loading.set(false); },
       error: err => { this.error.set(describeHttpError(err)); this.result.set(null); this.loading.set(false); },
+    });
+  }
+
+  toggleFit(path: string): void { this.fitParams.set(toggleParam(this.fitParams(), path)); }
+
+  runFit(): void {
+    const last = this.lastRequest();
+    if (!last || this.fitIssue()) return;
+    this.fitSub?.unsubscribe();
+    this.fitLoading.set(true);
+    this.fitError.set('');
+    this.fitSub = this.api.runWalkForward(fitRequest(last, { params: this.fitParams(), folds: this.fitFolds(), mode: this.fitMode(), objective: this.fitObjective() })).subscribe({
+      next: r => { this.fit.set(r); this.fitLoading.set(false); },
+      error: err => { this.fitError.set(describeHttpError(err)); this.fit.set(null); this.fitLoading.set(false); },
     });
   }
 

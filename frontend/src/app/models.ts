@@ -477,6 +477,12 @@ export interface BacktestResult {
   curve: BacktestPoint[];
   rebalances: BacktestRebalance[];
   warnings: string[];
+  /** How fills were assumed, from the settings the run used; entries with modeled=false are not simulated at all. */
+  execution_assumptions?: BacktestAssumption[];
+  /** What the benchmark is and whether its currency matches the symbols; absent without a benchmark. */
+  benchmark_info?: BacktestBenchmarkInfo;
+  /** Quote currencies the provider reported for the symbols (not converted). */
+  currencies?: string[];
   /** Consecutive parts of the period, each measured on its own; absent when the period is too short. */
   segments?: BacktestSegment[];
   segment_summary?: string;
@@ -493,6 +499,11 @@ export interface BacktestResult {
   regime_unlabeled_days?: number;
   regime_note?: string;
   walk_forward_note?: string;
+}
+export interface BacktestAssumption { name: string; value: string; modeled: boolean }
+export interface BacktestBenchmarkInfo {
+  symbol: string; source: 'universe_default' | 'chosen'; basis: string; currency?: string; first_bar?: string; last_bar?: string;
+  currency_comparable: boolean; note?: string;
 }
 export interface BacktestConcentration { periods: number; dropped: number; total_return_pct: number; without_best_return_pct: number }
 export interface BacktestStress {
@@ -563,6 +574,8 @@ export interface BacktestParams {
   rebalance: 'monthly' | 'quarterly';
   /** Slippage in basis points per side; absent or 0 means none is modeled. */
   slippage?: number;
+  /** Trading days between the ranking and the fill (0 to 5); absent or 0 fills at the same close. */
+  delay?: number;
   /** A preset length, or 0 when from/to are used. */
   years: 3 | 5 | 10 | 0;
   from?: string;
@@ -727,7 +740,7 @@ export interface StrategyTrade {
 export interface StrategyRunMetrics { cagr_pct: number; volatility_pct: number; sharpe: number; sortino: number; max_drawdown_pct: number; calmar: number }
 export interface StrategyRunResult {
   symbol: string; provider: string; range: string; generated_at: string; strategy: StrategyDef;
-  config: { cost_bps: number }; base_price: number; from: string; to: string; data_start?: string; data_end?: string; notice?: string;
+  config: { cost_bps: number; slippage_bps?: number }; parameters?: FitParameter[]; base_price: number; from: string; to: string; data_start?: string; data_end?: string; notice?: string;
   metrics: StrategyRunMetrics; buy_hold: StrategyRunMetrics; total_return_pct: number; buy_hold_return_pct: number;
   stats: { trades: number; win_rate_pct: number; avg_win_pct: number; avg_loss_pct: number; profit_factor?: number; expectancy_pct: number; avg_r?: number; avg_bars: number; exposure_pct: number };
   curve: { date: string; close: number; equity: number; in_position?: boolean }[];
@@ -753,7 +766,33 @@ export interface StrategyMonteCarloResult {
   };
   notes: string[];
 }
-export interface StrategyRunRequest { strategy_id?: string; definition?: StrategyDef; symbol: string; provider?: string; range?: '1Y' | '3Y' | '5Y' | '10Y' | 'YTD' | 'MAX'; from?: string; to?: string; cost_bps: number }
+export interface StrategyRunRequest { strategy_id?: string; definition?: StrategyDef; symbol: string; provider?: string; range?: '1Y' | '3Y' | '5Y' | '10Y' | 'YTD' | 'MAX'; from?: string; to?: string; cost_bps: number; slippage_bps?: number }
+
+/** A number of a strategy that a walk-forward fit can change. */
+export interface FitParameter { path: string; label: string; value: number; integer: boolean; min: number; max: number }
+export type FitMode = 'rolling' | 'anchored';
+export type FitObjective = 'return' | 'sharpe' | 'expectancy';
+export interface FitRequest extends StrategyRunRequest { params: string[]; folds: number; mode: FitMode; objective: FitObjective }
+export interface FitFoldResult {
+  index: number; train_from: string; train_to: string; test_from: string; test_to: string;
+  chosen?: { path: string; label: string; value: number }[]; tried: number; qualified: number;
+  train_score: number; train_return_pct: number; train_trades: number;
+  test_return_pct: number; test_trades: number; test_max_drawdown_pct: number; unfitted_return_pct: number; buy_hold_return_pct: number;
+  skipped?: string;
+}
+export interface FitSummary {
+  folds_used: number; return_pct: number; unfitted_return_pct: number; buy_hold_return_pct: number; trades: number;
+  mean_train_return_pct: number; mean_test_return_pct: number; efficiency?: number; distinct_choices: number;
+}
+/** The answer of POST /api/strategies/walkforward. */
+export interface FitResult {
+  symbol: string; provider: string; range: string; generated_at: string; data_start?: string; data_end?: string; notice?: string;
+  warning_texts: Record<string, string>;
+  strategy: string; objective: FitObjective; mode: FitMode; from: string; to: string;
+  params: { path: string; label: string; base: number; values: number[] }[];
+  combos_per_fold: number; folds: FitFoldResult[]; out_of_sample?: FitSummary; warnings: string[]; note: string; parameters_fitted: boolean;
+  config: { cost_bps: number; slippage_bps?: number };
+}
 
 export interface ReferencePosition { symbol: string; name: string; weight_pct: number; shares?: number; shares_change_pct?: number }
 export interface ReferencePortfolio {

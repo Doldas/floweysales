@@ -16,6 +16,9 @@ last-reviewed: 2026-11-06
 - Choose a custom period in UTC, test several lists and periods at once, and check how trading cost, holdings and rebalance interval change a result. See [Strategies and backtests](strategies.md).
 - The Strategies page can resample a replay's closed trades with a seed to show percentile bands and the spread of the worst fall. See [Strategies and backtests](strategies.md).
 - Results are cut into consecutive parts of the period, and the result lists the biases that apply. Saved runs carry a source badge and export with their provenance.
+- Slippage and a fill delay (fill 1 or 2 trading days after the ranking) in leaderboard backtests, both included in the settings check. A collapsed "How fills were assumed" section states what is and is not modeled, and the benchmark is defined with its currency and dates. Mixed currencies and a benchmark in another currency are flagged.
+- Longer history: a period that starts more than nine years back asks the provider for its longest daily history, and says so when only the 10-year window could be served.
+- Rule strategies get a slippage setting and a **walk-forward fit** that chooses up to two of their numbers on one window and tests them on the next. See [Strategies and backtests](strategies.md#walk-forward-fit).
 
 **Research Agent**
 - The agent can hand a question to a team and show each member's answer with attribution.
@@ -42,6 +45,8 @@ last-reviewed: 2026-11-06
 ## Not available yet
 
 - Markets in Asia, Africa, South America and Oceania. A region is added only after a provider's prices and reports for it have been checked.
-- True walk-forward testing. The factor rankings have no fitted parameters to fit.
+- Walk-forward testing of leaderboard strategies. The factor rankings have no fitted parameters to fit.
+- Point-in-time lists of index members, so survivorship bias is stated but not measured.
+- Bid-ask spread, order size against traded volume, partial fills and market impact in backtests.
 - A quote time and delay from every provider. Providers that do not send them show them as unknown.
-- Long price history beyond what a backtest fetches (10 years).
+- Price history beyond what the provider returns as daily bars.

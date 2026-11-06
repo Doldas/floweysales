@@ -27,13 +27,15 @@ const (
 	WarnNoDividends   = "no_dividends"
 	WarnOpenTrade     = "open_trade"
 	WarnFitted        = "fitted_to_history"
+	WarnNoSlippage    = "slippage_not_modeled"
 )
 
 // WarningTexts explains each warning id in plain words.
 var WarningTexts = map[string]string{
 	WarnFewTrades:     "Fewer than 30 trades: the win rate and averages are too noisy to say whether the rules have an edge.",
 	WarnOneInstrument: "One instrument over one stretch of history. The same rules can behave very differently on other instruments or in other years.",
-	WarnFillRules:     "Signals are acted on at the next open. When a bar touches both stop and target the stop is assumed to hit first. Slippage beyond the cost setting is not modeled.",
+	WarnFillRules:     "Signals are acted on at the next open. When a bar touches both stop and target the stop is assumed to hit first. Orders always fill in full, with no spread, queue or market impact beyond the slippage setting.",
+	WarnNoSlippage:    "Slippage is zero: every fill is assumed at the exact open, stop or target price. A stop in a fast market usually fills worse, so treat the result as an upper bound.",
 	WarnNoDividends:   "Prices are used as given, without dividends, and a short position pays no borrowing cost.",
 	WarnOpenTrade:     "A trade was still open at the last bar and is valued at that close.",
 	WarnFitted:        "Rules tuned until the past looks good tend to fail on new data. Treat a result as a test of the idea, not as proof.",
@@ -42,6 +44,9 @@ var WarningTexts = map[string]string{
 // Config sets the cost of trading in a replay.
 type Config struct {
 	CostBps float64 `json:"cost_bps"` // per side, on the traded value
+	// SlippageBps is the gap between the price the rules assume and the price of the fill, per side, always
+	// against the trade (a buy fills higher, a sell lower). It is charged on top of CostBps. Default 0.
+	SlippageBps float64 `json:"slippage_bps"`
 	// From and To (UTC) bound the tested period. Bars before From still warm up the
 	// indicators, but no trade is opened before From; bars after To are ignored.
 	From, To time.Time `json:"-"`
@@ -353,6 +358,9 @@ func Run(def Strategy, points []market.HistoryPoint, cfg Config) (Result, error)
 	if cfg.CostBps < 0 || cfg.CostBps > 200 {
 		return Result{}, errors.New("cost must be from 0 to 200 basis points per side")
 	}
+	if math.IsNaN(cfg.SlippageBps) || cfg.SlippageBps < 0 || cfg.SlippageBps > 200 {
+		return Result{}, errors.New("slippage must be from 0 to 200 basis points per side")
+	}
 	if !cfg.To.IsZero() {
 		end := cfg.To.UTC().Truncate(24 * time.Hour).Add(24 * time.Hour).Unix()
 		kept := make([]market.HistoryPoint, 0, len(points))
@@ -375,6 +383,7 @@ func Run(def Strategy, points []market.HistoryPoint, cfg Config) (Result, error)
 		sign = -1
 	}
 	costRate := cfg.CostBps / 10000
+	slipRate := cfg.SlippageBps / 10000
 
 	// Start where the slowest default indicators are warm.
 	first := 0
@@ -406,6 +415,7 @@ func Run(def Strategy, points []market.HistoryPoint, cfg Config) (Result, error)
 	inBars := 0
 
 	closeTrade := func(t int, price float64, reason string) {
+		price *= 1 - sign*slipRate // a sell fills lower, a buy-to-cover higher
 		value := pos.qty * price
 		exitCost := math.Abs(value) * costRate
 		cash += value - exitCost
@@ -434,7 +444,7 @@ func Run(def Strategy, points []market.HistoryPoint, cfg Config) (Result, error)
 		}
 		exitOrder = false
 		if pos == nil && entryOrder != nil {
-			px := s.open[t]
+			px := s.open[t] * (1 + sign*slipRate) // a buy fills higher, a short sale lower
 			equity := cash
 			qty := 0.0
 			ok := true
@@ -550,6 +560,9 @@ func Run(def Strategy, points []market.HistoryPoint, cfg Config) (Result, error)
 	}
 
 	res.Warnings = []string{WarnOneInstrument, WarnFillRules, WarnNoDividends, WarnFitted}
+	if cfg.SlippageBps == 0 {
+		res.Warnings = append(res.Warnings, WarnNoSlippage)
+	}
 	if len(trades) < fewTrades {
 		res.Warnings = append([]string{WarnFewTrades}, res.Warnings...)
 	}

@@ -21,7 +21,7 @@ func getSensitivity(t *testing.T, query string) (int, sensitivityResponse, map[s
 }
 
 func TestSensitivityChangesOneSettingAtATime(t *testing.T) {
-	code, res, raw := getSensitivity(t, "symbols=UP,FLAT&strategy=momentum&top=1&benchmark=SPY&cost_bps=10&costs=0,10,50&tops=1,2")
+	code, res, raw := getSensitivity(t, "symbols=UP,FLAT&strategy=momentum&top=1&benchmark=SPY&cost_bps=10&costs=0,10,50&tops=1,2&slippages=0&delays=0")
 	if code != http.StatusOK {
 		t.Fatalf("status %d: %v", code, raw)
 	}
@@ -74,5 +74,31 @@ func TestSensitivityRefusesBadSettings(t *testing.T) {
 		if code, _, raw := getSensitivity(t, q); code != http.StatusBadRequest {
 			t.Errorf("%s: status %d %v", q, code, raw)
 		}
+	}
+}
+
+func TestSensitivityTestsSlippageAndFillDelay(t *testing.T) {
+	code, res, raw := getSensitivity(t, "symbols=UP,FLAT&strategy=momentum&top=1&benchmark=SPY&costs=10&tops=1&slippages=0,25&delays=0,2")
+	if code != http.StatusOK {
+		t.Fatalf("status %d: %v", code, raw)
+	}
+	got := map[string]float64{}
+	for _, v := range res.Variants {
+		if v.Metrics == nil {
+			t.Fatalf("variant without metrics: %+v", v)
+		}
+		got[v.Parameter+"="+v.Value] = v.Metrics.CAGRPct
+	}
+	if _, ok := got["slippage_bps=25"]; !ok {
+		t.Fatalf("no slippage variant: %v", got)
+	}
+	if _, ok := got["delay_days=2"]; !ok {
+		t.Fatalf("no delay variant: %v", got)
+	}
+	if got["slippage_bps=25"] > got["base=as asked"] {
+		t.Errorf("slippage cannot raise the return: %v", got)
+	}
+	if res.Base["delay_days"] != "0" || res.Base["slippage_bps"] != "0" {
+		t.Fatalf("base %v", res.Base)
 	}
 }
