@@ -15,8 +15,9 @@ COPY --from=frontend /src/www/browser ./www/browser
 # Published images pass the commit so Settings → Updates can compare versions.
 ARG GIT_COMMIT=""
 ARG BUILD_TIME=""
+ARG APP_VERSION=""
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
-    -ldflags="-s -w -X floweysales/internal/app.BuildCommit=${GIT_COMMIT} -X floweysales/internal/app.BuildTime=${BUILD_TIME}" \
+    -ldflags="-s -w -X floweysales/internal/app.BuildCommit=${GIT_COMMIT} -X floweysales/internal/app.BuildTime=${BUILD_TIME} -X floweysales/internal/app.Version=${APP_VERSION}" \
     -o /out/floweysales_backend .
 
 FROM golang:1.27.1-bookworm AS legacy-import-builder
@@ -37,10 +38,12 @@ ENTRYPOINT ["/app/migrate-sqlite"]
 FROM debian:bookworm-slim AS runtime
 ARG GIT_COMMIT=""
 ARG BUILD_TIME=""
+ARG APP_VERSION=""
 # Must equal plugins.ProtocolVersion; TestDockerfileDeclaresPluginProtocol keeps them in step.
 ARG PLUGIN_PROTOCOL="1"
 LABEL org.opencontainers.image.revision="${GIT_COMMIT}" \
       org.floweysales.plugin-protocol="${PLUGIN_PROTOCOL}" \
+      org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.created="${BUILD_TIME}" \
       org.opencontainers.image.source="https://github.com/Doldas/floweysales"
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \

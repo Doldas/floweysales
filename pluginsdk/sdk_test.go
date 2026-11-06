@@ -62,6 +62,7 @@ func TestManifestValidation(t *testing.T) {
 		"research mismatch": func(m *Manifest) { m.Provider.Research = nil },
 		"reserved env":      func(m *Manifest) { m.Env = []EnvVar{{Name: "MYSQL_DSN"}} },
 		"backend env":       func(m *Manifest) { m.Env = []EnvVar{{Name: "FLOWEYSALES_ANYTHING"}} },
+		"app version":       func(m *Manifest) { m.MinAppVersion = "latest" },
 	}
 	for name, mutate := range cases {
 		m := base

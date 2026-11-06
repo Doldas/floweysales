@@ -99,6 +99,7 @@ jobs:
           tags: ghcr.io/doldas/floweysales:${{ github.ref_name }}
           build-args: |
             GIT_COMMIT=${{ github.sha }}
+            APP_VERSION=${{ github.ref_name }}
           provenance: true
       - name: Restore pinned JDBC cache for migration image
         uses: actions/cache@v4

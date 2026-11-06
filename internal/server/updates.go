@@ -53,6 +53,7 @@ type updateOverview struct {
 // pluginPreflight is the before/after compatibility preview shown before an update is approved.
 type pluginPreflight struct {
 	AppProtocol    int                      `json:"app_protocol"`
+	TargetVersion  string                   `json:"target_version,omitempty"`
 	TargetProtocol int                      `json:"target_protocol"` // 0: the release does not declare one
 	Plugins        []plugins.PreflightEntry `json:"plugins"`
 }
@@ -75,7 +76,7 @@ func (e *Engine) updateOverview() updateOverview {
 	out.Status = status
 	if e.plugins != nil && out.Check != nil && out.Check.Latest != nil {
 		target := out.Check.Latest.PluginProtocol
-		out.PluginPreflight = &pluginPreflight{AppProtocol: plugins.ProtocolVersion, TargetProtocol: target, Plugins: e.plugins.Preflight(target)}
+		out.PluginPreflight = &pluginPreflight{AppProtocol: plugins.ProtocolVersion, TargetProtocol: target, TargetVersion: out.Check.Latest.AppVersion, Plugins: e.plugins.Preflight(target, out.Check.Latest.AppVersion)}
 	}
 	out.CanApply = out.Check != nil && out.Check.CanApply() && out.Agent != nil && !updates.Running(status.State)
 	return out

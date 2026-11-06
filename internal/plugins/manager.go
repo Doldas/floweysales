@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,6 +36,12 @@ type Config struct {
 	LookupEnv func(name string) string
 	// CallTimeout bounds one plugin call; zero means 45s.
 	CallTimeout time.Duration
+	// AppVersion is the running release version (for example "0.6.0"); empty
+	// for builds that are not tagged releases. Plugin version ranges are
+	// judged against it, never guessed.
+	AppVersion string
+	// AppBuild identifies the running build (commit) for the post-upgrade report.
+	AppBuild string
 }
 
 // InstalledPlugin is one entry of installed.json.
@@ -44,6 +51,9 @@ type InstalledPlugin struct {
 	SHA256      string    `json:"sha256"`
 	InstalledAt time.Time `json:"installed_at"`
 	Source      string    `json:"source"` // store URL or "file"
+	// Previous is the version this one replaced, kept on disk so an update can be
+	// rolled back without a download. Only one level is kept.
+	Previous *InstalledPlugin `json:"previous,omitempty"`
 }
 
 type stateFile struct {
@@ -75,6 +85,8 @@ type Manager struct {
 	procs     map[string]*process
 	failures  map[string]startFailure
 	checks    map[string]compatCheck // last handshake per plugin id
+	lastRun   *runtimeState          // what ran against this directory before this start
+	report    *UpgradeReport
 
 	storeMu  sync.Mutex
 	snapshot *storeSnapshot
@@ -115,8 +127,16 @@ func Open(cfg Config) (*Manager, error) {
 		return nil, err
 	}
 	cfg.Dir = abs
+	cfg.AppVersion = strings.TrimPrefix(cfg.AppVersion, "v")
 	if err := os.MkdirAll(cfg.Dir, 0o750); err != nil {
 		return nil, fmt.Errorf("create plugin directory: %w", err)
+	}
+	// An update that was interrupted leaves only a staging directory: nothing
+	// references it, so it is safe to drop; installed plugins are never touched.
+	if stale, _ := filepath.Glob(filepath.Join(cfg.Dir, ".staging-*")); len(stale) > 0 {
+		for _, dir := range stale {
+			_ = os.RemoveAll(dir)
+		}
 	}
 	m := &Manager{cfg: cfg, store: store, http: client, installed: map[string]InstalledPlugin{},
 		saved: map[string]string{}, procs: map[string]*process{}, failures: map[string]startFailure{}, checks: map[string]compatCheck{}}
@@ -139,6 +159,7 @@ func Open(cfg Config) (*Manager, error) {
 			}
 		}
 	}
+	m.loadUpgradeState()
 	return m, nil
 }
 
@@ -176,7 +197,7 @@ func (m *Manager) Installed() []InstalledPlugin {
 	all := m.InstalledAll()
 	out := all[:0]
 	for _, p := range all {
-		if declaredProblem(p) == "" {
+		if m.declaredProblem(p) == "" {
 			out = append(out, p)
 		}
 	}
@@ -247,7 +268,7 @@ func (m *Manager) env(manifest *Manifest) (env []string, missing []string) {
 // (after re-verifying the binary's checksum) when needed.
 func (m *Manager) process(p InstalledPlugin) (*process, error) {
 	id := p.Manifest.ID
-	if problem := declaredProblem(p); problem != "" {
+	if problem := m.declaredProblem(p); problem != "" {
 		return nil, fmt.Errorf("plugin %s is incompatible with this FloweySales and is not run (it stays installed): %s", id, problem)
 	}
 	m.mu.Lock()
@@ -404,14 +425,14 @@ func (m *Manager) Install(ctx context.Context, id, version string, acceptTerms b
 	m.mu.Unlock()
 	var v IndexVersion
 	if version == "" {
-		v, ok = entry.Latest(isInstalled && IsPrerelease(current.Manifest.Version))
+		v, ok = m.latest(entry, isInstalled && IsPrerelease(current.Manifest.Version))
 		if !ok {
-			return InstalledPlugin{}, fmt.Errorf("%s has no version for %s using plugin protocol %d", id, Platform(), ProtocolVersion)
+			return InstalledPlugin{}, fmt.Errorf("%s has no version that runs here (%s, plugin protocol %d, FloweySales %s); the installed copy was not changed", id, Platform(), ProtocolVersion, m.appLabel())
 		}
 	} else if v, ok = entry.Version(version); !ok {
 		return InstalledPlugin{}, fmt.Errorf("%w: %s %s", ErrNotInStore, id, version)
-	} else if !v.installable() {
-		return InstalledPlugin{}, fmt.Errorf("%s %s is not available for %s or needs a newer FloweySales", id, version, Platform())
+	} else if why := m.whyNotInstallable(v); why != "" {
+		return InstalledPlugin{}, fmt.Errorf("%s %s cannot be installed here: %s The installed copy was not changed", id, version, why)
 	}
 	if isInstalled && current.Manifest.Version == v.Manifest.Version {
 		return current, nil
@@ -493,6 +514,14 @@ func (m *Manager) installBinary(ctx context.Context, data []byte, expected *Mani
 		return InstalledPlugin{}, fmt.Errorf("downloaded binary describes itself as %s %s (%s), not %s %s (%s)",
 			described.ID, described.Version, described.Provider.ID, expected.ID, expected.Version, expected.Provider.ID)
 	}
+	// Final gate on what the binary itself declares, not on what the store
+	// claimed: covers sideloads and a store entry that disagrees with its binary.
+	if problem := m.manifestProblem(described); problem != "" {
+		return InstalledPlugin{}, fmt.Errorf("%s %s cannot be installed here: %s", described.ID, described.Version, problem)
+	}
+	if expected != nil && (described.MinAppVersion != expected.MinAppVersion || described.MaxAppVersion != expected.MaxAppVersion) {
+		return InstalledPlugin{}, fmt.Errorf("downloaded binary declares a different FloweySales version range than the store lists for %s %s", expected.ID, expected.Version)
+	}
 	for _, check := range checks {
 		if err := check(described); err != nil {
 			return InstalledPlugin{}, err
@@ -513,6 +542,12 @@ func (m *Manager) installBinary(ctx context.Context, data []byte, expected *Mani
 
 	m.mu.Lock()
 	previous, hadPrevious := m.installed[id]
+	var superseded *InstalledPlugin // the version two updates back, which is dropped now
+	if hadPrevious {
+		kept := previous
+		superseded, kept.Previous = kept.Previous, nil
+		entry.Previous = &kept
+	}
 	m.installed[id] = entry
 	m.checks[id] = compatCheck{at: time.Now().UTC()} // the staged handshake just succeeded
 	if err := m.saveLocked(); err != nil {
@@ -527,9 +562,10 @@ func (m *Manager) installBinary(ctx context.Context, data []byte, expected *Mani
 	}
 	m.stopLocked(id)
 	m.mu.Unlock()
-	if hadPrevious {
+	if superseded != nil {
+		// The previous version stays for Rollback; only the one before it goes.
 		// Windows refuses to delete the executable while the old process stops.
-		removeSoon(filepath.Join(m.cfg.Dir, filepath.Dir(filepath.FromSlash(previous.Binary))))
+		removeSoon(filepath.Join(m.cfg.Dir, filepath.Dir(filepath.FromSlash(superseded.Binary))))
 	}
 	return entry, nil
 }
@@ -596,8 +632,11 @@ func (m *Manager) Uninstall(id string) error {
 	}
 	m.stopLocked(id)
 	m.mu.Unlock()
-	// Only this version's directory: a reinstall gets a fresh one.
+	// Only this plugin's version directories: a reinstall gets a fresh one.
 	removeSoon(filepath.Join(m.cfg.Dir, filepath.Dir(filepath.FromSlash(previous.Binary))))
+	if previous.Previous != nil {
+		removeSoon(filepath.Join(m.cfg.Dir, filepath.Dir(filepath.FromSlash(previous.Previous.Binary))))
+	}
 	return nil
 }
 
@@ -687,6 +726,8 @@ type InstalledStatus struct {
 	Log             []string    `json:"log"`
 	// Compatibility states whether the plugin works with the running FloweySales.
 	Compatibility Compatibility `json:"compatibility"`
+	// PreviousVersion is the version an update replaced and Rollback restores; empty when there is none.
+	PreviousVersion string `json:"previous_version,omitempty"`
 }
 
 // StorePlugin is a store entry annotated for this backend.
@@ -718,13 +759,17 @@ type Overview struct {
 	Dir       string            `json:"dir"`
 	Installed []InstalledStatus `json:"installed"`
 	Store     StoreStatus       `json:"store"`
+	// AppVersion is the running release version; empty when this build is not a tagged release.
+	AppVersion string `json:"app_version,omitempty"`
+	// UpgradeReport is the outcome for every plugin after the last application upgrade.
+	UpgradeReport *UpgradeReport `json:"upgrade_report,omitempty"`
 }
 
 // Overview combines installed state with the cached store index; it never
 // fetches.
 func (m *Manager) Overview() Overview {
 	out := Overview{Platform: Platform(), Protocol: ProtocolVersion, StoreURL: m.cfg.StoreURL, Dir: m.cfg.Dir,
-		Installed: []InstalledStatus{}, Store: StoreStatus{Plugins: []StorePlugin{}}}
+		Installed: []InstalledStatus{}, Store: StoreStatus{Plugins: []StorePlugin{}}, AppVersion: m.cfg.AppVersion, UpgradeReport: m.LastUpgradeReport()}
 	snap := m.cachedStore()
 	installed := m.InstalledAll()
 	installedVersion := map[string]string{}
@@ -745,11 +790,13 @@ func (m *Manager) Overview() Overview {
 				sp.Versions = append(sp.Versions, v.Manifest.Version)
 			}
 			sort.Slice(sp.Versions, func(i, j int) bool { return CompareVersions(sp.Versions[i], sp.Versions[j]) > 0 })
-			if latest, ok := p.Latest(IsPrerelease(sp.InstalledVersion)); ok {
+			if latest, ok := m.latest(p, IsPrerelease(sp.InstalledVersion)); ok {
 				sp.LatestVersion, sp.Installable = latest.Manifest.Version, true
 				sp.UpdateAvailable = sp.InstalledVersion != "" && CompareVersions(latest.Manifest.Version, sp.InstalledVersion) > 0
 			} else if newest.Manifest.Protocol > ProtocolVersion {
 				sp.Reason = "Needs a newer FloweySales (plugin protocol " + fmt.Sprint(newest.Manifest.Protocol) + ")."
+			} else if why := m.whyNotInstallable(newest); why != "" {
+				sp.Reason = why
 			} else {
 				sp.Reason = "No build for " + Platform() + "."
 			}
@@ -762,6 +809,9 @@ func (m *Manager) Overview() Overview {
 	}
 	for _, p := range installed {
 		st := InstalledStatus{Manifest: p.Manifest, InstalledAt: p.InstalledAt, Source: p.Source, SHA256: p.SHA256, Env: []EnvStatus{}, Log: []string{}, Compatibility: m.assess(p, snap)}
+		if p.Previous != nil {
+			st.PreviousVersion = p.Previous.Manifest.Version
+		}
 		_, missing := m.env(&p.Manifest)
 		st.Ready = len(missing) == 0
 		for _, e := range p.Manifest.Env {
@@ -791,4 +841,67 @@ func (m *Manager) Provider(p market.Provider) (InstalledPlugin, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.byProviderLocked(p.ID())
+}
+
+// appLabel names the running release for messages.
+func (m *Manager) appLabel() string {
+	if m.cfg.AppVersion == "" {
+		return "(untagged build)"
+	}
+	return m.cfg.AppVersion
+}
+
+// ErrNoPrevious is returned when there is no earlier version to roll back to.
+var ErrNoPrevious = errors.New("there is no earlier version of this plugin to restore")
+
+// Rollback restores the version an update replaced. It does not download
+// anything: the previous binary was kept on disk, is checked against its
+// recorded checksum, handshaken and judged against the running FloweySales
+// like any other candidate. Saved settings are untouched by updates and by
+// rollbacks, so they apply to whichever version runs. The newer version
+// becomes the new "previous", so a rollback can itself be undone.
+func (m *Manager) Rollback(ctx context.Context, id string) (InstalledPlugin, error) {
+	m.installMu.Lock()
+	defer m.installMu.Unlock()
+	m.mu.Lock()
+	current, ok := m.installed[id]
+	m.mu.Unlock()
+	if !ok {
+		return InstalledPlugin{}, ErrNotInstalled
+	}
+	if current.Previous == nil {
+		return InstalledPlugin{}, ErrNoPrevious
+	}
+	prev := *current.Previous
+	if problem := m.declaredProblem(prev); problem != "" {
+		return InstalledPlugin{}, fmt.Errorf("version %s cannot be restored: %s", prev.Manifest.Version, problem)
+	}
+	path := filepath.Join(m.cfg.Dir, filepath.FromSlash(prev.Binary))
+	if sum, err := fileSHA256(path); err != nil {
+		return InstalledPlugin{}, fmt.Errorf("version %s cannot be restored: its binary cannot be read: %w", prev.Manifest.Version, err)
+	} else if sum != prev.SHA256 {
+		return InstalledPlugin{}, fmt.Errorf("version %s cannot be restored: its binary changed on disk", prev.Manifest.Version)
+	}
+	described, err := m.handshake(ctx, path)
+	if err != nil {
+		return InstalledPlugin{}, fmt.Errorf("version %s cannot be restored: %w", prev.Manifest.Version, err)
+	}
+	if described.ID != prev.Manifest.ID || described.Version != prev.Manifest.Version {
+		return InstalledPlugin{}, fmt.Errorf("version %s cannot be restored: the binary describes itself as %s %s", prev.Manifest.Version, described.ID, described.Version)
+	}
+	forward := current
+	forward.Previous = nil
+	restored := prev
+	restored.Previous = &forward
+	m.mu.Lock()
+	m.installed[id] = restored
+	m.checks[id] = compatCheck{at: time.Now().UTC()}
+	if err := m.saveLocked(); err != nil {
+		m.installed[id] = current
+		m.mu.Unlock()
+		return InstalledPlugin{}, fmt.Errorf("record rollback: %w", err)
+	}
+	m.stopLocked(id)
+	m.mu.Unlock()
+	return restored, nil
 }

@@ -21,7 +21,7 @@ const (
 )
 
 // fakeProtocolLabel, when set, is the plugin protocol label fakeRegistry images carry.
-var fakeProtocolLabel string
+var fakeProtocolLabel, fakeVersionLabel string
 
 // fakeRegistry serves an OCI index for repository doldas/floweysales:stable
 // whose platform manifest's config carries commit as its revision label.
@@ -73,6 +73,9 @@ func fakeRegistry(t *testing.T, commit string) (*httptest.Server, *atomic.Int32)
 		}
 		if fakeProtocolLabel != "" {
 			labels[PluginProtocolLabel] = fakeProtocolLabel
+		}
+		if fakeVersionLabel != "" {
+			labels[VersionLabel] = fakeVersionLabel
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"created": "2026-10-25T08:00:00Z", "config": map[string]any{"Labels": labels}})
 	})
@@ -314,6 +317,27 @@ func TestStatusIsBoundedAndValidated(t *testing.T) {
 	}
 	if _, err := (Control{Dir: dir}).Status(); err == nil {
 		t.Fatal("oversized status file accepted")
+	}
+}
+
+func TestLookupReadsReleaseVersionLabel(t *testing.T) {
+	lookup := func(label string) string {
+		fakeVersionLabel = label
+		t.Cleanup(func() { fakeVersionLabel = "" })
+		srv, _ := fakeRegistry(t, newCommit)
+		info, err := Registry{BaseURL: srv.URL}.Lookup(context.Background(), "ghcr.io/doldas/floweysales", "stable")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return info.AppVersion
+	}
+	if got := lookup("v0.6.0"); got != "0.6.0" {
+		t.Fatalf("version = %q", got)
+	}
+	for _, bad := range []string{"", "stable", "0.6", "latest"} {
+		if got := lookup(bad); got != "" {
+			t.Fatalf("label %q gave version %q, want undeclared", bad, got)
+		}
 	}
 }
 

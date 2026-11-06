@@ -76,6 +76,7 @@ func TestPluginAdminRequiresAuthentication(t *testing.T) {
 		httptest.NewRequest(http.MethodGet, "/api/admin/plugins", nil),
 		httptest.NewRequest(http.MethodPost, "/api/admin/plugins/install", strings.NewReader(`{"id":"yahoo"}`)),
 		httptest.NewRequest(http.MethodDelete, "/api/admin/plugins/yahoo", nil),
+		httptest.NewRequest(http.MethodPost, "/api/admin/plugins/yahoo/rollback", nil),
 		httptest.NewRequest(http.MethodPut, "/api/admin/plugins/fred/env/FRED_API_KEY", strings.NewReader(`{"value":"x"}`)),
 		httptest.NewRequest(http.MethodDelete, "/api/admin/plugins/fred/env/FRED_API_KEY", nil),
 	} {

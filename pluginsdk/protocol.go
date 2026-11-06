@@ -63,6 +63,10 @@ type Manifest struct {
 	// Tools adds a tab of interactive tools to the app.
 	Tools *ToolsInfo `json:"tools,omitempty"`
 	Env   []EnvVar   `json:"env,omitempty"`
+	// MinAppVersion and MaxAppVersion optionally bound the FloweySales release
+	// (semantic version, inclusive) the plugin supports.
+	MinAppVersion string `json:"min_app_version,omitempty"`
+	MaxAppVersion string `json:"max_app_version,omitempty"`
 }
 
 // ProviderInfo is the market-data provider a plugin contributes.
@@ -145,6 +149,11 @@ func (m Manifest) Validate() error {
 		return fmt.Errorf("plugin version %q is not a semantic version", m.Version)
 	case len(m.Description) > 600 || len(m.Terms) > 4000 || len(m.Provider.Notes) > 1000:
 		return errors.New("manifest text fields are too long")
+	}
+	for name, v := range map[string]string{"min_app_version": m.MinAppVersion, "max_app_version": m.MaxAppVersion} {
+		if v != "" && !versionPattern.MatchString(v) {
+			return fmt.Errorf("%s %q is not a semantic version", name, v)
+		}
 	}
 	if err := m.validateProvider(); err != nil {
 		return err
