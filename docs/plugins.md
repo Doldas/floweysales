@@ -49,7 +49,33 @@ An incompatible plugin is **kept, not run**. FloweySales never removes it, its s
 
 When **Settings → Updates** finds a newer version, it lists every installed plugin with its status **now** and **after** the update, the reason, and the store versions that speak the new protocol. The comparison uses the plugin protocol the new image declares in its `org.floweysales.plugin-protocol` label (the `PLUGIN_PROTOCOL` build argument, kept equal to the backend's protocol by a test). An image without the label is shown as **Unknown** for every plugin rather than assumed compatible, and a protocol-1 plugin is never marked compatible with a protocol-2 release. The preview changes nothing: no plugin is run, downloaded, removed or updated, and each one's binary, settings, data and approvals stay as they are. After the update runs, the status in Settings → Plugins is again established by a handshake.
 
-Not yet covered: minimum and maximum app versions in the manifest, staged updates with configuration rollback, and a post-upgrade report.
+The preview also judges each plugin's declared FloweySales version range (see below) against the release version the new image declares in the standard `org.opencontainers.image.version` label (the `APP_VERSION` build argument, set from the tag by the release workflow). An image without a version is shown as **Unknown** for plugins that declare a range.
+
+#### Supported FloweySales versions
+
+A manifest may declare `min_app_version` and/or `max_app_version` (semantic versions, both inclusive). The running release version is set at build time (`app.Version`, from `APP_VERSION`). Then:
+
+- A running version **outside** the range makes the plugin **Incompatible**: kept, not run, with the reason ("needs FloweySales 0.9.0 or newer; this is 0.6.0") and the store versions that do fit.
+- A build that does not report a release version (a local or untagged build) **cannot be judged**: the plugin is shown as **Not verified** with that reason. Nothing is claimed, and nothing is blocked beyond what the staged handshake already checks.
+
+#### Install gate
+
+Install, update, choosing a version (upgrade or downgrade), Update all, sideload (`install --file`), restore and the CLI all pass the same gate in the plugin manager, not only in the browser. The gate checks the plugin protocol, the manifest and the version range, first on what the store lists (before anything is downloaded) and again on what the downloaded binary itself declares after its staged handshake, so a store entry that disagrees with its binary is refused. A refused candidate never replaces a working plugin, never changes settings or data, and the error says which requirement failed. A newest version that does not fit is skipped when "latest" is chosen; an explicitly chosen version is refused rather than silently swapped for another. Unknown candidates (no verifiable metadata) are not claimed compatible: the staged handshake still runs in isolation, without any of the plugin's secrets, before anything is activated.
+
+#### Staged updates and rollback
+
+An update is staged: the new binary is written to a staging directory, handshaken without secrets, and only then moved in place and recorded atomically in `installed.json`. Any failure leaves the installed plugin untouched, and a leftover staging directory from an interrupted update is removed at the next start. The version an update replaces is **kept on disk** (one level) and recorded as `previous`. **Restore** in Settings → Plugins, `POST /api/admin/plugins/{id}/rollback` or `floweysales_backend plugins rollback <id>` switches back to it without a download, after re-checking its checksum, a handshake and the compatibility gate. The newer version becomes the new `previous`, so a rollback can be undone. Settings you entered (API keys and so on) are stored per variable name, outside the plugin's files, and updates and rollbacks never touch them, so they apply to whichever version runs. Plugins are not given a data migration by FloweySales; a plugin that needs one must make it backward compatible.
+
+#### After an application upgrade
+
+At startup FloweySales handshakes with every installed plugin and compares the result with what the plugin directory remembers from the previous run (`runtime.json`). When the application build changed, it saves a **post-upgrade report** (`upgrade-report.json`, shown in Settings → Plugins and in `GET /api/admin/plugins` as `upgrade_report`) with one result per plugin:
+
+- **Verified**: the same binary (version and checksum) as before, and the handshake works.
+- **Needs attention**: kept, but compatibility cannot be verified or a required setting is not configured.
+- **Incompatible**: kept with its settings and data, not run.
+- **Updated** / **Removed**: changed or uninstalled by an explicit action since the last run. FloweySales itself never updates or removes a plugin because the app was upgraded.
+
+Plugins live in the `plugins_data` volume (`PLUGIN_DIR`), which Compose recreation and `docker compose pull && up -d` leave alone; never use `docker compose down -v` during an upgrade. If an app update fails and the old image runs again against the same volume, the plugins are exactly as before and usable.
 
 **Update all** tries each plugin on its own and ends with a per-plugin result (updated, skipped or failed, with the reason). One failure or a terms prompt never stops the others, and a plugin that is not updated keeps its installed version and settings. Incompatible versions are never offered, and the backend refuses them even when called directly.
 
@@ -65,6 +91,7 @@ floweysales_backend plugins install binance 1.0.0       # a specific version
 floweysales_backend plugins install --file ./my-plugin  # sideload a local binary
 floweysales_backend plugins list                        # installed, status, available updates
 floweysales_backend plugins update                      # update everything
+floweysales_backend plugins rollback yahoo              # restore the version an update replaced
 floweysales_backend plugins uninstall avanza
 ```
 
@@ -300,6 +327,8 @@ returned by `describe`, uploaded with each release and copied into the store.
     "cache_ttl_seconds": 60,
     "notes": "Access, licensing and freshness caveats."
   },
+  "min_app_version": "0.6.0",
+  "max_app_version": "0.9.0",
   "env": [{"name": "EXAMPLE_API_KEY", "secret": true, "required": true, "description": "API token"}]
 }
 ```
@@ -307,6 +336,10 @@ returned by `describe`, uploaded with each release and copied into the store.
 Plugin ids are lowercase (`[a-z][a-z0-9-]{1,39}`), provider ids uppercase.
 One plugin provides one provider, and two installed plugins cannot provide the
 same provider id. Run `my-plugin --manifest` to print the embedded manifest.
+`min_app_version` and `max_app_version` are optional, inclusive semantic
+versions of FloweySales (see "Supported FloweySales versions"); leave them out
+unless you know a bound. They are additive to protocol 1, so the SDK change
+needs a new `pluginsdk/v<semver>` tag after merge.
 
 Try a plugin locally with `floweysales_backend plugins install --file`, or
 build a local store (below).

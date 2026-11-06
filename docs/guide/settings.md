@@ -31,7 +31,7 @@ Flows use three permissions that an administrator can assign through roles: **fl
 | **Permission management** | Assign permissions to roles. |
 | **Mail configuration** | The SMTP server used to send email, such as invitations, tracker alerts and flow emails. Every message uses the same FloweySales design, with a plain-text version for clients that cannot show HTML. See [Email rendering](../email-rendering.md). |
 | **Trading limits** | Limits and costs for the **paper** portfolio only, and a reset of the simulated account. These apply to simulated orders. |
-| **Plugins** | Installed market-data providers and the plugin store. Install, update, roll back to a version, uninstall, and check for updates. Installing a provider that relies on an unofficial interface asks you to accept its terms first. See [Provider plugins](../plugins.md). |
+| **Plugins** | Installed market-data providers and the plugin store. Install, update, restore the version an update replaced, uninstall, and check for updates. Each plugin shows whether it is compatible with this FloweySales, and after an app upgrade a report lists which plugins were kept and verified, need attention or are not run. A plugin that does not fit this version is kept with its settings and data but not run, and an incompatible version cannot be installed. Installing a provider that relies on an unofficial interface asks you to accept its terms first. See [Provider plugins](../plugins.md). |
 | **Updates** | The installed version, whether a newer one is available, what changed, and, when the host updater is installed, install with backup and automatic rollback. See [Automatic updates](../auto-updates.md). |
 
 ## What users set for themselves

@@ -103,6 +103,7 @@ mäter pappersportföljens risk och avvikelse från planen.
 | GET | `/api/admin/plugins` | Installerade plugin, senast hämtade butikskatalog och trackers per plugin |
 | POST | `/api/admin/plugins/check` | Hämtar butikskatalogen nu (sök efter uppdateringar) |
 | POST | `/api/admin/plugins/install` | `{"id":"yahoo","version":"","accept_terms":true}` installerar eller uppdaterar; tom version = senaste. 409 med `terms` om villkor måste godkännas |
+| POST | `/api/admin/plugins/{id}/rollback` | Återställer versionen som senaste uppdatering ersatte (ingen nedladdning); 409 om det inte finns någon. `GET /api/admin/plugins` ger även `upgrade_report` efter en appuppgradering |
 | DELETE | `/api/admin/plugins/{id}` | Avinstallerar; 409 med `trackers` om aktiva trackers använder providern, `?force=true` bekräftar |
 
 En provider vars plugin inte är installerat ger HTTP 404 på `/api/history`,
