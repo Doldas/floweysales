@@ -323,10 +323,36 @@ export interface LeaderboardRow {
   /** Present when the request asked to explain the score. */
   breakdown?: LeaderboardBreakdown;
   /** Why the company is on the list, where its numbers come from, and which listing it is: three separate answers. */
-  discovery?: { why: string; source: string; kind: string; url: string | null; as_of: string | null };
+  discovery?: { why: string; source: string; kind: string; url: string | null; as_of: string | null; list_id?: string; list_version?: string | null; how?: string;
+    lists?: { id: string; label: string; kind: string; source: string; as_of: string | null; rule: string }[] };
+  /** What is recorded about the security beyond its ticker; an ISIN nobody verified is "not recorded". */
+  identifier?: { symbol: string; isin: string | null; isin_status: 'recorded' | 'not recorded'; name: string | null };
+  /** The region the row was compared within, and what that comparison rests on (global scope). */
+  region?: string;
+  compared_with?: string;
+  /** Set when a second provider filled this row or disagreed with the primary. */
+  data_provider?: string;
+  provider_note?: string;
+  provider_conflict?: { kind: string; detail: string; differs_pct?: number };
   metrics_source?: { provider: string; price_as_of?: string; fundamentals_through?: string; record_url?: string | null; fact?: Provenance };
   listing?: { exchange: string; mic?: string; country?: string; known: boolean };
 }
+
+export interface ScopeCoverage {
+  region: string; label: string; listed: number; ranked: number; price_newest: string; price_oldest: string;
+  countries: string[]; exchanges: string[]; currencies: string[]; providers: string[];
+}
+export interface ScopeComparability {
+  mode: 'region' | 'all'; mode_label: string; currencies: Record<string, number>; mixed_currencies: boolean;
+  fx: { applied: boolean; source: string | null; note: string }; accounting: string; timezones: string; warnings: string[];
+}
+/** The scope a ranking was computed for: filters, what it is compared with, and per-region coverage. */
+export interface LeaderboardScope {
+  filters: { active: boolean; description: string }; compare: 'region' | 'all';
+  coverage: ScopeCoverage[]; comparability: ScopeComparability;
+}
+/** What the user asked to narrow the ranking by; codes are upper case, regions are ids. */
+export interface ScopeRequest { regions?: string[]; countries?: string[]; exchanges?: string[]; currencies?: string[]; compare?: 'region' | 'all' }
 
 export interface UniverseSource { kind: 'curated' | 'disclosure' | 'custom' | string; name: string; url: string | null; as_of: string | null; rule: string; limitations: string }
 export interface LeaderboardSelection {
@@ -439,7 +465,7 @@ export interface BacktestMembership {
   point_in_time_rebalances: number; fallback_rebalances: number; note: string;
 }
 
-export interface LeaderboardOption { id: string; label: string; description: string; benchmark?: string; source?: UniverseSource; region?: string; countries?: string[] }
+export interface LeaderboardOption { id: string; label: string; description: string; benchmark?: string; source?: UniverseSource; region?: string; countries?: string[]; components?: string[] }
 
 export interface LeaderboardResponse {
   universe: string;
@@ -452,6 +478,7 @@ export interface LeaderboardResponse {
   /** The list that was ranked, with its source; absent from older servers. */
   universe_info?: LeaderboardOption;
   selection?: LeaderboardSelection;
+  scope?: LeaderboardScope;
   /** The caller's saved preferences and whether they shaped this ranking. */
   preferences?: { applied: boolean; values: RankingPreferences; summary: string[]; effective_weights: Record<string, number> };
   universes: LeaderboardOption[];

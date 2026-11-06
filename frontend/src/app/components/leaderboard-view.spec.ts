@@ -97,8 +97,8 @@ test('the export keeps the three sources apart and cannot run as a spreadsheet f
     discovery: { why: 'On the "hand-picked" list, no link', source: '=HYPERLINK("x")', kind: 'curated', url: null, as_of: null },
     metrics_source: { provider: 'YAHOO', price_as_of: '2026-10-28', fundamentals_through: '2026-09-30', record_url: 'https://finance.yahoo.com/quote/AZN.ST' } }]);
   const [head, line] = csv.trim().split('\n');
-  assert.match(head, /^rank,symbol,exchange,mic,country,why_on_list,list_source,/);
-  assert.match(line, /^1,AZN\.ST,Nasdaq Stockholm,XSTO,SE,"On the ""hand-picked"" list, no link",/);
+  assert.match(head, /^rank,symbol,isin,exchange,mic,country,currency,compared_with,why_on_list,how_matched,list_source,/);
+  assert.match(line, /^1,AZN\.ST,not recorded,Nasdaq Stockholm,XSTO,SE,,,"On the ""hand-picked"" list, no link",/);
   assert.ok(line.includes(`"'=HYPERLINK(""x"")"`) || line.includes("'=HYPERLINK"), 'a leading = is neutralized');
   assert.ok(line.endsWith(',YAHOO,2026-10-28,2026-09-30,https://finance.yahoo.com/quote/AZN.ST'));
 });
