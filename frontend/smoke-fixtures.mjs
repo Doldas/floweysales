@@ -202,6 +202,29 @@ function leaderboard(universe, strategy) {
         caps: ['momentum is capped at 35 when the price is below its 200-day average'], missing_factor_score: 40 } } };
 }
 
+/** Strategies page: one preset, a replay with 24 closed trades and a trade-level Monte Carlo answer (same shapes as /api/strategies*). */
+const mockStrategy = { id: 'dip_buyer', name: 'Dip buyer', direction: 'long', entry: [], sizing: { mode: 'fixed_pct', value: 100 } };
+function strategyReplay() {
+  const trades = Array.from({ length: 24 }, (_, i) => ({ entry_date: '2025-01-02', entry_price: 100, exit_date: '2025-01-09', exit_price: 101, bars: 5,
+    return_pct: i % 3 ? 1.2 : -0.8, equity_return_pct: i % 3 ? 1.2 : -0.8, reason: 'signal' }));
+  const metrics = { cagr_pct: 8, volatility_pct: 14, sharpe: 0.6, sortino: 0.8, max_drawdown_pct: -9, calmar: 0.9 };
+  return { symbol: 'NVDA', provider: 'YAHOO', range: '5Y', generated_at: '2026-10-28T15:30:00Z', strategy: mockStrategy, config: { cost_bps: 5 }, base_price: 100,
+    from: '2021-10-28', to: '2026-10-28', data_start: '2021-10-28', data_end: '2026-10-28', metrics, buy_hold: metrics, total_return_pct: 12.3, buy_hold_return_pct: 40.1,
+    stats: { trades: 24, win_rate_pct: 66, avg_win_pct: 1.2, avg_loss_pct: -0.8, expectancy_pct: 0.5, avg_bars: 5, exposure_pct: 30 },
+    curve: [{ date: '2021-10-28', close: 100, equity: 100 }, { date: '2026-10-28', close: 140, equity: 112.3 }], trades, warnings: [],
+    latest: { date: '2026-10-28', close: 140, in_position: false, entry_signal: false, exit_signal: false, has_leg: false } };
+}
+function strategyMonteCarlo() {
+  const d = (a, b, c, e, f) => ({ p5: a, p25: b, p50: c, p75: e, p95: f });
+  return { symbol: 'NVDA', provider: 'YAHOO', range: '5Y', generated_at: '2026-10-28T15:30:00Z', strategy: 'Dip buyer', cost_bps: 5, from: '2021-10-28', to: '2026-10-28',
+    data_start: '2021-10-28', data_end: '2026-10-28', observed: { total_return_pct: 12.3, buy_hold_return_pct: 40.1, closed_trades: 24, warnings: [] },
+    simulation: { model_version: 'mc-1', config: { method: 'trade_bootstrap', runs: 2000, trades: 24, seed: 42, dispersion_scale: 1, delay_bars: 2, position_scale: 1.5 },
+      observed_trades: 24, observed: { days: 24, total_return_pct: 12.3, max_drawdown_pct: -4.1 }, concentration: { best_trades_removed: 3, return_without_best_pct: 7.1, largest_loss_pct: -0.8 },
+      terminal_return_pct: d(-3, 5, 12, 19, 30), max_drawdown_pct: d(-12, -8, -5, -3, -1), prob_loss_pct: 9.5, prob_ruin_pct: 0,
+      assumptions: ['2000 simulated paths of 24 trades each, drawn with seed 42.'], limitations: ['Resampling past trades does not predict future ones.'] },
+    notes: ['Everything under simulation is simulated.', 'Research only. No order is placed or prepared.'] };
+}
+
 /** Same shape as GET /api/market/backtest: a strategy curve and a flatter benchmark. */
 function backtest(universe, strategy) {
   const curve = Array.from({ length: 60 }, (_, i) => {
@@ -267,6 +290,9 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     '/api/history': history(q.get('symbol') ?? 'NVDA', q.get('range') ?? '1M'),
     '/api/financials': financials(q.get('symbol') ?? 'NVDA'),
     '/api/market/indices': indices(),
+    '/api/strategies': { presets: [mockStrategy], custom: [], warnings: {} },
+    '/api/strategies/backtest': strategyReplay(),
+    '/api/strategies/montecarlo': strategyMonteCarlo(),
     '/api/market/leaderboard': leaderboard(q.get('universe') ?? 'custom', q.get('strategy') ?? 'best'),
     '/api/trading/size': { symbol: 'NVDA', side: 'buy', entry: 121.4, equity: 100114, risk_pct: 1, atr_mult: 2, atr: 3.2, stop_source: 'atr', result: { quantity: 156, stop: 115, risk_amount: 998.4, position_pct: 18.9 } },
     '/api/portfolio/analytics': portfolioAnalytics(),
