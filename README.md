@@ -304,7 +304,7 @@ environment variable of the same name.
 ### Research engine and updates
 
 - `SYS_ADMIN` configures bounded AI model rounds and tool calls in the UI (persisted by Liquibase).
-- Optional `search_web` tool uses the Brave Search API with a server-side `BRAVE_SEARCH_API_KEY`; returned public URLs should be independently verified.
+- Optional `search_web` tool searches through the providers a SYS_ADMIN configures (SearXNG, Tavily, Brave, Google Search via Gemini grounding; see [docs/web-search.md](docs/web-search.md)), or Brave with a server-side `BRAVE_SEARCH_API_KEY`; returned public URLs should be independently verified.
 - P/E uses matching TTM per-share EPS and share price or market cap and TTM earnings; P/FCF requires market cap divided by TTM total FCF.
 - For unattended Docker / Podman updates from **successful CI-published GHCR images**, see [auto-updates](docs/auto-updates.md). SYS_ADMIN can also check for, review (changes and database migrations) and install updates from **Settings → Updates**. The updater backs up MySQL, migrates, restarts, health-checks and rolls back the image if needed; it preserves `.env`, MySQL and SQLite volumes and does not auto-upgrade MySQL.
 
@@ -313,7 +313,7 @@ environment variable of the same name.
 
 The **API Settings** tab (available only to `SYS_ADMIN`) manages the AI endpoint,
 default model and agent budgets, AI model choices, and encrypted credentials for
-OpenAI-compatible AI and Brave/Tavily web search. API keys are never returned by
+OpenAI-compatible AI and the web search providers (see [docs/web-search.md](docs/web-search.md)). API keys are never returned by
 the GET endpoints; only configured/not-configured status is shown.
 
 Persistent credentials require a stable 32-byte server-side AES-256-GCM master
@@ -325,8 +325,8 @@ cannot be recovered. Without it, the admin page remains accessible but saving
 API keys is disabled. Encryption uses random per-secret nonces and authenticated
 integration identifiers. Existing environment-only AI keys still work.
 
-Web search credentials can be saved ahead of the upcoming search-engine node;
-this settings page alone does not activate a search endpoint or crawler.
+Web search providers, their order, budgets and fallback policy are managed on the
+same tab and used by the research agent, agent teams and the Flow Studio web search node.
 
 
 ### User accounts, roles and SMTP invitations

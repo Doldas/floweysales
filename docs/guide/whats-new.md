@@ -12,6 +12,9 @@ last-reviewed: 2026-11-06
 **Agents**
 - Agent answers get a claim check: each cited sentence is compared with the cited text for company, metric, period, unit and direction, and shown as supported, contradicted, not proven or not checked, with the source passage under **Why is this claim supported?** See [Agents, teams and evidence](agents.md).
 
+**Web search**
+- Several web search providers can be set up together: free self-hosted SearXNG, Tavily, Brave, and Google Search through Gemini grounding (paid, only after an explicit approval and with spending ceilings). Automatic mode falls back in a set order with a limited number of tries; every skip and failure is listed. See [Settings and roles](settings.md).
+
 **Backtests**
 - Choose a custom period in UTC, test several lists and periods at once, and check how trading cost, holdings and rebalance interval change a result. See [Strategies and backtests](strategies.md).
 - The Strategies page can resample a replay's closed trades with a seed to show percentile bands and the spread of the worst fall. See [Strategies and backtests](strategies.md).

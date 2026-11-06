@@ -311,7 +311,7 @@ func TestPerRunBudget(t *testing.T) {
 	resp := hits(1)
 	resp.Usage = Usage{Searches: 1}
 	cfg := google(100)
-	cfg.FreeMonthly = 1 // consumed by the warm-up search below
+	cfg.FreeMonthly = 1       // consumed by the warm-up search below
 	cfg.PricePer1000USD = 100 // $0.10 per search; precheck assumes 3 = $0.30
 	rg := newRig(t, map[string]func(int) (Response, error){GoogleGrounding: always(resp, nil)}, cfg)
 	p := rg.Policy()

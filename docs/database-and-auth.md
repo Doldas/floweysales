@@ -134,7 +134,9 @@ the administrator saves overriding values. A model round is one completion,
 not necessarily one tool invocation; multiple tool calls in a round count
 individually. The agent reports a partial/incomplete task upon exhaustion.
 
-To enable web search configure `BRAVE_SEARCH_API_KEY` as a **server-side
+Web search providers (SearXNG, Tavily, Brave, Google grounding) are configured by
+a SYS_ADMIN under Settings → API integrations; see [web-search.md](web-search.md).
+Alternatively configure `BRAVE_SEARCH_API_KEY` as a **server-side
 environment variable** (API subscription/token from Brave Search). The
 `search_web` tool searches public pages and includes URLs, date hints and
 short snippets. Web results are untrusted and must be cross-checked against
