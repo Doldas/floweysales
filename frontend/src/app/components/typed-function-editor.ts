@@ -1,4 +1,6 @@
-import { Component, input, output } from '@angular/core';
+import { Component, computed, input, output, signal } from '@angular/core';
+import { FlowDiagramComponent } from '../ui/flow-canvas/flow-diagram';
+import { typedFunctionDiagram } from '../ui/flow-canvas/diagram-adapters';
 import { FormsModule } from '@angular/forms';
 import {
   MAX_PINS, Pin, PinType, V2Edge, V2Graph, V2Node, WireKind, connectWire, inputPorts, outputPorts, pinProblems, removePin, renamePin,
@@ -14,7 +16,7 @@ const OPERATIONS = ['add', 'subtract', 'multiply', 'divide', 'greater', 'less', 
 @Component({
   selector: 'fse-typed-function-editor', host:{class:'fs-native-forms'},
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, FlowDiagramComponent],
   template: `
   <section class="typed" aria-label="Typed function editor">
    <div class="pins">
@@ -42,6 +44,9 @@ const OPERATIONS = ['add', 'subtract', 'multiply', 'divide', 'greater', 'less', 
     </fieldset>
    </div>
    @for(problem of problems(); track problem){<p class="problem" role="alert">{{problem}}</p>}
+
+   <fse-flow-diagram variant="typed-function" ariaLabel="Typed function graph: data and execution wires between pins" [nodes]="diagram().nodes" [edges]="diagram().edges"
+    [selectedId]="focused()" fitKey="typed" readonlyHint="Preview of the form below; dashed wires set execution order" (nodeSelect)="focused.set($event)"/>
 
    <h4>Internal nodes</h4>
    <div class="row">
@@ -102,6 +107,8 @@ export class TypedFunctionEditorComponent {
   readonly graphChange = output<V2Graph>();
   readonly operations = OPERATIONS;
   readonly maxPins = MAX_PINS;
+  readonly focused = signal('');
+  readonly diagram = computed(() => typedFunctionDiagram(this.graph(), { inputPorts, outputPorts }));
 
   private set(next: V2Graph): void { this.graphChange.emit(next); }
 
@@ -140,7 +147,8 @@ export class TypedFunctionEditorComponent {
   addNode(type: V2Node['type']): void {
     const g = this.graph();
     const id = this.nextName(type === 'output' ? 'exit' : type, g.nodes.map(n => n.id));
-    const node: V2Node = { id, type, x: 0, y: 0, ...(type === 'constant' ? { value_type: 'number' as PinType, value: '1' } : {}), ...(type === 'operation' ? { operation: 'add' } : {}) };
+    const slot = g.nodes.length;
+    const node: V2Node = { id, type, x: 200 + (Math.floor(slot / 2) % 3) * 140, y: 20 + (slot % 2) * 200, ...(type === 'constant' ? { value_type: 'number' as PinType, value: '1' } : {}), ...(type === 'operation' ? { operation: 'add' } : {}) };
     this.set({ ...g, nodes: [...g.nodes, node] });
   }
   patch(id: string, change: Partial<V2Node>): void {

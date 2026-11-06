@@ -32,6 +32,22 @@ type AgentFlowRun struct {
 	MaxClaims  int     `json:"max_attempts"`
 	QueuedAt   *string `json:"queued_at"`
 	ParentRun  *int64  `json:"parent_run_id"`
+	// GraphHash is the SHA-256 of the graph snapshot the run executed.
+	GraphHash string `json:"graph_hash"`
+}
+
+// ScratchFlowID is the run-history scope of one person's flows that were
+// tested before ever being saved. It is negative so it can never be a stored
+// flow, and no row exists for it: a draft test of a new flow persists only its
+// run, trace and snapshot, never a flow or a revision.
+func ScratchFlowID(userID int64) int64 { return -userID - 1 }
+
+// ScratchFlowOwner is the person a scratch scope belongs to.
+func ScratchFlowOwner(flowID int64) (int64, bool) {
+	if flowID >= 0 {
+		return 0, false
+	}
+	return -flowID - 1, true
 }
 
 var agentFlowSelect = "SELECT p.id,p.name,p.graph_json,p.enabled,p.interval_minutes,COALESCE(p.event_key,'')" +
@@ -133,7 +149,7 @@ func (d *Database) FinishAgentFlowRunWithNode(ctx context.Context, id int64, out
 	return err
 }
 func (d *Database) ListAgentFlowRuns(ctx context.Context, flowID int64) ([]AgentFlowRun, error) {
-	rows, err := d.db.QueryContext(ctx, "SELECT id,flow_id,trigger_type,status,COALESCE(output_json,''),COALESCE(error_message,''),DATE_FORMAT(started_at,'%Y-%m-%dT%H:%i:%s.%fZ'),IF(finished_at IS NULL,NULL,DATE_FORMAT(finished_at,'%Y-%m-%dT%H:%i:%s.%fZ')),IF(finished_at IS NULL,NULL,TIMESTAMPDIFF(MICROSECOND,started_at,finished_at) DIV 1000),failed_node_id,flow_revision,attempts,max_attempts,IF(queued_at IS NULL,NULL,DATE_FORMAT(queued_at,'%Y-%m-%dT%H:%i:%s.%fZ')),parent_run_id FROM agent_flow_runs WHERE flow_id=? ORDER BY id DESC LIMIT 30", flowID)
+	rows, err := d.db.QueryContext(ctx, "SELECT r.id,r.flow_id,r.trigger_type,r.status,COALESCE(r.output_json,''),COALESCE(r.error_message,''),DATE_FORMAT(r.started_at,'%Y-%m-%dT%H:%i:%s.%fZ'),IF(r.finished_at IS NULL,NULL,DATE_FORMAT(r.finished_at,'%Y-%m-%dT%H:%i:%s.%fZ')),IF(r.finished_at IS NULL,NULL,TIMESTAMPDIFF(MICROSECOND,r.started_at,r.finished_at) DIV 1000),r.failed_node_id,r.flow_revision,r.attempts,r.max_attempts,IF(r.queued_at IS NULL,NULL,DATE_FORMAT(r.queued_at,'%Y-%m-%dT%H:%i:%s.%fZ')),r.parent_run_id,COALESCE(SHA2(s.graph_json,256),'') FROM agent_flow_runs r LEFT JOIN agent_flow_run_snapshots s ON s.run_id=r.id WHERE r.flow_id=? ORDER BY r.id DESC LIMIT 30", flowID)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +160,7 @@ func (d *Database) ListAgentFlowRuns(ctx context.Context, flowID int64) ([]Agent
 		var finishedAt sql.NullString
 		var durationMS sql.NullInt64
 		var failedNode sql.NullString
-		if err := rows.Scan(&x.ID, &x.FlowID, &x.Trigger, &x.Status, &x.Output, &x.Error, &x.StartedAt, &finishedAt, &durationMS, &failedNode, &x.Revision, &x.Attempts, &x.MaxClaims, &x.QueuedAt, &x.ParentRun); err != nil {
+		if err := rows.Scan(&x.ID, &x.FlowID, &x.Trigger, &x.Status, &x.Output, &x.Error, &x.StartedAt, &finishedAt, &durationMS, &failedNode, &x.Revision, &x.Attempts, &x.MaxClaims, &x.QueuedAt, &x.ParentRun, &x.GraphHash); err != nil {
 			return nil, err
 		}
 		if finishedAt.Valid {

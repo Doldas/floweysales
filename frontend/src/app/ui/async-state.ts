@@ -7,6 +7,8 @@ export type AsyncPhase = 'idle' | 'loading' | 'slow' | 'success' | 'empty' | 'er
 
 /** A wait longer than this says it is still working. */
 export const SLOW_AFTER_MS = 8000;
+/** A wait longer than this says it may be stuck and offers a way out. */
+export const STALL_AFTER_MS = 30000;
 /** A load shorter than this shows nothing, to prevent flicker. */
 export const SKELETON_DELAY_MS = 150;
 
@@ -38,4 +40,15 @@ export function progressText(stage: string, elapsedMs: number, done: number | nu
   if (done !== null && total !== null && total > 0) parts.push(`${Math.min(done, total)} of ${total}`);
   if (elapsedMs >= SLOW_AFTER_MS) parts.push(`still working, ${Math.floor(elapsedMs / 1000)} s`);
   return parts.join(' · ');
+}
+
+/** Elapsed time since `since` (epoch ms), never negative; 0 when the start is unknown. */
+export function elapsedSince(since: number | null | undefined, now: number): number {
+  return typeof since === 'number' && Number.isFinite(since) ? Math.max(0, now - since) : 0;
+}
+
+/** After a long silent wait: say so and name the way out. Empty before that. */
+export function stallHint(elapsedMs: number, canCancel: boolean): string {
+  if (elapsedMs < STALL_AFTER_MS) return '';
+  return canCancel ? 'This is taking longer than usual. You can cancel and try again.' : 'This is taking longer than usual. It may still finish; reload the page if nothing changes.';
 }

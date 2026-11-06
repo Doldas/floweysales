@@ -1,7 +1,10 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { AgentSession } from '../core/agent-session';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
+import { MarkdownEditorComponent } from '../ui/markdown-editor';
+import { MarkdownViewComponent } from '../ui/markdown-view';
+import { findReadme, readmePathFor } from '../core/workspace-readme';
 
 interface FileEntry {path:string; content_type:string; size:number}
 interface TreeItem { name:string; path:string; depth:number; }
@@ -9,14 +12,14 @@ interface TreeItem { name:string; path:string; depth:number; }
 @Component({
  selector:'fse-userspace-files', host:{class:'fs-native-forms'},
  standalone:true,
- imports:[FormsModule,CommonModule],
+ imports:[FormsModule,CommonModule,MarkdownEditorComponent,MarkdownViewComponent],
  template:`
  <section class="explorer" aria-label="My Workspace file explorer">
   <header class="explorer-toolbar">
    <div class="explorer-title"><i class="bi bi-hdd-stack" aria-hidden="true"></i><div><strong>My Workspace</strong><small>Private · 2 MiB per file · 256 files</small></div></div>
    <div class="toolbar-actions">
     <button class="btn btn-sm btn-outline-secondary" (click)="newFolder()" [disabled]="busy()"><i class="bi bi-folder-plus" aria-hidden="true"></i>Folder</button>
-    <button class="btn btn-sm btn-primary" (click)="newFile()"><i class="bi bi-file-earmark-plus" aria-hidden="true"></i>New file</button>
+    <button class="btn btn-sm btn-primary" (click)="newFileClick()"><i class="bi bi-file-earmark-plus" aria-hidden="true"></i>New file</button>
     <button class="btn btn-sm btn-ghost btn-icon" (click)="refresh()" [disabled]="busy()" aria-label="Refresh files" title="Refresh"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button>
    </div>
   </header>
@@ -83,11 +86,13 @@ interface TreeItem { name:string; path:string; depth:number; }
       <option value="text/csv">CSV</option>
      </select></label>
      <label>View<select [ngModel]="view()" (ngModelChange)="view.set($event)">
-      <option value="edit">Code editor</option><option value="highlight">Syntax preview</option>
+      <option value="edit">{{mime()==='text/markdown'?'Markdown editor':'Code editor'}}</option><option value="highlight">Syntax preview</option>
       <option value="tree">Structure viewer</option>
      </select></label>
     </div>
-    @if(view()==='edit'){
+    @if(view()==='edit'&&mime()==='text/markdown'){
+     <fse-markdown-editor [value]="content()" (valueChange)="content.set($event)" [baseDir]="parent(path())" [disabled]="busy()" (save)="save()" (openPath)="followLink($event)" />
+    } @else if(view()==='edit'){
      <textarea class="code-editor" spellcheck="false" rows="18" [ngModel]="content()" (ngModelChange)="content.set($event)" maxlength="2097152" aria-label="File content"></textarea>
     } @else if(view()==='highlight'){
      <pre class="syntax" [innerHTML]="highlighted()"></pre>
@@ -104,6 +109,12 @@ interface TreeItem { name:string; path:string; depth:number; }
     } @else {<pre class="syntax">{{content()}}</pre>}
     <div class="file-actions">
      <button class="btn btn-sm btn-primary" (click)="save()" [disabled]="busy()||!path()">Save</button>
+     <span class="save-state" role="status" [class.dirty]="dirty()" [class.failed]="!!saveError()">
+      @if(busy()&&saving()){<i class="bi bi-hourglass-split" aria-hidden="true"></i> Saving…}
+      @else if(saveError()){<i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Not saved: {{saveError()}}}
+      @else if(dirty()){<i class="bi bi-circle-fill" aria-hidden="true"></i> Unsaved changes}
+      @else if(selectedPath()){<i class="bi bi-check2" aria-hidden="true"></i> Saved}
+     </span>
      <button class="btn btn-sm btn-outline-secondary" (click)="download()" [disabled]="!path()">Download</button>
      <button class="btn btn-sm btn-outline-secondary" (click)="startTransfer('copy')" [disabled]="busy()||!selectedPath()">Duplicate</button>
      <button class="btn btn-sm btn-outline-secondary" (click)="startTransfer('move')" [disabled]="busy()||!selectedPath()">Move</button>
@@ -128,6 +139,31 @@ interface TreeItem { name:string; path:string; depth:number; }
     @if(message()){<p role="status">{{message()}}</p>}
    </section>
   </div>
+  <section class="readme-overview" aria-labelledby="readme-title">
+   @if(readmePath(); as readme){
+    <header class="readme-head">
+     <h2 id="readme-title"><i class="bi bi-book" aria-hidden="true"></i> Overview <small>{{basename(readme)}} in {{folder()}}</small></h2>
+     <div class="readme-actions">
+      @if(readmeLong()){<button type="button" class="btn btn-sm btn-outline-secondary" (click)="readmeExpanded.update(v=>!v)" [attr.aria-expanded]="readmeExpanded()" aria-controls="readme-body">{{readmeExpanded()?'Show less':'Show full README'}}</button>}
+      <button type="button" class="btn btn-sm btn-outline-secondary" (click)="open(readme)" [disabled]="busy()"><i class="bi bi-pencil-square" aria-hidden="true"></i>Open README</button>
+     </div>
+    </header>
+    @if(readmeError()){
+     <p class="error" role="alert">Could not load {{readme}}: {{readmeError()}}</p>
+    } @else if(readmeLoading()&&!readmeContent()){
+     <p class="empty" role="status">Loading README…</p>
+    } @else if(!readmeContent().trim()){
+     <p class="empty">{{basename(readme)}} is empty. Open it to add an introduction to this folder.</p>
+    } @else {
+     <div id="readme-body" class="readme-body" [class.clamped]="readmeLong()&&!readmeExpanded()">
+      <fse-markdown-view [source]="readmeContent()" [baseDir]="folder()" (openPath)="followLink($event)" />
+     </div>
+     @if(readmeLong()&&!readmeExpanded()){<p class="readme-more">Showing the start of this README. <button type="button" class="link-button" (click)="readmeExpanded.set(true)">Show full README</button> or open it to read and edit the whole file.</p>}
+    }
+   } @else {
+    <p class="empty readme-none">No README.md in this folder. <button type="button" class="link-button" (click)="newReadme()" [disabled]="busy()">Create README.md</button> to describe what is here; it will then appear in this overview.</p>
+   }
+  </section>
  </section>`,
  styles:[`
  :host{display:block;color:var(--fs-text)}
@@ -169,6 +205,18 @@ interface TreeItem { name:string; path:string; depth:number; }
  .syntax :is(.token-key){color:var(--fs-accent-text)}.syntax :is(.token-string){color:var(--fs-pos)}.syntax :is(.token-tag){color:var(--fs-agent)}
  .tree-view{min-height:340px;max-height:560px;overflow:auto;background:var(--fs-sunken);border:1px solid var(--fs-border);padding:10px;border-radius:var(--bs-border-radius);font-size:.82rem}
  .tree-row{display:flex;gap:12px;padding:4px;border-bottom:1px solid var(--fs-border);overflow-wrap:anywhere}.tree-key{color:var(--fs-accent-text);font-weight:500}
+ .save-state{font-size:.78rem;color:var(--fs-muted);display:inline-flex;align-items:center;gap:5px}
+ .save-state.dirty{color:var(--fs-accent-text);font-weight:500}.save-state.dirty .bi{font-size:.5rem}
+ .save-state.failed{color:var(--fs-neg)}
+ .readme-overview{border-top:1px solid var(--fs-border);padding:12px 16px;min-width:0}
+ .readme-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+ .readme-head h2{font-size:.95rem;margin:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.readme-head h2 small{color:var(--fs-muted);font-weight:400;font-size:.75rem;overflow-wrap:anywhere}
+ .readme-actions{display:flex;gap:8px;flex-wrap:wrap}
+ .readme-body{min-width:0;max-width:80ch;overflow-wrap:anywhere}
+ .readme-body.clamped{max-height:16rem;overflow:hidden;-webkit-mask-image:linear-gradient(#000 70%,transparent);mask-image:linear-gradient(#000 70%,transparent)}
+ .readme-more{font-size:.78rem;color:var(--fs-muted);margin:6px 0 0}
+ .readme-none{padding:4px 0}
+ .link-button{background:none;border:0;padding:0;color:var(--fs-accent-text);text-decoration:underline;font:inherit;cursor:pointer}.link-button:disabled{opacity:.5}
  .error{color:var(--fs-neg)}.empty{color:var(--fs-muted);padding:16px 4px;font-size:.85rem}
  .delete-confirm{border:1px solid color-mix(in srgb,var(--fs-neg) 45%,transparent);background:var(--fs-neg-soft);padding:12px;border-radius:var(--bs-border-radius)}
  @media(max-width:1050px){.explorer-grid{grid-template-columns:minmax(155px,30%) minmax(0,1fr)}.editor-panel{grid-column:1/-1;border-top:1px solid var(--fs-border)}}
@@ -276,7 +324,57 @@ export class UserspaceFilesComponent {
   if(doc.documentElement)walk(doc.documentElement,0);
   return rows;
  });
- constructor(){void this.refresh()}
+ /** The README shown as this folder's overview: only that of the folder itself (see findReadme). */
+ readonly readmePath=computed(()=>findReadme(this.files(),this.folder()));
+ readonly readmeContent=signal('');
+ readonly readmeError=signal('');
+ readonly readmeLoading=signal(false);
+ readonly readmeExpanded=signal(false);
+ readonly readmeLong=computed(()=>{const text=this.readmeContent();return text.length>1200||text.split('\n').length>20});
+ /** Bumped after every file-list refresh so a saved, renamed or deleted README is reloaded. */
+ private readonly filesTick=signal(0);
+ private readmeToken=0;
+ private readmeLoaded='';
+ readonly savedContent=signal('');
+ readonly saveError=signal('');
+ readonly saving=signal(false);
+ readonly dirty=computed(()=>this.content()!==this.savedContent()||(!!this.selectedPath()&&this.path()!==this.selectedPath()));
+ constructor(){
+  void this.refresh();
+  effect(()=>{const path=this.readmePath();this.filesTick();untracked(()=>void this.loadReadme(path))});
+ }
+ private async loadReadme(path:string):Promise<void>{
+  const token=++this.readmeToken;
+  if(path!==this.readmeLoaded){this.readmeContent.set('');this.readmeExpanded.set(false);this.readmeLoaded=path}
+  this.readmeError.set('');
+  if(!path){this.readmeLoading.set(false);return}
+  this.readmeLoading.set(true);
+  try{
+   const response=await fetch('/api/userspace/file?path='+encodeURIComponent(path),{credentials:'same-origin'});
+   if(!response.ok)throw Error('the file could not be read');
+   const text=await response.text();
+   if(token===this.readmeToken)this.readmeContent.set(text);
+  }catch(e){if(token===this.readmeToken){this.readmeContent.set('');this.readmeError.set(String(e).replace(/^Error: /,''))}}
+  finally{if(token===this.readmeToken)this.readmeLoading.set(false)}
+ }
+ /** Asks before an action replaces the editor content while it has unsaved changes. */
+ private discardOk():boolean{
+  return !this.dirty()||window.confirm('Discard unsaved changes to '+this.basename(this.path())+'?');
+ }
+ newFileClick(){if(this.discardOk())this.newFile()}
+ newReadme(){
+  if(!this.discardOk())return;
+  this.newFile();this.path.set(readmePathFor(this.folder()));
+ }
+ /** Follows a Workspace link from a preview or README: opens the file or shows the folder, or says it is missing. */
+ async followLink(path:string):Promise<void>{
+  if(this.files().some(f=>f.path===path&&!this.isFolderMarker(f.path))){
+   if(await this.open(path))this.navigate(this.parent(path));
+   return;
+  }
+  if(this.directories().some(d=>d.path===path)){this.navigate(path);return}
+  this.message.set('That link points to a file or folder that does not exist in your Workspace: '+path);
+ }
  isFolderMarker(path:string):boolean{return path.endsWith('/.folder')}
  isCollapsed(path:string):boolean{return this.collapsedDirectories().includes(path)}
  toggleDirectory(path:string):void{
@@ -309,30 +407,32 @@ export class UserspaceFilesComponent {
   }catch(e){this.message.set('Could not create folder: '+String(e))}
   finally{this.busy.set(false)}
  }
- newFile(){this.selectedPath.set('');this.transferMode.set('');this.path.set((this.folder()==='/'?'':this.folder())+'/new.md');this.mime.set('text/markdown');this.content.set('');this.view.set('edit');this.deleteRequested.set(false)}
+ newFile(){this.selectedPath.set('');this.transferMode.set('');this.path.set((this.folder()==='/'?'':this.folder())+'/new.md');this.mime.set('text/markdown');this.content.set('');this.savedContent.set('');this.saveError.set('');this.view.set('edit');this.deleteRequested.set(false)}
  private escape(s:string){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
  private async api(url:string,options?:RequestInit):Promise<any>{
   const response=await fetch(url,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...options?.headers}});
   const data=await response.json();if(!response.ok)throw Error(data.error||'Request failed');return data;
  }
- async refresh(){try{const d=await this.api('/api/userspace/files');this.files.set(d.files||[])}catch(e){this.message.set(String(e))}}
- async open(path:string){
+ async refresh(){try{const d=await this.api('/api/userspace/files');this.files.set(d.files||[]);this.filesTick.update(v=>v+1)}catch(e){this.message.set(String(e))}}
+ async open(path:string):Promise<boolean>{
+  if(path!==this.path()&&!this.discardOk())return false;
   this.deleteRequested.set(false);this.busy.set(true);
   try{
    const response=await fetch('/api/userspace/file?path='+encodeURIComponent(path),{credentials:'same-origin'});
    if(!response.ok)throw Error('Cannot open file');
-   const text=await response.text();this.path.set(path);this.selectedPath.set(path);this.content.set(text);this.view.set('edit');
+   const text=await response.text();this.path.set(path);this.selectedPath.set(path);this.content.set(text);this.savedContent.set(text);this.saveError.set('');this.view.set('edit');
    this.mime.set(this.files().find(f=>f.path===path)?.content_type||'text/plain');
-  }catch(e){this.message.set(String(e))}finally{this.busy.set(false)}
+   return true;
+  }catch(e){this.message.set(String(e));return false}finally{this.busy.set(false)}
  }
- async save(){this.busy.set(true);try{
+ async save(){if(this.busy())return;this.busy.set(true);this.saving.set(true);this.saveError.set('');try{
   const bytes=new TextEncoder().encode(this.content()).byteLength;
   if(bytes>2*1024*1024)throw Error('File exceeds 2 MiB limit ('+bytes+' bytes)');
   if(this.mime()==='application/json')JSON.parse(this.content());
   if(this.mime()==='application/xml'&&this.xmlError())throw Error(this.xmlError());
   await this.api('/api/userspace/file',{method:'PUT',body:JSON.stringify({path:this.path(),content_type:this.mime(),content:this.content()})});
-  const target=this.path();this.selectedPath.set(target);await this.refresh();this.navigate(this.parent(target));this.message.set('File saved');
- }catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
+  const target=this.path();this.selectedPath.set(target);this.savedContent.set(this.content());await this.refresh();this.navigate(this.parent(target));this.message.set('File saved');
+ }catch(e){const reason=String(e).replace(/^Error: /,'');this.saveError.set(reason);this.message.set('Could not save: '+reason)}finally{this.busy.set(false);this.saving.set(false)}}
  async remove(){if(!this.deleteRequested()||!this.selectedPath())return;this.busy.set(true);
   try{await this.api('/api/userspace/file?path='+encodeURIComponent(this.selectedPath()),{method:'DELETE'});
    this.deleteRequested.set(false);this.newFile();await this.refresh();this.message.set('File deleted');

@@ -1,5 +1,7 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ProgressStatusComponent } from '../ui/progress-status';
+import { SkeletonComponent } from '../ui/skeleton';
 import { AuthState } from '../auth.service';
 import { canDecide, decisionProblem, describeAudit, describeCapability, formatBytes, sideEffectStatusLabel, sortForReview, type AuditEntry, type SideEffect } from './side-effects';
 import { formatUtcDateTime } from '../ui/datetime';
@@ -8,7 +10,7 @@ import { formatUtcDateTime } from '../ui/datetime';
 @Component({
  selector:'fse-flow-side-effects', host:{class:'fs-native-forms'},
  standalone:true,
- imports:[FormsModule],
+ imports:[FormsModule,ProgressStatusComponent,SkeletonComponent],
  template:`
  <section class="effects" aria-label="Side effect approvals and audit trail">
   <header class="effects-top">
@@ -41,7 +43,7 @@ import { formatUtcDateTime } from '../ui/datetime';
   } @else {
   @if(pendingCount()){<p class="effects-pending" role="status">{{pendingCount()}} {{pendingCount()===1?'request is':'requests are'}} waiting for approval.</p>}
   @if(message()){<p class="effects-message" role="status">{{message()}}</p>}
-  @if(!effects().length){<p class="muted">No side effects recorded{{status()?' with this status':''}} yet.</p>}
+  @if(busy()&&!effects().length){<fs-progress-status stage="Loading approvals"/><fs-skeleton shape="rows" [rows]="3" aria-hidden="true"/>}@else if(!effects().length){<p class="muted">No side effects recorded{{status()?' with this status':''}} yet.</p>}
   <ul class="effect-list">
    @for(effect of effects();track effect.id){
     <li class="effect" [class.effect-pending]="effect.status==='PENDING'">

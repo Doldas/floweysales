@@ -129,6 +129,8 @@ func annotateDiscovery(universe leaderboardUniverse, provider string, ranked []m
 		why := "On the " + universe.Label + " list."
 		if universe.Source.Kind == "curated" {
 			why = "On the hand-picked " + universe.Label + " list; the maintainers chose it and no external record backs the choice."
+		} else if universe.Source.Kind == "index" {
+			why = "A member of the " + universe.Label + " in the recorded list. Membership is the index provider's decision, not a FloweySales recommendation."
 		} else if universe.Source.Kind == "disclosure" {
 			why = "Held according to " + universe.Source.Name + "."
 		} else if universe.Source.Kind == "custom" {

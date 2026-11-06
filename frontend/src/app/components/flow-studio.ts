@@ -1,7 +1,8 @@
 import { CanvasGestures } from './canvas-gestures';
 import { ProgressStatusComponent } from '../ui/progress-status';
-import { HostListener, Component, ChangeDetectionStrategy, signal, effect } from '@angular/core';
+import { HostListener, Component, ChangeDetectionStrategy, signal, effect, computed } from '@angular/core';
 import { MarkdownRunOutputComponent } from './markdown-run-output';
+import { DRAFT_HISTORY_SCOPE, draftRunBody, historyPath, isDraftTest, runButtonHint, runButtonLabel, runKindLabel, shortHash } from './draft-test';
 import { FlowSideEffectsComponent } from './flow-side-effects';
 import { clampToolBudget, describeToolCall, toggleTool, toolLabel, type GrantableTool, type ToolCall } from './agent-tools';
 import { FlowEventAdaptersComponent } from './flow-event-adapters';
@@ -17,6 +18,9 @@ import { listOverviewFlows } from './flow-overview';
 import { semanticIssues } from './flow-semantics';
 import { nearestPort, portPoints, wireFromDrag, edgeKey, wirePath, type PortPoint } from './wire-drag';
 import { bindInputPin, declaredPins, mixesPinAndPlainInputs, pinBindings, pinEdgeProblem, pinOffset, routeOutputPin, unboundInputPins } from './function-pins';
+import { FlowDiagramComponent } from '../ui/flow-canvas/flow-diagram';
+import { flowNodeTag, runSnapshotDiagram } from '../ui/flow-canvas/diagram-adapters';
+import { FLOW_CANVAS_STYLES } from '../ui/flow-canvas/flow-canvas-styles';
 import { FlowNotifyChannelsComponent } from './flow-notify-channels';
 import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES, SCREEN_FIELDS, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
@@ -30,12 +34,12 @@ interface FlowGraph { version?:number; nodes:FlowNode[]; edges:FlowEdge[] }
 interface SavedFlow extends PublishState { id:number; name:string; graph:FlowGraph; enabled:boolean; interval_minutes:number; event_key:string }
 interface FlowRunStep {id:number;node:string;label:string;status:string;input?:string;output:string;output_bytes?:number;output_truncated?:boolean;output_stored?:boolean;error?:string;started_at?:string;created_at?:string;duration_ms?:number|null;attempts?:number|null;worker_attempt?:number|null;tool_calls?:ToolCall[];sources?:StepSources}
 interface StepSources {attempt?:number;policy?:EvidencePolicy;sources:AnswerSource[];audit?:AnswerFinding[];removed?:AnswerFinding[]}
-interface FlowRun { id:number; parent_run_id?:number|null; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null; failed_node?:string|null; flow_revision?:number|null; attempts?:number; max_attempts?:number; queued_at?:string|null }
+interface FlowRun { id:number; parent_run_id?:number|null; trigger:string; status:string; output:string; error:string; started_at?:string; finished_at?:string|null; duration_ms?:number|null; failed_node?:string|null; flow_revision?:number|null; graph_hash?:string; attempts?:number; max_attempts?:number; queued_at?:string|null }
 interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'boolean'}
 
 @Component({
  selector:'fse-flow-studio', standalone:true,
- imports:[ProgressStatusComponent,CommonModule,FormsModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,FlowSideEffectsComponent,FlowEventAdaptersComponent,FlowNotifyChannelsComponent],
+ imports:[FlowDiagramComponent,ProgressStatusComponent,CommonModule,FormsModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,FlowSideEffectsComponent,FlowEventAdaptersComponent,FlowNotifyChannelsComponent],
  host:{class:'fs-native-forms'},
  changeDetection:ChangeDetectionStrategy.Default,
  template:`
@@ -466,8 +470,11 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
      <button class="btn btn-sm btn-outline-secondary" type="button" (click)="redoGraph()" [disabled]="!canRedo()||busy()" aria-label="Redo graph change" title="Redo (Ctrl/Cmd+Shift+Z or Ctrl+Y)">↷ Redo</button>
      <button class="btn btn-sm btn-primary" (click)="save()" [disabled]="busy()">Save flow</button>
       <span class="muted" role="status">{{hasUnsavedChanges()?'Unsaved changes':'All changes saved'}}</span>
-     <button class="btn btn-sm btn-outline-secondary" (click)="run()" [disabled]="busy()||!selectedId()" [title]="!selectedId()?'Save the flow once to test it':hasUnsavedChanges()?'Runs the graph shown here, including unsaved edits, as a draft test. Nothing is saved.':currentFlow()?.active_revision?'Runs the active revision':'Runs the saved draft'">{{hasUnsavedChanges()?'Test unsaved draft':'Run now'}}</button>
+     <button class="btn btn-sm btn-outline-secondary" (click)="run()" [disabled]="busy()" [title]="runButtonHint(selectedId(),hasUnsavedChanges(),!!currentFlow()?.active_revision)">{{runButtonLabel(selectedId(),hasUnsavedChanges())}}</button>
+     @if((hasUnsavedChanges()||!selectedId())&&sideEffects().length){<label class="live-effects"><input type="checkbox" [ngModel]="liveEffects()" (ngModelChange)="liveEffects.set($event)" [disabled]="!selectedId()||busy()"> Allow real side effects in this test{{selectedId()?'':' (save the flow first)'}}</label>}
+     <span class="muted draft-help" id="run-help">Test runs the graph shown here, even unsaved, and never saves it. Save keeps your changes. Publish revision changes what scheduled runs use.</span>
      @if(currentFlow()?.active_revision&&currentFlow()?.has_unpublished_changes){<button class="btn btn-sm btn-outline-secondary" (click)="run('draft')" [disabled]="busy()||hasUnsavedChanges()" title="Run the saved draft without publishing it. Unsaved edits use Test unsaved draft.">Run draft</button>}
+     @if(busy()){<fs-progress-status stage="Sending the request to the server"/>}
      <label>Event value <input [ngModel]="triggerValue()" (ngModelChange)="triggerValue.set($event)" placeholder="Value matching trigger type"></label>
      <button class="btn btn-sm btn-outline-secondary" (click)="emitEvent()" [disabled]="busy()||!eventKey()">Trigger event</button>
      <button class="btn btn-sm btn-outline-secondary" (click)="refresh()">Refresh</button>
@@ -500,7 +507,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
    @if (studioTab()==='approvals') { <fse-flow-side-effects></fse-flow-side-effects> }
    @if (studioTab()==='runs') {
    <div class="run-history-heading"><h3>Recent runs</h3>
-     <label>Flow <select [ngModel]="historyFlowId()" (ngModelChange)="selectHistoryFlow(+$event)" aria-label="Select flow for history"><option [ngValue]="0">Select a flow…</option>@for(f of flows();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
+     <label>Flow <select [ngModel]="historyFlowId()" (ngModelChange)="selectHistoryFlow(+$event)" aria-label="Select flow for history"><option [ngValue]="0">Select a flow…</option><option [ngValue]="draftScope">Unsaved draft tests (never-saved flows)</option>@for(f of flows();track f.id){<option [ngValue]="f.id">{{f.name}}</option>}</select></label>
      <label>Find run <input [ngModel]="historySearch()" (ngModelChange)="historySearch.set($event)" placeholder="Run ID or trigger"></label>
      <label>Status <select [ngModel]="historyStatusFilter()" (ngModelChange)="historyStatusFilter.set($event)"><option value="all">All statuses</option><option value="SUCCESS">Success</option><option value="FAILED">Failed</option><option value="QUEUED">Queued</option><option value="RUNNING">Running</option><option value="AWAITING_APPROVAL">Awaiting approval</option><option value="CANCELLED">Cancelled</option><option value="DEAD">Dead-lettered</option></select></label>
      <label>Output view <select [ngModel]="logView()" (ngModelChange)="logView.set($event)">
@@ -520,7 +527,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
     @if(historyFlowId()&&runs().length&&!filteredRuns().length){<p class="muted">No runs match your filters.</p>}
    @for(run of filteredRuns();track run.id){
     <details class="flow-run">
-      <summary><span class="fs-status" [class.is-success]="run.status==='SUCCESS'" [class.is-danger]="run.status==='FAILED'||run.status==='DEAD'" [class.is-warning]="canCancelRun(run.status)">{{runStatusLabel(run.status)}}</span> #{{run.id}} · {{run.trigger}} · {{runRevisionLabel(run.flow_revision)}}@if(runAttemptLabel(run.attempts,run.max_attempts);as attempt){ · {{attempt}}} <span class="muted">· {{displayRunTime(run.status==='QUEUED'?run.queued_at:run.started_at)}} · {{displayRunDuration(run)}}</span></summary>
+      <summary><span class="fs-status" [class.is-success]="run.status==='SUCCESS'" [class.is-danger]="run.status==='FAILED'||run.status==='DEAD'" [class.is-warning]="canCancelRun(run.status)">{{runStatusLabel(run.status)}}</span> #{{run.id}} · <span class="run-kind" [class.draft-test]="isDraftTest(run)">{{runKindLabel(run)}}</span>@if(runAttemptLabel(run.attempts,run.max_attempts);as attempt){ · {{attempt}}} <span class="muted">· {{displayRunTime(run.status==='QUEUED'?run.queued_at:run.started_at)}} · {{displayRunDuration(run)}}</span></summary>
       <div class="run-diagnostics">
        @if(run.queued_at){<span><strong>Queued:</strong> {{displayRunTime(run.queued_at)}}</span>}
        <span><strong>Started:</strong> {{run.status==='QUEUED'&&!run.attempts?'Waiting for a worker':displayRunTime(run.started_at)}}</span>
@@ -528,7 +535,9 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
        @if(run.attempts){<span><strong>Worker attempts:</strong> {{run.attempts}} of {{run.max_attempts}}</span>}
        <span><strong>Duration:</strong> {{displayRunDuration(run)}}</span>
        <span><strong>Trigger:</strong> {{run.trigger}}@if(run.parent_run_id){ · triggered by run #{{run.parent_run_id}}}</span>
-       <span><strong>Graph:</strong> {{runRevisionLabel(run.flow_revision)}}</span>
+       <span><strong>Graph:</strong> {{isDraftTest(run)?'Editor draft, not saved':runRevisionLabel(run.flow_revision)}}</span>
+       @if(run.graph_hash){<span><strong>Snapshot:</strong> <code>{{shortHash(run.graph_hash)}}</code></span>}
+       @if(isDraftTest(run)){<span><strong>Draft test:</strong> published triggers, schedules and saved versions were not changed.</span>}
       </div>
       @if(run.status==='QUEUED'&&run.error){<p class="muted" role="status">{{run.error}}</p>}
       @if((run.status==='FAILED'||run.status==='DEAD')&&run.error){
@@ -551,19 +560,8 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
         <section class="exec-graph" aria-label="Historical execution graph">
           <strong>Execution graph · run #{{run.id}}</strong>
           <p class="muted">Saved graph from this run. Select a node to inspect its status and recorded output.</p>
-          <div class="exec-graph-canvas">
-            <svg [attr.viewBox]="executionViewBox()" role="group" [attr.aria-label]="'Execution graph for run '+run.id">
-              @for(edge of graph.edges;track $index){<path [attr.d]="executionEdgePath(edge,graph)" class="exec-edge"/>}
-              @for(n of graph.nodes;track n.id){
-                <g tabindex="0" role="button" class="exec-node" [attr.aria-label]="n.label+' '+executionNodeStatus(n.id)"
-                 (click)="executionSelectedNode.set(n.id)" (keydown.enter)="executionSelectedNode.set(n.id)" (keydown.space)="$event.preventDefault();executionSelectedNode.set(n.id)">
-                  <rect [attr.class]="'exec-rect tone-'+executionNodeColor(n.id)" [class.selected]="executionSelectedNode()===n.id" [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="10"/>
-                  <text class="exec-text" [attr.x]="n.x+10" [attr.y]="n.y+24" font-size="12">{{n.label.slice(0,17)}}</text>
-                  <text class="exec-sub" [attr.x]="n.x+10" [attr.y]="n.y+46" font-size="11"> {{executionNodeStatus(n.id)}}</text>
-                </g>
-              }
-            </svg>
-          </div>
+          <fse-flow-diagram variant="run-snapshot" [nodes]="executionDiagram().nodes" [edges]="executionDiagram().edges" [selectedId]="executionSelectedNode()||''"
+            [fitKey]="run.id" [ariaLabel]="'Execution graph for run '+run.id" readonlyHint="Read-only snapshot" (nodeSelect)="executionSelectedNode.set($event)"/>
           @if(executionSelectedNode();as nodeId){
             <div class="exec-selected">
               <div class="debug-head">
@@ -667,7 +665,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
    }
    }
  </div>`,
- styles:[`
+ styles:[FLOW_CANVAS_STYLES,`
  :host{display:block;margin:0 0 24px;color:var(--fs-text)}
  .flow-studio{display:block;min-width:0}
  .muted{color:var(--fs-muted)}
@@ -714,10 +712,6 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
 
  .blueprint-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;min-height:470px}
  .canvas-shell{position:relative;min-width:0;min-height:0;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);overflow:hidden;background:var(--fs-canvas-bg)}
- .canvas-navigation{display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:8px;background:var(--fs-surface);border-bottom:1px solid var(--fs-border)}
- .canvas-navigation button,.canvas-context-menu button{display:inline-flex;align-items:center;gap:6px;background:var(--fs-surface);color:var(--fs-text-2);border:1px solid var(--fs-border-strong);border-radius:6px;min-height:32px;padding:4px 10px;font:inherit;font-size:.8125rem}
- .canvas-navigation button:hover,.canvas-context-menu button:hover{background:var(--fs-surface-3);color:var(--fs-text)}
- .canvas-navigation span{min-width:48px;text-align:center;font-variant-numeric:tabular-nums;font-size:.8125rem;color:var(--fs-muted)}
  .canvas-connect-hint{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fs-warn);margin-left:auto}
  .canvas-connect-hint button{border-color:var(--fs-warn)!important;color:var(--fs-warn)!important}
  .canvas-context-menu{position:absolute;top:55px;left:16px;z-index:5;display:flex;flex-direction:column;gap:4px;min-width:200px;padding:10px;background:var(--fs-surface);border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);box-shadow:var(--fs-shadow-lg)}
@@ -726,25 +720,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
  .flow-workspace{background:radial-gradient(var(--fs-canvas-dot) 1px,transparent 1px) 0 0/20px 20px,var(--fs-canvas-bg);overflow:auto;min-height:470px}
  .flow-workspace svg{user-select:none;-webkit-user-select:none}
  svg{min-width:660px;width:100%;height:auto;display:block;touch-action:none;cursor:grab}
- .flow-edge{fill:none;stroke:var(--fs-edge);stroke-width:2.2}
- .edge-arrow{fill:var(--fs-edge)}
- .wire-ghost{fill:none;stroke:var(--fs-wire-ghost);stroke-width:2.5;stroke-dasharray:6 4}
- .wire-target{fill:none;stroke:var(--fs-wire-ghost);stroke-width:3}
- .flow-node{fill:var(--fs-node-bg);stroke:var(--fs-node-border);stroke-width:1.5;filter:drop-shadow(0 2px 4px rgba(15,23,42,.12))}
- .flow-node.selected{fill:var(--fs-node-selected-bg);stroke:var(--fs-node-selected);stroke-width:2.5}
- [data-canvas-node]:focus-visible .flow-node{stroke:var(--fs-node-selected);stroke-width:3}
- [data-canvas-node]:focus,[data-canvas-node]:focus-visible,.exec-node:focus{outline:none}
- .flow-node-accent{fill:var(--fs-accent)}
- .flow-node-accent[data-type=trigger]{fill:#0ea5e9}.flow-node-accent[data-type=output]{fill:#10b981}.flow-node-accent[data-type=condition],.flow-node-accent[data-type=loop]{fill:#f59e0b}
- .flow-node-accent[data-type=workspace_write],.flow-node-accent[data-type=emit_event]{fill:#ef4444}.flow-node-accent[data-type=http_get],.flow-node-accent[data-type=web_search],.flow-node-accent[data-type=web_crawl]{fill:#14b8a6}
- .flow-node-accent[data-type=watchlist_quotes],.flow-node-accent[data-type=technical_scan],.flow-node-accent[data-type=fundamentals],.flow-node-accent[data-type=sec_filings],.flow-node-accent[data-type=news],.flow-node-accent[data-type=leaderboard],.flow-node-accent[data-type=insider_activity],.flow-node-accent[data-type=wealth_plan],.flow-node-accent[data-type=backtest],.flow-node-accent[data-type=macro_regime],.flow-node-accent[data-type=portfolio_check],.flow-node-accent[data-type=corporate_events]{fill:#f59e0b}.flow-node-accent[data-type=screen],.flow-node-accent[data-type=only_new],.flow-node-accent[data-type=report_table]{fill:#8b5cf6}.flow-node-accent[data-type=notify]{fill:#ef4444}
  .field-hints{display:flex;flex-wrap:wrap;gap:4px;align-items:center}.field-chip{border:1px solid var(--fs-border);background:var(--fs-surface-2);color:var(--fs-text);border-radius:999px;padding:1px 8px;font:inherit;font-size:.75rem}.field-chip:hover{border-color:var(--fs-accent)}
- .node-type{fill:var(--fs-node-sub);font-weight:600;letter-spacing:.04em}
- .node-label{fill:var(--fs-node-text);font-weight:600}
- .pin-label{fill:var(--fs-node-sub)}
- .canvas-port{touch-action:none;stroke:var(--fs-port-stroke);stroke-width:2;cursor:crosshair}
- .input-port,.pin-in{fill:var(--fs-port-in)}.output-port,.pin-out{fill:var(--fs-port-out)}
- .port-active,.canvas-port:focus-visible{stroke:var(--fs-wire-ghost);stroke-width:4;outline:none}
 
  .node-quick-tooltip{position:absolute;right:12px;top:58px;z-index:7;display:flex;flex-direction:column;gap:10px;padding:14px;width:min(480px,calc(100% - 24px));box-sizing:border-box;max-height:min(78vh,780px);overflow:auto;background:color-mix(in srgb,var(--fs-surface) 94%,transparent);backdrop-filter:blur(10px);border:1px solid var(--fs-border);box-shadow:var(--fs-shadow-lg);border-radius:var(--bs-border-radius-lg)}
  .quick-tooltip-title{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--fs-border)}
@@ -787,6 +763,9 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
  .run-history-heading{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:14px;padding:12px;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);background:var(--fs-surface)}
  .run-history-heading h3{margin:0 auto 6px 0;flex:1 0 100%}
  .run-history-heading label{flex:1 1 180px}
+ .run-kind.draft-test{font-weight:600;color:var(--bs-warning-text-emphasis,#664d03)}
+ .live-effects{display:inline-flex;gap:6px;align-items:center;font-size:13px}
+ .draft-help{flex-basis:100%;font-size:12px}
  .flow-run{padding:12px 14px;margin:0 0 8px;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);background:var(--fs-surface)}
  .flow-run>summary{cursor:pointer;display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;font-size:.875rem}
  .flow-run>summary::marker{color:var(--fs-muted)}
@@ -806,17 +785,6 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
  .run-compare tr.change-input td,.run-compare tr.change-output td,.run-compare tr.change-added td{color:var(--fs-warn)}
 
  .exec-graph{margin:14px 0;display:grid;gap:10px;padding:14px;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);background:var(--fs-surface-2)}
- .exec-graph-canvas{overflow:auto;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius);background:radial-gradient(var(--fs-canvas-dot) 1px,transparent 1px) 0 0/20px 20px,var(--fs-canvas-bg)}
- .exec-graph-canvas svg{min-width:0;width:100%;min-height:210px;max-height:520px;height:auto;cursor:default}
- .exec-edge{fill:none;stroke:var(--fs-edge);stroke-width:2;opacity:.7}
- .exec-rect{stroke-width:2;stroke:var(--fs-node-border);fill:var(--fs-node-bg)}
- .exec-rect.tone-ok{fill:var(--fs-pos-soft);stroke:var(--fs-pos)}
- .exec-rect.tone-fail{fill:var(--fs-neg-soft);stroke:var(--fs-neg)}
- .exec-rect.tone-run{fill:var(--fs-warn-soft);stroke:var(--fs-warn)}
- .exec-rect.tone-skip{opacity:.6}
- .exec-rect.selected{stroke:var(--fs-node-selected);stroke-width:4}
- .exec-text{fill:var(--fs-node-text);font-weight:600}.exec-sub{fill:var(--fs-node-sub)}
- .exec-node{cursor:pointer}.exec-node:focus-visible{outline:none}.exec-node:focus-visible rect{stroke:var(--fs-node-selected);stroke-width:4}
  .exec-selected{padding:12px;border-radius:var(--bs-border-radius);border:1px solid var(--fs-border);background:var(--fs-surface)}
  .exec-selected pre{max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
  .exec-error-hint{border-left:3px solid var(--fs-neg);background:var(--fs-neg-soft);padding:8px 12px;border-radius:0 6px 6px 0;margin:8px 0}
@@ -1057,6 +1025,10 @@ export class FlowStudioComponent {
  readonly selectedNode=()=>this.graph().nodes.find(n=>n.id===this.chosen());
  readonly runs=signal<FlowRun[]>([]);
   readonly historyFlowId=signal(0);
+ readonly draftScope=DRAFT_HISTORY_SCOPE;
+ readonly liveEffects=signal(false);
+ readonly runButtonLabel=runButtonLabel;readonly runButtonHint=runButtonHint;readonly runKindLabel=runKindLabel;readonly isDraftTest=isDraftTest;readonly shortHash=shortHash;
+ private historyPath():string{return historyPath(this.historyFlowId())}
   readonly savedSnapshot=signal('');
   readonly hasUnsavedChanges=()=>this.savedSnapshot()!==this.currentSnapshot();
   private currentSnapshot():string{return JSON.stringify({name:this.name(),graph:this.graph(),enabled:this.enabled(),interval:this.interval(),eventKey:this.eventKey()})}
@@ -1169,7 +1141,7 @@ export class FlowStudioComponent {
   const known=this.fullOutputs()[step.id];if(known!==undefined)return known;
   this.loadingOutput.set(step.id);
   try{
-   const data=await this.request('/api/admin/flows/'+this.historyFlowId()+'/runs/'+runId+'/steps/'+step.id+'/output');
+   const data=await this.request(this.historyPath()+'/runs/'+runId+'/steps/'+step.id+'/output');
    this.fullOutputs.update(m=>({...m,[step.id]:String(data.output??'')}));
    return this.fullOutputs()[step.id];
   }catch(e){this.message.set('Cannot load the full output: '+String(e));return null}
@@ -1216,12 +1188,10 @@ export class FlowStudioComponent {
      this.executionSelectedNode.set(nodeId);
  }
  executionStep(id:string):FlowRunStep|undefined{const steps=this.traceSteps().filter(s=>s.node===id);return steps[steps.length-1]}
+ readonly executionDiagram=computed(()=>{const g=this.executionGraph();return g?runSnapshotDiagram(g.nodes,g.edges,id=>this.executionNodeStatus(id),t=>flowNodeTag(t,x=>investorNode(x)?.tag)):{nodes:[],edges:[]}});
  executionNodeStatus(id:string):string{return this.executionStep(id)?.status||'NOT RECORDED'}
  /** Status tone of an executed node, used as its canvas class. */
- executionNodeColor(id:string):string{switch(this.executionNodeStatus(id)){case 'SUCCESS':return 'ok';case 'FAILED':return 'fail';case 'RUNNING':return 'run';case 'SKIPPED':return 'skip';default:return 'none'}}
  executionNodeLabel(id:string):string{return this.executionGraph()?.nodes.find(n=>n.id===id)?.label||id}
- executionViewBox():string{const n=this.executionGraph()?.nodes||[];if(!n.length)return '0 0 820 380';const l=Math.min(...n.map(x=>x.x))-60,t=Math.min(...n.map(x=>x.y))-60,r=Math.max(...n.map(x=>x.x+125))+60,b=Math.max(...n.map(x=>x.y+70))+60;return l+' '+t+' '+(r-l)+' '+(b-t)}
- executionEdgePath(e:FlowEdge,g:FlowGraph):string{const a=g.nodes.find(n=>n.id===e.from),b=g.nodes.find(n=>n.id===e.to);if(!a||!b)return '';const x=a.x+125,y=a.y+35,tx=b.x,ty=b.y+35,d=Math.max(45,Math.abs(tx-x)*.45);return 'M '+x+' '+y+' C '+(x+d)+' '+y+', '+(tx-d)+' '+ty+', '+tx+' '+ty}
  readonly traceLoading=signal(false);
  readonly replaySteps=signal<{node:string;label:string;status:string;input?:string;output?:string}[]>([]);
  readonly replaySource=signal(0);
@@ -1596,7 +1566,7 @@ export class FlowStudioComponent {
   if(!this.historyFlowId()||this.busy())return;
   this.busy.set(true);
   try{
-   await this.request('/api/admin/flows/'+this.historyFlowId()+'/runs/'+runId+'/retry',{method:'POST'});
+   await this.request(this.historyPath()+'/runs/'+runId+'/retry',{method:'POST'});
    this.message.set('Run #'+runId+' queued again; it resumes from its last checkpoint.');
    await this.refreshRuns();
   }catch(e){this.message.set('Cannot retry run: '+String(e))}
@@ -1606,7 +1576,7 @@ export class FlowStudioComponent {
   if(!this.historyFlowId()||this.busy())return;
   this.busy.set(true);
   try{
-   await this.request('/api/admin/flows/'+this.historyFlowId()+'/runs/'+runId+'/cancel',{method:'POST'});
+   await this.request(this.historyPath()+'/runs/'+runId+'/cancel',{method:'POST'});
    this.message.set('Run cancellation requested');
    await this.refreshRuns();
   }catch(e){this.message.set('Cannot cancel run: '+String(e))}
@@ -1616,7 +1586,7 @@ export class FlowStudioComponent {
   if(!this.historyFlowId()||!runId){this.compareRun.set(0);this.comparedSteps.set([]);return}
   this.compareRun.set(runId);this.comparedSteps.set([]);
   try{
-   const data=await this.request('/api/admin/flows/'+this.historyFlowId()+'/runs/'+runId+'/steps');
+   const data=await this.request(this.historyPath()+'/runs/'+runId+'/steps');
    this.comparedSteps.set(data.steps||[]);
   }catch(e){this.message.set('Cannot compare runs: '+String(e))}
  }
@@ -1638,7 +1608,7 @@ export class FlowStudioComponent {
   if(!this.historyFlowId())return;
   this.replaySteps.set([]);this.replaySource.set(runId);
   try{
-   const result=await this.request('/api/admin/flows/'+this.historyFlowId()+'/runs/'+runId+'/preview',{method:'POST',body:JSON.stringify({node:nodeId})});
+   const result=await this.request(this.historyPath()+'/runs/'+runId+'/preview',{method:'POST',body:JSON.stringify({node:nodeId})});
    this.replaySteps.set(result.steps||[]);
    this.message.set('Preview only: no agents or side effects were executed. Uses the saved graph snapshot.');
   }catch(e){this.message.set('Replay preview unavailable: '+String(e))}
@@ -1647,7 +1617,7 @@ export class FlowStudioComponent {
   const flowId=this.historyFlowId();if(!flowId)return;
   if(this.traceRunId()===runId){this.traceRunId.set(0);this.traceSteps.set([]);this.traceLoading.set(false);this.executionGraph.set(null);this.executionSelectedNode.set('');return}
   this.traceRunId.set(runId);this.traceSteps.set([]);this.traceLoading.set(true);this.executionGraph.set(null);this.executionSelectedNode.set('');this.executionSnapshotUnavailable.set(false);
-  const base='/api/admin/flows/'+flowId+'/runs/'+runId;
+  const base=historyPath(flowId)+'/runs/'+runId;
   const [trace,snapshot]=await Promise.allSettled([this.request(base+'/steps'),this.request(base+'/snapshot')]);
   if(this.historyFlowId()!==flowId||this.traceRunId()!==runId)return;
   if(trace.status==='fulfilled')this.traceSteps.set(trace.value.steps||[]);
@@ -1659,7 +1629,7 @@ export class FlowStudioComponent {
  selectHistoryFlow(id:number):void{this.executionGraph.set(null);this.executionSnapshotUnavailable.set(false);this.executionSelectedNode.set('');this.historyFlowId.set(id);this.historyRequestVersion++;this.historyLoading.set(false);this.runs.set([]);this.traceRunId.set(0);this.traceSteps.set([]);this.traceLoading.set(false);this.compareRun.set(0);this.comparedSteps.set([]);this.replaySteps.set([]);this.replaySource.set(0);if(id)void this.refreshRuns()}
   async refreshRuns(){const id=this.historyFlowId();if(!id)return;const version=++this.historyRequestVersion;this.historyLoading.set(true);
    try{
-      const d=await this.request('/api/admin/flows/'+id+'/runs');
+      const d=await this.request(historyPath(id)+'/runs');
       if(this.historyFlowId()===id&&this.historyRequestVersion===version){
         this.runs.set(d.runs||[]);
         const runId=this.traceRunId();
@@ -1693,13 +1663,22 @@ export class FlowStudioComponent {
  async run(target:'active'|'draft'='active'){
    const issues=this.graphIssues();
    if(issues.length){this.message.set('Resolve '+issues.length+' graph issue(s) before running.');return}
-   // Unsaved edits run as a draft test of exactly what the editor shows; nothing is saved.
-   const unsaved=this.hasUnsavedChanges();
-   const graph=this.graph();
+   // Unsaved edits, and flows that were never saved, run as a draft test of exactly
+   // what the editor shows. Nothing is saved, and the editor state is left untouched.
+   const id=this.selectedId();
+   const unsaved=this.hasUnsavedChanges()||!id;
+   const graph=structuredClone(this.graph()); // The run uses this snapshot even if editing continues.
+   let live=false;
    if(unsaved){
      const effects=capabilityManifest(graph.nodes);
-     if(effects.length&&!confirm('This unsaved draft contains nodes that can act outside the flow ('+effects.map(e=>e.label||e.capability).join(', ')+'). Approval-gated actions still pause for approval. Run the test anyway?'))return;
+     live=!!id&&effects.length>0&&this.liveEffects();
+     if(live&&!confirm('This test will perform REAL side effects ('+effects.map(e=>e.label||e.capability).join(', ')+'). Approval-gated actions still pause for approval. Run them for real?'))return;
    }
-   this.busy.set(true);try{const queued=await this.request('/api/admin/flows/'+this.selectedId()+'/run',{method:'POST',body:JSON.stringify(unsaved?{target:'draft',graph}:{target})});this.historyFlowId.set(this.selectedId());this.message.set(unsaved?'Draft test queued with your unsaved edits; the saved flow is unchanged. Open Run history to see its progress':'Agent run queued ('+runRevisionLabel(queued.flow_revision)+'); open Run history to see its progress');setTimeout(()=>void this.refreshRuns(),3000)}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
+   this.busy.set(true);try{
+     const url=unsaved&&!id?'/api/admin/flows/draft/run':'/api/admin/flows/'+id+'/run';
+     const queued=await this.request(url,{method:'POST',body:JSON.stringify(unsaved?draftRunBody({graph,liveSideEffects:live}):{target})});
+     this.historyFlowId.set(unsaved&&!id?DRAFT_HISTORY_SCOPE:id);
+     this.message.set(unsaved?'Draft test queued from your unsaved editor graph (snapshot '+shortHash(queued.graph_hash)+'); '+(live?'confirmed side effects run for real; ':'side effects are simulated; ')+'nothing was saved. Open Run history to see its progress':'Saved version run queued ('+runRevisionLabel(queued.flow_revision)+'); open Run history to see its progress');
+     setTimeout(()=>void this.refreshRuns(),3000)}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
  async emitEvent(){this.busy.set(true);try{const definition=this.triggers().find(t=>t.event_key===this.eventKey());if(!definition)throw Error('Create the custom trigger first');let value:string|number|boolean=this.triggerValue();if(definition.payload_type==='number'){value=Number(value);if(!Number.isFinite(value))throw Error('Event requires a finite number')}if(definition.payload_type==='boolean'){if(value!=='true'&&value!=='false')throw Error('Use true or false for a boolean event');value=value==='true'}const data=await this.request('/api/admin/flow-events/'+encodeURIComponent(this.eventKey()),{method:'POST',body:JSON.stringify({value})});this.message.set(data.started+' flow(s) triggered');}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
 }

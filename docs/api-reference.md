@@ -125,3 +125,5 @@ konfiguration (t.ex. API-nyckel) ger 503.
 Obs: Webbplatsens listor är en dokumenterad inventering av relevant
 research-API, **inte en uttömmande lista över varje privat eller
 handelsrelaterad endpoint** som varje extern leverantör kan ha.
+
+`GET /api/market/indices` lists the index registry (S&P 500, Nasdaq-100, OMXS30): provider, methodology, constituent source, as-of date (UTC), counts, exclusions, licensing, history, warnings and `available`. An index without a verified, licensed constituent list is `unavailable` with no members, and `GET /api/market/leaderboard?universe=<index id>` answers 422 for it. See [provenance coverage](provenance-coverage.md#index-universes-258).

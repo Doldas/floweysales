@@ -53,6 +53,17 @@ function handle(method, pathname, body) {
       ...(n.id === agents[0]?.id ? { tool_calls: [{ attempt: 1, name: 'get_sec_facts', arguments: '{"symbol":"NVDA"}', ok: true, result_bytes: 2048 }] } : {}) }));
     return { run_id: run.id, flow_revision: run.flow_revision };
   }
+  if (pathname === '/api/admin/flows/draft/run') {
+    // A never-saved flow: a simulated draft test with a snapshot hash and no stored flow.
+    const run = { id: 200 + state.runs.length, flow_id: -2, status: 'SUCCESS', trigger: 'draft test', flow_revision: null, graph_hash: 'f'.repeat(64),
+      output: 'Simulated.', error: '', started_at: now(), finished_at: now(), duration_ms: 400 };
+    state.runs.push(run);
+    state.steps[run.id] = [{ id: 1, node: 'flow', label: 'Draft test', status: 'INFO', output: 'Draft test of graph snapshot. Side effects are simulated.', created_at: now() }];
+    return { status: 'queued', run_id: run.id, draft_test: true, scratch: true, simulated: true, graph_hash: run.graph_hash };
+  }
+  if ((m = pathname.match(/^\/api\/admin\/flows\/draft\/runs$/))) return { runs: state.runs.filter(r => r.flow_id === -2) };
+  if ((m = pathname.match(/^\/api\/admin\/flows\/draft\/runs\/(\d+)\/steps$/))) return { steps: state.steps[+m[1]] || [] };
+  if ((m = pathname.match(/^\/api\/admin\/flows\/draft\/runs\/(\d+)\/snapshot$/))) return { graph: { nodes: [], edges: [] } };
   if ((m = pathname.match(/^\/api\/admin\/flows\/(\d+)\/runs$/))) return { runs: state.runs.filter(r => r.flow_id === +m[1]) };
   if ((m = pathname.match(/^\/api\/admin\/flows\/(\d+)\/runs\/(\d+)\/steps$/))) return { steps: state.steps[+m[2]] || [] };
   if ((m = pathname.match(/^\/api\/admin\/flows\/(\d+)\/runs\/(\d+)\/snapshot$/))) return { graph: flowById(+m[1]).graph };
@@ -150,7 +161,7 @@ try {
 
   // 6. Run: the active revision is queued.
   await studio.getByRole('button', { name: 'Run now', exact: true }).last().click();
-  await studio.getByText('Agent run queued (rev 1)').waitFor();
+  await studio.getByText('Saved version run queued (rev 1)').waitFor();
   const run = state.requests.find(r => r.pathname.endsWith('/run'));
   check('run targets the active revision', run?.body?.target === 'active', JSON.stringify(run?.body));
 
@@ -159,7 +170,7 @@ try {
   await studio.getByRole('button', { name: 'Test unsaved draft', exact: true }).waitFor();
   const requestsBefore = state.requests.length;
   await studio.getByRole('button', { name: 'Test unsaved draft', exact: true }).click();
-  await studio.getByText('Draft test queued with your unsaved edits').waitFor();
+  await studio.getByText('Draft test queued from your unsaved editor graph').waitFor();
   const draftTest = state.requests.slice(requestsBefore).find(r => r.pathname.endsWith('/run'));
   check('unsaved run is a draft test carrying the editor graph', draftTest?.body?.target === 'draft' && Array.isArray(draftTest?.body?.graph?.nodes), JSON.stringify(draftTest?.body)?.slice(0, 120));
   check('unsaved run saves nothing', !state.requests.slice(requestsBefore).some(r => r.method === 'PUT' || (r.method === 'POST' && r.pathname === '/api/admin/flows')));
@@ -172,10 +183,10 @@ try {
   await studio.getByRole('button', { name: 'Refresh history' }).click();
   await studio.locator('summary', { hasText: '#100' }).first().click();
   await studio.getByRole('button', { name: 'Inspect nodes' }).first().click();
-  await studio.locator('[aria-label="Research SUCCESS"]').click();
+  await studio.locator('[data-node-id="agent-1"]').click();
   await studio.getByText('get_sec_facts').first().waitFor({ timeout: 5000 });
   check('node trace shows the recorded tool call', await studio.getByText('get_sec_facts').first().isVisible());
-  check('run history labels the revision', (await studio.locator('summary', { hasText: '#100' }).first().innerText()).includes('rev 1'));
+  check('run history labels the revision', (await studio.locator('summary', { hasText: '#100' }).first().innerText()).includes('Saved version (rev 1)'));
 
   // 8. Investor playbook: a price-alert automation starts valid, takes a
   // custom watchlist and screen rule, and saves exactly that graph.
@@ -190,6 +201,22 @@ try {
   await settings.getByLabel('Rule').fill('change_1d_pct <= -5');
   check('screen settings suggest fields from the watchlist node', await settings.getByRole('button', { name: 'from_high_pct' }).isVisible());
   await settings.getByRole('button', { name: 'Close node settings' }).click();
+  // 8b. A brand-new flow is tested without saving: it is not created, side effects stay simulated.
+  const newFlowRequests = state.requests.length;
+  await studio.getByRole('button', { name: 'Test unsaved draft', exact: true }).click();
+  await studio.getByText('side effects are simulated; nothing was saved').waitFor();
+  const newFlowTest = state.requests.slice(newFlowRequests).filter(r => r.method === 'POST');
+  check('a never-saved flow is tested through the draft endpoint', newFlowTest.length === 1 && newFlowTest[0].pathname === '/api/admin/flows/draft/run', JSON.stringify(newFlowTest.map(r => r.pathname)));
+  check('a never-saved flow test simulates side effects and saves nothing', newFlowTest[0]?.body?.simulate_side_effects === true && !newFlowTest[0]?.body?.confirm_live_side_effects);
+  check('real side effects cannot be enabled before the first save', await studio.getByLabel(/Allow real side effects/).isDisabled());
+  check('the new flow stays unsaved after its test', await studio.getByText('Unsaved changes').isVisible());
+  await studio.getByRole('tab', { name: 'Run history', exact: true }).click();
+  await studio.getByLabel('Select flow for history').selectOption({ label: 'Unsaved draft tests (never-saved flows)' });
+  await studio.locator('summary', { hasText: 'Draft test (side effects simulated)' }).first().waitFor();
+  check('draft history marks the run as a draft test with its snapshot', await studio.getByText('Draft test (side effects simulated)').first().isVisible());
+  await studio.getByRole('tab', { name: 'Flow editor', exact: true }).click();
+  await studio.getByText('Unsaved changes').waitFor();
+  check('the editor still holds the unsaved graph after the run', await studio.getByText('Unsaved changes').isVisible());
   await studio.getByRole('button', { name: 'Save flow' }).click();
   await studio.getByText('All changes saved').waitFor();
   const playbookSave = state.requests.filter(r => r.method === 'POST' && r.pathname === '/api/admin/flows').at(-1);

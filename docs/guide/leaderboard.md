@@ -2,7 +2,7 @@
 title: Leaderboard
 order: 4
 summary: How the company leaderboard ranks a list, what the factors and grades mean, and how to inspect the method and the data.
-last-reviewed: 2026-11-04
+last-reviewed: 2026-11-06
 ---
 
 # Leaderboard
@@ -38,6 +38,12 @@ The curated lists are picked by the maintainers by hand. They are not official i
 | Quality compounders | The highest and steadiest margins with growth and low volatility |
 | Quality on a dip | Profitable companies that pulled back from their high while the long-term trend holds |
 | Ashgrove, Holm and Fairbanks | Factor approximations of three fictional characters' approaches. They cannot see what a person would, such as management or moats |
+
+## Index universes
+
+The **Index** row offers well-known market indices: S&P 500, Nasdaq-100 and OMX Stockholm 30. An *index* is a published list of companies chosen by its provider's rules; each member is an *index constituent*, usually weighted by *market capitalization* (share price times shares outstanding). Membership is not a ranking and not a recommendation. The strategies rank whichever list you choose, so the index decides who is considered and the strategy decides the order.
+
+Choosing an index shows its provider, methodology, constituent source, as-of date (UTC), number of securities, exclusions, share-class and currency notes, licensing limits and whether past membership is known. An index appears as **unavailable** until its constituent list has been verified as legally usable. At the moment all three are unavailable: FloweySales shows what each index is, but no members, and does not guess them. The hand-picked Swedish and US lists are separate, and say they are not official indices. Once an index is available it still holds only today's members, so a backtest on it flatters the past.
 
 ## Coverage by region
 

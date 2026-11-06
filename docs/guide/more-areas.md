@@ -2,7 +2,7 @@
 title: More areas
 order: 10
 summary: Command Center, Wealth plan, Paper portfolio, Inbox, Files, Community and Notifications in brief.
-last-reviewed: 2026-11-04
+last-reviewed: 2026-11-06
 ---
 
 # More areas
@@ -30,6 +30,17 @@ Every decision that agents are waiting on. **Flow approvals** lists flow steps t
 ## Files
 
 Your private research space, for signed-in accounts. Flows read their inputs from it and save reports to it. You can edit, preview and download files, and organize them in folders. Deleting a folder is confirmed and covers its contents.
+
+**Markdown files** open in an editor with these views:
+
+- **Edit source** is the plain text of the file.
+- **Preview** shows the rendered result: headings, emphasis, nested and task lists, quotes, tables and fenced code. Footnotes and syntax coloring in code blocks are not supported, and images are never loaded; an image appears as a labeled link.
+- **Rich text** edits visually with a toolbar (headings, bold, italic, strikethrough, inline code, links, lists, quotes, rules, undo and redo) and saves Markdown into the same `.md` file. Formatting is rewritten only when you change something in this view. A file with content rich text cannot represent, such as raw HTML, front matter, footnotes, reference-style links, table alignment or indented code, stays in source mode and the page says why, so nothing is dropped.
+- **Split** shows source and preview side by side. It appears only on wide screens.
+
+All views edit the same text, so switching views keeps your unsaved changes. A status next to **Save** shows Saved, Unsaved changes, Saving or the reason a save failed, and Ctrl+S or Cmd+S saves. Previews treat file content as untrusted: HTML is shown as text, only `https` links and links to other Workspace files work, and a link that points outside the Workspace is shown as plain text.
+
+**README overview.** When a folder contains `README.md`, it is shown rendered under the file list as that folder's **Overview**. Only that folder's own README is used, never one from a parent or sibling folder. The name `README.md` wins; otherwise `readme.md` in any letter case, first in alphabetical order. A long README is clipped with **Show full README**, and **Open README** edits it like any other file. Relative links open the other Workspace file or folder. A folder without a README shows a hint and **Create README.md**; nothing is generated for you.
 
 ## Community
 
