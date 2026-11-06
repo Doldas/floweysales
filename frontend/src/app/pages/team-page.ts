@@ -14,6 +14,7 @@ import { MarketState } from '../core/market-state';
 import { TeamSession } from '../core/team-session';
 import { renderMarkdown } from '../markdown';
 import { ToolCallComponent } from '../components/tool-call';
+import { ProgressStatusComponent } from '../ui/progress-status';
 import { SymbolSearchComponent } from '../shell/symbol-search';
 
 /**
@@ -24,7 +25,7 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
 @Component({
   selector: 'fs-team-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HelpButtonComponent, SymbolSearchComponent, NgTemplateOutlet, RouterLink, ToolCallComponent],
+  imports: [HelpButtonComponent, SymbolSearchComponent, NgTemplateOutlet, RouterLink, ToolCallComponent, ProgressStatusComponent],
   template: `
 <div class="fs-page research-container">
   <header class="fs-page-header">
@@ -215,11 +216,11 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
     @for (f of m.removed ?? []; track $index) { <p class="muted evidence-line"><strong>Removed:</strong> {{ findingLabel(f.kind) }}. {{ f.detail }}</p> }
   }
   @switch (m.status) {
-    @case ('waiting') { <p class="muted">Waiting…</p> }
+    @case ('waiting') { <fs-progress-status stage="Waiting for this member" /> }
     @case ('error') { <p class="err">{{ m.error || 'No answer.' }}</p> }
     @default {
       @if (text(m); as t) { <div class="answer chat-markdown" [innerHTML]="html(t)"></div> }
-      @else { <p class="muted"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Working…</p> }
+      @else { <fs-progress-status stage="Working on the answer" /> }
     }
   }
 </ng-template>

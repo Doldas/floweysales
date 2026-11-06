@@ -316,4 +316,6 @@ pre { color: var(--fs-text-2); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  /* Spinners must not flicker at 0.01 ms: stop them. The adjacent status text still says it is working. */
+  .spin, .spinner-border, .spinner-grow, .progress-bar-animated, .dots i { animation: none !important; }
 }

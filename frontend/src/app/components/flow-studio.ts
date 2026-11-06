@@ -471,6 +471,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
      @if((hasUnsavedChanges()||!selectedId())&&sideEffects().length){<label class="live-effects"><input type="checkbox" [ngModel]="liveEffects()" (ngModelChange)="liveEffects.set($event)" [disabled]="!selectedId()||busy()"> Allow real side effects in this test{{selectedId()?'':' (save the flow first)'}}</label>}
      <span class="muted draft-help" id="run-help">Test runs the graph shown here, even unsaved, and never saves it. Save keeps your changes. Publish revision changes what scheduled runs use.</span>
      @if(currentFlow()?.active_revision&&currentFlow()?.has_unpublished_changes){<button class="btn btn-sm btn-outline-secondary" (click)="run('draft')" [disabled]="busy()||hasUnsavedChanges()" title="Run the saved draft without publishing it. Unsaved edits use Test unsaved draft.">Run draft</button>}
+     @if(busy()){<fs-progress-status stage="Sending the request to the server"/>}
      <label>Event value <input [ngModel]="triggerValue()" (ngModelChange)="triggerValue.set($event)" placeholder="Value matching trigger type"></label>
      <button class="btn btn-sm btn-outline-secondary" (click)="emitEvent()" [disabled]="busy()||!eventKey()">Trigger event</button>
      <button class="btn btn-sm btn-outline-secondary" (click)="refresh()">Refresh</button>
