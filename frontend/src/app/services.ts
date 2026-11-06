@@ -8,7 +8,7 @@ import {
   FinancialsResponse,
   HistorySeries,
   BacktestParams,
-  BacktestResult, BatchResult, SensitivityResult, MonteCarloResult, SavedBacktest, BacktestSummary,
+  BacktestResult, StrategyMonteCarloRequest, StrategyMonteCarloResult, BatchResult, SensitivityResult, MonteCarloResult, SavedBacktest, BacktestSummary,
   LeaderboardResponse,
   RankingPreferences,
   RankingPreferencesResponse,
@@ -189,6 +189,9 @@ export class MarketService {
   runStrategy(req: StrategyRunRequest): Observable<StrategyRunResult> { return this.http.post<StrategyRunResult>('/api/strategies/backtest', req); }
   /** Chooses numbers on one window and tests them on the next. Research only; nothing is ordered. */
   runWalkForward(req: FitRequest): Observable<FitResult> { return this.http.post<FitResult>('/api/strategies/walkforward', req); }
+
+  /** Resamples the closed trades of a strategy replay with a seed. Research only; nothing is ordered. */
+  strategyMonteCarlo(req: StrategyMonteCarloRequest): Observable<StrategyMonteCarloResult> { return this.http.post<StrategyMonteCarloResult>('/api/strategies/montecarlo', req); }
 
   /** The signed-in user's saved wealth plan, or nulls when none is saved. */
   getPlan(): Observable<PlanResponse> {

@@ -4,6 +4,7 @@ import { ActivatedRoute } from '@angular/router';
 import type { Subscription } from 'rxjs';
 
 import { StrategyBuilderComponent } from '../components/strategy-builder';
+import { StrategyMonteCarloComponent } from '../components/strategy-montecarlo';
 import {
   blankStrategy, chartSummary, cloneForEditing, describeStrategy, geometry, groupPresets, ownerLine, levelLines, linePath, nowText, problems, resultTiles, strategyPrompt, tradeMarkers,
 } from '../components/strategy-view';
@@ -31,7 +32,7 @@ const H_EQUITY = 160;
 @Component({
   selector: 'fs-strategies-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HelpButtonComponent, SymbolSearchComponent, StrategyBuilderComponent, SkeletonComponent, ProgressStatusComponent],
+  imports: [HelpButtonComponent, SymbolSearchComponent, StrategyBuilderComponent, StrategyMonteCarloComponent, SkeletonComponent, ProgressStatusComponent],
   template: `
 <div class="fs-page research-container">
   <header class="fs-page-header">
@@ -290,6 +291,7 @@ const H_EQUITY = 160;
               </div>
             }
           </section>
+          <fs-strategy-montecarlo [replay]="r" [request]="lastRequest()" />
         }
       } @else {
         <div class="fs-empty"><i class="bi bi-diagram-2"></i><h3>Choose a strategy</h3>
@@ -392,12 +394,13 @@ export class StrategiesPage {
   readonly fit = signal<FitResult | null>(null);
   readonly fitLoading = signal(false);
   readonly fitError = signal('');
-  private lastRequest: StrategyRunRequest | null = null;
   private fitSub?: Subscription;
   readonly fitIssue = computed(() => fitProblem(this.fitParams(), this.result()?.parameters));
   readonly fitTable = computed(() => fitRows(this.fit()?.folds));
   readonly fitText = computed(() => (this.fit() ? fitHeadline(this.fit()!) : []));
   readonly result = signal<StrategyRunResult | null>(null);
+  /** The request behind the shown result, so a robustness run asks the same question. */
+  readonly lastRequest = signal<StrategyRunRequest | null>(null);
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly error = signal('');
@@ -518,9 +521,8 @@ export class StrategiesPage {
     this.fit.set(null);
     this.fitError.set('');
     this.fitLoading.set(false);
-    this.lastRequest = req;
     this.request = this.api.runStrategy(req).subscribe({
-      next: r => { this.result.set(r); this.fitParams.set(this.fitParams().filter(p => r.parameters?.some(a => a.path === p))); this.loading.set(false); },
+      next: r => { this.lastRequest.set(req); this.result.set(r); this.fitParams.set(this.fitParams().filter(p => r.parameters?.some(a => a.path === p))); this.loading.set(false); },
       error: err => { this.error.set(describeHttpError(err)); this.result.set(null); this.loading.set(false); },
     });
   }
@@ -528,11 +530,12 @@ export class StrategiesPage {
   toggleFit(path: string): void { this.fitParams.set(toggleParam(this.fitParams(), path)); }
 
   runFit(): void {
-    if (!this.lastRequest || this.fitIssue()) return;
+    const last = this.lastRequest();
+    if (!last || this.fitIssue()) return;
     this.fitSub?.unsubscribe();
     this.fitLoading.set(true);
     this.fitError.set('');
-    this.fitSub = this.api.runWalkForward(fitRequest(this.lastRequest, { params: this.fitParams(), folds: this.fitFolds(), mode: this.fitMode(), objective: this.fitObjective() })).subscribe({
+    this.fitSub = this.api.runWalkForward(fitRequest(last, { params: this.fitParams(), folds: this.fitFolds(), mode: this.fitMode(), objective: this.fitObjective() })).subscribe({
       next: r => { this.fit.set(r); this.fitLoading.set(false); },
       error: err => { this.fitError.set(describeHttpError(err)); this.fit.set(null); this.fitLoading.set(false); },
     });

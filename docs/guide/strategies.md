@@ -50,6 +50,7 @@ The "In words" section reads the whole strategy back. **Save strategy**, **Save 
 - **Trade count and best periods:** the number of buys and sells, and the return with the three best rebalance periods removed. Fewer than 30 trades, or a positive result that disappears without a few periods, adds a warning.
 - **Read this before trusting the result** lists the warnings that apply to this run.
 - **Consistency across the period** cuts the history into four consecutive windows and scores the trades by when they were entered. The rules are the same in each window. A result that holds in only one window leans on that stretch.
+- **How robust is this result?** redraws the closed trades of the replay into many simulated sequences; see [Trade-level robustness](#trade-level-robustness). It is separate from the replay and never changes it.
 - **Walk-forward fit** is the one test here that fits anything. See "Walk-forward fit" below.
 - **Show trades** lists every trade with entry, exit, reason, days held, return and R.
 
@@ -68,6 +69,18 @@ The table shows, for every fold, the training and test dates, the values chosen,
 
 What it does not show: the result is not an independent test. You have seen all of this history, the original numbers were written by someone who had seen it, and anchored folds re-use earlier test windows for training. Trying many combinations and keeping the best is itself a way to fool yourself, so the result always warns about the search. It also warns when the test trades are fewer than 30, when the best values change from fold to fold, when fitting did worse than your original numbers, and when the training windows were clearly better than the test windows. The same slippage and cost settings apply to every fold. A fit uses one instrument and one provider and places no order.
 - **Assess** sends the result to the [Research Agent](agents.md) for a written view. That text is AI-generated.
+
+### Trade-level robustness
+
+Under the result, **How robust is this result?** resamples the trades of the replay with a seed. Each trade is the change in your account value it caused after costs (the position size is included), not the return on the traded amount. The panel is for research and paper testing only; it places and prepares no order.
+
+- **Method.** *Bootstrap* draws trades one at a time with replacement, so one trade can appear several times in a sequence and trades are treated as independent. *Shuffle* replays the same trades in a new order: the total return is the same in every sequence and only the worst fall varies, which shows sequence risk, not return risk.
+- **Runs and seed.** 100 to 20,000 sequences (2,000 by default), each as long as the number of closed trades. The same settings and seed give the same numbers while the price data is the same. Change the seed to see how much the percentiles themselves move.
+- **Stress choices.** *Alert at a fall of* gives the share of sequences that fell that far at some point. *Extra cost* takes a flat number of basis points of the account from every trade, for example to ask what a slower fill or slippage would do. *Spread of trades* widens each trade's distance from the average trade. These are assumptions you pick, listed under "What this assumes", not things that were observed.
+- **Reading the table.** The "Happened" column is the replay; the 5th to 95th columns are percentiles of simulated sequences. Figures are per number of trades, not per year. The worst fall is measured at closed trades, so a dip inside a trade is not counted and the real fall can be deeper.
+- **When it refuses.** Fewer than 20 closed trades, or trades that all have the same result, are not simulated; the panel says how many trades there are instead of showing percentiles that rest on nothing. A trade still open at the last bar is left out.
+
+Execution delay, partial fills and concentration are not modeled. Only trades that happened can be drawn, so a loss worse than the worst trade cannot appear, and the biases of the replay (one instrument, one stretch of history, rules that may have been tuned on it) carry over. The result lists the instrument, provider, data dates in UTC, strategy, cost, model version and seed it used. It is not saved with the strategy.
 
 ## Leaderboard backtests
 

@@ -273,6 +273,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerTeamRoutes()
 	e.registerProfileRoutes()
 	e.registerStrategyRoutes()
+	e.registerStrategyMonteCarloRoutes()
 	e.registerStrategyFitRoutes()
 	e.registerWorldRoutes()
 	e.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {

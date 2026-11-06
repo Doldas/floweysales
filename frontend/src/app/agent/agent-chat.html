@@ -87,7 +87,7 @@
         @if (task.status === 'incomplete') { <p class="mb-0 text-muted">Parts are missing, so this is not reported as finished. Open Saved tasks to resume it; the evidence gathered so far is kept.</p> }
       </section>
     }
-    @if (!session.streaming() && (session.answerSources().length || session.answerRemoved().length)) {
+    @if (!session.streaming() && (session.answerSources().length || session.answerRemoved().length || session.answerClaims().length)) {
       <details class="sources small">
         <summary><i class="bi bi-journal-text" aria-hidden="true"></i> Sources ({{ session.answerSources().length }})</summary>
         <p class="mb-1" [class.text-danger]="session.answerAudit().length" role="status">{{ auditText() }}</p>
@@ -99,6 +99,33 @@
         }
         @for (f of session.answerAudit(); track $index) {
           <p class="finding mb-1"><strong>{{ findingLabel(f.kind) }}.</strong> {{ f.detail }} <em>“{{ f.sentence }}”</em></p>
+        }
+        @if (claims().length) {
+          <h4>Claims checked against their sources</h4>
+          <p class="mb-1" role="status">{{ claimsText() }} Only “supported” is proof, and only of what the cited text says.</p>
+          @for (c of claims(); track c.id) {
+            <details class="claim" [class.claim-bad]="c.verdict === 'contradicted'" [class.claim-weak]="c.verdict === 'insufficient'" [open]="c.verdict === 'contradicted'">
+              <summary><span class="verdict" [attr.data-verdict]="c.verdict">{{ verdictLabel(c.verdict) }}</span> <em>“{{ c.sentence }}”</em></summary>
+              <p class="mb-1"><strong>{{ whyLabel(c.verdict) }}</strong> {{ c.explanation }}</p>
+              @if (c.assertion) { <p class="mb-1 text-muted">Read as: {{ c.assertion }}</p> }
+              <dl class="facts mb-1">@for (f of claimFacts(c); track f.label) { <dt>{{ f.label }}</dt><dd>{{ f.value }}</dd> }</dl>
+              @if (c.calculation) { <p class="mb-1">Calculation: <code>{{ c.calculation }}</code></p> }
+              @for (f of c.figures ?? []; track $index) {
+                <p class="mb-1"><strong>{{ f.text }}</strong>: {{ verdictLabel(f.verdict) }}. {{ f.detail }}</p>
+              }
+              @for (sp of c.spans ?? []; track $index) {
+                <blockquote class="span mb-1"><span class="text-muted">{{ spanOrigin(sp) }}</span><br>…{{ spanParts(sp).before }} <mark>{{ spanParts(sp).match }}</mark> {{ spanParts(sp).after }}…</blockquote>
+              }
+              @if (c.conflicts?.length) {
+                <p class="mb-1 text-danger">Another source gives a different figure for the same metric and period:</p>
+                @for (k of c.conflicts ?? []; track $index) {
+                  <blockquote class="span mb-1"><span class="text-muted">{{ spanOrigin(k.span) }}</span><br>…{{ spanParts(k.span).before }} <mark>{{ spanParts(k.span).match }}</mark> {{ spanParts(k.span).after }}…</blockquote>
+                }
+              }
+              @if (c.injection_suspected) { <p class="mb-1 text-danger">A cited source contains text that reads as an instruction to an AI. It was ignored and never counted as evidence.</p> }
+              <p class="mb-0 text-muted">{{ c.limitations }} Verifier {{ c.verifier_version }}, {{ c.verified_at }}.</p>
+            </details>
+          }
         }
         @if (groups().read.length) {
           <h4>Read by the agent</h4>

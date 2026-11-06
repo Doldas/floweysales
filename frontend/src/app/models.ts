@@ -1,6 +1,6 @@
 import type { BudgetSummary } from './components/team-budget';
 import type { Provenance } from './core/provenance';
-import type { AnswerFinding, AnswerSource } from './core/answer-sources';
+import type { AnswerClaim, AnswerFinding, AnswerSource, ClaimStats } from './core/answer-sources';
 export interface MarketData {
   assetDataProvider?: string;
   type?: string;
@@ -718,7 +718,7 @@ export interface TeamEvent {
   /** On the 'budget' event that ends a run with a budget. */
   budget?: BudgetSummary;
   /** With a `sources` event: what the member retrieved and what the citation check found in its answer. */
-  sources?: AnswerSource[]; audit?: AnswerFinding[]; removed?: AnswerFinding[];
+  sources?: AnswerSource[]; audit?: AnswerFinding[]; removed?: AnswerFinding[]; claims?: AnswerClaim[]; claim_stats?: ClaimStats;
 }
 export type StrategyOperandType = 'price' | 'const' | 'ema' | 'sma' | 'rsi' | 'atr' | 'highest' | 'lowest' | 'fib_retr' | 'fib_ext' | 'swing_high' | 'swing_low';
 export interface StrategyOperand { type: StrategyOperandType; field?: string; period?: number; ratio?: number; value?: number }
@@ -735,7 +735,7 @@ export interface SavedStrategy { id: number; updated_at: string; definition: Str
 export interface StrategyCatalog { presets: StrategyDef[]; custom: SavedStrategy[]; warnings: Record<string, string> }
 export interface StrategyTrade {
   entry_date: string; entry_price: number; exit_date: string; exit_price: number; stop?: number; target?: number;
-  bars: number; return_pct: number; r?: number; reason: 'stop' | 'target' | 'signal' | 'max_bars' | 'open';
+  bars: number; return_pct: number; equity_return_pct?: number; r?: number; reason: 'stop' | 'target' | 'signal' | 'max_bars' | 'open';
 }
 export interface StrategyRunMetrics { cagr_pct: number; volatility_pct: number; sharpe: number; sortino: number; max_drawdown_pct: number; calmar: number }
 export interface StrategyRunResult {
@@ -748,6 +748,23 @@ export interface StrategyRunResult {
   walk_forward?: { from: string; to: string; trades: number; win_rate_pct: number; return_pct: number; buy_hold_return_pct: number; expectancy_pct: number }[];
   latest: { date: string; close: number; in_position: boolean; entry_signal: boolean; exit_signal: boolean; has_leg: boolean;
     leg_low?: number; leg_high?: number; leg_low_date?: string; leg_high_date?: string; levels?: { label: string; ratio: number; price: number }[] };
+}
+/** POST /api/strategies/montecarlo: the replay's observed figures next to simulated trade-level outcomes. */
+export interface StrategyMonteCarloRequest extends StrategyRunRequest {
+  method?: string; runs?: number; trades?: number; seed?: number; drawdown_limit?: number; extra_cost_bps?: number; dispersion_scale?: number;
+}
+export interface StrategyMonteCarloResult {
+  symbol: string; provider: string; range: string; generated_at: string; strategy: string; strategy_id?: string; cost_bps: number;
+  from: string; to: string; data_start: string; data_end: string; notice?: string;
+  observed: { total_return_pct: number; buy_hold_return_pct: number; closed_trades: number; open_trade_excluded?: boolean; warnings: string[] };
+  simulation: {
+    model_version: string;
+    config: { method: string; runs: number; trades: number; seed: number; drawdown_limit_pct?: number; extra_cost_bps_per_trade?: number; dispersion_scale: number };
+    observed_trades: number; observed: { days: number; total_return_pct: number; max_drawdown_pct: number };
+    terminal_return_pct: MonteCarloDist; max_drawdown_pct: MonteCarloDist;
+    prob_loss_pct: number; prob_breach_pct?: number; prob_ruin_pct: number; assumptions: string[]; limitations: string[];
+  };
+  notes: string[];
 }
 export interface StrategyRunRequest { strategy_id?: string; definition?: StrategyDef; symbol: string; provider?: string; range?: '1Y' | '3Y' | '5Y' | '10Y' | 'YTD' | 'MAX'; from?: string; to?: string; cost_bps: number; slippage_bps?: number }
 

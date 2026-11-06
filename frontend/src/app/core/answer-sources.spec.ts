@@ -2,7 +2,7 @@
 //   node --test src/app/core/answer-sources.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EVIDENCE_MODES, auditSummary, delegationProgress, parseEvidenceMode, findingLabel, patchNodeEvidence, policyFromSettings, removedSummary, safeUrl, sourceOrigin, settingsFromPolicy, settingsProblem, settingsSummary, splitSources } from './answer-sources.ts';
+import { EVIDENCE_MODES, auditSummary, claimFacts, claimsSummary, sortClaims, spanOrigin, spanParts, verdictLabel, whyLabel, type AnswerClaim, delegationProgress, parseEvidenceMode, findingLabel, patchNodeEvidence, policyFromSettings, removedSummary, safeUrl, sourceOrigin, settingsFromPolicy, settingsProblem, settingsSummary, splitSources } from './answer-sources.ts';
 
 test('sources split by whether the agent opened them', () => {
   const { read, listed } = splitSources([
@@ -105,4 +105,45 @@ test('delegationProgress names the member and its stance', () => {
 test('a source a delegated team member retrieved names that member', () => {
   assert.equal(sourceOrigin({ member: 'Owner' }), 'retrieved by team member Owner');
   assert.equal(sourceOrigin({}), '');
+});
+
+const claim = (over: Partial<AnswerClaim>): AnswerClaim => ({
+  id: 'C1', sentence: 'Acme revenue was $4.5 billion in fiscal 2024 [S1].', kind: 'fact', verdict: 'supported', code: 'match',
+  explanation: 'The cited text states the figure.', limitations: 'Not proof the source is right.', verifier_version: 'claims-v1', verified_at: '2026-11-06T10:00:00Z', ...over,
+});
+
+test('verdict labels never present uncertainty as proof', () => {
+  assert.equal(verdictLabel('supported'), 'Supported by the cited text');
+  assert.match(verdictLabel('insufficient'), /Not proven/);
+  assert.equal(verdictLabel('not_checked'), 'Not checked');
+  assert.equal(verdictLabel('contradicted'), 'Contradicted by the cited text');
+  assert.equal(whyLabel('supported'), 'Why is this claim supported?');
+  assert.equal(whyLabel('contradicted'), 'Why is this claim not supported?');
+  assert.equal(findingLabel('claim_contradicted'), 'Claim contradicted by the cited text');
+});
+
+test('claims are listed with the worst first and keep answer order within a verdict', () => {
+  const order = sortClaims([claim({ id: 'C1' }), claim({ id: 'C2', verdict: 'not_checked' }), claim({ id: 'C3', verdict: 'contradicted' }), claim({ id: 'C4', verdict: 'insufficient' }), claim({ id: 'C5' })]);
+  assert.deepEqual(order.map(c => c.id), ['C3', 'C4', 'C2', 'C1', 'C5']);
+});
+
+test('the claims summary counts verdicts and states the cost of the check', () => {
+  const text = claimsSummary([claim({}), claim({ verdict: 'contradicted' })], { claims: 2, supported: 1, contradicted: 1, insufficient: 0, not_checked: 0, skipped: 3, elapsed_ms: 4, model_calls: 0, verifier_version: 'claims-v1' });
+  assert.match(text, /2 claims: 1 supported, 1 contradicted, 0 not proven, 0 not checked/);
+  assert.match(text, /4 ms with no model call/);
+  assert.match(text, /3 more sentences were not checked/);
+  assert.equal(claimsSummary([]), '');
+});
+
+test('claim facts list only what the verifier found', () => {
+  const rows = claimFacts(claim({ entity: 'Acme', metric: 'revenue', period: 'FY2024', causal: true }));
+  assert.deepEqual(rows.map(r => r.label), ['Entity', 'Metric', 'Period', 'Kind']);
+  assert.equal(rows[3].value, 'fact (states a cause)');
+});
+
+test('a span keeps the matched token apart and names its source with UTC times', () => {
+  const span = { source: 'S1', start: 10, end: 15, before: 'Total revenue', match: '4,500', after: '3,900', title: 'Acme 10-K', retrieved_at: '2026-11-05T12:00:00Z', published_at: '2025-02-01' };
+  assert.deepEqual(spanParts(span), { before: 'Total revenue', match: '4,500', after: '3,900' });
+  assert.equal(spanOrigin(span), '[S1] · Acme 10-K · published 2025-02-01 · retrieved 2026-11-05 12:00 UTC');
+  assert.equal(spanOrigin({ source: 'S2', start: 0, end: 1, match: 'x' }), '[S2]');
 });

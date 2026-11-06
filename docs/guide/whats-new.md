@@ -9,8 +9,12 @@ last-reviewed: 2026-11-06
 
 ## November 2026 release
 
+**Agents**
+- Agent answers get a claim check: each cited sentence is compared with the cited text for company, metric, period, unit and direction, and shown as supported, contradicted, not proven or not checked, with the source passage under **Why is this claim supported?** See [Agents, teams and evidence](agents.md).
+
 **Backtests**
 - Choose a custom period in UTC, test several lists and periods at once, and check how trading cost, holdings and rebalance interval change a result. See [Strategies and backtests](strategies.md).
+- The Strategies page can resample a replay's closed trades with a seed to show percentile bands and the spread of the worst fall. See [Strategies and backtests](strategies.md).
 - Results are cut into consecutive parts of the period, and the result lists the biases that apply. Saved runs carry a source badge and export with their provenance.
 - Slippage and a fill delay (fill 1 or 2 trading days after the ranking) in leaderboard backtests, both included in the settings check. A collapsed "How fills were assumed" section states what is and is not modeled, and the benchmark is defined with its currency and dates. Mixed currencies and a benchmark in another currency are flagged.
 - Longer history: a period that starts more than nine years back asks the provider for its longest daily history, and says so when only the 10-year window could be served.
@@ -23,7 +27,7 @@ last-reviewed: 2026-11-06
 
 **Markets**
 - The feed status badge separates the connection, freshness, kind of data and market session.
-- The instrument chip in the top bar has favorites, recent instruments and a full-screen picker on phones. See [Markets](markets.md).
+- The instrument chip in the top bar has favorites, recent instruments and a full-screen picker on phones that also shows the full instrument identity and holds the favorite button. The phone top bar stays on one row without the page title or a star, with low-frequency actions in a More menu. See [Markets](markets.md).
 
 **Flow Studio**
 - **Test unsaved draft** runs the graph in the editor without saving, including a brand-new flow. Side effects are simulated unless you confirm real ones, and Run history marks each run as a draft test or a saved version with its snapshot hash. See [Flows](flows.md).

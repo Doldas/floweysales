@@ -120,6 +120,17 @@ export class ShellComponent {
     name: this.market.trackedName() || undefined, exchange: this.market.trackedExchange() || undefined,
   }));
 
+  /** The chip's visible words in order; its accessible name must contain them (WCAG 2.5.3). */
+  readonly chipVisibleText = computed(() => {
+    const exch = this.market.trackedExchange();
+    return [
+      this.market.trackedSymbol(),
+      this.market.trackedName(),
+      `${exch ? exch + ' · ' : ''}${this.market.trackedProvider()}`,
+      this.instrumentUse() === 'ignored' ? 'Not used on this page' : '',
+    ].filter(Boolean).join(' ');
+  });
+
   readonly priceChange = computed(() => this.market.dayChange() ?? this.market.rangeChange());
 
   constructor() {
@@ -181,6 +192,22 @@ export class ShellComponent {
       this.moreOpen.set(false);
       this.pickerOpen.set(false);
     }
+  }
+
+  /** Phone layout (matches the 767.98px breakpoint in shell.scss), where the chip is shown without its details. */
+  isNarrow(): boolean {
+    try {
+      return window.matchMedia('(max-width: 767.98px)').matches;
+    } catch {
+      return false;
+    }
+  }
+
+  /** On narrow screens the chip opens the picker, which shows the full instrument identity and the favorite action. */
+  onChipClick(event: Event): void {
+    if (!this.isNarrow()) return;
+    event.preventDefault();
+    this.openPicker();
   }
 
   openPicker(): void {
