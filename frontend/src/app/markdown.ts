@@ -1,9 +1,12 @@
 /**
- * A tiny, dependency-free Markdown renderer for chat bubbles.
+ * A tiny, dependency-free Markdown renderer shared by chat bubbles, help pages, run output and the Workspace
+ * (Markdown preview, rich-text editor and README overview).
  *
  * Every piece of the source is HTML-escaped before any formatting is applied,
  * so model/user output can never inject markup or script. The renderer only
- * ever emits tags it generates itself and only allows http(s) links.
+ * ever emits tags it generates itself, only allows http(s) links (plus Workspace
+ * paths when a Workspace folder is given) and never loads images: an image is
+ * rendered as a labeled link.
  */
 
 const HTML_ESCAPES: Record<string, string> = {
@@ -18,8 +21,82 @@ export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
 }
 
+function unescapeHtml(value: string): string {
+  return value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+export interface MarkdownOptions {
+  /**
+   * Workspace folder the document lives in (for example `/reports`). When set, relative links resolve inside the
+   * Workspace and render as in-app links; targets that escape the Workspace root are rendered as plain text.
+   */
+  workspaceBase?: string;
+  /**
+   * Rich-text editing output: code blocks are plain `pre` elements carrying their language in a data attribute and
+   * there are no copy buttons, so the editor can write Markdown back without rewriting anything.
+   */
+  rich?: boolean;
+}
+
+/**
+ * Resolves a Markdown link target against a Workspace folder. Returns the normalized absolute Workspace path, or
+ * null when the target is not a Workspace path (external scheme, empty, anchor-only) or leaves the Workspace
+ * through `..` segments. Query strings and fragments are dropped.
+ */
+export function resolveWorkspacePath(base: string, href: string): string | null {
+  let target = href.trim();
+  if (!target || target.startsWith('#') || target.startsWith('//') || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(target)) return null;
+  target = target.replace(/[?#].*$/, '');
+  try {
+    target = decodeURIComponent(target);
+  } catch {
+    return null;
+  }
+  if (!target || /[\u0000-\u001f\\]/.test(target)) return null;
+  const parts = target.startsWith('/') ? [] : base.split('/').filter(Boolean);
+  for (const segment of target.split('/')) {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') {
+      if (!parts.length) return null;
+      parts.pop();
+      continue;
+    }
+    parts.push(segment);
+  }
+  return parts.length ? '/' + parts.join('/') : null;
+}
+
 interface InlineState {
   code: string[];
+  /** Opening tags of generated links, kept out of the text so emphasis rules never touch attributes. */
+  tags: string[];
+  options: MarkdownOptions;
+}
+
+/** Renders a link or image target; unsafe or out-of-Workspace targets fall back to plain text. */
+function renderTarget(label: string, escapedHref: string, state: InlineState, image: boolean): string {
+  const href = unescapeHtml(escapedHref).trim();
+  const base = state.options.workspaceBase;
+  const keep = ` data-md-href="${escapeHtml(href)}"${image ? ' data-md-image="1"' : ''}`;
+  const prefix = image ? 'Image: ' : '';
+  const stash = (tag: string) => `\u0000T${state.tags.push(tag) - 1}\u0000${prefix}${label}</a>`;
+  if (/^https?:\/\/[^\s]+$/i.test(href)) {
+    return stash(`<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer"${keep}>`);
+  }
+  if (base !== undefined) {
+    const path = resolveWorkspacePath(base, href);
+    if (path === null) return label;
+    return stash(`<a href="#" class="md-ws-link" data-ws-path="${escapeHtml(path)}"${keep}>`);
+  }
+  if (!image && href.startsWith('/') && !href.startsWith('//') && !/[\u0000-\u001f\\]/.test(href)) {
+    return stash(`<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer"${keep}>`);
+  }
+  return image ? label : `[${label}](${escapedHref})`;
 }
 
 /** Renders inline constructs: code, links, bold, italic, strike, underline. */
@@ -30,10 +107,15 @@ function renderInline(text: string, state: InlineState): string {
     return `\u0000C${idx}\u0000`;
   });
 
-  out = out.replace(
-    /\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]*)\)/g,
-    '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
+  // Images are never loaded (no remote content, no Workspace file fetches): they render as a labeled link.
+  out = out.replace(/!\[([^\]]*)\]\(([^\s)]+)\)/g, (_m, alt: string, href: string) =>
+    renderTarget(alt || 'image', href, state, true),
   );
+  out = out.replace(/\[([^\]]+)\]\(([^\s)]+)\)/g, (_m, label: string, href: string) =>
+    renderTarget(label, href, state, false),
+  );
+  // Backslash escapes for inline punctuation (also written by the rich-text editor).
+  out = out.replace(/\\([\\`*_{}[\]()#+\-.!|~])/g, (_m, ch: string) => `&#${ch.charCodeAt(0)};`);
 
   out = out.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
   out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
@@ -43,6 +125,7 @@ function renderInline(text: string, state: InlineState): string {
   out = out.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
   out = out.replace(/(^|[^\w])_([^_\n]+)_(?!\w)/g, '$1<em>$2</em>');
 
+  out = out.replace(/\u0000T(\d+)\u0000/g, (_m, i: string) => state.tags[Number(i)] ?? '');
   out = out.replace(/\u0000C(\d+)\u0000/g, (_m, i: string) => {
     return `<code>${state.code[Number(i)] ?? ''}</code>`;
   });
@@ -55,16 +138,45 @@ function restoreCodePlaceholders(html: string, state: InlineState): string {
 }
 
 const FENCE = /^```([A-Za-z0-9+#._-]*)\s*$/;
+const LIST_ITEM = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
 
-export function renderMarkdown(source: string): string {
+interface ListItem {
+  indent: number;
+  ordered: boolean;
+  text: string;
+}
+
+/** Builds one (possibly nested) list from consecutive item lines, advancing `pos`. */
+function buildList(items: ListItem[], pos: { i: number }, state: InlineState): string {
+  const { indent, ordered } = items[pos.i];
+  let html = '';
+  while (pos.i < items.length) {
+    const item = items[pos.i];
+    if (item.indent < indent || (item.indent === indent && item.ordered !== ordered)) break;
+    if (item.indent > indent) {
+      html += buildList(items, pos, state);
+      continue;
+    }
+    pos.i++;
+    const task = item.text.match(/^\[([ xX])\]\s+(.*)$/);
+    let inner = renderInline(task ? task[2] : item.text, state);
+    if (pos.i < items.length && items[pos.i].indent > indent) inner += buildList(items, pos, state);
+    const attr = task ? ` data-task="${task[1] === ' ' ? 'open' : 'done'}"` : '';
+    html += `<li${attr}>${inner}</li>`;
+  }
+  const tag = ordered ? 'ol' : 'ul';
+  return `<${tag}>${html}</${tag}>`;
+}
+
+export function renderMarkdown(source: string, options: MarkdownOptions = {}): string {
   if (!source) return '';
 
-  const escaped = escapeHtml(source);
+  const escaped = escapeHtml(source.replace(/\r\n?/g, '\n'));
   const fences: string[] = [];
 
   const lines = escaped.split('\n');
   const out: string[] = [];
-  const inline: InlineState = { code: [] };
+  const inline: InlineState = { code: [], tags: [], options };
   let paragraph: string[] = [];
 
   const flushParagraph = () => {
@@ -80,17 +192,19 @@ export function renderMarkdown(source: string): string {
     const fenceMatch = line.match(FENCE);
     if (fenceMatch) {
       flushParagraph();
-      const lang = fenceMatch[1] || 'code';
       const body: string[] = [];
       i++;
       while (i < lines.length && !/^```\s*$/.test(lines[i])) {
         body.push(lines[i]);
         i++;
       }
+      const lang = fenceMatch[1];
       const idx = fences.push(
-        `<div class="md-code"><div class="md-code-head"><span class="md-lang">${lang}</span>` +
-          `<button type="button" class="md-copy" data-md-copy>copy</button></div>` +
-          `<pre><code>${body.join('\n')}</code></pre></div>`,
+        options.rich
+          ? `<pre data-lang="${lang}"><code>${body.join('\n')}</code></pre>`
+          : `<div class="md-code"><div class="md-code-head"><span class="md-lang">${lang || 'code'}</span>` +
+              `<button type="button" class="md-copy" data-md-copy>copy</button></div>` +
+              `<pre><code>${body.join('\n')}</code></pre></div>`,
       ) - 1;
       out.push(`\u0000F${idx}\u0000`);
       continue;
@@ -151,29 +265,19 @@ export function renderMarkdown(source: string): string {
       continue;
     }
 
-    // Unordered list
-    if (/^\s*[-*+]\s+/.test(line)) {
+    // Lists (unordered, ordered, nested by indentation, task items)
+    if (LIST_ITEM.test(line)) {
       flushParagraph();
-      const items: string[] = [];
-      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^\s*[-*+]\s+/, ''));
+      const items: ListItem[] = [];
+      while (i < lines.length) {
+        const m = lines[i].match(LIST_ITEM);
+        if (!m) break;
+        items.push({ indent: m[1].replace(/\t/g, '    ').length, ordered: /\d/.test(m[2][0]), text: m[3] });
         i++;
       }
       i--;
-      out.push(`<ul>${items.map((it) => `<li>${renderInline(it, inline)}</li>`).join('')}</ul>`);
-      continue;
-    }
-
-    // Ordered list
-    if (/^\s*\d+[.)]\s+/.test(line)) {
-      flushParagraph();
-      const items: string[] = [];
-      while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^\s*\d+[.)]\s+/, ''));
-        i++;
-      }
-      i--;
-      out.push(`<ol>${items.map((it) => `<li>${renderInline(it, inline)}</li>`).join('')}</ol>`);
+      const pos = { i: 0 };
+      while (pos.i < items.length) out.push(buildList(items, pos, inline));
       continue;
     }
 

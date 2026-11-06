@@ -69,4 +69,14 @@
   tbody td { padding: 5px 10px; border-top: 1px solid var(--fs-border); color: var(--fs-text-2); white-space: nowrap; }
   tbody tr:nth-child(even) td { background: var(--fs-surface-2); }
   img { max-width: 100%; height: auto; }
+
+  // Task list items from "- [ ] item" / "- [x] item".
+  li[data-task] { list-style: none; margin-left: -1.1em; }
+  li[data-task]::before { content: '\2610\00a0'; color: var(--fs-muted); }
+  li[data-task='done']::before { content: '\2611\00a0'; color: var(--fs-accent); }
+
+  // Code blocks in the rich-text editor (plain pre, no copy button).
+  pre[data-lang] { margin: 0.65em 0; padding: 9px 11px; overflow-x: auto; font-size: 0.8rem; line-height: 1.5; background: var(--fs-sunken); border: 1px solid var(--fs-border); border-radius: 8px; color: var(--fs-text-2); }
+  pre[data-lang]:not([data-lang='']):before { content: attr(data-lang); display: block; font-size: 0.7em; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fs-muted); margin-bottom: 4px; }
+  pre[data-lang] code { background: none; border: none; padding: 0; color: inherit; font-size: 1em; white-space: pre; }
 }
