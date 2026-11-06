@@ -51,7 +51,7 @@ The wording is deliberate. **Live prices** appears only when the provider says i
 
 ## The selected instrument
 
-The instrument chip in the top bar follows you across pages. Open the search with nothing typed to see your **Favorites** (star the selected instrument) and your **Recent** instruments, each with exchange and provider. Favorites and recent instruments are kept in this browser. On phones, the search button opens a full-screen picker. In live mode, choosing an instrument selects it without starting to track it: the badge says "Not tracked live" and a **Track live** button starts the tracker (up to 16). Pages that do not use the instrument, such as Flows or Settings, mute the chip and say so.
+The instrument chip in the top bar follows you across pages. Open the search with nothing typed to see your **Favorites** (star the selected instrument) and your **Recent** instruments, each with exchange and provider. Favorites and recent instruments are kept in this browser. On phones the top bar shows only the ticker, on one row and not cut off at normal text sizes; tap it to open a full-screen picker with the full ticker, name, exchange and provider, the **Add to favorites** / **Remove from favorites** button and the search. There is no separate star in the top bar. Less-used actions (Search or run, theme) sit in the **More actions** menu, and the page name is shown by the page heading and the highlighted entry in the navigation. In live mode, choosing an instrument selects it without starting to track it: the badge says "Not tracked live" and a **Track live** button starts the tracker (up to 16). Pages that do not use the instrument, such as Flows or Settings, mute the chip and say so.
 
 ## Fundamentals
 

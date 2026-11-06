@@ -186,6 +186,14 @@
   border: 1px solid var(--fs-border); border-radius: var(--bs-border-radius); background: var(--fs-surface-2); color: var(--fs-text);
   &[aria-pressed='true'] .bi { color: var(--bs-warning); }
 }
+.picker-current {
+  display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.75rem; margin: 0; padding: 0.6rem 0.75rem;
+  border: 1px solid var(--fs-border); border-radius: var(--bs-border-radius); background: var(--fs-surface-2);
+  dt { font-size: 0.72rem; font-weight: 500; color: var(--fs-muted); }
+  dd { margin: 0; min-width: 0; overflow-wrap: anywhere; font-size: 0.85rem; }
+  .picker-sym { font-weight: 650; }
+}
+.picker-markets { font-size: 0.85rem; }
 .picker-sheet {
   position: fixed; inset: 0; z-index: 1075; display: flex; flex-direction: column; gap: 0.75rem;
   padding: 0.75rem 1rem; background: var(--fs-bg); overflow: auto;
@@ -291,6 +299,12 @@
 @media (max-width: 419.98px) {
   .agent-label { display: none; }
   .fs-topbar { gap: 0.3rem; }
-  .instrument-chip { flex: 0 1 auto; }
+  // Controls stop growing with large text (44px is a comfortable touch target), so enlarged text goes
+  // to the ticker. The ticker keeps its full width; only when even that cannot fit (very large text)
+  // does it shrink, and the full identity stays in the chip's label and the picker.
+  .fs-topbar .btn-icon, .fs-topbar .avatar-btn { width: min(2.25rem, 44px); height: min(2.25rem, 44px); }
+  .fs-topbar .btn-agent { padding-inline: min(0.5rem, 8px); }
+  .instrument-chip { flex: 0 1 auto; padding: 0.25rem 0.5rem; }
   .instrument-chip .chip-sym { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .has-instrument .picker-open { display: none; }
 }
