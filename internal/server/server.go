@@ -15,6 +15,7 @@ import (
 	"floweysales/internal/ai"
 	"floweysales/internal/app"
 	"floweysales/internal/identity"
+	"floweysales/internal/indexsource"
 	"floweysales/internal/market"
 	"floweysales/internal/plugins"
 	"floweysales/internal/redact"
@@ -195,6 +196,10 @@ type Engine struct {
 	flowState     flowNodeStateStore
 	profiles      investorProfileStore
 	rankingPrefs  rankingPreferencesStore // leaderboard objective and constraints per user; tests replace the database
+	indexSources  indexSourceStore        // user-supplied index constituent lists; tests replace the database
+	indexSecrets  indexSecretStore        // sealed per-user Financial Modeling Prep keys; tests replace the database
+	indexHTTP     indexsource.HTTPDoer    // injectable client for the FMP adapter
+	indexFMPBase  string                  // test seam for the FMP host; empty is FMP
 	strategies    strategyStore
 	modelProfiles modelProfileStore // model profiles; tests replace the database
 	teams         teamStore         // saved agent teams
@@ -257,6 +262,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerMarketRoutes()
 	e.registerLeaderboardRoutes()
 	e.registerIndexRoutes()
+	e.registerIndexSourceRoutes()
 	e.registerRankingPreferenceRoutes()
 	e.registerBacktestRoutes()
 	e.registerBacktestBatchRoutes()

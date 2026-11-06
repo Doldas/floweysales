@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"floweysales/internal/backtest"
+	"floweysales/internal/indexsource"
 	"floweysales/internal/market"
 )
 
@@ -40,6 +41,7 @@ type backtestRequest struct {
 	years      int
 	from, to   time.Time // custom UTC window; zero when years is used
 	provider   market.Provider
+	snap       *indexsource.Snapshot // the caller's own index list; nil for other universes
 	cacheKey   string
 	rebalLabel string
 }
@@ -61,6 +63,8 @@ type backtestResponse struct {
 	// BenchmarkInfo defines what the comparison index is and is not; Currencies lists the quote currencies seen.
 	BenchmarkInfo *benchmarkInfo `json:"benchmark_info,omitempty"`
 	Currencies    []string       `json:"currencies,omitempty"`
+	// Membership says which constituents each rebalance used when the universe is an index.
+	Membership *membershipInfo `json:"membership,omitempty"`
 	backtest.Result
 }
 
@@ -79,10 +83,10 @@ type backtestCall struct {
 type badRequest struct{ error }
 
 func (e *Engine) parseBacktestRequest(r *http.Request) (backtestRequest, error) {
-	return e.parseBacktestQuery(r.URL.Query())
+	return e.parseBacktestQuery(r.Context(), r.URL.Query())
 }
 
-func (e *Engine) parseBacktestQuery(q url.Values) (backtestRequest, error) {
+func (e *Engine) parseBacktestQuery(ctx context.Context, q url.Values) (backtestRequest, error) {
 	req := backtestRequest{top: 10, rebalance: 21, rebalLabel: "monthly", costBps: 10, years: 3}
 	universe := q.Get("universe")
 	if strings.TrimSpace(q.Get("symbols")) != "" {
@@ -90,8 +94,18 @@ func (e *Engine) parseBacktestQuery(q url.Values) (backtestRequest, error) {
 	} else if universe == "" {
 		universe = leaderboardUniverses[0].ID
 	}
-	symbols, err := leaderboardSymbols(universe, q.Get("symbols"), "")
-	if err != nil {
+	var symbols []string
+	var err error
+	if idx, isIndex := findIndex(universe); isIndex {
+		snap, serr := e.snapshotFor(ctx, idx)
+		if serr != nil {
+			return req, serr
+		}
+		if snap == nil {
+			return req, badRequest{errors.New(idx.Name + " is unavailable: " + unavailableForUser(idx))}
+		}
+		req.snap = snap
+	} else if symbols, err = leaderboardSymbols(universe, q.Get("symbols"), ""); err != nil {
 		return req, badRequest{err}
 	}
 	if universe == "custom" && len(symbols) > 25 {
@@ -105,6 +119,8 @@ func (e *Engine) parseBacktestQuery(q url.Values) (backtestRequest, error) {
 	req.benchmark = backtestDefaultBenchmark
 	if u, found := findLeaderboardUniverse(universe); found && u.Benchmark != "" {
 		req.benchmark = u.Benchmark
+	} else if idx, isIndex := findIndex(universe); isIndex && idx.BenchmarkSymbol != "" {
+		req.benchmark = idx.BenchmarkSymbol
 	}
 	if b := strings.TrimSpace(q.Get("benchmark")); b != "" {
 		if req.benchmark, err = market.CanonicalSymbol(b); err != nil {
@@ -116,7 +132,7 @@ func (e *Engine) parseBacktestQuery(q url.Values) (backtestRequest, error) {
 			return req, badRequest{errors.New("top must be a whole number from 1 to 25")}
 		}
 	}
-	if req.top > len(symbols) {
+	if req.snap == nil && req.top > len(symbols) {
 		return req, badRequest{fmt.Errorf("top %d is more than the %d symbols in the universe", req.top, len(symbols))}
 	}
 	switch q.Get("rebalance") {
@@ -159,6 +175,18 @@ func (e *Engine) parseBacktestQuery(q url.Values) (backtestRequest, error) {
 		req.from, req.to, req.years = from, to, 0
 	}
 	req.provider = e.parseProvider(q.Get("provider"))
+	if req.snap != nil {
+		// The universe is the symbols that were members at any time in the
+		// window when past membership is known, else today's members.
+		start := req.from
+		if req.years > 0 {
+			start = time.Now().UTC().AddDate(-req.years, 0, 0)
+		}
+		req.symbols = req.snap.EverMembers(start.Format(strategyDateLayout))
+		if req.top > len(req.symbols) {
+			return req, badRequest{fmt.Errorf("top %d is more than the %d symbols in the universe", req.top, len(req.symbols))}
+		}
+	}
 	req.cacheKey = backtestKey(req)
 	return req, nil
 }
@@ -168,16 +196,23 @@ func (e *Engine) parseBacktestQuery(q url.Values) (backtestRequest, error) {
 func backtestKey(req backtestRequest) string {
 	sorted := append([]string(nil), req.symbols...)
 	sort.Strings(sorted)
-	return fmt.Sprintf("%s|%s|%s|%s|%d|%s|%g|%g|%d|%d", req.provider, strings.Join(sorted, ","), req.strategy.ID, req.benchmark, req.top, req.rebalLabel, req.costBps, req.slippage, req.years, req.delay) + "|" + req.from.Format(strategyDateLayout) + "|" + req.to.Format(strategyDateLayout)
+	idx := ""
+	if req.snap != nil {
+		idx = "idx:" + req.snap.IndexID + ":" + req.snap.Key() + "|"
+	}
+	return idx + fmt.Sprintf("%s|%s|%s|%s|%d|%s|%g|%g|%d|%d", req.provider, strings.Join(sorted, ","), req.strategy.ID, req.benchmark, req.top, req.rebalLabel, req.costBps, req.slippage, req.years, req.delay) + "|" + req.from.Format(strategyDateLayout) + "|" + req.to.Format(strategyDateLayout)
 }
 
 // leaderboardScorer ranks the symbols exactly as the leaderboard does, from
 // the point-in-time data the backtest hands over.
-func (e *Engine) leaderboardScorer(strategy leaderboardStrategy) backtest.Scorer {
+func (e *Engine) leaderboardScorer(strategy leaderboardStrategy, snap *indexsource.Snapshot, track *membershipTrack) backtest.Scorer {
 	return func(asOf time.Time, series map[string]market.HistorySeries, fin map[string]market.FinancialsResponse) ([]string, float64) {
+		allowed := track.allowed(snap, asOf)
 		symbols := make([]string, 0, len(series))
 		for sym := range series {
-			symbols = append(symbols, sym)
+			if allowed == nil || allowed[sym] {
+				symbols = append(symbols, sym)
+			}
 		}
 		sort.Strings(symbols)
 		rows := make([]map[string]any, 0, len(symbols))
@@ -285,19 +320,29 @@ func (e *Engine) runBacktest(ctx context.Context, req backtestRequest) (backtest
 			fellBack++
 		}
 	}
+	track := &membershipTrack{}
 	cfg := backtest.Config{Start: start, End: end, TopN: req.top, RebalanceDays: req.rebalance, CostBps: req.costBps, SlippageBps: req.slippage, DelayDays: req.delay}
-	result, err := backtest.Run(cfg, series, fin, bench, e.leaderboardScorer(req.strategy))
+	result, err := backtest.Run(cfg, series, fin, bench, e.leaderboardScorer(req.strategy, req.snap, track))
 	if err != nil {
 		return backtestResponse{}, badRequest{err}
 	}
 	if bench == nil {
 		result.Warnings = append(result.Warnings, backtest.WarnNoBenchmark)
 	}
+	membership := track.info(req.snap, len(missing))
+	if membership != nil && membership.Mode == membershipPointInTime && len(missing) == 0 {
+		// Every rebalance used the members of its own date and every one had prices.
+		result.Warnings = dropWarning(result.Warnings, backtest.WarnSurvivorship)
+	}
 	if len(missing) > 0 {
 		result.Warnings = append(result.Warnings, backtest.WarnSymbolsMissing)
 	}
 	res := backtestResponse{Universe: req.universe, Strategy: req.strategy.ID, Provider: req.provider.String(),
 		Symbols: req.symbols, GeneratedAt: time.Now().UTC().Format(time.RFC3339), Result: result}
+	res.Membership = membership
+	if membership != nil {
+		res.Notice = strings.TrimSpace(res.Notice + " " + membership.Note)
+	}
 	res.From, res.To = start.Format(strategyDateLayout), ""
 	if !end.IsZero() {
 		res.To = end.Format(strategyDateLayout)

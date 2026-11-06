@@ -1,6 +1,6 @@
 {
   "version": "2026-11-1",
-  "note": "Index definitions only. An index is offered as 'available' solely after a maintainer has verified legal access to its constituent list and recorded the source, as-of date and licensing. No constituent list has been verified yet, so all three are 'unavailable' and carry no symbols. Never fill 'constituents' from memory or from an unlicensed copy.",
+  "note": "Index definitions only. FloweySales ships no constituent list: this file never carries members, and every index here stays 'unavailable' in the registry. An index becomes available for one user once that user imports their own CSV file or fetches the list with their own Financial Modeling Prep key (internal/server/index_sources.go); the list is stored per user and is never committed. Never fill 'constituents' from memory or from an unlicensed copy.",
   "indices": [
     {
       "id": "index_sp500",
@@ -15,14 +15,22 @@
         "summary": "A float-adjusted, market-capitalization-weighted index of large US-listed companies, chosen by an index committee using size, liquidity, domicile, profitability and other published eligibility rules. Membership is a committee decision, not a ranking of the best investments.",
         "url": "https://www.spglobal.com/spdji/en/indices/equity/sp-500/"
       },
-      "constituent_source": { "name": "S&P Dow Jones Indices constituent file (licensed)", "url": null, "retrieved_at": null, "license_verified": false },
+      "constituent_source": {
+        "name": "Supplied by the user (CSV import or the user's own data-provider key)",
+        "url": null,
+        "retrieved_at": null,
+        "license_verified": false
+      },
       "as_of": null,
       "status": "unavailable",
-      "unavailable_reason": "The official constituent list is licensed by S&P Dow Jones Indices and no licence or redistributable copy has been verified. FloweySales does not reconstruct it from memory or from unlicensed copies.",
-      "licensing": "Index data is proprietary to the provider. Redistribution of constituents and weights needs a licence. Not verified.",
+      "unavailable_reason": "FloweySales ships no constituent list because index lists are licensed by their providers. It becomes available for you when you supply your own: import a CSV file or fetch the list with your own Financial Modeling Prep key.",
+      "licensing": "Index data is proprietary to the provider. FloweySales does not ship or redistribute it; the data you supply is stored for you only, and you confirm you may use it.",
       "exclusions": "Some companies have more than one share class; how many lines count is set by the provider's rules. The constituent count can differ from the name (500).",
       "share_class_policy": "Multiple share classes of one company are separate securities; they are merged by canonical identity (ISIN or exchange plus ticker) in a combined universe, never by ticker alone.",
-      "history": { "point_in_time": false, "note": "No point-in-time membership is available. Past rankings and backtests on today's members suffer survivorship and selection bias." },
+      "history": {
+        "point_in_time": false,
+        "note": "No point-in-time membership is available. Past rankings and backtests on today's members suffer survivorship and selection bias."
+      },
       "benchmark_note": "^GSPC is the price index and excludes dividends; a total-return comparison needs a separate total-return series.",
       "constituents": []
     },
@@ -39,14 +47,22 @@
         "summary": "An index of large non-financial companies listed on the Nasdaq Stock Market, weighted by modified market capitalization and reviewed on a published schedule. Financial companies are excluded by rule. Membership is rule-based and is not a ranking of the best investments.",
         "url": "https://www.nasdaq.com/solutions/nasdaq-100"
       },
-      "constituent_source": { "name": "Nasdaq Global Indexes constituent file (licensed)", "url": null, "retrieved_at": null, "license_verified": false },
+      "constituent_source": {
+        "name": "Supplied by the user (CSV import or the user's own data-provider key)",
+        "url": null,
+        "retrieved_at": null,
+        "license_verified": false
+      },
       "as_of": null,
       "status": "unavailable",
-      "unavailable_reason": "No verified licence or redistributable copy of the constituent list is available to FloweySales. It is not reconstructed from memory.",
-      "licensing": "Index data is proprietary to the provider. Redistribution needs a licence. Not verified.",
+      "unavailable_reason": "FloweySales ships no constituent list because index lists are licensed by their providers. It becomes available for you when you supply your own: import a CSV file or fetch the list with your own Financial Modeling Prep key (the Nasdaq-100 fetch is marked unverified).",
+      "licensing": "Index data is proprietary to the provider. FloweySales does not ship or redistribute it; the data you supply is stored for you only, and you confirm you may use it.",
       "exclusions": "Financial companies are excluded by the index rules. Some companies have more than one share class, so the number of securities can exceed 100.",
       "share_class_policy": "Multiple share classes of one company are separate securities; they are merged by canonical identity (ISIN or exchange plus ticker) in a combined universe, never by ticker alone.",
-      "history": { "point_in_time": false, "note": "No point-in-time membership is available. Past rankings and backtests on today's members suffer survivorship and selection bias." },
+      "history": {
+        "point_in_time": false,
+        "note": "No point-in-time membership is available. Past rankings and backtests on today's members suffer survivorship and selection bias."
+      },
       "benchmark_note": "^NDX is the price index and excludes dividends.",
       "constituents": []
     },
@@ -63,14 +79,22 @@
         "summary": "A market-capitalization-weighted index of the 30 most traded shares on Nasdaq Stockholm, reviewed twice a year on published rules. Membership follows trading volume rules, not quality, and is not a ranking of the best investments.",
         "url": "https://indexes.nasdaqomx.com/Index/Overview/OMXS30"
       },
-      "constituent_source": { "name": "Nasdaq Nordic index constituent list (licensing unverified)", "url": null, "retrieved_at": null, "license_verified": false },
+      "constituent_source": {
+        "name": "Supplied by the user (CSV import or the user's own data-provider key)",
+        "url": null,
+        "retrieved_at": null,
+        "license_verified": false
+      },
       "as_of": null,
       "status": "unavailable",
-      "unavailable_reason": "No verified licence or redistributable copy of the constituent list is available to FloweySales. The hand-picked 'Swedish large caps' list is a different, curated list and is not OMXS30.",
-      "licensing": "Index data is proprietary to the provider. Redistribution needs a licence. Not verified.",
+      "unavailable_reason": "FloweySales ships no constituent list because index lists are licensed by their providers. It becomes available for you when you supply your own: import a CSV file (no data API is supported for this index).",
+      "licensing": "Index data is proprietary to the provider. FloweySales does not ship or redistribute it; the data you supply is stored for you only, and you confirm you may use it.",
       "exclusions": "Companies with more than one share class (for example A and B shares) may appear with one or more lines, set by the provider's rules. Prices are in SEK; comparison with other currencies needs an FX source that is not integrated.",
       "share_class_policy": "Multiple share classes are separate securities with exchange-qualified symbols (suffix .ST); they are merged by canonical identity, never by ticker alone.",
-      "history": { "point_in_time": false, "note": "No point-in-time membership is available. Past rankings and backtests on today's members suffer survivorship and selection bias." },
+      "history": {
+        "point_in_time": false,
+        "note": "No point-in-time membership is available. Past rankings and backtests on today's members suffer survivorship and selection bias."
+      },
       "benchmark_note": "The benchmark symbol is a price index in SEK and excludes dividends. It has not been verified as available from every market-data provider.",
       "constituents": []
     }

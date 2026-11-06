@@ -91,6 +91,10 @@ func (e *Engine) Handler() http.Handler {
 				writeJSON(w, http.StatusForbidden, map[string]any{"error": "Insufficient permissions"})
 				return
 			}
+			r = r.WithContext(withIndexUser(r.Context(), u.ID))
+		}
+		if e.authService == nil {
+			r = r.WithContext(withIndexUser(r.Context(), 0))
 		}
 		if r.URL.Path == "/api/admin/users" {
 			e.serveUserProvision(w, r)
@@ -159,6 +163,20 @@ func isOwnSettingsRoute(method, path string) bool {
 		return method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete
 	case "/api/market/leaderboard/preferences":
 		return method == http.MethodGet || method == http.MethodPut
+	case "/api/market/indices":
+		return method == http.MethodGet
+	case "/api/market/indices/fmp-key":
+		return method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete
+	}
+	if rest, ok := strings.CutPrefix(path, "/api/market/indices/"); ok {
+		switch {
+		case strings.HasSuffix(rest, "/csv"):
+			return method == http.MethodPut
+		case strings.HasSuffix(rest, "/fmp"):
+			return method == http.MethodPost
+		case strings.HasSuffix(rest, "/source"):
+			return method == http.MethodDelete
+		}
 	}
 	return false
 }

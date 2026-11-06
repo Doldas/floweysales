@@ -110,7 +110,7 @@ func (e *Engine) runMonteCarlo(ctx context.Context, q url.Values) (montecarloRes
 	if err != nil {
 		return montecarloResponse{}, err
 	}
-	req, err := e.parseBacktestQuery(q)
+	req, err := e.parseBacktestQuery(ctx, q)
 	if err != nil {
 		return montecarloResponse{}, err
 	}
