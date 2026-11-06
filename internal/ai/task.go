@@ -77,6 +77,7 @@ type Checkpoint struct {
 	Sources  []sources.Source  `json:"sources,omitempty"`
 	Audit    []sources.Finding `json:"audit,omitempty"`
 	Removed  []sources.Finding `json:"removed,omitempty"`
+	Claims   []sources.Claim   `json:"claims,omitempty"`
 	Evidence *EvidencePolicy   `json:"evidence,omitempty"`
 }
 

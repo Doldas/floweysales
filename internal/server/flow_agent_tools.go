@@ -211,6 +211,11 @@ type flowSourcesRecord struct {
 	Sources []sources.Source   `json:"sources"`
 	Audit   []sources.Finding  `json:"audit,omitempty"`
 	Removed []sources.Finding  `json:"removed,omitempty"`
+	// Claims are the claim-level evidence records of the answer, with the
+	// verifier version and UTC time each was produced; Stats is the cost of
+	// the check. Redacted like the sources.
+	Claims []sources.Claim     `json:"claims,omitempty"`
+	Stats  *sources.ClaimStats `json:"claim_stats,omitempty"`
 }
 
 // observe records tool events; a tool_result follows its own tool_start.
@@ -299,8 +304,9 @@ func (t *flowToolTrace) SourcesJSON() string {
 	if fin, ok := t.final[attempt]; ok {
 		rec.Sources, rec.Policy = fin.Sources, fin.Policy
 		rec.Audit, rec.Removed = append([]sources.Finding(nil), fin.Audit...), append([]sources.Finding(nil), fin.Removed...)
+		rec.Claims, rec.Stats = redactClaims(fin.Claims), fin.ClaimStats
 	}
-	if len(rec.Sources) == 0 && len(rec.Audit) == 0 && len(rec.Removed) == 0 {
+	if len(rec.Sources) == 0 && len(rec.Audit) == 0 && len(rec.Removed) == 0 && len(rec.Claims) == 0 {
 		return ""
 	}
 	rec.Sources = sources.Compact(rec.Sources, maxRecordedStepSources, stepSourceExcerpt)
@@ -318,6 +324,44 @@ func (t *flowToolTrace) SourcesJSON() string {
 		return ""
 	}
 	return string(raw)
+}
+
+// maxRecordedClaims bounds the claim records one step stores.
+const maxRecordedClaims = 40
+
+// redactClaims copies claim records for storage with secrets masked in every
+// field that quotes the answer or a source.
+func redactClaims(list []sources.Claim) []sources.Claim {
+	if len(list) > maxRecordedClaims {
+		list = list[:maxRecordedClaims]
+	}
+	out := make([]sources.Claim, len(list))
+	redactSpan := func(sp sources.Span) sources.Span {
+		sp.Before, sp.Match, sp.After, sp.Title = redact.String(sp.Before), redact.String(sp.Match), redact.String(sp.After), redact.String(sp.Title)
+		return sp
+	}
+	for i, c := range list {
+		c.Sentence, c.Assertion, c.Explanation, c.Entity = redact.String(c.Sentence), redact.String(c.Assertion), redact.String(c.Explanation), redact.String(c.Entity)
+		c.Spans = append([]sources.Span(nil), c.Spans...)
+		for j := range c.Spans {
+			c.Spans[j] = redactSpan(c.Spans[j])
+		}
+		c.Figures = append([]sources.FigureCheck(nil), c.Figures...)
+		for j := range c.Figures {
+			f := &c.Figures[j]
+			f.Detail = redact.String(f.Detail)
+			if f.Span != nil {
+				sp := redactSpan(*f.Span)
+				f.Span = &sp
+			}
+		}
+		c.Conflicts = append([]sources.Conflict(nil), c.Conflicts...)
+		for j := range c.Conflicts {
+			c.Conflicts[j].Span = redactSpan(c.Conflicts[j].Span)
+		}
+		out[i] = c
+	}
+	return out
 }
 
 // Evidence returns one attempt's successful tool results.
