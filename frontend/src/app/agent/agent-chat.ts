@@ -1,3 +1,4 @@
+import { answerToJson, answerToMarkdown, buildAnswerExport } from '../core/answer-export';
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, effect, inject, input, signal, viewChild, OnInit } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
@@ -43,6 +44,22 @@ export class AgentChatComponent implements OnInit {
   readonly groups = computed(() => splitSources(this.session.answerSources()));
   readonly auditText = computed(() => auditSummary(this.session.answerAudit()));
   link(url: string | undefined): string { return safeUrl(url); }
+
+  /** Downloads the latest answer with its policy and sources as Markdown or JSON. */
+  exportAnswer(format: 'md' | 'json'): void {
+    const last = [...this.session.entries()].reverse().find(e => e.role === 'assistant' && e.content.trim());
+    const exp = buildAnswerExport({
+      answer: last?.content ?? '', question: this.session.answerQuestion(), policy: this.session.answerPolicy(),
+      sources: this.session.answerSources(), findings: this.session.answerAudit(), removed: this.session.answerRemoved(),
+    });
+    const body = format === 'json' ? answerToJson(exp) : answerToMarkdown(exp);
+    const blob = new Blob([body], { type: format === 'json' ? 'application/json' : 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `research-answer-${exp.exported_at.slice(0, 19).replace(/[:T]/g, '-')}Z.${format}`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
   private readonly sanitizer = inject(DomSanitizer);
   private readonly scroller = viewChild<ElementRef<HTMLElement>>('scroller');
   private readonly composer = viewChild<ElementRef<HTMLTextAreaElement>>('composer');
