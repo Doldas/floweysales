@@ -2,7 +2,7 @@
 title: Getting started
 order: 2
 summary: Set up FloweySales, connect a model and a data provider, and ask a first research question.
-last-reviewed: 2026-11-04
+last-reviewed: 2026-11-06
 ---
 
 # Getting started
@@ -29,7 +29,7 @@ When authentication is turned off, a single local user has all the access of an 
 5. Optionally, open **Model profiles** and prepare a few named model choices, such as "Fast and cheap" and "Deep research", so that users can pick by name. See [Model profiles](../model-profiles.md).
 6. To expose FloweySales to other people, turn on authentication and create their accounts first. See [Database and authentication](../database-and-auth.md). Do not expose the server to the internet without HTTPS.
 
-[Settings and roles](settings.md) describes each tab.
+[Settings and roles](settings.md) describes each tab. For backups, updates and other ways to run FloweySales, see [Install, run and back up](install-and-run.md).
 
 ## Your first session
 

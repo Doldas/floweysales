@@ -2,7 +2,7 @@
 title: What is FloweySales?
 order: 1
 summary: What FloweySales is for, who it is for, what is available now and what it does not do.
-last-reviewed: 2026-11-04
+last-reviewed: 2026-11-06
 ---
 
 # What is FloweySales?
@@ -36,6 +36,8 @@ This guide covers only what is built. Each page says what a screen does, what yo
 | Settings | Integrations, model profiles, people and roles, plugins and updates | [Settings and roles](settings.md) |
 | Help and About | In-app help, contextual help panels, build information | [Help and About](help.md) |
 | More areas | Command Center, Wealth plan, Paper portfolio, Inbox, Files, Community, Notifications | [More areas](more-areas.md) |
+| Install and run | For administrators: ways to run, accounts, backups and updates | [Install, run and back up](install-and-run.md) |
+| Glossary | Plain definitions of the terms used in the guide | [Glossary](glossary.md) |
 
 ## What to keep in mind
 
