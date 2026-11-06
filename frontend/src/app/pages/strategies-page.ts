@@ -4,6 +4,7 @@ import { ActivatedRoute } from '@angular/router';
 import type { Subscription } from 'rxjs';
 
 import { StrategyBuilderComponent } from '../components/strategy-builder';
+import { StrategyMonteCarloComponent } from '../components/strategy-montecarlo';
 import {
   blankStrategy, chartSummary, cloneForEditing, describeStrategy, geometry, groupPresets, ownerLine, levelLines, linePath, nowText, problems, resultTiles, strategyPrompt, tradeMarkers,
 } from '../components/strategy-view';
@@ -13,7 +14,7 @@ import { PERIOD_PRESETS, parseSavedPeriods, periodError, periodRequest, withSave
 import { todayUtc } from '../ui/datetime';
 import { SkeletonComponent } from '../ui/skeleton';
 import { ProgressStatusComponent } from '../ui/progress-status';
-import type { Persona, SavedStrategy, StrategyCatalog, StrategyDef, StrategyRunResult } from '../models';
+import type { Persona, SavedStrategy, StrategyCatalog, StrategyDef, StrategyRunRequest, StrategyRunResult } from '../models';
 import { MarketService, describeHttpError } from '../services';
 import { SymbolSearchComponent } from '../shell/symbol-search';
 
@@ -30,7 +31,7 @@ const H_EQUITY = 160;
 @Component({
   selector: 'fs-strategies-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HelpButtonComponent, SymbolSearchComponent, StrategyBuilderComponent, SkeletonComponent, ProgressStatusComponent],
+  imports: [HelpButtonComponent, SymbolSearchComponent, StrategyBuilderComponent, StrategyMonteCarloComponent, SkeletonComponent, ProgressStatusComponent],
   template: `
 <div class="fs-page research-container">
   <header class="fs-page-header">
@@ -219,6 +220,7 @@ const H_EQUITY = 160;
               </div>
             }
           </section>
+          <fs-strategy-montecarlo [replay]="r" [request]="lastRequest()" />
         }
       } @else {
         <div class="fs-empty"><i class="bi bi-diagram-2"></i><h3>Choose a strategy</h3>
@@ -305,6 +307,8 @@ export class StrategiesPage {
   readonly periodProblem = computed(() => this.range() === 'CUSTOM' ? periodError(this.from(), this.to(), this.today) : '');
   readonly cost = signal(10);
   readonly result = signal<StrategyRunResult | null>(null);
+  /** The request behind the shown result, so a robustness run asks the same question. */
+  readonly lastRequest = signal<StrategyRunRequest | null>(null);
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly error = signal('');
@@ -422,7 +426,7 @@ export class StrategiesPage {
     const common = { symbol, provider: this.market.provider(), ...periodRequest(this.range(), this.from(), this.to()), cost_bps: this.cost() };
     const req = this.isPreset() ? { ...common, strategy_id: this.draftId()! } : { ...common, definition: d };
     this.request = this.api.runStrategy(req).subscribe({
-      next: r => { this.result.set(r); this.loading.set(false); },
+      next: r => { this.lastRequest.set(req); this.result.set(r); this.loading.set(false); },
       error: err => { this.error.set(describeHttpError(err)); this.result.set(null); this.loading.set(false); },
     });
   }
