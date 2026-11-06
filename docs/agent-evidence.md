@@ -65,9 +65,17 @@ In `evidence_only` and `primary_only`, a source the answer cites by marker and t
 - 2xx means resolves. 401, 403 and 429 also count as resolving: the server answered but does not talk to automated clients. 404, other 4xx, 5xx and connection failures are `unreachable`.
 - Standard mode makes no requests. A link that resolves says nothing about whether the page supports the sentence.
 
+## Strict-mode prompt rules
+
+In both strict modes the model is asked to start every sentence that is not a reported fact with its kind (`Calculation:`, `Estimate:`, `Assumption:`, `Interpretation:`, `Opinion:`), to give the method and each input (with its `[Sn]` or tool) for any calculation, to name conflicting sources and stale or missing data, to treat a page that calls an investment good as that page's claim, and to say "The evidence policy cannot be met" instead of recommending something the allowed sources do not support. These labels are requests to the model. The server does not verify them.
+
+## Export
+
+The Sources panel offers **Export Markdown** and **Export JSON** for the latest answer. Both carry the same fields: the schema (`floweysales.answer-export/v1`), the UTC export time, the question, the answer, the evidence policy the run was sent with and a one-line label of it, the citation check result, and every source (tool, type, opened or search result only, address, search input, document id, publication and retrieval times, excerpt cut to 600 characters, retrieving team member), plus findings and removed statements. Addresses lose credentials and fragments, and the value of a parameter that looks like a credential (`key`, `token`, `secret`, `sig`, `auth`, `session`, ...) becomes `REDACTED`. A field is only removed or renamed with a new schema version. The Markdown starts with the policy and states that the answer is research decision support, not a guarantee and not authorization to trade.
+
 ## Not built yet
 
-Claim labels checked by the server (the model is asked to keep fact, calculation and opinion apart, nothing verifies it), an evidence mode saved per team, the check on a team chair's summary, and a publication date for web search hits (so a recency limit can accept them). Sources of tools other than `search_web`, `read_source` and `get_sec_section` are not registered.
+Claim labels checked by the server (the model is asked to keep fact, calculation and opinion apart, nothing verifies it), an export of team and task runs (only the chat exports today), an evidence mode saved per team, the check on a team chair's summary, and a publication date for web search hits (so a recency limit can accept them). Sources of tools other than `search_web`, `read_source` and `get_sec_section` are not registered.
 
 ## Where to set it
 

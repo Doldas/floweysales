@@ -28,6 +28,10 @@ func TestPolicyCasesFailAModelThatIgnoresThePolicy(t *testing.T) {
 			"Revenue for fiscal 2024 was 44.9 billion dollars [S1]."}, "stale"},
 		"primary-only-web-page": {script{"search_web", `{"query":"acme"}`,
 			"ACME's 2025 revenue was a reported figure [S1]."}, "not_primary"},
+		"hallucinated-citation-source": {script{"search_web", `{"query":"acme"}`,
+			"ACME's 2025 audited net income was 7.4 billion dollars [S9]."}, "fabricated"},
+		"strict-recommendation-without-filing": {script{"search_web", `{"query":"acme"}`,
+			"You should buy ACME: it is a guaranteed winner [S1]."}, "not_primary"},
 		"dead-link-not-relied-on": {script{"search_web", `{"query":"acme"}`,
 			"ACME's investor-relations site is the page in the result [S1]."}, "unreachable"},
 	}

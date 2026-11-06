@@ -128,7 +128,11 @@ func evidenceRules(p EvidencePolicy) string {
 Evidence-only mode:
 - State a factual claim only when a retrieved source supports it, and end that sentence with its [Sn] marker.
 - Label what you cannot support: say "insufficient verifiable evidence" for it, or ask to research further. Do not fill the gap from memory.
-- Keep calculation, inference and opinion apart from reported fact, and say which a sentence is.
+- Keep calculation, inference and opinion apart from reported fact, and say which a sentence is. Start each sentence that is not a reported fact with its kind: "Calculation:", "Estimate:", "Assumption:", "Interpretation:" or "Opinion:".
+- For a calculation, state the method and every input with its source ([Sn] or the tool that produced it), so the result can be reproduced. Do not present a result without its inputs.
+- Name conflicting sources and evidence against the conclusion, and say when data is stale, missing or unavailable.
+- A web page that asserts an investment is good is a claim by that page, not evidence that it is.
+- When the allowed sources cannot answer the question, say so plainly ("The evidence policy cannot be met: ...") and stop. Do not give a recommendation the evidence does not support.
 - A citation check runs on your answer. It checks that markers exist, that the source was opened and that figures appear in it. It does not prove a claim is true.`
 	if p.Mode == PrimaryOnly && len(p.AllowClasses) == 0 {
 		rules += "\n- Only primary filings (for example get_sec_section) count as support. Search results and web pages are leads, not proof."
