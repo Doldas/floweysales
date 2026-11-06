@@ -183,6 +183,22 @@ export class ShellComponent {
     }
   }
 
+  /** Phone layout (matches the 767.98px breakpoint in shell.scss), where the chip is shown without its details. */
+  isNarrow(): boolean {
+    try {
+      return window.matchMedia('(max-width: 767.98px)').matches;
+    } catch {
+      return false;
+    }
+  }
+
+  /** On narrow screens the chip opens the picker, which shows the full instrument identity and the favorite action. */
+  onChipClick(event: Event): void {
+    if (!this.isNarrow()) return;
+    event.preventDefault();
+    this.openPicker();
+  }
+
   openPicker(): void {
     this.pickerOpen.set(true);
     // Focus the search once the sheet is in the DOM; the keyboard then opens on phones.

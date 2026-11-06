@@ -93,7 +93,7 @@
   <div class="fs-backdrop" (click)="navOpen.set(false)" aria-hidden="true"></div>
 
   <div class="fs-main">
-    <header class="fs-topbar">
+    <header class="fs-topbar" [class.has-instrument]="!!market.trackedSymbol()">
       <button type="button" class="btn btn-ghost btn-icon d-lg-none" (click)="navOpen.set(true)" aria-label="Open navigation"
               aria-controls="fs-sidebar" [attr.aria-expanded]="navOpen()">
         <i class="bi bi-list fs-5"></i>
@@ -101,7 +101,9 @@
       <div class="topbar-title" aria-live="polite">{{ pageTitle() }}</div>
 
       @if (market.trackedSymbol()) {
-        <a routerLink="/markets" class="instrument-chip" [class.is-ignored]="instrumentUse() === 'ignored'" [title]="instrumentTitle()">
+        <a routerLink="/markets" class="instrument-chip" [class.is-ignored]="instrumentUse() === 'ignored'" [title]="instrumentTitle()"
+           [attr.aria-label]="'Selected instrument: ' + instrumentTitle() + (isNarrow() ? '. Opens the instrument picker.' : '. Opens Markets.')"
+           (click)="onChipClick($event)">
           <span class="chip-sym">{{ market.trackedSymbol() }}</span>
           @if (market.trackedName()) { <span class="chip-name">{{ market.trackedName() }}</span> }
           <span class="chip-meta">{{ market.trackedExchange() ? market.trackedExchange() + ' · ' : '' }}{{ market.trackedProvider() }}</span>
@@ -192,6 +194,15 @@
             <i class="bi" [class.bi-star-fill]="market.selectedFavorite()" [class.bi-star]="!market.selectedFavorite()" aria-hidden="true"></i>
             <span>{{ market.selectedFavorite() ? 'Remove ' + market.trackedSymbol() + ' from favorites' : 'Add ' + market.trackedSymbol() + ' to favorites' }}</span>
           </button>
+        }
+        @if (market.trackedSymbol()) {
+          <dl class="picker-current" aria-label="Selected instrument">
+            <dt>Ticker</dt><dd class="picker-sym">{{ market.trackedSymbol() }}</dd>
+            @if (market.trackedName()) { <dt>Name</dt><dd>{{ market.trackedName() }}</dd> }
+            @if (market.trackedExchange()) { <dt>Exchange</dt><dd>{{ market.trackedExchange() }}</dd> }
+            <dt>Provider</dt><dd>{{ market.trackedProvider() }}</dd>
+          </dl>
+          <a routerLink="/markets" class="picker-markets" (click)="pickerOpen.set(false)">Open in Markets</a>
         }
         @if (instrumentUse() === 'ignored') { <p class="picker-note">The current page does not use the selected instrument.</p> }
         <fs-symbol-search (chosen)="pickerOpen.set(false)" />
