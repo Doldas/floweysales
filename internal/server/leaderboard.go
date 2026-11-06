@@ -25,7 +25,7 @@ import (
 
 const (
 	leaderboardCacheTTL = 15 * time.Minute
-	leaderboardMaxCache = 16
+	leaderboardMaxCache = 32
 	// A factor without data scores below the median: unknown is not good.
 	leaderboardMissingFactor = 40.0
 )
@@ -50,6 +50,12 @@ type leaderboardUniverse struct {
 	Countries   []string       `json:"countries,omitempty"`
 	Source      universeSource `json:"source"`
 	Symbols     []string       `json:"symbols"`
+	// Components names the lists a composite universe (the global scope) is
+	// the union of, so each company can be traced to the list it came from.
+	Components []string `json:"components,omitempty"`
+	// Identifiers holds verified identifiers by symbol. An identifier that
+	// nobody verified is absent, never guessed.
+	Identifiers map[string]instrumentID `json:"identifiers,omitempty"`
 	// Persona and AsOf mark a universe built from a character's reference
 	// portfolio, and the date of the disclosure it comes from.
 	Persona string `json:"persona,omitempty"`
@@ -64,6 +70,10 @@ var universesJSON []byte
 // like data, with their source stated beside the symbols.
 var leaderboardUniverses = loadCuratedUniverses()
 
+// curatedUniversesVersion is the version of universes.json, quoted in each
+// company's discovery record.
+var curatedUniversesVersion string
+
 func loadCuratedUniverses() []leaderboardUniverse {
 	var file struct {
 		Version   string                `json:"version"`
@@ -72,6 +82,7 @@ func loadCuratedUniverses() []leaderboardUniverse {
 	if err := json.Unmarshal(universesJSON, &file); err != nil {
 		panic("universes.json: " + err.Error())
 	}
+	curatedUniversesVersion = file.Version
 	return file.Universes
 }
 
@@ -780,6 +791,9 @@ func (e *Engine) registerLeaderboardRoutes() {
 			}
 			uu := definitionWith(idx, snap).universe()
 			userUniverse, symbols = &uu, uu.Symbols
+		} else if universe == globalUniverseID {
+			g := globalUniverse()
+			userUniverse, symbols = &g, g.Symbols
 		} else {
 			var err error
 			if symbols, err = leaderboardSymbols(universe, q.Get("symbols"), ""); err != nil {
@@ -792,8 +806,29 @@ func (e *Engine) registerLeaderboardRoutes() {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "unknown strategy"})
 			return
 		}
+		filter, err := parseScopeFilter(q)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		mode, err := compareMode(q.Get("compare"), universe)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
 		provider := e.parseProvider(q.Get("provider"))
-		rows, err := e.leaderboardMetrics(r.Context(), provider, symbols)
+		fullList := symbols
+		symbols, outOfScope := filter.filterSymbols(symbols)
+		info, found := findLeaderboardUniverse(universe)
+		if userUniverse != nil {
+			info = *userUniverse
+		} else if !found {
+			info = customUniverse(fullList)
+		}
+		rows, err := e.rowsForUniverse(r.Context(), provider, info, symbols)
+		if err == nil {
+			rows, err = e.withFallbackProvider(r.Context(), q.Get("fallback_provider"), q.Get("cross_check") == "1", provider, rows)
+		}
 		if err != nil {
 			status := providerErrorStatus(err)
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -808,12 +843,12 @@ func (e *Engine) registerLeaderboardRoutes() {
 				asOf = d
 			}
 		}
-		info, found := findLeaderboardUniverse(universe)
-		if userUniverse != nil {
-			info = *userUniverse
-		} else if !found {
-			info = customUniverse(symbols)
+		var outOfCurrency []excludedCompany
+		rows, outOfCurrency = filter.filterRows(rows)
+		for _, c := range outOfCurrency {
+			symbols = removeSymbol(symbols, c.Symbol)
 		}
+		outOfScope = append(outOfScope, outOfCurrency...)
 		// The signed-in user's own objective and constraints, unless the
 		// request turns them off. Flow nodes and the agent never apply them.
 		var prefs rankingPreferences
@@ -822,11 +857,12 @@ func (e *Engine) registerLeaderboardRoutes() {
 		}
 		effective := tiltedStrategy(strategy, prefs)
 		now := time.Now().UTC()
-		scored := scoreLeaderboardDetailed(rows, effective, q.Get("explain") == "1")
+		scored := scoreByMode(rows, effective, q.Get("explain") == "1", mode)
 		scored, removed := constrain(prefs, scored)
 		annotateDiscovery(info, provider.String(), scored)
 		selection := buildSelection(info, symbols, rows, scored)
 		addConstraintStep(&selection, removed)
+		addFilterStep(&selection, filter, outOfScope)
 		listed := info
 		listed.Symbols = nil // the list itself is in "universes"; here only its description
 		prov := leaderboardProvenanceFor(effective, prefs, universe, symbols, rows)
@@ -834,11 +870,14 @@ func (e *Engine) registerLeaderboardRoutes() {
 		prov["universe_fact"] = universeFact(info)
 		prov["data_age"] = leaderboardDataAge(info, rows, now)
 		prov["bias"] = leaderboardBias(info, symbols, rows, scored)
+		prov["providers"] = providersUsed(provider.String(), rows)
 		writeJSON(w, http.StatusOK, map[string]any{
 			"universe": universe, "strategy": strategy.ID, "provider": provider.String(), "as_of": asOf,
 			"generated_at":  now.Format(time.RFC3339),
 			"universe_info": listed, "selection": selection,
 			"rows": scored, "unranked": splitLeaderboardRows(rows),
+			"scope": map[string]any{"filters": map[string]any{"active": filter.active(), "description": filter.describe()}, "compare": mode,
+				"coverage": regionCoverageOf(symbols, rows, scored, provider.String()), "comparability": leaderboardComparability(mode, scored)},
 			"universes": e.universesFor(r.Context()), "strategies": leaderboardStrategies,
 			"preferences": map[string]any{"applied": prefs.active(), "values": prefs, "summary": prefs.describe(), "effective_weights": effective.Weights},
 			"provenance":  prov,

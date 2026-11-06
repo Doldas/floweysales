@@ -199,7 +199,7 @@ func TestLeaderboardEndpoint(t *testing.T) {
 	if rows[0].(map[string]any)["symbol"] != "UP" || unranked[0].(map[string]any)["symbol"] != "BAD" {
 		t.Fatalf("unexpected ranking: %v / %v", rows, unranked)
 	}
-	if len(body["universes"].([]any)) != len(leaderboardUniverses) || len(body["strategies"].([]any)) != len(leaderboardStrategies) {
+	if len(body["universes"].([]any)) != len(leaderboardUniverses)+1 || len(body["strategies"].([]any)) != len(leaderboardStrategies) {
 		t.Fatal("the response lists the available universes and strategies")
 	}
 	// The second call reuses the cached metrics, so a strategy switch is free.
