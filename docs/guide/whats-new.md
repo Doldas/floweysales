@@ -9,6 +9,9 @@ last-reviewed: 2026-11-06
 
 ## November 2026 release
 
+**Agents**
+- Agent answers get a claim check: each cited sentence is compared with the cited text for company, metric, period, unit and direction, and shown as supported, contradicted, not proven or not checked, with the source passage under **Why is this claim supported?** See [Agents, teams and evidence](agents.md).
+
 **Backtests**
 - Choose a custom period in UTC, test several lists and periods at once, and check how trading cost, holdings and rebalance interval change a result. See [Strategies and backtests](strategies.md).
 - Results are cut into consecutive parts of the period, and the result lists the biases that apply. Saved runs carry a source badge and export with their provenance.
