@@ -37,6 +37,20 @@ The optional **run_workflows** automatically selects **one or two real saved Flo
 
 A Playwright job runs against the *currently deployed* version. The job's checkout SHA is the test code revision, **not proof that the deployment is on the same version**. The suite therefore checks `/healthz`, reads the commit the deployed image reports in `/api/about`, prints it in the log and fails if the build reports none. Set the `expect_commit` input (or `LIVE_E2E_EXPECT_COMMIT` locally) to also fail unless the instance runs that commit, for example after a deploy.
 
+## Scenario matrix, helpers and mock-backed counterpart
+
+The safety rules and invariants live in `frontend/live-e2e/workflow-scenarios.ts`, a pure module (no Playwright, network or secrets) with `node --test` unit tests in `workflow-scenarios.spec.ts` (part of normal CI):
+
+- `optedIn` - gates (`LIVE_E2E_AI`, `LIVE_E2E_WORKFLOWS`) open only for `true`/`1`; everything else keeps the tests skipped.
+- `fixtureProblems` - refuses any flow that is not a disabled, unscheduled `[E2E] ` flow made of allowlisted node types without agent tool grants.
+- `classifyScenarios` - tags each fixture by structure (`chain`, `branch`, `merge`, `agent-output`, `deterministic`) so a fixture set can be seen to cover several angles; logs print only the id and tags, never names or contents.
+- `stepProblems` - checks the run's node trace by structure and state (trigger ran, no failed step, output reached, all nodes ran in non-branching graphs), never by exact model text.
+- `redact` - strips emails, bearer tokens, key-like strings and `password=` style values from text before logging.
+
+`LIVE_E2E_MAX_WORKFLOWS` (workflow input `max_workflows`, default 2, hard ceiling 6) bounds how many fixtures one run may execute. Suggested fixtures, one per angle: `[E2E] Chain` (trigger, transform, output), `[E2E] Branch` (condition with two outputs), `[E2E] Merge`, `[E2E] AI chain` (agent without tools, then output).
+
+`frontend/e2e/flow-run-now.spec.ts` is the **mock-backed counterpart**: it runs the same UI path (My Flows, Run now, "Run queued", history, Inspect nodes) against the deterministic mock backend in normal CI, so the selectors the live suite depends on cannot silently break. Not yet covered: invalid-graph diagnostics on live fixtures, retry/timeout/resume, saved vs draft behavior (#273).
+
 ## Safety and failure evidence
 
 - This workflow is `workflow_dispatch` only, runs only through a protected GitHub environment, has `contents: read` permissions and cannot deploy code. Do **not** put these credentials into a pull-request-triggered workflow or enable arbitrary external base URLs.

@@ -20,6 +20,11 @@ on:
         required: true
         type: boolean
         default: false
+      max_workflows:
+        description: 'Upper bound of [E2E] fixtures executed when run_workflows is on (1-6)'
+        required: false
+        type: string
+        default: '2'
 
 permissions:
   contents: read
@@ -60,6 +65,7 @@ jobs:
           LIVE_E2E_EXPECT_COMMIT: ${{ inputs.expect_commit }}
           LIVE_E2E_AI: ${{ inputs.run_ai_probe }}
           LIVE_E2E_WORKFLOWS: ${{ inputs.run_workflows }}
+          LIVE_E2E_MAX_WORKFLOWS: ${{ inputs.max_workflows }}
         run: |
           set -euo pipefail
           test -n "$LIVE_E2E_EMAIL" || { echo "::error::Configure live-e2e environment secret LIVE_E2E_EMAIL"; exit 1; }
