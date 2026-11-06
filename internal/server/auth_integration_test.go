@@ -268,6 +268,44 @@ func TestMySQLAuthGate(t *testing.T) {
 	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/run", flowID), map[string]any{"graph": editedGraph}, userCookie, ""), http.StatusBadRequest)
 	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/run", flowID), map[string]any{"target": "draft", "graph": editedGraph}, otherCookies[0], ""), http.StatusNotFound)
 	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/runs/%d/cancel", flowID, int64(draftRunID)), nil, userCookie, ""), http.StatusOK)
+	// The draft test carries the snapshot hash and a simulated-side-effects label.
+	if hash, _ := draftRun["graph_hash"].(string); len(hash) != 64 || draftRun["simulated"] != true {
+		t.Fatalf("draft test should report its snapshot hash and simulation: %v", draftRun)
+	}
+	// A flow that was never saved is tested without creating any flow: its run lives in
+	// the tester's own "draft" history and is invisible to other users.
+	scratchResponse := request("POST", "/api/admin/flows/draft/run", map[string]any{"graph": editedGraph}, userCookie, "")
+	var scratchRun map[string]any
+	if err := json.NewDecoder(scratchResponse.Body).Decode(&scratchRun); err != nil {
+		t.Fatal(err)
+	}
+	scratchResponse.Body.Close()
+	scratchRunID, _ := scratchRun["run_id"].(float64)
+	if scratchResponse.StatusCode != http.StatusAccepted || scratchRun["scratch"] != true || scratchRun["simulated"] != true || scratchRunID <= 0 {
+		t.Fatalf("a never-saved flow should be queued as a simulated draft test: %d %v", scratchResponse.StatusCode, scratchRun)
+	}
+	historyResponse := request("GET", "/api/admin/flows/draft/runs", nil, userCookie, "")
+	historyBody, _ := io.ReadAll(historyResponse.Body)
+	historyResponse.Body.Close()
+	if !strings.Contains(string(historyBody), `"trigger":"draft test"`) || !strings.Contains(string(historyBody), scratchRun["graph_hash"].(string)) {
+		t.Fatalf("the draft history should list the run with its hash: %s", historyBody)
+	}
+	otherHistory := request("GET", "/api/admin/flows/draft/runs", nil, otherCookies[0], "")
+	otherHistoryBody, _ := io.ReadAll(otherHistory.Body)
+	otherHistory.Body.Close()
+	if strings.Contains(string(otherHistoryBody), `"trigger":"draft test"`) {
+		t.Fatalf("another user must not see the draft history: %s", otherHistoryBody)
+	}
+	assert(request("POST", "/api/admin/flows/draft/run", nil, userCookie, ""), http.StatusBadRequest)
+	assert(request("POST", "/api/admin/flows/draft/run", map[string]any{"graph": brokenGraph}, userCookie, ""), http.StatusBadRequest)
+	assert(request("POST", "/api/admin/flows/draft/run", map[string]any{"graph": editedGraph, "simulate_side_effects": false}, userCookie, ""), http.StatusBadRequest)
+	assert(request("POST", fmt.Sprintf("/api/admin/flows/draft/runs/%d/cancel", int64(scratchRunID)), nil, userCookie, ""), http.StatusOK)
+	scratchFlows := request("GET", "/api/admin/flows", nil, userCookie, "")
+	scratchFlowsBody, _ := io.ReadAll(scratchFlows.Body)
+	scratchFlows.Body.Close()
+	if strings.Contains(string(scratchFlowsBody), flowDraftName) {
+		t.Fatalf("testing a new flow must not create one: %s", scratchFlowsBody)
+	}
 	// Only safe research routes are available to USER. No orders or global changes.
 	assert(request("GET", "/api/ai/tools", nil, userCookie, ""), http.StatusOK)
 	assert(request("GET", "/api/orders", nil, userCookie, ""), http.StatusForbidden)

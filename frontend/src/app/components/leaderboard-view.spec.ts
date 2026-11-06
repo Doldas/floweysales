@@ -2,7 +2,7 @@
 //   node --test src/app/components/leaderboard-view.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { STRATEGY_PLAYBOOK, alternativeList, dataAgeIsWarning, flagList, formToPreferences, leaderboardPrompt, pct, preferencesToForm, reasonList, recordLink, scoreTone } from './leaderboard-view.ts';
+import { indexBadge, indexFacts, STRATEGY_PLAYBOOK, alternativeList, dataAgeIsWarning, flagList, formToPreferences, leaderboardPrompt, pct, preferencesToForm, reasonList, recordLink, scoreTone } from './leaderboard-view.ts';
 import { INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES } from './investor-nodes.ts';
 
 test('tones, flags, reasons and figures', () => {
@@ -146,4 +146,31 @@ test('mixed data ages, an old newest price or an old list make the age statement
   assert.equal(dataAgeIsWarning({ mixed: true }), true);
   assert.equal(dataAgeIsWarning({ mixed: false, newest_price_age_days: 9 }), true);
   assert.equal(dataAgeIsWarning({ mixed: false, list_stale: true }), true);
+});
+
+const unavailableIndex = {
+  id: 'index_omxs30', name: 'OMX Stockholm 30 (OMXS30)', region: 'europe', country: 'SE', currency: 'SEK', provider: 'Nasdaq Nordic', nominal_count: 30, benchmark_symbol: '^OMX',
+  methodology: { summary: 'Rules.', url: 'https://example.com/m' }, constituent_source: { name: 'Unverified', url: null, retrieved_at: null, license_verified: false },
+  as_of: null, status: 'unavailable' as const, unavailable_reason: 'No licence.', licensing: 'Not verified.', exclusions: 'A and B shares.', share_class_policy: 'By identity.',
+  history: { point_in_time: false, note: 'No history.' }, benchmark_note: 'Price index.', count: 0, warnings: ['Unavailable: No licence.'], age_days: null, stale: false, available: false,
+};
+
+test('an unavailable index shows no members, no date and no invented source', () => {
+  assert.equal(indexBadge(unavailableIndex), 'unavailable');
+  const facts = Object.fromEntries(indexFacts(unavailableIndex).map(f => [f.label, f]));
+  assert.equal(facts['As of (UTC)'].value, 'No list loaded');
+  assert.equal(facts['Securities'].value, 'None loaded (index name says 30)');
+  assert.equal(facts['Constituent source'].link, null);
+  assert.equal(facts['Methodology'].link, 'https://example.com/m');
+  assert.match(facts['History'].value, /^Current members only/);
+});
+
+test('an available index shows count, date and stale state', () => {
+  const ix = { ...unavailableIndex, available: true, status: 'available' as const, count: 29, as_of: '2026-11-01', stale: true,
+    constituent_source: { name: 'List', url: 'javascript:alert(1)', retrieved_at: '2026-11-01', license_verified: true } };
+  assert.equal(indexBadge(ix), '29 · 2026-11-01 · stale');
+  const facts = Object.fromEntries(indexFacts(ix).map(f => [f.label, f]));
+  assert.equal(facts['Securities'].value, '29 (index name says 30)');
+  assert.equal(facts['Constituent source'].link, null, 'only http(s) links are followed');
+  assert.match(facts['Licensing'].value, /Licence verified\./);
 });

@@ -6,6 +6,7 @@ import { AgentSession, type ChatEntry } from '../core/agent-session';
 import { renderMarkdown } from '../markdown';
 import { toolLabel } from '../components/agent-tools';
 import { defaultOptionLabel, profileOption, profileSummary } from '../components/profile-view';
+import { ProgressStatusComponent } from '../ui/progress-status';
 import { ToolCallComponent } from '../components/tool-call';
 import { canResume, checklistLine, taskStatusLabel } from '../core/task-view';
 import { formatUtcDateTime } from '../ui/datetime';
@@ -22,7 +23,7 @@ type Block = { kind: 'user' | 'assistant'; entry: ChatEntry } | { kind: 'steps';
 @Component({
   selector: 'fs-agent-chat',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ToolCallComponent],
+  imports: [ToolCallComponent, ProgressStatusComponent],
   templateUrl: './agent-chat.html',
   styleUrl: './agent-chat.scss',
 })

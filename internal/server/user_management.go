@@ -2,79 +2,39 @@ package server
 
 import (
 	"context"
-	"crypto/tls"
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"html"
-	"io"
-	"net"
 	"net/http"
 	"net/mail"
-	"net/smtp"
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"floweysales/internal/identity"
+	"floweysales/internal/mailer"
 )
 
 func sendInvitation(ctx context.Context, cfg identity.SMTPSettings, password, email, token string) error {
 	if cfg.Port != 587 {
 		return errors.New("SMTP requires port 587 with STARTTLS")
 	}
-	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
-	dialer := net.Dialer{Timeout: 8 * time.Second}
-	conn, err := dialer.DialContext(ctx, "tcp", addr)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(20 * time.Second))
-	client, err := smtp.NewClient(conn, cfg.Host)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	ok, _ := client.Extension("STARTTLS")
-	if !ok {
-		return errors.New("SMTP server does not support STARTTLS")
-	}
-	if err := client.StartTLS(&tls.Config{ServerName: cfg.Host, MinVersion: tls.VersionTLS12}); err != nil {
-		return err
-	}
-	if cfg.Username != "" {
-		if password == "" {
-			return errors.New("SMTP password not configured")
-		}
-		if err := client.Auth(smtp.PlainAuth("", cfg.Username, password, cfg.Host)); err != nil {
-			return err
-		}
-	}
-	if err := client.Mail(cfg.Sender); err != nil {
-		return err
-	}
-	if err := client.Rcpt(email); err != nil {
-		return err
-	}
-	writer, err := client.Data()
-	if err != nil {
-		return err
-	}
 	link := strings.TrimSuffix(cfg.PublicURL, "/") + "/?invite=" + url.QueryEscape(token)
-	boundary := "floweysales-invitation-mixed-2026"
-	plain := "You've been invited to FloweySales. Activate your account within 48 hours:\r\n" + link + "\r\n\r\nIf you did not expect this invitation, you can ignore this email.\r\n"
-	safeLink := html.EscapeString(link)
-	rich := fmt.Sprintf(`<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:32px 12px;background:#0b1020;font-family:Arial,Helvetica,sans-serif;color:#e2e8f0"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%%;max-width:560px;margin:auto;background:#151d32;border:1px solid #334155;border-radius:16px"><tr><td style="padding:32px"><p style="font-size:19px;font-weight:bold;color:#a5b4fc;margin:0 0 28px">✦ FloweySales</p><h1 style="font-size:27px;line-height:1.25;color:#ffffff;margin:0 0 14px">Your research workspace awaits</h1><p style="color:#cbd5e1;line-height:1.6;font-size:16px">You've been invited to FloweySales. Set your password to activate your private research workspace.</p><p style="margin:30px 0"><a href="%s" style="display:inline-block;padding:14px 24px;background:#6366f1;color:#ffffff;text-decoration:none;font-weight:bold;border-radius:9px">Activate your account</a></p><p style="font-size:13px;color:#a5b4fc">This invitation expires in 48 hours.</p><p style="font-size:13px;color:#94a3b8;line-height:1.6">If the button doesn't work, copy this link:<br><a href="%s" style="color:#67e8f9;overflow-wrap:anywhere">%s</a></p><hr style="border:0;border-top:1px solid #334155;margin:26px 0"><p style="font-size:12px;color:#94a3b8;line-height:1.6">If you weren't expecting this invitation, ignore this message. FloweySales is a research aid, not investment advice.</p></td></tr></table></body></html>`, safeLink, safeLink, safeLink)
-	body := "From: " + cfg.Sender + "\r\nTo: " + email + "\r\nSubject: FloweySales account invitation\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=\"" + boundary + "\"\r\n\r\n--" + boundary + "\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n" + plain + "\r\n--" + boundary + "\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n" + rich + "\r\n--" + boundary + "--\r\n"
-	_, err = io.WriteString(writer, body)
-	if err != nil {
-		writer.Close()
-		return err
-	}
-	return writer.Close()
+	return mailer.Send(ctx, smtpConfig(cfg, password), email, mailer.Message{
+		Kind:        mailer.KindTransactional,
+		Subject:     "FloweySales account invitation",
+		Title:       "Your research workspace awaits",
+		Preheader:   "You've been invited to FloweySales.",
+		ContentType: mailer.Text,
+		Content:     "You've been invited to FloweySales. Set your password to activate your private research workspace.",
+		Action:      &mailer.Action{Label: "Activate your account", URL: link},
+		ActionNote:  "This invitation expires in 48 hours.",
+	})
+}
+
+// smtpConfig adapts the stored mail settings and the opened password.
+func smtpConfig(cfg identity.SMTPSettings, password string) mailer.Config {
+	return mailer.Config{Host: cfg.Host, Port: cfg.Port, Username: cfg.Username, Password: password, Sender: cfg.Sender}
 }
 
 func validSMTP(cfg identity.SMTPSettings) bool {

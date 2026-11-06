@@ -9,13 +9,13 @@ import { Access } from '../core/access';
 import { AgentSession } from '../core/agent-session';
 import { MarketState } from '../core/market-state';
 import { MarketService, describeHttpError } from '../services';
-import type { LeaderboardOption, LeaderboardResponse, LeaderboardRow, RankingPreferencesResponse } from '../models';
+import type { IndexInfo, LeaderboardOption, LeaderboardResponse, LeaderboardRow, RankingPreferencesResponse } from '../models';
 import { LEADERBOARD_FACTORS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES } from './investor-nodes';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import { SkeletonComponent } from '../ui/skeleton';
 import { SourceComponent } from '../ui/source';
 import { BacktestPanelComponent } from './backtest-panel';
-import { FACTOR_LABELS, OBJECTIVE_OPTIONS, dataAgeIsWarning, formToPreferences, preferencesToForm, recordLink, regionCoverage, STRATEGY_PLAYBOOK, alternativeList, coverageBreakdown, coverageSummary, flagList, leaderboardPrompt, methodFactors, metricValue, num, pct, reasonList, scoreSum, scoreTone, selectionLines, sourceKindLabel, universeCsv } from './leaderboard-view';
+import { indexBadge, indexFacts, FACTOR_LABELS, OBJECTIVE_OPTIONS, dataAgeIsWarning, formToPreferences, preferencesToForm, recordLink, regionCoverage, STRATEGY_PLAYBOOK, alternativeList, coverageBreakdown, coverageSummary, flagList, leaderboardPrompt, methodFactors, metricValue, num, pct, reasonList, scoreSum, scoreTone, selectionLines, sourceKindLabel, universeCsv } from './leaderboard-view';
 
 const WATCHLIST = 'watchlist';
 const STORE_KEY = 'fs.leaderboard';
@@ -53,6 +53,29 @@ const STORE_KEY = 'fs.leaderboard';
         <button type="button" [attr.aria-pressed]="universe() === watchlist" (click)="setUniverse(watchlist)" title="The symbols on your watchlist or trackers">My watchlist</button>
       }
     </div>
+    <div class="index-picker" role="group" aria-label="Index universe">
+      <span class="index-label">Index</span>
+      @for (i of indices(); track i.id) {
+        <button type="button" class="fs-chip" [attr.aria-pressed]="universe() === i.id || (!i.available && indexView() === i.id)" (click)="chooseIndex(i)"
+          [title]="i.available ? i.name + ': ' + i.provider : i.name + ' is unavailable: ' + i.unavailable_reason">
+          {{ i.name }} <small class="text-muted">{{ badge(i) }}</small>
+        </button>
+      }
+      @if (indicesError()) { <span class="text-muted">{{ indicesError() }}</span> }
+    </div>
+    @if (shownIndex(); as ix) {
+      <section class="index-panel" aria-label="About this index">
+        <h3 class="h6">{{ ix.name }} <span class="text-muted">({{ ix.region.replace('_', ' ') }}, {{ ix.country }})</span></h3>
+        @if (!ix.available) { <p class="index-unavailable" role="status"><strong>Unavailable.</strong> {{ ix.unavailable_reason }} No members are shown or assumed.</p> }
+        @for (w of ix.warnings; track w) { @if (ix.available) { <p class="index-warning" role="status">{{ w }}</p> } }
+        <dl class="index-facts">
+          @for (f of facts(ix); track f.label) {
+            <div><dt>{{ f.label }}</dt><dd>{{ f.value }} @if (f.link) { <a [href]="f.link" target="_blank" rel="noopener noreferrer">source</a> }</dd></div>
+          }
+        </dl>
+        <p class="text-muted mb-0">An <strong>index</strong> is a published list of companies chosen by its provider's rules; each member is an <strong>index constituent</strong>. Members are usually weighted by <strong>market capitalization</strong> (share price times shares outstanding). Membership is not a ranking or a recommendation: the strategies below rank whichever list you choose.</p>
+      </section>
+    }
     <details class="regions">
       <summary>Coverage by region</summary>
       <ul>
@@ -362,6 +385,13 @@ const STORE_KEY = 'fs.leaderboard';
 .board-sub { font-size: 0.8rem; color: var(--fs-muted); margin-top: 0.15rem; }
 .board-actions { display: flex; align-items: center; gap: 0.4rem; }
 .as-of { font-size: 0.75rem; color: var(--fs-muted); white-space: nowrap; }
+.index-picker { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.index-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fs-muted); }
+.index-panel { border: 1px solid var(--fs-border); border-radius: 0.5rem; padding: 0.75rem 1rem; font-size: 0.8125rem; }
+.index-unavailable { border-left: 3px solid var(--fs-warn, #b7791f); padding-left: 0.6rem; }
+.index-warning { color: var(--fs-muted); margin: 0.25rem 0; }
+.index-facts { margin: 0.5rem 0; display: grid; gap: 0.3rem; div { display: grid; grid-template-columns: 9rem 1fr; gap: 0.5rem; } dt { color: var(--fs-muted); font-weight: 500; } dd { margin: 0; } }
+@media (max-width: 575.98px) { .index-facts div { grid-template-columns: 1fr; gap: 0; } }
 .regions { font-size: 0.8125rem; summary { cursor: pointer; color: var(--fs-muted); } ul { margin: 0.4rem 0; padding-left: 1.1rem; } }
 .board-controls { display: grid; gap: 0.6rem; padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--fs-border); }
 .strategies { display: flex; flex-wrap: wrap; gap: 0.35rem; .fs-chip { padding: 0.2rem 0.65rem; font-size: 0.78rem; } }
@@ -431,6 +461,13 @@ export class LeaderboardComponent {
   readonly num = num;
 
   readonly universe = signal('us_mega');
+  readonly indices = signal<IndexInfo[]>([]);
+  readonly indicesError = signal('');
+  /** The unavailable index being inspected; an available one is the ranked universe. */
+  readonly indexView = signal('');
+  readonly shownIndex = computed(() => this.indices().find(i => i.id === (this.indexView() || this.universe())) ?? null);
+  readonly facts = indexFacts;
+  readonly badge = indexBadge;
   readonly strategy = signal('best');
   readonly data = signal<LeaderboardResponse | null>(null);
   readonly loading = signal(false);
@@ -482,10 +519,27 @@ export class LeaderboardComponent {
     } catch { /* storage may be unavailable */ }
     inject(DestroyRef).onDestroy(() => this.request?.unsubscribe());
     this.loadPreferences();
+    this.loadIndices();
     this.load();
   }
 
+  private loadIndices(): void {
+    const sub = this.api.getIndices().subscribe({
+      next: r => this.indices.set(r.indices),
+      error: () => this.indicesError.set('The index list could not be loaded.'),
+    });
+    inject(DestroyRef).onDestroy(() => sub.unsubscribe());
+  }
+
+  /** An available index becomes the ranked universe; an unavailable one is only inspected and never ranked. */
+  chooseIndex(i: IndexInfo): void {
+    if (!i.available) { this.indexView.set(i.id); return; }
+    this.indexView.set('');
+    this.setUniverse(i.id);
+  }
+
   setUniverse(id: string): void {
+    this.indexView.set('');
     if (id === this.universe()) return;
     this.universe.set(id);
     this.showAll.set(false);
