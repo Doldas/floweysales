@@ -1,6 +1,6 @@
 import { CanvasGestures } from './canvas-gestures';
 import { ProgressStatusComponent } from '../ui/progress-status';
-import { HostListener, Component, ChangeDetectionStrategy, signal, effect } from '@angular/core';
+import { HostListener, Component, ChangeDetectionStrategy, signal, effect, computed } from '@angular/core';
 import { MarkdownRunOutputComponent } from './markdown-run-output';
 import { DRAFT_HISTORY_SCOPE, draftRunBody, historyPath, isDraftTest, runButtonHint, runButtonLabel, runKindLabel, shortHash } from './draft-test';
 import { FlowSideEffectsComponent } from './flow-side-effects';
@@ -18,6 +18,9 @@ import { listOverviewFlows } from './flow-overview';
 import { semanticIssues } from './flow-semantics';
 import { nearestPort, portPoints, wireFromDrag, edgeKey, wirePath, type PortPoint } from './wire-drag';
 import { bindInputPin, declaredPins, mixesPinAndPlainInputs, pinBindings, pinEdgeProblem, pinOffset, routeOutputPin, unboundInputPins } from './function-pins';
+import { FlowDiagramComponent } from '../ui/flow-canvas/flow-diagram';
+import { flowNodeTag, runSnapshotDiagram } from '../ui/flow-canvas/diagram-adapters';
+import { FLOW_CANVAS_STYLES } from '../ui/flow-canvas/flow-canvas-styles';
 import { FlowNotifyChannelsComponent } from './flow-notify-channels';
 import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES, SCREEN_FIELDS, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
@@ -36,7 +39,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
 
 @Component({
  selector:'fse-flow-studio', standalone:true,
- imports:[ProgressStatusComponent,CommonModule,FormsModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,FlowSideEffectsComponent,FlowEventAdaptersComponent,FlowNotifyChannelsComponent],
+ imports:[FlowDiagramComponent,ProgressStatusComponent,CommonModule,FormsModule,BlueprintLibraryComponent,MarkdownRunOutputComponent,FlowSideEffectsComponent,FlowEventAdaptersComponent,FlowNotifyChannelsComponent],
  host:{class:'fs-native-forms'},
  changeDetection:ChangeDetectionStrategy.Default,
  template:`
@@ -557,19 +560,8 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
         <section class="exec-graph" aria-label="Historical execution graph">
           <strong>Execution graph · run #{{run.id}}</strong>
           <p class="muted">Saved graph from this run. Select a node to inspect its status and recorded output.</p>
-          <div class="exec-graph-canvas">
-            <svg [attr.viewBox]="executionViewBox()" role="group" [attr.aria-label]="'Execution graph for run '+run.id">
-              @for(edge of graph.edges;track $index){<path [attr.d]="executionEdgePath(edge,graph)" class="exec-edge"/>}
-              @for(n of graph.nodes;track n.id){
-                <g tabindex="0" role="button" class="exec-node" [attr.aria-label]="n.label+' '+executionNodeStatus(n.id)"
-                 (click)="executionSelectedNode.set(n.id)" (keydown.enter)="executionSelectedNode.set(n.id)" (keydown.space)="$event.preventDefault();executionSelectedNode.set(n.id)">
-                  <rect [attr.class]="'exec-rect tone-'+executionNodeColor(n.id)" [class.selected]="executionSelectedNode()===n.id" [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="10"/>
-                  <text class="exec-text" [attr.x]="n.x+10" [attr.y]="n.y+24" font-size="12">{{n.label.slice(0,17)}}</text>
-                  <text class="exec-sub" [attr.x]="n.x+10" [attr.y]="n.y+46" font-size="11"> {{executionNodeStatus(n.id)}}</text>
-                </g>
-              }
-            </svg>
-          </div>
+          <fse-flow-diagram variant="run-snapshot" [nodes]="executionDiagram().nodes" [edges]="executionDiagram().edges" [selectedId]="executionSelectedNode()||''"
+            [fitKey]="run.id" [ariaLabel]="'Execution graph for run '+run.id" readonlyHint="Read-only snapshot" (nodeSelect)="executionSelectedNode.set($event)"/>
           @if(executionSelectedNode();as nodeId){
             <div class="exec-selected">
               <div class="debug-head">
@@ -673,7 +665,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
    }
    }
  </div>`,
- styles:[`
+ styles:[FLOW_CANVAS_STYLES,`
  :host{display:block;margin:0 0 24px;color:var(--fs-text)}
  .flow-studio{display:block;min-width:0}
  .muted{color:var(--fs-muted)}
@@ -720,10 +712,6 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
 
  .blueprint-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;min-height:470px}
  .canvas-shell{position:relative;min-width:0;min-height:0;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);overflow:hidden;background:var(--fs-canvas-bg)}
- .canvas-navigation{display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:8px;background:var(--fs-surface);border-bottom:1px solid var(--fs-border)}
- .canvas-navigation button,.canvas-context-menu button{display:inline-flex;align-items:center;gap:6px;background:var(--fs-surface);color:var(--fs-text-2);border:1px solid var(--fs-border-strong);border-radius:6px;min-height:32px;padding:4px 10px;font:inherit;font-size:.8125rem}
- .canvas-navigation button:hover,.canvas-context-menu button:hover{background:var(--fs-surface-3);color:var(--fs-text)}
- .canvas-navigation span{min-width:48px;text-align:center;font-variant-numeric:tabular-nums;font-size:.8125rem;color:var(--fs-muted)}
  .canvas-connect-hint{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fs-warn);margin-left:auto}
  .canvas-connect-hint button{border-color:var(--fs-warn)!important;color:var(--fs-warn)!important}
  .canvas-context-menu{position:absolute;top:55px;left:16px;z-index:5;display:flex;flex-direction:column;gap:4px;min-width:200px;padding:10px;background:var(--fs-surface);border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);box-shadow:var(--fs-shadow-lg)}
@@ -732,25 +720,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
  .flow-workspace{background:radial-gradient(var(--fs-canvas-dot) 1px,transparent 1px) 0 0/20px 20px,var(--fs-canvas-bg);overflow:auto;min-height:470px}
  .flow-workspace svg{user-select:none;-webkit-user-select:none}
  svg{min-width:660px;width:100%;height:auto;display:block;touch-action:none;cursor:grab}
- .flow-edge{fill:none;stroke:var(--fs-edge);stroke-width:2.2}
- .edge-arrow{fill:var(--fs-edge)}
- .wire-ghost{fill:none;stroke:var(--fs-wire-ghost);stroke-width:2.5;stroke-dasharray:6 4}
- .wire-target{fill:none;stroke:var(--fs-wire-ghost);stroke-width:3}
- .flow-node{fill:var(--fs-node-bg);stroke:var(--fs-node-border);stroke-width:1.5;filter:drop-shadow(0 2px 4px rgba(15,23,42,.12))}
- .flow-node.selected{fill:var(--fs-node-selected-bg);stroke:var(--fs-node-selected);stroke-width:2.5}
- [data-canvas-node]:focus-visible .flow-node{stroke:var(--fs-node-selected);stroke-width:3}
- [data-canvas-node]:focus,[data-canvas-node]:focus-visible,.exec-node:focus{outline:none}
- .flow-node-accent{fill:var(--fs-accent)}
- .flow-node-accent[data-type=trigger]{fill:#0ea5e9}.flow-node-accent[data-type=output]{fill:#10b981}.flow-node-accent[data-type=condition],.flow-node-accent[data-type=loop]{fill:#f59e0b}
- .flow-node-accent[data-type=workspace_write],.flow-node-accent[data-type=emit_event]{fill:#ef4444}.flow-node-accent[data-type=http_get],.flow-node-accent[data-type=web_search],.flow-node-accent[data-type=web_crawl]{fill:#14b8a6}
- .flow-node-accent[data-type=watchlist_quotes],.flow-node-accent[data-type=technical_scan],.flow-node-accent[data-type=fundamentals],.flow-node-accent[data-type=sec_filings],.flow-node-accent[data-type=news],.flow-node-accent[data-type=leaderboard],.flow-node-accent[data-type=insider_activity],.flow-node-accent[data-type=wealth_plan],.flow-node-accent[data-type=backtest],.flow-node-accent[data-type=macro_regime],.flow-node-accent[data-type=portfolio_check],.flow-node-accent[data-type=corporate_events]{fill:#f59e0b}.flow-node-accent[data-type=screen],.flow-node-accent[data-type=only_new],.flow-node-accent[data-type=report_table]{fill:#8b5cf6}.flow-node-accent[data-type=notify]{fill:#ef4444}
  .field-hints{display:flex;flex-wrap:wrap;gap:4px;align-items:center}.field-chip{border:1px solid var(--fs-border);background:var(--fs-surface-2);color:var(--fs-text);border-radius:999px;padding:1px 8px;font:inherit;font-size:.75rem}.field-chip:hover{border-color:var(--fs-accent)}
- .node-type{fill:var(--fs-node-sub);font-weight:600;letter-spacing:.04em}
- .node-label{fill:var(--fs-node-text);font-weight:600}
- .pin-label{fill:var(--fs-node-sub)}
- .canvas-port{touch-action:none;stroke:var(--fs-port-stroke);stroke-width:2;cursor:crosshair}
- .input-port,.pin-in{fill:var(--fs-port-in)}.output-port,.pin-out{fill:var(--fs-port-out)}
- .port-active,.canvas-port:focus-visible{stroke:var(--fs-wire-ghost);stroke-width:4;outline:none}
 
  .node-quick-tooltip{position:absolute;right:12px;top:58px;z-index:7;display:flex;flex-direction:column;gap:10px;padding:14px;width:min(480px,calc(100% - 24px));box-sizing:border-box;max-height:min(78vh,780px);overflow:auto;background:color-mix(in srgb,var(--fs-surface) 94%,transparent);backdrop-filter:blur(10px);border:1px solid var(--fs-border);box-shadow:var(--fs-shadow-lg);border-radius:var(--bs-border-radius-lg)}
  .quick-tooltip-title{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--fs-border)}
@@ -815,17 +785,6 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
  .run-compare tr.change-input td,.run-compare tr.change-output td,.run-compare tr.change-added td{color:var(--fs-warn)}
 
  .exec-graph{margin:14px 0;display:grid;gap:10px;padding:14px;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);background:var(--fs-surface-2)}
- .exec-graph-canvas{overflow:auto;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius);background:radial-gradient(var(--fs-canvas-dot) 1px,transparent 1px) 0 0/20px 20px,var(--fs-canvas-bg)}
- .exec-graph-canvas svg{min-width:0;width:100%;min-height:210px;max-height:520px;height:auto;cursor:default}
- .exec-edge{fill:none;stroke:var(--fs-edge);stroke-width:2;opacity:.7}
- .exec-rect{stroke-width:2;stroke:var(--fs-node-border);fill:var(--fs-node-bg)}
- .exec-rect.tone-ok{fill:var(--fs-pos-soft);stroke:var(--fs-pos)}
- .exec-rect.tone-fail{fill:var(--fs-neg-soft);stroke:var(--fs-neg)}
- .exec-rect.tone-run{fill:var(--fs-warn-soft);stroke:var(--fs-warn)}
- .exec-rect.tone-skip{opacity:.6}
- .exec-rect.selected{stroke:var(--fs-node-selected);stroke-width:4}
- .exec-text{fill:var(--fs-node-text);font-weight:600}.exec-sub{fill:var(--fs-node-sub)}
- .exec-node{cursor:pointer}.exec-node:focus-visible{outline:none}.exec-node:focus-visible rect{stroke:var(--fs-node-selected);stroke-width:4}
  .exec-selected{padding:12px;border-radius:var(--bs-border-radius);border:1px solid var(--fs-border);background:var(--fs-surface)}
  .exec-selected pre{max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
  .exec-error-hint{border-left:3px solid var(--fs-neg);background:var(--fs-neg-soft);padding:8px 12px;border-radius:0 6px 6px 0;margin:8px 0}
@@ -1229,12 +1188,10 @@ export class FlowStudioComponent {
      this.executionSelectedNode.set(nodeId);
  }
  executionStep(id:string):FlowRunStep|undefined{const steps=this.traceSteps().filter(s=>s.node===id);return steps[steps.length-1]}
+ readonly executionDiagram=computed(()=>{const g=this.executionGraph();return g?runSnapshotDiagram(g.nodes,g.edges,id=>this.executionNodeStatus(id),t=>flowNodeTag(t,x=>investorNode(x)?.tag)):{nodes:[],edges:[]}});
  executionNodeStatus(id:string):string{return this.executionStep(id)?.status||'NOT RECORDED'}
  /** Status tone of an executed node, used as its canvas class. */
- executionNodeColor(id:string):string{switch(this.executionNodeStatus(id)){case 'SUCCESS':return 'ok';case 'FAILED':return 'fail';case 'RUNNING':return 'run';case 'SKIPPED':return 'skip';default:return 'none'}}
  executionNodeLabel(id:string):string{return this.executionGraph()?.nodes.find(n=>n.id===id)?.label||id}
- executionViewBox():string{const n=this.executionGraph()?.nodes||[];if(!n.length)return '0 0 820 380';const l=Math.min(...n.map(x=>x.x))-60,t=Math.min(...n.map(x=>x.y))-60,r=Math.max(...n.map(x=>x.x+125))+60,b=Math.max(...n.map(x=>x.y+70))+60;return l+' '+t+' '+(r-l)+' '+(b-t)}
- executionEdgePath(e:FlowEdge,g:FlowGraph):string{const a=g.nodes.find(n=>n.id===e.from),b=g.nodes.find(n=>n.id===e.to);if(!a||!b)return '';const x=a.x+125,y=a.y+35,tx=b.x,ty=b.y+35,d=Math.max(45,Math.abs(tx-x)*.45);return 'M '+x+' '+y+' C '+(x+d)+' '+y+', '+(tx-d)+' '+ty+', '+tx+' '+ty}
  readonly traceLoading=signal(false);
  readonly replaySteps=signal<{node:string;label:string;status:string;input?:string;output?:string}[]>([]);
  readonly replaySource=signal(0);

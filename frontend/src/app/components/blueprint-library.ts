@@ -1,8 +1,9 @@
-import { CanvasGestures } from './canvas-gestures';
-import { HostListener, Component, EventEmitter, Output, signal } from '@angular/core';
+import { FlowDiagramComponent } from '../ui/flow-canvas/flow-diagram';
+import { functionDiagram, triggerDiagram } from '../ui/flow-canvas/diagram-adapters';
+import { HostListener, Component, EventEmitter, Output, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TypedFunctionEditorComponent } from './typed-function-editor';
-import { V2Graph, isTypedFunctionGraph, newTypedFunctionGraph } from './function-pins';
+import { V2Graph, inputPorts, isTypedFunctionGraph, newTypedFunctionGraph, outputPorts } from './function-pins';
 import { PublishState, RevisionSummary, canPublish, publishStatusLabel } from './flow-versions';
 
 type Kind='text'|'number'|'boolean';
@@ -12,7 +13,7 @@ interface Definition extends PublishState {id:number;name:string;graph:{nodes:No
 interface Trigger {id:number;event_key:string;payload_type:Kind}
 @Component({
  selector:'fse-blueprint-library', host:{class:'fs-native-forms'},standalone:true,
- imports:[FormsModule,TypedFunctionEditorComponent],
+ imports:[FormsModule,TypedFunctionEditorComponent,FlowDiagramComponent],
  template:`
  <div class="card lib">
  <h3>Blueprint Function Library</h3>
@@ -35,29 +36,8 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
   <fse-typed-function-editor [graph]="t" (graphChange)="typed.set($event)"></fse-typed-function-editor>
  } @else {
  <div class="blueprint-layout">
- <div class="canvas-shell">
-    <div class="canvas-navigation" aria-label="Canvas navigation">
-      <button type="button" (click)="zoomCanvas(0.8)" aria-label="Zoom in">＋</button>
-      <span>{{ canvasZoomPercent() }}%</span>
-      <button type="button" (click)="zoomCanvas(1.25)" aria-label="Zoom out">－</button>
-      <button type="button" (click)="resetCanvas()" title="Reset canvas view">Reset view</button>
-    </div>
-    <div class="canvas">
-  <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (pointerdown)="onCanvasPointerDown($event)" (click)="closeQuickNodeOnCanvas($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="onCanvasPointerEnd($event)" (pointercancel)="onCanvasPointerEnd($event)" (contextmenu)="onCanvasContextMenu($event)">
-   <defs><marker id="fn-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" class="edge-arrow"/></marker></defs>
-   @for(e of edges();track e.from+e.to+e.to_port){
-    <line [attr.x1]="node(e.from)?.x!+120" [attr.y1]="node(e.from)?.y!+25"
-      [attr.x2]="node(e.to)?.x" [attr.y2]="node(e.to)?.y!+25" class="fn-edge" marker-end="url(#fn-arrow)"/>
-   }
-   @for(n of nodes();track n.id){
-    <g data-canvas-node (click)="$event.stopPropagation();openQuickNode(n.id)" tabindex="0" (keydown.enter)="openQuickNode(n.id)">
-     <rect class="fn-node" [class.selected]="selected()===n.id" [attr.x]="n.x" [attr.y]="n.y" width="120" height="50" rx="9"/>
-     <text class="fn-type" [attr.x]="n.x+8" [attr.y]="n.y+21" font-size="11">{{n.type.toUpperCase()}}</text>
-     <text class="fn-sub" [attr.x]="n.x+8" [attr.y]="n.y+40" font-size="11">{{n.operation||n.value_type||n.id}}</text>
-    </g>
-   }
-  </svg>
- </div>
+ <fse-flow-diagram variant="function" ariaLabel="Function canvas: nodes and directed connections" [nodes]="diagram().nodes" [edges]="diagram().edges"
+   [selectedId]="selected()" [fitKey]="currentId()" emptyText="Add a value or operation to start" (nodeSelect)="openQuickNode($event)" (canvasClick)="closeQuickNode()" (canvasContextMenu)="onCanvasContextMenu($event)">
  @if(quickNode();as q){
   <div class="node-quick-tooltip" (click)="$event.stopPropagation()" aria-label="Quick function node settings">
    <div class="quick-tooltip-title"><strong>⚙ {{q.id}}</strong><button type="button" class="btn-close quick-tooltip-close" (click)="closeQuickNode()" aria-label="Close quick settings" title="Close"></button></div>
@@ -76,7 +56,7 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
  <button type="button" role="menuitem" (click)="add('operation');closeCanvasMenu()">Operation</button>
  <button type="button" (click)="closeCanvasMenu()">Cancel</button>
  </div>}
- </div>
+ </fse-flow-diagram>
  <aside class="panel" aria-label="Function node details">
   <header class="inspector-heading"><span>DETAILS</span><strong>{{ selectedNode()?.id || 'No node selected' }}</strong></header>
   @if(selectedNode();as n){
@@ -131,57 +111,35 @@ interface Trigger {id:number;event_key:string;payload_type:Kind}
   <button class="btn btn-sm btn-outline-secondary" (click)="createTrigger()" [disabled]="busy()">Create trigger</button>
  </div>
  <div class="triggers">@for(t of triggers();track t.id){<span>{{t.event_key}} · {{t.payload_type}}</span>}</div>
+ @if(triggers().length){
+  <fse-flow-diagram variant="trigger" ariaLabel="Event triggers: each event feeds a typed payload" [nodes]="triggerModel().nodes" [edges]="triggerModel().edges"
+   [selectedId]="selectedTrigger()" [fitKey]="triggers().length" readonlyHint="Read-only: a trigger is its event key and payload type" (nodeSelect)="selectedTrigger.set($event)"/>
+  @if(selectedTriggerInfo();as t){<p role="status" class="trigger-detail"><strong>{{t.event_key}}</strong> carries a {{t.payload_type}} payload. Enabled flows subscribed to this key run when it is sent.</p>}
+ }
  @if(status()){<p role="status">{{status()}}</p>}
  </div>`,
  styles:[`
- .edge-arrow{fill:var(--fs-edge)}.fn-edge{stroke:var(--fs-edge);stroke-width:2}
- .fn-node{fill:var(--fs-node-bg);stroke:var(--fs-node-border);stroke-width:1.5}.fn-node.selected{fill:var(--fs-node-selected-bg);stroke:var(--fs-node-selected);stroke-width:2.5}
- .fn-type{fill:var(--fs-node-sub);font-weight:600;letter-spacing:.04em}.fn-sub{fill:var(--fs-node-text)}
- [data-canvas-node]{cursor:pointer}[data-canvas-node]:focus,[data-canvas-node]:focus-visible{outline:none}[data-canvas-node]:focus-visible .fn-node{stroke:var(--fs-node-selected);stroke-width:3}
- .canvas-shell{position:relative;min-width:0;min-height:0}
  .node-quick-tooltip{position:absolute;right:12px;top:60px;z-index:7;display:flex;flex-direction:column;gap:9px;padding:12px;width:min(260px,85%);background:var(--fs-surface-2);backdrop-filter:blur(10px);border:1px solid var(--fs-accent);border-radius:9px;box-shadow:var(--fs-shadow)}
  .quick-tooltip-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
  .node-quick-tooltip label{display:flex;flex-direction:column;gap:5px}
  .node-quick-tooltip input,.node-quick-tooltip select{width:100%;box-sizing:border-box}
  .node-quick-tooltip button{min-height:32px}
- .canvas-navigation{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:8px;background:var(--fs-surface);border:1px solid var(--fs-border-strong);border-radius:8px 8px 0 0}
- .canvas-navigation button,.canvas-context-menu button{background:var(--fs-surface-3);color:var(--fs-text);border:1px solid var(--fs-border-strong);border-radius:5px;min-height:34px;padding:6px 10px;cursor:pointer}
- .canvas-navigation button:focus-visible,.canvas-context-menu button:focus-visible{outline:2px solid var(--fs-accent)}
- .canvas-navigation span{min-width:48px;text-align:center;font-variant-numeric:tabular-nums}
  .canvas-context-menu{position:absolute;top:55px;left:16px;z-index:5;display:flex;flex-direction:column;gap:6px;min-width:180px;padding:12px;background:var(--fs-surface-2);border:1px solid var(--fs-accent);border-radius:10px;box-shadow:var(--fs-shadow)}
  :host{display:block;margin-top:22px}.lib{padding:18px}.toolbar,.panel,.triggers{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}.panel{padding:16px;border:1px solid var(--fs-border-strong);border-radius:8px;align-content:start;background:var(--fs-surface);min-width:0;max-height:min(75vh,780px);overflow-y:auto;display:flex;flex-direction:column;align-items:stretch}
  .blueprint-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(270px,315px);gap:12px;align-items:stretch}
- .blueprint-layout .canvas{min-width:0;min-height:440px}
  .inspector-heading{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid var(--fs-border-strong);padding-bottom:12px}
  .inspector-heading span{font-size:11px;letter-spacing:.14em;opacity:.75}
  .panel label,.panel input,.panel select{min-width:0;width:100%;box-sizing:border-box}
- @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.blueprint-layout .canvas{min-height:280px}.panel{max-height:360px}}
-.panel strong{width:100%}label{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}input,select{background:var(--fs-surface);color:var(--fs-text);border:1px solid var(--fs-border-strong);border-radius:6px;padding:8px}.canvas{overflow:auto;border:1px solid var(--fs-border-strong);background:var(--fs-surface);border-radius:8px}svg{display:block;min-width:650px;width:100%;height:auto;touch-action:none;cursor:grab}.triggers span{padding:8px;border:1px solid var(--fs-border-strong);border-radius:12px}
+ @media(max-width:850px){.blueprint-layout{grid-template-columns:minmax(0,1fr)}.panel{max-height:360px}}
+.panel strong{width:100%}label{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}input,select{background:var(--fs-surface);color:var(--fs-text);border:1px solid var(--fs-border-strong);border-radius:6px;padding:8px}.triggers span{padding:8px;border:1px solid var(--fs-border-strong);border-radius:12px}
  .versions ul{list-style:none;padding:0;display:flex;flex-direction:column;gap:6px}.versions li{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;padding:8px;border:1px solid var(--fs-border);border-radius:8px}.versions li.active{border-color:var(--fs-accent);background:var(--fs-surface-3)}.muted{opacity:.75}`]
 })
 export class BlueprintLibraryComponent {
- readonly canvasView = signal({ x: 0, y: 0, width: 850, height: 340 });
  readonly canvasMenu = signal(false);
- readonly canvasViewBox = () => {
-   const v = this.canvasView();
-   return `${v.x} ${v.y} ${v.width} ${v.height}`;
- };
- readonly canvasZoomPercent = () => Math.round(850 / this.canvasView().width * 100);
- zoomCanvas(factor: number): void {
-   const v = this.canvasView();
-   const width = Math.max(850 / 3, Math.min(850 * 4, v.width * factor));
-   const height = width * 340 / 850;
-   this.canvasView.set({ x: v.x + (v.width - width) / 2, y: v.y + (v.height - height) / 2, width, height });
- }
- panCanvas(dx: number, dy: number): void {
-   this.canvasView.update(v => ({ ...v, x: v.x + dx * v.width / 850, y: v.y + dy * v.height / 340 }));
- }
- resetCanvas(): void { this.gestures.reset(); this.canvasView.set({ x: 0, y: 0, width: 850, height: 340 }); this.closeCanvasMenu(); }
- readonly gestures = new CanvasGestures(() => this.canvasView(), view => this.canvasView.set(view), 850, 340);
- onCanvasPointerDown(event: PointerEvent): void { this.gestures.pointerDown(event); }
- onCanvasPointerMove(event: PointerEvent): void { this.gestures.pointerMove(event); }
- onCanvasPointerEnd(event: PointerEvent): void { this.gestures.pointerEnd(event); }
- onCanvasWheel(event: WheelEvent): void { this.gestures.wheel(event); }
+ readonly selectedTrigger = signal('');
+ readonly triggerModel = computed(() => triggerDiagram(this.triggers()));
+ readonly selectedTriggerInfo = computed(() => { const id = this.selectedTrigger().replace(/^(event|payload):/, ''); return this.triggers().find(t => t.event_key === id); });
+ readonly diagram = computed(() => functionDiagram(this.nodes(), this.edges(), { inputPorts, outputPorts }));
  onCanvasContextMenu(event: MouseEvent): void {
    event.preventDefault();
    this.canvasMenu.set(true);

@@ -21,7 +21,7 @@ You see Flows in the sidebar only if your role has the flow read permission. Whi
 | **Flow editor** | The canvas. Add nodes, wire them, set each node's options and check the graph. |
 | **Run history** | Every run of a flow, with its status, timing and the graph as it was when it ran. Inspect a run node by node. |
 | **Approvals & audit** | Steps that wait for a decision, and the record of every change a flow made outside itself. |
-| **Function library & triggers** | Reusable functions and custom triggers. Administrators only. |
+| **Function library & triggers** | Reusable functions and custom triggers, drawn on the same canvas as the flow editor (zoom, fit, keyboard navigation). Administrators only. |
 
 ## Build a flow
 
