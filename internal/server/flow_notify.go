@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"floweysales/internal/mailer"
 	"floweysales/internal/storage"
 )
 
@@ -65,6 +67,50 @@ func notifyBody(payload string) string {
 	return strings.TrimSpace(body)
 }
 
+// flowEmailContentType decides how a Notify node's output is rendered. A
+// content type declared on the node wins; otherwise the output is JSON or XML
+// only when it parses as such, and Markdown (which includes plain text) when not.
+func flowEmailContentType(declared, payload string) mailer.ContentType {
+	if ct, ok := mailer.ContentTypeFromMIME(declared); ok {
+		return ct
+	}
+	trimmed := strings.TrimSpace(payload)
+	switch {
+	case strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "["):
+		if json.Valid([]byte(trimmed)) {
+			return mailer.JSON
+		}
+	case strings.HasPrefix(trimmed, "<") && !strings.HasPrefix(trimmed, "<!") && xml.Unmarshal([]byte(trimmed), new(struct{ XMLName xml.Name })) == nil:
+		return mailer.XML
+	}
+	return mailer.Markdown
+}
+
+// flowEmailMessage describes a flow notification for the shared mail renderer.
+func flowEmailMessage(f storage.AgentFlow, n flowNode, subject, payload string, runID int64, now time.Time) mailer.Message {
+	ct := flowEmailContentType(n.ContentType, payload)
+	meta := []mailer.Meta{{Label: "Flow", Value: fmt.Sprintf("#%d %s", f.ID, f.Name)}}
+	where := "the flow's run history"
+	if runID > 0 {
+		meta = append(meta, mailer.Meta{Label: "Run", Value: fmt.Sprintf("#%d", runID)})
+		where = fmt.Sprintf("run #%d in the flow's run history", runID)
+	}
+	return mailer.Message{
+		Kind:        mailer.KindFlow,
+		Subject:     subject,
+		Title:       f.Name,
+		Preheader:   subject,
+		ContentType: ct,
+		Content:     payload,
+		Meta:        meta,
+		SentAt:      now,
+		Notice:      notifyDisclaimer,
+		Generated:   true,
+		Raw:         ct == mailer.JSON || ct == mailer.XML,
+		FullOutput:  where,
+	}
+}
+
 func truncateText(s string, max int) string {
 	if len(s) <= max {
 		return s
@@ -110,7 +156,7 @@ func (e *Engine) sendFlowNotification(ctx context.Context, f storage.AgentFlow, 
 		}
 		mailCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
 		defer cancel()
-		if err := sendTrackerEmail(mailCtx, cfg.Host, cfg.Port, cfg.Username, cfg.Sender, password, recipient, subject, truncateNotified(body, notifyEmailMaxBody, runID)+footer); err != nil {
+		if err := mailer.Send(mailCtx, smtpConfig(cfg, password), recipient, flowEmailMessage(f, n, subject, payload, runID, now)); err != nil {
 			return "", fmt.Errorf("email delivery failed: %w", err)
 		}
 		return "Emailed " + recipient + ": " + subject, nil

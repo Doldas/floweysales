@@ -2,7 +2,7 @@
 title: Flow Studio
 order: 6
 summary: Build saved, repeatable research automations with agents, data steps and approvals, and understand what runs when and who may do what.
-last-reviewed: 2026-11-04
+last-reviewed: 2026-11-06
 ---
 
 # Flow Studio
@@ -41,7 +41,7 @@ A flow has exactly one trigger and 2 to 16 nodes with 1 to 32 connections, and i
 - **Data and investor nodes:** watchlist quotes, technical scan, fundamentals, SEC filings, news headlines, leaderboard, backtest, insider activity, macro regime, corporate events, portfolio check and wealth plan. These produce rows from provider data computed on the server.
 - **Logic and shaping:** If / Else, Merge, JSON field, Loop, Value, Transform, Screen (keep rows that match a rule), Only new since last run, Report table and Output. Any node can be set to skip when its input is empty.
 - **Web:** HTTP JSON/XML, web crawler and web search.
-- **Notify, Write file and Emit event:** change something outside the run and are reserved for administrators. See [Approvals](#approvals-and-the-inbox).
+- **Notify, Write file and Emit event:** change something outside the run and are reserved for administrators. See [Approvals](#approvals-and-the-inbox). An email from a Notify node uses the shared FloweySales design: Markdown (headings, emphasis, lists, tables), JSON and XML output are shown as readable sections, and the message includes the flow, run and send time in UTC. If a result is too long for one email, the message says how much is shown and where the full output is. See [Email rendering](../email-rendering.md).
 
 ## Run a flow
 
@@ -55,7 +55,11 @@ A run that is interrupted resumes from its last checkpoint, so completed steps a
 
 ## Versions: draft, publish, roll back
 
-**Save** writes the editable draft. **Publish revision** freezes the draft as a numbered revision, which becomes the active one. Scheduled and event runs always use the active revision; **Run draft** tests the saved, unpublished draft, and **Test unsaved draft** runs what is currently in the editor without saving it (shown in Run history as a *draft test*). Activating an older revision rolls back immediately. A flow that was never published runs its draft.
+**Save** writes the editable draft. **Publish revision** freezes the draft as a numbered revision, which becomes the active one. Scheduled and event runs always use the active revision; **Run draft** tests the saved, unpublished draft.
+
+**Test unsaved draft** runs exactly what is in the editor, including edits you have not saved, and also works on a brand-new flow you have never saved. It never saves anything, never changes what a schedule or trigger runs, and leaves your editor as it was. The run works on a frozen copy, so you can keep editing while it runs. By default nodes that act outside the flow (Workspace write, Emit Event, Notify) are **simulated**: the trace says what would have been done, and nothing is written or sent. For a saved flow you can tick **Allow real side effects in this test** and confirm; actions that need approval still wait for it. A flow that has never been saved is always tested with simulated effects.
+
+In Run history each run says whether it was a **Draft test** or a **Saved version** and shows a short snapshot hash that identifies the exact graph it ran. Tests of never-saved flows are listed under **Unsaved draft tests**, visible only to you. Activating an older revision rolls back immediately. A flow that was never published runs its draft.
 
 ## Read a run
 

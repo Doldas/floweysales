@@ -221,6 +221,9 @@ func (d *Database) DeleteUserspaceFolder(ctx context.Context, owner int64, rawPa
 }
 
 func (d *Database) FlowOwner(ctx context.Context, flowID int64) (int64, error) {
+	if owner, scratch := ScratchFlowOwner(flowID); scratch {
+		return owner, nil // A draft test of a never-saved flow belongs to its tester.
+	}
 	var owner int64
 	err := d.db.QueryRowContext(ctx, "SELECT created_by FROM agent_flows WHERE id=?", flowID).Scan(&owner)
 	return owner, err

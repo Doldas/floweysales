@@ -561,7 +561,7 @@ func (e *Engine) flowAuthorized(w http.ResponseWriter, r *http.Request, permissi
 		writeJSON(w, 403, map[string]string{"error": "Flow permission denied"})
 		return false
 	}
-	if idValue := r.PathValue("id"); idValue != "" {
+	if idValue := r.PathValue("id"); idValue != "" && idValue != flowDraftScope {
 		id, err := strconv.ParseInt(idValue, 10, 64)
 		if err != nil || id <= 0 {
 			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
@@ -711,8 +711,8 @@ func (e *Engine) registerFlowRoutes() {
 		if !e.flowAuthorized(w, r, "flows.read") {
 			return
 		}
-		var id int64
-		if _, err := fmt.Sscan(r.PathValue("id"), &id); err != nil || id <= 0 {
+		id, ok := e.flowHistoryScope(r)
+		if !ok {
 			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
 			return
 		}
@@ -727,8 +727,8 @@ func (e *Engine) registerFlowRoutes() {
 		if !e.flowAuthorized(w, r, "flows.run") {
 			return
 		}
-		flowID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		if err != nil || flowID <= 0 {
+		flowID, ok := e.flowHistoryScope(r)
+		if !ok {
 			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
 			return
 		}
@@ -759,8 +759,8 @@ func (e *Engine) registerFlowRoutes() {
 		if !e.flowAuthorized(w, r, "flows.run") {
 			return
 		}
-		flowID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		if err != nil || flowID <= 0 {
+		flowID, ok := e.flowHistoryScope(r)
+		if !ok {
 			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
 			return
 		}
@@ -788,8 +788,8 @@ func (e *Engine) registerFlowRoutes() {
 		if !e.flowAuthorized(w, r, "flows.read") {
 			return
 		}
-		flowID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		if err != nil || flowID <= 0 {
+		flowID, ok := e.flowHistoryScope(r)
+		if !ok {
 			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
 			return
 		}
@@ -826,10 +826,10 @@ func (e *Engine) registerFlowRoutes() {
 		if !e.flowAuthorized(w, r, "flows.read") {
 			return
 		}
-		flowID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		flowID, scopeOK := e.flowHistoryScope(r)
 		runID, runErr := strconv.ParseInt(r.PathValue("run"), 10, 64)
 		stepID, stepErr := strconv.ParseInt(r.PathValue("step"), 10, 64)
-		if err != nil || runErr != nil || stepErr != nil || flowID <= 0 || runID <= 0 || stepID <= 0 {
+		if !scopeOK || runErr != nil || stepErr != nil || runID <= 0 || stepID <= 0 {
 			writeJSON(w, 400, map[string]string{"error": "Invalid flow, run or step ID"})
 			return
 		}
@@ -865,8 +865,8 @@ func (e *Engine) registerFlowRoutes() {
 		if !e.flowAuthorized(w, r, "flows.read") {
 			return
 		}
-		flowID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		if err != nil || flowID <= 0 {
+		flowID, ok := e.flowHistoryScope(r)
+		if !ok {
 			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
 			return
 		}
@@ -904,8 +904,8 @@ func (e *Engine) registerFlowRoutes() {
 		if !e.flowAuthorized(w, r, "flows.read") {
 			return
 		}
-		flowID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		if err != nil || flowID <= 0 {
+		flowID, ok := e.flowHistoryScope(r)
+		if !ok {
 			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
 			return
 		}
@@ -970,99 +970,10 @@ func (e *Engine) registerFlowRoutes() {
 		}
 		writeJSON(w, 200, map[string]any{"steps": steps, "mode": "preview_only", "note": "Uses the saved graph snapshot for this run; no agents, tools, database writes or external actions are executed."})
 	})
-	e.mux.HandleFunc("POST /api/admin/flows/{id}/run", func(w http.ResponseWriter, r *http.Request) {
-		if !e.flowAuthorized(w, r, "flows.run") {
-			return
-		}
-		var id int64
-		if _, err := fmt.Sscan(r.PathValue("id"), &id); err != nil || id <= 0 {
-			writeJSON(w, 400, map[string]string{"error": "Invalid flow ID"})
-			return
-		}
-		// An optional {"target":"draft"} runs unpublished edits; the default
-		// is the active revision (or the draft of a never-published flow).
-		// {"target":"draft","graph":{...}} tests the editor's unsaved graph:
-		// it is validated like a save, snapshotted into the run and never stored
-		// as the flow, so saved drafts, revisions and schedules stay untouched.
-		r.Body = http.MaxBytesReader(w, r.Body, flowDraftRunBodyLimit)
-		var request struct {
-			Target string          `json:"target"`
-			Graph  json.RawMessage `json:"graph"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil && !errors.Is(err, io.EOF) {
-			writeJSON(w, 400, map[string]string{"error": "Invalid run request"})
-			return
-		}
-		if request.Target != "" && request.Target != "active" && request.Target != "draft" {
-			writeJSON(w, 400, map[string]string{"error": "target must be active or draft"})
-			return
-		}
-		unsaved := len(request.Graph) > 0 && string(request.Graph) != "null"
-		if unsaved && request.Target != "draft" {
-			writeJSON(w, 400, map[string]string{"error": "An unsaved graph can only be run with target draft"})
-			return
-		}
-		if unsaved && !e.flowAuthorized(w, r, "flows.write") {
-			return // Running a graph of your own making needs the same right as saving it.
-		}
-		var f storage.AgentFlow
-		var revision *int
-		var err error
-		if request.Target == "draft" {
-			f, err = e.db.GetAgentFlow(r.Context(), id)
-		} else {
-			f, revision, err = e.db.ResolveAgentFlow(r.Context(), id, 0)
-		}
-		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, 404, map[string]string{"error": "Flow not found"})
-			return
-		}
-		if err != nil {
-			writeJSON(w, 503, map[string]string{"error": "Flow storage unavailable"})
-			return
-		}
-		trigger := "manual"
-		if unsaved {
-			f.Graph = request.Graph
-			trigger = "draft test"
-			graph, _, err := validateFlow(f)
-			if err != nil {
-				writeJSON(w, 400, map[string]string{"error": err.Error()})
-				return
-			}
-			tester, _ := e.currentUser(r)
-			if err := e.flowChoicesAvailable(r.Context(), e.flowChoiceOwner(r.Context(), f.ID, tester.ID), graph); err != nil {
-				writeJSON(w, 400, map[string]string{"error": err.Error()})
-				return
-			}
-			if err := e.checkCallReferences(r.Context(), graph); err != nil {
-				writeReferenceError(w, err)
-				return
-			}
-		}
-		current, _ := e.currentUser(r)
-		if current.Role != identity.RoleSysAdmin {
-			graph, _, err := validateFlow(f)
-			if err != nil || !flowAllowedForNonAdmin(graph) {
-				writeJSON(w, 403, map[string]string{"error": "Flow is not permitted for user execution"})
-				return
-			}
-			if err := e.configuredFlowModelsAllowed(r.Context(), graph); err != nil {
-				writeJSON(w, 403, map[string]string{"error": err.Error()})
-				return
-			}
-		}
-		runID, err := e.enqueueFlow(r.Context(), f, revision, trigger, "")
-		if errors.Is(err, storage.ErrFlowQueueFull) {
-			writeJSON(w, 429, map[string]string{"error": err.Error()})
-			return
-		}
-		if err != nil {
-			writeJSON(w, 503, map[string]string{"error": "Could not queue the run"})
-			return
-		}
-		writeJSON(w, 202, map[string]any{"status": "queued", "flow_id": id, "run_id": runID, "flow_revision": revision, "draft_test": unsaved})
-	})
+	e.mux.HandleFunc("POST /api/admin/flows/{id}/run", func(w http.ResponseWriter, r *http.Request) { e.runFlowRequest(w, r, false) })
+	// A flow that was never saved is tested through the same handler; its runs
+	// live in the tester's scratch history, never in a stored flow.
+	e.mux.HandleFunc("POST /api/admin/flows/draft/run", func(w http.ResponseWriter, r *http.Request) { e.runFlowRequest(w, r, true) })
 	e.mux.HandleFunc("POST /api/admin/flow-events/{key}", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {
 			return
@@ -1498,10 +1409,16 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 					mime = "text/plain"
 				}
 				owner := workspaceOwner
-				if _, err := e.performSideEffect(ctx, f, n, depth, previous, mime, func(payload string) (string, error) {
+				summary, err := e.performSideEffect(ctx, f, n, depth, previous, mime, func(payload string) (string, error) {
 					return "", e.db.WriteUserspaceFile(ctx, owner, n.Value, mime, []byte(payload))
-				}); err != nil {
+				})
+				if err != nil {
 					return "", fmt.Errorf("workspace write %s: %w", n.Value, err)
+				}
+				if flowSimulated(ctx) {
+					// The payload still passes through; the trace says nothing was written.
+					record(map[string]string{"node": n.ID, "label": n.Label, "output": summary + "\n\n" + previous, "file": n.Value})
+					continue
 				}
 			} else {
 				content, _, err := e.db.ReadUserspaceFile(ctx, workspaceOwner, n.Value)

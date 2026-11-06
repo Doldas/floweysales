@@ -22,6 +22,9 @@ last-reviewed: 2026-11-06
 - The feed status badge separates the connection, freshness, kind of data and market session.
 - The instrument chip in the top bar has favorites, recent instruments and a full-screen picker on phones. See [Markets](markets.md).
 
+**Flow Studio**
+- **Test unsaved draft** runs the graph in the editor without saving, including a brand-new flow. Side effects are simulated unless you confirm real ones, and Run history marks each run as a draft test or a saved version with its snapshot hash. See [Flows](flows.md).
+
 **Leaderboard**
 - A method panel with a fingerprint, origin of each company on the list, bias statements, a coverage-by-region view, and your own objective and constraints. See [Leaderboard](leaderboard.md).
 
