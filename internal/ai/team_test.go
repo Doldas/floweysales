@@ -222,3 +222,26 @@ func TestTeamMembersUseTheirOwnModelAndToolRules(t *testing.T) {
 		t.Errorf("each member's start event names its model and says when it has no tools: %v %v", models, details)
 	}
 }
+
+func TestChairSummaryFiguresAreTracedToTheMembers(t *testing.T) {
+	events := collect(t, TeamOptions{
+		Members:  []TeamMember{{ID: "a", Name: "Alpha", SystemPrompt: "PROMPT-A"}, {ID: "b", Name: "Beta", SystemPrompt: "PROMPT-B"}},
+		Question: "Q?", Chair: true,
+		Run: fakeRun(map[string]string{
+			"PROMPT-A": "Margin is 31.5%.\nSTANCE: fits",
+			"PROMPT-B": "Too expensive.\nSTANCE: does_not_fit",
+			"neutral":  "Alpha cites a 31.5% margin. Revenue grew 18%.",
+		}, nil),
+	})
+	var found []string
+	for _, ev := range events {
+		if ev.Type == "sources" && ev.Agent == "chair" {
+			for _, f := range ev.Audit {
+				found = append(found, f.Sentence)
+			}
+		}
+	}
+	if len(found) != 1 || !strings.Contains(found[0], "18%") {
+		t.Fatalf("only the invented figure must be flagged: %v", found)
+	}
+}
