@@ -183,7 +183,7 @@ try {
   await studio.getByRole('button', { name: 'Refresh history' }).click();
   await studio.locator('summary', { hasText: '#100' }).first().click();
   await studio.getByRole('button', { name: 'Inspect nodes' }).first().click();
-  await studio.locator('[aria-label="Research SUCCESS"]').click();
+  await studio.locator('[data-node-id="agent-1"]').click();
   await studio.getByText('get_sec_facts').first().waitFor({ timeout: 5000 });
   check('node trace shows the recorded tool call', await studio.getByText('get_sec_facts').first().isVisible());
   check('run history labels the revision', (await studio.locator('summary', { hasText: '#100' }).first().innerText()).includes('Saved version (rev 1)'));
