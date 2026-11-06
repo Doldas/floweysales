@@ -232,6 +232,9 @@ type indexView struct {
 	AgeDays   *int     `json:"age_days"`
 	Stale     bool     `json:"stale"`
 	Available bool     `json:"available"`
+	// Sources lists how the caller can supply data; Source is what they supplied.
+	Sources []string        `json:"sources"`
+	Source  *userSourceView `json:"source"`
 }
 
 func viewIndex(d indexDefinition, now time.Time) indexView {
@@ -321,11 +324,16 @@ func findIndex(id string) (indexDefinition, bool) {
 func (e *Engine) registerIndexRoutes() {
 	e.mux.HandleFunc("GET /api/market/indices", func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now().UTC()
+		u, ok := e.planUser(w, r)
+		if !ok {
+			return
+		}
 		views := make([]indexView, 0, len(indexRegistry))
 		for _, d := range indexRegistry {
-			views = append(views, viewIndex(d, now))
+			snap, _ := e.userSnapshot(r.Context(), u.ID, d.ID)
+			views = append(views, userIndexView(d, snap, now))
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"indices": views, "generated_at": now.Format(time.RFC3339),
-			"notice": "An index is a published list of companies chosen by its provider's rules. Membership is not a ranking or a recommendation; the Leaderboard strategies rank whichever list you choose. An index is offered only after its constituent list has been verified; others are shown as unavailable."})
+		writeJSON(w, http.StatusOK, map[string]any{"indices": views, "generated_at": now.Format(time.RFC3339), "fmp_key_saved": e.hasFMPKey(r.Context(), u.ID),
+			"notice": "An index is a published list of companies chosen by its provider's rules. Membership is not a ranking or a recommendation; the Leaderboard strategies rank whichever list you choose. FloweySales ships no constituent list. An index is available to you once you import your own CSV file or fetch the list with your own Financial Modeling Prep key; until then it is shown as unavailable."})
 	})
 }

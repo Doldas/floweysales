@@ -175,7 +175,7 @@ func (e *Engine) runBacktestBatch(ctx context.Context, base url.Values) (batchRe
 			q, err := batchCellQuery(base, universe, period)
 			var req backtestRequest
 			if err == nil {
-				req, err = e.parseBacktestQuery(q)
+				req, err = e.parseBacktestQuery(ctx, q)
 			}
 			if err == nil {
 				if out.Strategy == "" {

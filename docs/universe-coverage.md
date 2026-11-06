@@ -53,3 +53,35 @@ suffix must be one the Leaderboard can read an exchange from.
 
 Not covered by the check, and still open for global ranking: comparing returns across currencies (no FX source), mixed
 accounting standards and fiscal calendars, and percentile comparison within versus across regions (Plan 4, WP3 steps 2 to 5).
+
+## User-supplied index constituents (#258)
+
+The S&P 500, Nasdaq-100 and OMXS30 index lists are licensed, so FloweySales does not ship, commit or redistribute any of them.
+Each user supplies their own, and the index becomes `available` for that user only (a registry entry in `internal/server/indices.json`
+stays `unavailable` and empty; `TestShippedIndicesAreUnavailableAndEmpty` guards it).
+
+| Index | CSV import | Financial Modeling Prep | Past membership |
+|---|---|---|---|
+| S&P 500 | yes | yes (`stable/sp500-constituent`, `stable/historical-sp500-constituent`) | from FMP's add/remove records |
+| Nasdaq-100 | yes | yes, **unverified** (`stable/nasdaq-constituent`, `stable/historical-nasdaq-constituent`) | from FMP's records, unverified |
+| OMXS30 | yes | no known API: CSV only | none (today's members only) |
+
+**CSV.** Columns `symbol` (required), `name`, `weight`, `exchange`; plus the as-of date (UTC), the source name and a licence or
+terms acknowledgement the user must confirm. Validation refuses duplicates (also `BRK.B` against `BRK-B`), malformed symbols,
+symbols from the wrong exchange (a `.ST` suffix or an `ST` exchange is required for OMXS30; a US list carries no suffix), a
+count far from the index's size (under half, or over one and a half times, the nominal count) and bad weights; a blank weight
+stays blank, never 0. A modest gap from the nominal count is a warning. No row is ever invented.
+
+**Financial Modeling Prep.** The user's own key is sealed with the server secrets key and stored under `index_fmp:<user id>` in
+`api_integration_secrets`; it is never logged or returned, and errors from the HTTP client are scrubbed of it. The HTTP client is
+injectable and tests use fixtures only. Verified from FMP's documentation search results: the endpoint **paths** above. **Not
+verified:** the response field names. FMP's documentation pages answered 403 to the build environment, so the parser accepts
+`symbol`/`name` for current members and `symbol` (added), `removedTicker`, and `date` or `dateAdded` for changes, and refuses a
+response with none of them rather than guessing. The fixtures in the tests are hand-written to that shape, not recorded from FMP.
+Someone with a key should compare a live response before the Nasdaq-100 flag is lifted. FMP's terms, rate limits and which plan
+includes constituent data are for the user to check; the UI and guide say so.
+
+**Point-in-time.** `Snapshot.MembersAt(date)` starts from the list as of its date and undoes every change dated after the
+requested day. It is known only from the earliest change record onward; before that, or with no records, today's members stand in
+and the backtest says so (`membership.mode`, a note, and the survivorship warning). Companies that left an index often have no
+price history from the market-data provider; they are skipped and named, and the survivorship warning stays in that case.

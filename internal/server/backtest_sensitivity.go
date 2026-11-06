@@ -74,7 +74,7 @@ func floatList(raw string, def []float64) ([]float64, error) {
 }
 
 func (e *Engine) runSensitivity(ctx context.Context, q url.Values) (sensitivityResponse, error) {
-	baseReq, err := e.parseBacktestQuery(q)
+	baseReq, err := e.parseBacktestQuery(ctx, q)
 	if err != nil {
 		return sensitivityResponse{}, err
 	}
@@ -163,7 +163,7 @@ func (e *Engine) runSensitivity(ctx context.Context, q url.Values) (sensitivityR
 		if v.base {
 			item.Parameter, item.Value = "base", "as asked"
 		}
-		req, err := e.parseBacktestQuery(v.query)
+		req, err := e.parseBacktestQuery(ctx, v.query)
 		var res backtestResponse
 		if err == nil {
 			res, err = e.backtestCached(ctx, req)

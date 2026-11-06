@@ -104,6 +104,29 @@ export class MarketService {
     return this.http.get<IndicesResponse>('/api/market/indices');
   }
 
+  /** Imports the user's own CSV file of constituents for an index. */
+  importIndexCsv(id: string, body: { csv: string; as_of: string; source_name: string; license_terms: string; license_confirmed: boolean }): Observable<{ saved: boolean }> {
+    return this.http.put<{ saved: boolean }>(`/api/market/indices/${encodeURIComponent(id)}/csv`, body);
+  }
+
+  /** Fetches constituents with the user's own saved Financial Modeling Prep key. */
+  fetchIndexFromFmp(id: string, body: { license_terms: string; license_confirmed: boolean }): Observable<{ saved: boolean }> {
+    return this.http.post<{ saved: boolean }>(`/api/market/indices/${encodeURIComponent(id)}/fmp`, body);
+  }
+
+  removeIndexSource(id: string): Observable<{ deleted: boolean }> {
+    return this.http.delete<{ deleted: boolean }>(`/api/market/indices/${encodeURIComponent(id)}/source`);
+  }
+
+  /** The key is write-only: the server never returns it. */
+  saveFmpKey(apiKey: string): Observable<{ saved: boolean }> {
+    return this.http.put<{ saved: boolean }>('/api/market/indices/fmp-key', { api_key: apiKey });
+  }
+
+  removeFmpKey(): Observable<{ deleted: boolean }> {
+    return this.http.delete<{ deleted: boolean }>('/api/market/indices/fmp-key');
+  }
+
   /** Ranks a preset universe, or up to 25 symbols, for a strategy. */
   getLeaderboard(universe: string, strategy: string, symbols: string[] = [], ignorePreferences = false): Observable<LeaderboardResponse> {
     const params: Record<string, string> = { strategy, explain: '1' };

@@ -51,7 +51,7 @@ type saveBacktestRunBody struct {
 func (e *Engine) computeBacktestRun(ctx context.Context, kind string, q url.Values) (any, error) {
 	switch kind {
 	case "single":
-		req, err := e.parseBacktestQuery(q)
+		req, err := e.parseBacktestQuery(ctx, q)
 		if err != nil {
 			return nil, err
 		}

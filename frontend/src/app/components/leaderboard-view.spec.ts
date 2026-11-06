@@ -172,5 +172,5 @@ test('an available index shows count, date and stale state', () => {
   const facts = Object.fromEntries(indexFacts(ix).map(f => [f.label, f]));
   assert.equal(facts['Securities'].value, '29 (index name says 30)');
   assert.equal(facts['Constituent source'].link, null, 'only http(s) links are followed');
-  assert.match(facts['Licensing'].value, /Licence verified\./);
+  assert.match(facts['Licensing'].value, /You confirmed you may use it\./);
 });

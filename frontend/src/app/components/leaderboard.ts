@@ -15,6 +15,7 @@ import { ProgressStatusComponent } from '../ui/progress-status';
 import { SkeletonComponent } from '../ui/skeleton';
 import { SourceComponent } from '../ui/source';
 import { BacktestPanelComponent } from './backtest-panel';
+import { IndexSourcesComponent } from './index-sources';
 import { indexBadge, indexFacts, FACTOR_LABELS, OBJECTIVE_OPTIONS, dataAgeIsWarning, formToPreferences, preferencesToForm, recordLink, regionCoverage, STRATEGY_PLAYBOOK, alternativeList, coverageBreakdown, coverageSummary, flagList, leaderboardPrompt, methodFactors, metricValue, num, pct, reasonList, scoreSum, scoreTone, selectionLines, sourceKindLabel, universeCsv } from './leaderboard-view';
 
 const WATCHLIST = 'watchlist';
@@ -28,7 +29,7 @@ const STORE_KEY = 'fs.leaderboard';
 @Component({
   selector: 'fs-leaderboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HelpButtonComponent, DecimalPipe, FormsModule, RouterLink, BacktestPanelComponent, ProgressStatusComponent, SkeletonComponent, SourceComponent],
+  imports: [HelpButtonComponent, DecimalPipe, FormsModule, RouterLink, BacktestPanelComponent, IndexSourcesComponent, ProgressStatusComponent, SkeletonComponent, SourceComponent],
   template: `
 <section class="card board" aria-labelledby="board-title">
   <div class="card-header board-head">
@@ -73,6 +74,7 @@ const STORE_KEY = 'fs.leaderboard';
             <div><dt>{{ f.label }}</dt><dd>{{ f.value }} @if (f.link) { <a [href]="f.link" target="_blank" rel="noopener noreferrer">source</a> }</dd></div>
           }
         </dl>
+        <fs-index-sources [index]="ix" [fmpKeySaved]="fmpKeySaved()" (changed)="onIndexChanged($event)" />
         <p class="text-muted mb-0">An <strong>index</strong> is a published list of companies chosen by its provider's rules; each member is an <strong>index constituent</strong>. Members are usually weighted by <strong>market capitalization</strong> (share price times shares outstanding). Membership is not a ranking or a recommendation: the strategies below rank whichever list you choose.</p>
       </section>
     }
@@ -463,6 +465,7 @@ export class LeaderboardComponent {
   readonly universe = signal('us_mega');
   readonly indices = signal<IndexInfo[]>([]);
   readonly indicesError = signal('');
+  readonly fmpKeySaved = signal(false);
   /** The unavailable index being inspected; an available one is the ranked universe. */
   readonly indexView = signal('');
   readonly shownIndex = computed(() => this.indices().find(i => i.id === (this.indexView() || this.universe())) ?? null);
@@ -525,10 +528,23 @@ export class LeaderboardComponent {
 
   private loadIndices(): void {
     const sub = this.api.getIndices().subscribe({
-      next: r => this.indices.set(r.indices),
+      next: r => { this.indices.set(r.indices); this.fmpKeySaved.set(!!r.fmp_key_saved); },
       error: () => this.indicesError.set('The index list could not be loaded.'),
     });
     inject(DestroyRef).onDestroy(() => sub.unsubscribe());
+  }
+
+  /** The user imported, fetched or removed a list: reload the registry and rank the index when it is now available. */
+  onIndexChanged(id: string): void {
+    this.api.getIndices().subscribe({
+      next: r => {
+        this.indices.set(r.indices);
+        this.fmpKeySaved.set(!!r.fmp_key_saved);
+        const ix = r.indices.find(i => i.id === id);
+        if (ix?.available) { this.indexView.set(''); this.universe.set(''); this.setUniverse(id); }
+        else if (this.universe() === id) { this.indexView.set(id); this.setUniverse(this.universes()[0]?.id ?? 'us_mega'); }
+      },
+    });
   }
 
   /** An available index becomes the ranked universe; an unavailable one is only inspected and never ranked. */

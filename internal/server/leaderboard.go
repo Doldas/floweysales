@@ -651,6 +651,9 @@ func leaderboardSymbols(universe, symbols, input string) ([]string, error) {
 	if strings.TrimSpace(symbols) == "" && universe != "" && universe != "custom" {
 		u, ok := findLeaderboardUniverse(universe)
 		if !ok {
+			if _, isIndex := findIndex(universe); isIndex {
+				return nil, fmt.Errorf("%s is an index built from data you supply; choose it on the Leaderboard page", universe)
+			}
 			return nil, fmt.Errorf("unknown universe %q", universe)
 		}
 		return u.Symbols, nil
@@ -763,14 +766,26 @@ func (e *Engine) registerLeaderboardRoutes() {
 		} else if universe == "" {
 			universe = leaderboardUniverses[0].ID
 		}
-		if idx, isIndex := findIndex(universe); isIndex && idx.Status != indexAvailable {
-			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": idx.Name + " is unavailable: " + idx.UnavailableWhy, "index": viewIndex(idx, time.Now().UTC())})
-			return
-		}
-		symbols, err := leaderboardSymbols(universe, q.Get("symbols"), "")
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
-			return
+		var symbols []string
+		var userUniverse *leaderboardUniverse
+		if idx, isIndex := findIndex(universe); isIndex {
+			snap, err := e.snapshotFor(r.Context(), idx)
+			if err != nil {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": err.Error()})
+				return
+			}
+			if snap == nil {
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": idx.Name + " is unavailable: " + unavailableForUser(idx), "index": userIndexView(idx, nil, time.Now().UTC())})
+				return
+			}
+			uu := definitionWith(idx, snap).universe()
+			userUniverse, symbols = &uu, uu.Symbols
+		} else {
+			var err error
+			if symbols, err = leaderboardSymbols(universe, q.Get("symbols"), ""); err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+				return
+			}
 		}
 		strategy, ok := findLeaderboardStrategy(q.Get("strategy"))
 		if !ok {
@@ -794,7 +809,9 @@ func (e *Engine) registerLeaderboardRoutes() {
 			}
 		}
 		info, found := findLeaderboardUniverse(universe)
-		if !found {
+		if userUniverse != nil {
+			info = *userUniverse
+		} else if !found {
 			info = customUniverse(symbols)
 		}
 		// The signed-in user's own objective and constraints, unless the
@@ -822,7 +839,7 @@ func (e *Engine) registerLeaderboardRoutes() {
 			"generated_at":  now.Format(time.RFC3339),
 			"universe_info": listed, "selection": selection,
 			"rows": scored, "unranked": splitLeaderboardRows(rows),
-			"universes": leaderboardUniverses, "strategies": leaderboardStrategies,
+			"universes": e.universesFor(r.Context()), "strategies": leaderboardStrategies,
 			"preferences": map[string]any{"applied": prefs.active(), "values": prefs, "summary": prefs.describe(), "effective_weights": effective.Weights},
 			"provenance":  prov,
 		})

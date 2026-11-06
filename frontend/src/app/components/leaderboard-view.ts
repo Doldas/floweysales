@@ -216,7 +216,8 @@ export function indexFacts(i: IndexInfo): { label: string; value: string; link?:
     { label: 'Exclusions', value: i.exclusions },
     { label: 'Share classes', value: i.share_class_policy },
     { label: 'Currency', value: `${i.currency}; ${i.benchmark_note}` },
-    { label: 'Licensing', value: i.licensing + (i.constituent_source.license_verified ? ' Licence verified.' : '') },
+    { label: 'Licensing', value: i.licensing + (i.constituent_source.license_verified ? ' You confirmed you may use it.' : i.source ? '' : ' No list has been supplied.') },
+    ...(i.source ? [{ label: 'Your data', value: `${i.source.provider === 'fmp' ? 'Financial Modeling Prep' : 'CSV import'}, ${i.source.count} securities, imported ${i.source.imported_at} UTC. You confirmed: "${i.source.license_terms}"` }] : []),
     { label: 'History', value: (i.history.point_in_time ? 'Point-in-time membership. ' : 'Current members only. ') + i.history.note },
   ];
 }

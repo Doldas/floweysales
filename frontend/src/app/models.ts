@@ -415,9 +415,29 @@ export interface IndexInfo {
   licensing: string; exclusions: string; share_class_policy: string;
   history: { point_in_time: boolean; note: string }; benchmark_note: string;
   count: number; warnings: string[]; age_days: number | null; stale: boolean; available: boolean;
+  /** How the signed-in user can supply a list: a CSV file, or their own Financial Modeling Prep key. */
+  sources?: ('csv' | 'fmp')[];
+  /** What the user supplied; null until they import or fetch a list. */
+  source?: IndexUserSource | null;
 }
 
-export interface IndicesResponse { indices: IndexInfo[]; generated_at: string; notice: string }
+/** Provenance of a list the user supplied (nothing ships with the app). */
+export interface IndexUserSource {
+  provider: 'csv' | 'fmp'; source_name: string; as_of: string; imported_at: string; count: number;
+  license_terms: string; license_confirmed: boolean; point_in_time: boolean; history_from?: string; change_records: number;
+  unverified?: boolean; warnings: string[];
+}
+
+export interface IndicesResponse { indices: IndexInfo[]; generated_at: string; notice: string; fmp_key_saved?: boolean }
+
+/** A refused import or fetch: the reason and one line per problem. */
+export interface IndexSourceRefusal { error: string; problems?: string[] }
+
+/** Which constituents a backtest on an index used at each rebalance. */
+export interface BacktestMembership {
+  mode: 'point_in_time' | 'point_in_time_with_fallback' | 'current_members'; provider: string; source_name: string; as_of: string; history_from?: string;
+  point_in_time_rebalances: number; fallback_rebalances: number; note: string;
+}
 
 export interface LeaderboardOption { id: string; label: string; description: string; benchmark?: string; source?: UniverseSource; region?: string; countries?: string[] }
 
@@ -481,6 +501,8 @@ export interface BacktestResult {
   execution_assumptions?: BacktestAssumption[];
   /** What the benchmark is and whether its currency matches the symbols; absent without a benchmark. */
   benchmark_info?: BacktestBenchmarkInfo;
+  /** Present when the universe is an index the user supplied. */
+  membership?: BacktestMembership;
   /** Quote currencies the provider reported for the symbols (not converted). */
   currencies?: string[];
   /** Consecutive parts of the period, each measured on its own; absent when the period is too short. */

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"errors"
+	"strconv"
 	"time"
 )
 
@@ -194,6 +195,12 @@ func (s *Service) DeleteUser(ctx context.Context, id int64) error {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, "DELETE FROM ranking_preferences WHERE user_id=?", id); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM index_sources WHERE user_id=?", id); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM api_integration_secrets WHERE integration=?", "index_fmp:"+strconv.FormatInt(id, 10)); err != nil {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, "DELETE FROM user_evidence_defaults WHERE user_id=?", id); err != nil {
