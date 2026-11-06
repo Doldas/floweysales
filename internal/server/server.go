@@ -24,6 +24,7 @@ import (
 	"floweysales/internal/tracker"
 	"floweysales/internal/trading"
 	"floweysales/internal/updates"
+	"floweysales/internal/websearch"
 )
 
 // SharedMarketConfig is the live asset configuration that the tick loop polls
@@ -168,16 +169,16 @@ type Engine struct {
 	backtestCache map[string]backtestCacheEntry
 	backtestCalls map[string]*backtestCall
 
-	integrationMu     sync.Mutex
-	webSearchProvider string
-	secContact        string // saved SEC User-Agent, empty when the environment default is used
-	webSearchAPIKey   string
-	aiMu              sync.Mutex
-	aiBaseURL         string
-	aiAPIKey          string
-	aiModel           string
-	aiMaxSteps        int
-	aiMaxToolCalls    int
+	integrationMu  sync.Mutex
+	secContact     string // saved SEC User-Agent, empty when the environment default is used
+	searchOnce     sync.Once
+	searchRouter   *websearch.Router // web search providers and policy (see web_search.go)
+	aiMu           sync.Mutex
+	aiBaseURL      string
+	aiAPIKey       string
+	aiModel        string
+	aiMaxSteps     int
+	aiMaxToolCalls int
 
 	// Order lifecycle: account settings and the match loop guard.
 	tradingMu      sync.Mutex
@@ -324,6 +325,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerAgentTaskRoutes()
 	e.registerEvidenceRoutes()
 	e.registerIntegrationSettingsRoutes()
+	e.registerWebSearchRoutes()
 	e.registerTradingSettingsRoutes()
 	e.registerUserManagementRoutes()
 	e.registerTrackerEmailRoutes()

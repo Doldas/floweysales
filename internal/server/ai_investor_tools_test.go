@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"floweysales/internal/websearch"
 	"strings"
 	"testing"
 	"time"
@@ -157,11 +158,13 @@ func TestAgentWebSearchUsesTheSavedKey(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "Settings → Integrations") {
 		t.Fatalf("an unconfigured search must say where to configure it: %v", err)
 	}
-	e.integrationMu.Lock()
-	e.webSearchProvider, e.webSearchAPIKey = "not-a-provider", "saved-key"
-	e.integrationMu.Unlock()
+	router := e.webSearchRouter()
+	router.SetAdapterFactory(func(websearch.ProviderConfig) (websearch.Adapter, error) {
+		return nil, &websearch.Error{Provider: websearch.Tavily, Kind: websearch.KindUnauthorized, Status: 401}
+	})
+	router.SetConfig(websearch.ProviderConfig{ID: websearch.Tavily, Enabled: true, APIKey: "saved-key"})
 	_, err = ai.Execute(context.Background(), engineSource{e: e}, "search_web", `{"query":"gold price"}`)
-	if err == nil || strings.Contains(err.Error(), "Settings → Integrations") || !strings.Contains(err.Error(), "unsupported web search provider") {
+	if err == nil || strings.Contains(err.Error(), "Settings → Integrations") || !strings.Contains(err.Error(), "credentials rejected") {
 		t.Fatalf("with a saved key the search must go through the saved provider: %v", err)
 	}
 }

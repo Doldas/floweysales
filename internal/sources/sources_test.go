@@ -28,6 +28,21 @@ func registry(t *testing.T) *Registry {
 	return r
 }
 
+// Where a hit came from, and what kind of hit it is, travels with the source.
+// A grounded source is listed, never read.
+func TestSearchProviderAndResultTypeAreRecorded(t *testing.T) {
+	r := NewRegistry()
+	grounded := `{"provider":"google_grounding","retrieved_at_utc":"2026-11-03T10:00:00Z","result_type":"grounded_answer","results":[{"title":"example.com","url":"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AAA","type":"grounded_source","provider":"google_grounding"}]}`
+	_, added := r.Register("search_web", "c1", `{"query":"acme"}`, grounded)
+	if len(added) != 1 || added[0].SearchProvider != "google_grounding" || added[0].ResultType != "grounded_source" || added[0].Access != AccessListed {
+		t.Fatalf("%+v", added)
+	}
+	_, added = r.Register("search_web", "c2", `{"query":"acme"}`, searchResult)
+	if added[0].SearchProvider != "brave_search" || added[0].ResultType != "" {
+		t.Fatalf("%+v", added[0])
+	}
+}
+
 func kinds(f []Finding) string {
 	var k []string
 	for _, x := range f {
