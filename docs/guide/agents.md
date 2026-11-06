@@ -2,7 +2,7 @@
 title: Agents, teams and evidence
 order: 7
 summary: The Research Agent, agent teams of fictional investor characters, choosing a model, and the evidence modes that hold an answer until its citations check out.
-last-reviewed: 2026-11-04
+last-reviewed: 2026-11-06
 ---
 
 # Agents, teams and evidence
@@ -43,7 +43,18 @@ A mechanical check goes through the final answer sentence by sentence. It report
 | Quote mismatch | A passage in quotation marks (five words or more) that is not in the text of the cited source |
 | Not primary | A secondary source cited in the primary-sources mode |
 
-A passing check says that every cited source was retrieved and its figures appear in the text. It does **not** say the claims are true, that the source is right, or that the prose supports the claim. Always read the passage a number comes from before you rely on it.
+A second check, the **claim check**, reads each cited sentence against the cited text and gives it a verdict:
+
+| Verdict | Meaning |
+| --- | --- |
+| Supported | The cited text states the figure with the same company, metric, period, unit and direction. Proof of what the source says, not that the source is right. |
+| Contradicted | The number is in the source, but for another metric, period, unit or direction, or the arithmetic does not follow. |
+| Not proven | The evidence is insufficient: the company is not named in the source, the figure is adjusted or guidance but stated as reported, a stated cause is not in the source, another source disagrees, or the source was only a search result. This is uncertainty, not a finding that the claim is false. |
+| Not checked | No fixed rule applies, for example a recommendation, a forecast or an opinion. |
+
+Under **Sources**, each claim opens to **Why is this claim supported?** It shows how the sentence was read (company, metric, period, unit, direction), the calculation when there is one, the exact passage of the source with the matched number highlighted and when it was retrieved (UTC), and any other source that gives a different figure. The rules run in the app with no model call, so they are repeatable and cost nothing; at most 40 sentences are checked per answer. Text inside a source that reads as an instruction to an AI is ignored and never counts as evidence. Judgements the agent should label as such ("Forecast:", "Opinion:") are flagged in the evidence modes when they are not.
+
+A passing check says that every cited source was retrieved and its figures appear in the text, and the claim check says what each source states. Neither says the claims are true, that the source is right, or that the prose supports the claim. Always read the passage a number comes from before you rely on it.
 
 The agent can open a search hit by its id. It cannot be made to fetch an address that no search returned, and it only reads public pages. Pages that need a login or JavaScript, and scanned PDFs, cannot be read; the source then stays "search result only". Reading a page does not make it a primary source.
 
@@ -92,6 +103,7 @@ Name a team and press **Save team** to keep the characters, the chair setting an
 - Models are served from one endpoint set up by the administrator. A profile chooses among the models that endpoint offers.
 - Cost ceilings need prices in the model profile and a usage report from the endpoint; without them only the tool-call ceiling is enforced.
 - The citation check covers web search, opened pages and SEC section sources. Other tools are not registered in the source list yet.
+- The claim check understands English filing phrasing and a fixed list of metrics. It reads a figure's meaning from the words around it in the source; a table the agent received as plain text, or a metric it does not know, is reported as not checked, not as supported.
 - A link that was reachable when checked may change later, and a page can be reachable and still not say what the answer claims.
 - An answer is a summary of what the tools returned. Check dates, especially for numbers.
 

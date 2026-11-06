@@ -51,7 +51,8 @@ Until the leaderboard adopts the badge, it explains itself in three panels (see 
 
 ## What checks do and do not prove
 
-- **The citation check** confirms that cited sources were retrieved and that figures and quoted passages appear in the cited text. It does not read whether the prose supports the claim, and it does not confirm that the source is right.
+- **The citation check** confirms that cited sources were retrieved and that figures and quoted passages appear in the cited text. It does not confirm that the source is right.
+- **The claim check** compares a cited sentence with the cited text: company, metric, period, unit, direction, stated causes and simple arithmetic. "Supported" means the source states it that way. "Not proven" and "not checked" are uncertainty, never confirmation, and the check does not judge forecasts, opinions or whether the source is correct.
 - **"Require grounded figures"** on a flow's agent node confirms that figures in its answer match a number in its input or tool results. A number that appears for an unrelated reason would pass.
 - **The summary of a saved backtest** is checked against the stored figures. The check does not judge the wording.
 - **A leaderboard score** says how a company compares within a list. It does not predict anything.

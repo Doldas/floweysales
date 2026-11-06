@@ -1,6 +1,6 @@
 import type { BudgetSummary } from './components/team-budget';
 import type { Provenance } from './core/provenance';
-import type { AnswerFinding, AnswerSource } from './core/answer-sources';
+import type { AnswerClaim, AnswerFinding, AnswerSource, ClaimStats } from './core/answer-sources';
 export interface MarketData {
   assetDataProvider?: string;
   type?: string;
@@ -705,7 +705,7 @@ export interface TeamEvent {
   /** On the 'budget' event that ends a run with a budget. */
   budget?: BudgetSummary;
   /** With a `sources` event: what the member retrieved and what the citation check found in its answer. */
-  sources?: AnswerSource[]; audit?: AnswerFinding[]; removed?: AnswerFinding[];
+  sources?: AnswerSource[]; audit?: AnswerFinding[]; removed?: AnswerFinding[]; claims?: AnswerClaim[]; claim_stats?: ClaimStats;
 }
 export type StrategyOperandType = 'price' | 'const' | 'ema' | 'sma' | 'rsi' | 'atr' | 'highest' | 'lowest' | 'fib_retr' | 'fib_ext' | 'swing_high' | 'swing_low';
 export interface StrategyOperand { type: StrategyOperandType; field?: string; period?: number; ratio?: number; value?: number }

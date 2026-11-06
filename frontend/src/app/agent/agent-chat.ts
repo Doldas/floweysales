@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, effect, inject, input, signal, viewChild, OnInit } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
-import { EVIDENCE_MODES, auditSummary, findingLabel, removedSummary, safeUrl, settingsSummary, sourceOrigin, splitSources } from '../core/answer-sources';
+import { EVIDENCE_MODES, auditSummary, claimFacts, claimsSummary, findingLabel, removedSummary, safeUrl, settingsSummary, sortClaims, sourceOrigin, spanOrigin, spanParts, splitSources, verdictLabel, whyLabel } from '../core/answer-sources';
 import { AgentSession, type ChatEntry } from '../core/agent-session';
 import { renderMarkdown } from '../markdown';
 import { toolLabel } from '../components/agent-tools';
@@ -42,6 +42,13 @@ export class AgentChatComponent implements OnInit {
   readonly removedText = computed(() => removedSummary(this.session.answerRemoved()));
   readonly groups = computed(() => splitSources(this.session.answerSources()));
   readonly auditText = computed(() => auditSummary(this.session.answerAudit()));
+  readonly claims = computed(() => sortClaims(this.session.answerClaims()));
+  readonly claimsText = computed(() => claimsSummary(this.session.answerClaims(), this.session.claimStats()));
+  readonly verdictLabel = verdictLabel;
+  readonly whyLabel = whyLabel;
+  readonly claimFacts = claimFacts;
+  readonly spanParts = spanParts;
+  readonly spanOrigin = spanOrigin;
   link(url: string | undefined): string { return safeUrl(url); }
   private readonly sanitizer = inject(DomSanitizer);
   private readonly scroller = viewChild<ElementRef<HTMLElement>>('scroller');
