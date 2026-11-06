@@ -71,6 +71,8 @@ används först 60 dagar efter periodens slut) mot ett index och returnerar
 nyckeltal, kurva, ombalanseringar och varningar. Båda läses med
 `research.read`; se [investor automations](investor-automations.md#backtest).
 
+`GET /api/market/leaderboard` also takes a scope (#209): `universe=global` (the union of the reviewed curated lists), `regions=europe,north_america`, `countries=SE,DK`, `exchanges=XSTO` (MIC), `currencies=SEK` (all optional; an unknown region or malformed code is a 400) and `compare=region|all` (percentiles within each region, the default for `global`, or across one pool). The response adds `scope` (`filters`, `compare`, per-region `coverage` with counts, price dates in UTC, currencies, exchanges and providers, and `comparability` with currency, FX, accounting and time-zone statements and warnings) and, per row, `region`, `compared_with`, `identifier` (`isin`, `isin_status`) and a `discovery` that records `list_id`, `list_version`, `how` and, for `global`, the `lists` the company is on. `fallback_provider=<id>` fills companies the primary provider could not load from a second provider (each row's `data_provider` and `provider_note` say which), and `cross_check=1` also compares both providers' last prices and records `provider_conflict` where they differ by more than 2%. `global` is not accepted by the backtest or the flow node.
+
 `GET|PUT /api/market/leaderboard/preferences` reads and saves the signed-in user's own leaderboard objective and constraints; see [investor automations](investor-automations.md#your-objective-and-constraints). `GET /api/market/leaderboard?preferences=off` ranks without them.
 
 `GET /api/plan`, `PUT /api/plan/profile` och `POST /api/plan/preview` hanterar

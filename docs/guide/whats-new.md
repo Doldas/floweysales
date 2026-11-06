@@ -34,6 +34,7 @@ last-reviewed: 2026-11-06
 - **Test unsaved draft** runs the graph in the editor without saving, including a brand-new flow. Side effects are simulated unless you confirm real ones, and Run history marks each run as a draft test or a saved version with its snapshot hash. See [Flows](flows.md).
 
 **Leaderboard**
+- A **Global** scope that combines the reviewed lists (North America and Europe today), filters by region, country, exchange and currency, a choice between percentiles within each region or across all companies, and a coverage and comparability panel. No exchange rate is applied; the page says so. Each company shows how it was matched and its ISIN, or "not recorded". See [Leaderboard](leaderboard.md).
 - A method panel with a fingerprint, origin of each company on the list, bias statements, a coverage-by-region view, and your own objective and constraints. See [Leaderboard](leaderboard.md).
 
 **Files**
