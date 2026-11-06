@@ -55,7 +55,11 @@ A run that is interrupted resumes from its last checkpoint, so completed steps a
 
 ## Versions: draft, publish, roll back
 
-**Save** writes the editable draft. **Publish revision** freezes the draft as a numbered revision, which becomes the active one. Scheduled and event runs always use the active revision; **Run draft** tests the saved, unpublished draft, and **Test unsaved draft** runs what is currently in the editor without saving it (shown in Run history as a *draft test*). Activating an older revision rolls back immediately. A flow that was never published runs its draft.
+**Save** writes the editable draft. **Publish revision** freezes the draft as a numbered revision, which becomes the active one. Scheduled and event runs always use the active revision; **Run draft** tests the saved, unpublished draft.
+
+**Test unsaved draft** runs exactly what is in the editor, including edits you have not saved, and also works on a brand-new flow you have never saved. It never saves anything, never changes what a schedule or trigger runs, and leaves your editor as it was. The run works on a frozen copy, so you can keep editing while it runs. By default nodes that act outside the flow (Workspace write, Emit Event, Notify) are **simulated**: the trace says what would have been done, and nothing is written or sent. For a saved flow you can tick **Allow real side effects in this test** and confirm; actions that need approval still wait for it. A flow that has never been saved is always tested with simulated effects.
+
+In Run history each run says whether it was a **Draft test** or a **Saved version** and shows a short snapshot hash that identifies the exact graph it ran. Tests of never-saved flows are listed under **Unsaved draft tests**, visible only to you. Activating an older revision rolls back immediately. A flow that was never published runs its draft.
 
 ## Read a run
 

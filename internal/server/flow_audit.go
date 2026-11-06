@@ -33,6 +33,7 @@ var flowAuditRoutes = map[string]auditedRoute{
 	"POST /api/admin/flows/{id}/publish":                                {"flow.publish", "flow", "id"},
 	"POST /api/admin/flows/{id}/revisions/{rev}/activate":               {"flow.activate_revision", "flow", "id"},
 	"POST /api/admin/flows/{id}/revisions/{rev}/restore":                {"flow.restore_revision", "flow", "id"},
+	"POST /api/admin/flows/draft/run":                                   {"flow.draft_test", "flow", ""},
 	"POST /api/admin/flows/{id}/run":                                    {"flow.run", "flow", "id"},
 	"POST /api/admin/flows/{id}/runs/{run}/cancel":                      {"run.cancel", "run", "run"},
 	"POST /api/admin/flows/{id}/runs/{run}/retry":                       {"run.retry", "run", "run"},
