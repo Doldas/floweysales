@@ -157,6 +157,9 @@ jobs:
       - name: Playwright visual evidence (desktop and phone)
         working-directory: frontend
         run: npx playwright test --config playwright.config.ts e2e/visual-evidence.spec.ts
+      - name: Playwright Help/About branding and theme checks (desktop and phone)
+        working-directory: frontend
+        run: npx playwright test --config playwright.config.ts e2e/help-about-branding.spec.ts
       - name: Upload Playwright HTML report, screenshots, video and traces
         if: always()
         uses: actions/upload-artifact@v7
