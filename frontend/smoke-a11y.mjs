@@ -68,7 +68,7 @@ try {
   await page.locator('fse-flow-studio').getByRole('button', { name: 'Inspect nodes' }).first().click();
   await page.locator('fse-flow-studio [aria-label^="Execution graph for run"]').waitFor({ state: 'visible' });
   await audit(page, 'Run history: node trace');
-  await page.locator('fse-flow-studio [aria-label="Analyst SUCCESS"]').focus();
+  await page.locator('fse-flow-studio [data-node-id="agent"]').focus();
   await page.keyboard.press('Enter');
   await page.locator('fse-flow-studio').getByText('not granted to this agent').first().waitFor({ state: 'visible', timeout: 5000 });
   await audit(page, 'Run history: agent step with tool calls');

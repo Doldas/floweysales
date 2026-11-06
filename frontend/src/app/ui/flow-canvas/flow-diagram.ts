@@ -43,14 +43,14 @@ const BASE_ASPECT = 820 / 380;
        <rect class="flow-node" [class]="'tone-'+(n.tone||'none')" [class.selected]="n.id===selectedId()"
         [attr.x]="n.x" [attr.y]="n.y" [attr.width]="nodeWidth" [attr.height]="nodeHeight" rx="12"/>
        <rect class="flow-node-accent" [attr.data-type]="n.kind" [attr.x]="n.x" [attr.y]="n.y" width="4" [attr.height]="nodeHeight" rx="2"/>
-       <text class="node-type" [attr.x]="n.x+12" [attr.y]="n.y+24" font-size="11">{{n.tag}}</text>
-       <text class="node-label" [attr.x]="n.x+12" [attr.y]="n.y+46" font-size="13">{{n.label.slice(0,16)}}</text>
+       <text class="node-type" [attr.x]="n.x+12" [attr.y]="n.y+24" font-size="11">{{n.tag}}</text>&ngsp;
+       <text class="node-label" [attr.x]="n.x+12" [attr.y]="n.y+46" font-size="13">{{n.label.slice(0,16)}}</text>&ngsp;
        @if(subline(n);as s){<text class="node-sub" [attr.x]="n.x+12" [attr.y]="n.y+62" font-size="10">{{s.slice(0,22)}}</text>}
        @for(p of n.inputs||[]; track p.name; let i=$index){
-        <circle class="canvas-port pin-in" [attr.cx]="n.x" [attr.cy]="n.y+offset(i,(n.inputs||[]).length)" r="6" pointer-events="none"><title>Input {{p.name}}@if(p.type){ ({{p.type}})}</title></circle>
+        <circle class="canvas-port pin-in" [attr.cx]="n.x" [attr.cy]="n.y+offset(i,(n.inputs||[]).length)" r="6" pointer-events="none"></circle>
        }
        @for(p of n.outputs||[]; track p.name; let i=$index){
-        <circle class="canvas-port pin-out" [attr.cx]="n.x+nodeWidth" [attr.cy]="n.y+offset(i,(n.outputs||[]).length)" r="6" pointer-events="none"><title>Output {{p.name}}@if(p.type){ ({{p.type}})}</title></circle>
+        <circle class="canvas-port pin-out" [attr.cx]="n.x+nodeWidth" [attr.cy]="n.y+offset(i,(n.outputs||[]).length)" r="6" pointer-events="none"></circle>
        }
       </g>
      }
@@ -111,7 +111,11 @@ export class FlowDiagramComponent {
   path(edge: DiagramEdge): string { return edgeBetween(this.nodes(), edge); }
   offset(index: number, count: number): number { return portOffset(index, count); }
   subline(n: DiagramNode): string { return [n.sub, toneLabel(n.tone)].filter(Boolean).join(' · '); }
-  nodeName(n: DiagramNode): string { return n.ariaLabel || `${n.tag.replace(/^\S+\s/, '')} ${n.label}${toneLabel(n.tone) ? ', ' + toneLabel(n.tone) : ''}`; }
+  nodeName(n: DiagramNode): string {
+    // WCAG 2.5.3: the accessible name must contain the visible text, so lead with exactly what is rendered.
+    const visible = [n.tag, n.label.slice(0, 16), this.subline(n).slice(0, 22)].filter(Boolean).join(' ');
+    return n.ariaLabel && !visible.includes(n.ariaLabel) ? `${visible}, ${n.ariaLabel}` : visible;
+  }
 
   /** Arrow keys move focus between nodes; + / - / 0 zoom and reset like the toolbar. */
   onKey(event: KeyboardEvent): void {
