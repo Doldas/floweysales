@@ -26,6 +26,8 @@ import {
   StrategyCatalog,
   StrategyDef,
   StrategyRunRequest,
+  FitRequest,
+  FitResult,
   StrategyRunResult,
   WorldView,
   PlanProfile,
@@ -185,6 +187,8 @@ export class MarketService {
   deleteStrategy(id: number): Observable<void> { return this.http.delete<void>(`/api/strategies/${id}`); }
   /** Replays a strategy over one instrument's daily bars. Nothing is ordered. */
   runStrategy(req: StrategyRunRequest): Observable<StrategyRunResult> { return this.http.post<StrategyRunResult>('/api/strategies/backtest', req); }
+  /** Chooses numbers on one window and tests them on the next. Research only; nothing is ordered. */
+  runWalkForward(req: FitRequest): Observable<FitResult> { return this.http.post<FitResult>('/api/strategies/walkforward', req); }
 
   /** The signed-in user's saved wealth plan, or nulls when none is saved. */
   getPlan(): Observable<PlanResponse> {

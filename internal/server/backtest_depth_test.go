@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,10 +18,13 @@ type depthBackend struct {
 	longBackend
 	daily bool
 	asked map[string]int
+	mu    *sync.Mutex
 }
 
 func (b depthBackend) History(ctx context.Context, p market.Provider, symbol, rng string) (market.HistorySeries, error) {
+	b.mu.Lock()
 	b.asked[rng]++
+	b.mu.Unlock()
 	s, err := b.longBackend.History(ctx, p, symbol, rng)
 	if err != nil {
 		return s, err
@@ -42,7 +46,7 @@ func depthEngine(t *testing.T, daily bool) (*Engine, map[string]int) {
 	t.Helper()
 	e := NewEngine(nil, &SharedMarketConfig{}, nil, tracker.DefaultConfig())
 	asked := map[string]int{}
-	e.providers = depthBackend{longBackend: longBackend{investorBackend{now: time.Now().UTC()}}, daily: daily, asked: asked}
+	e.providers = depthBackend{longBackend: longBackend{investorBackend{now: time.Now().UTC()}}, daily: daily, asked: asked, mu: &sync.Mutex{}}
 	return e, asked
 }
 

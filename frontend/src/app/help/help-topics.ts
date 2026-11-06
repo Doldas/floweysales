@@ -111,6 +111,8 @@ All times are UTC.`,
 
 - Past results do not predict future results. Costs, taxes and slippage may differ from what is assumed.
 - Compare against simply holding the instrument.
+- Set slippage and, for leaderboard backtests, a fill delay: a result that vanishes with a little of either was not tradable as measured.
+- A walk-forward fit tests chosen numbers on a window they were not chosen on; it still uses history you have already seen.
 - Nothing is ordered: strategies here only run on historical data.`,
     keywords: 'backtest fibonacci rules return drawdown',
     guide: 'strategies',
