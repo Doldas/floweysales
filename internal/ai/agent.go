@@ -148,6 +148,7 @@ Rules:
 // Run executes the multi-step tool-calling loop. Content deltas and tool
 // events are pushed through emit (may be nil).
 func Run(ctx context.Context, client *Client, src DataSource, transcript []Message, opts AgentOptions, emit func(Event)) error {
+	ctx = ensureRunScope(ctx)
 	if emit == nil {
 		emit = func(Event) {}
 	}
