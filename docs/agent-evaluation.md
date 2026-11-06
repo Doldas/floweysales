@@ -68,6 +68,23 @@ Eleven cases (suite version 2026-11-06.1) test behavior a figure cannot show, ma
 
 `must` and `must_not` are named case-insensitive patterns; `clean_citations` requires an empty audit. `evidence` sets the evidence policy of a case (see [agent-evidence.md](agent-evidence.md)), `today` fixes the date the recency limit counts from, and `dead_links` lists the addresses a fake link check reports as unreachable. No case touches the network. Patterns are wording checks, so a model that expresses the right idea in other words can fail one. Read the answers before trusting a single miss.
 
+## Claim-verification golden fixtures
+
+`internal/sources/testdata/claims_golden.json` holds the adversarial and golden fixtures of the semantic claim check (issue #255; see [agent-evidence.md](agent-evidence.md)). Each fixture has the sources an agent retrieved, an answer, whether it ran in a strict evidence mode and the expected verdict and code per claim. `go test ./internal/sources` runs them with no network and no model. Categories:
+
+| Category | What it pins |
+| --- | --- |
+| `supported` | Table rows read by column, narrative figures, scaled amounts, a percentage derived from stated endpoints, a cause the source states, a split ratio, guidance stated as guidance |
+| `wrong_metric`, `wrong_period`, `wrong_entity`, `wrong_unit`, `wrong_direction` | The number is in the cited document but means something else: net income for revenue, the prior year, a quarter for a year, another company, million for billion, a percentage for an amount, euros for dollars, an increase for a decrease |
+| `misleading_context` | Non-GAAP stated as reported, guidance stated as a result, a net loss stated as income |
+| `cherry_picked` | A figure that a restated filing contradicts, with and without the sentence disclosing it |
+| `contradicted`, `unsupported` | Arithmetic that does not follow, a different split ratio, an undated or wrongly dated event, a cause the source never states, an unopened search hit, a figure absent from the source |
+| `not_checked` | Recommendations, inferences and qualitative statements are reported as not checked, never as supported |
+| `prompt_injection` | A figure that appears only in an injected instruction is not evidence, the legitimate figure in the same source is still checked, and a "verdict: supported" directive changes nothing |
+| `abstention` | Evidence-only behavior: unlabeled recommendations and forecasts and uncited causal claims are flagged, labeled opinion passes, standard mode does not flag thin evidence |
+
+A new failure mode is added as a fixture first. The tests also assert that every fixture category is present, that each supported figure carries a source span, that every contradicted or misread claim produces a finding, and that a pass of 40 claims stays bounded and makes no model call.
+
 ## Limits
 
 Scoring is mechanical. It checks figures, sources and refusal wording, not whether the reasoning is sound. A wrong figure that happens to appear in the evidence passes the grounding check. The accuracy check catches that only for the expected figures.

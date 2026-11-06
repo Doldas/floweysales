@@ -8,7 +8,7 @@ import {
   FinancialsResponse,
   HistorySeries,
   BacktestParams,
-  BacktestResult, BatchResult, SensitivityResult, MonteCarloResult, SavedBacktest, BacktestSummary,
+  BacktestResult, StrategyMonteCarloRequest, StrategyMonteCarloResult, BatchResult, SensitivityResult, MonteCarloResult, SavedBacktest, BacktestSummary,
   LeaderboardResponse,
   RankingPreferences,
   RankingPreferencesResponse,
@@ -185,6 +185,9 @@ export class MarketService {
   deleteStrategy(id: number): Observable<void> { return this.http.delete<void>(`/api/strategies/${id}`); }
   /** Replays a strategy over one instrument's daily bars. Nothing is ordered. */
   runStrategy(req: StrategyRunRequest): Observable<StrategyRunResult> { return this.http.post<StrategyRunResult>('/api/strategies/backtest', req); }
+
+  /** Resamples the closed trades of a strategy replay with a seed. Research only; nothing is ordered. */
+  strategyMonteCarlo(req: StrategyMonteCarloRequest): Observable<StrategyMonteCarloResult> { return this.http.post<StrategyMonteCarloResult>('/api/strategies/montecarlo', req); }
 
   /** The signed-in user's saved wealth plan, or nulls when none is saved. */
   getPlan(): Observable<PlanResponse> {

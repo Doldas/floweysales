@@ -8,6 +8,28 @@ export interface AnswerSource {
 }
 export interface AnswerFinding { kind: string; sentence: string; source?: string; detail: string }
 
+/** The exact passage of a source a verdict rests on: Match is the matched token, Before and After its surroundings. */
+export interface ClaimSpan {
+  source: string; start: number; end: number; before?: string; match: string; after?: string;
+  url?: string; title?: string; document_id?: string; published_at?: string; retrieved_at?: string;
+}
+export interface ClaimFigure {
+  text: string; metric?: string; period?: string; unit?: string; direction?: string;
+  verdict: string; code: string; detail?: string; span?: ClaimSpan;
+}
+export type ClaimVerdict = 'supported' | 'contradicted' | 'insufficient' | 'not_checked';
+/** The claim-level evidence record of one sentence of an answer. */
+export interface AnswerClaim {
+  id: string; sentence: string; kind: string; causal?: boolean; assertion?: string;
+  entity?: string; metric?: string; period?: string; unit?: string; direction?: string; qualifiers?: string[]; citations?: string[];
+  verdict: ClaimVerdict | string; code: string; explanation: string;
+  figures?: ClaimFigure[]; spans?: ClaimSpan[]; calculation?: string; conflicts?: { value: string; span: ClaimSpan }[];
+  limitations: string; injection_suspected?: boolean; verifier_version: string; verified_at: string;
+}
+export interface ClaimStats {
+  claims: number; supported: number; contradicted: number; insufficient: number; not_checked: number;
+  skipped?: number; elapsed_ms: number; model_calls: number; verifier_version: string;
+}
 const FINDING_LABELS: Record<string, string> = {
   fabricated: 'Not a source the agent retrieved',
   snippet_only: 'Search result not opened',
@@ -18,6 +40,9 @@ const FINDING_LABELS: Record<string, string> = {
   excluded_source: 'Source type not accepted',
   stale: 'Source too old or undated',
   unreachable: 'Link no longer resolves',
+  claim_contradicted: 'Claim contradicted by the cited text',
+  claim_insufficient: 'Claim not proven by the cited text',
+  unsupported_claim: 'Judgement not labeled as such',
 };
 
 export function findingLabel(kind: string): string {
@@ -157,4 +182,62 @@ export function delegationProgress(ev: { type?: string; name?: string; agent?: s
   if (ev.type !== 'member_done') return '';
   if (ev.error) return `${who} failed: ${ev.error}`;
   return ev.stance ? `${who} answered (${ev.stance.replace(/_/g, ' ')})` : `${who} answered`;
+}
+
+const VERDICT_LABELS: Record<string, string> = {
+  supported: 'Supported by the cited text',
+  contradicted: 'Contradicted by the cited text',
+  insufficient: 'Not proven (insufficient evidence)',
+  not_checked: 'Not checked',
+};
+
+/** The heading of a claim's verdict. Only "supported" is proof; the others are never shown as confirmation. */
+export function verdictLabel(verdict: string): string {
+  return VERDICT_LABELS[verdict] ?? verdict.replace(/_/g, ' ');
+}
+
+/** The question a claim's explanation answers: why it is supported, or why it is not. */
+export function whyLabel(verdict: string): string {
+  return verdict === 'supported' ? 'Why is this claim supported?' : 'Why is this claim not supported?';
+}
+
+/** Contradicted claims first, then unproven, not checked and supported, keeping answer order within a group. */
+export function sortClaims(claims: readonly AnswerClaim[]): AnswerClaim[] {
+  const rank: Record<string, number> = { contradicted: 0, insufficient: 1, not_checked: 2, supported: 3 };
+  return claims.map((c, i) => ({ c, i })).sort((a, b) => (rank[a.c.verdict] ?? 4) - (rank[b.c.verdict] ?? 4) || a.i - b.i).map(x => x.c);
+}
+
+/** One line for the claims header; says how many claims were proven and what the check cost. */
+export function claimsSummary(claims: readonly AnswerClaim[], stats?: ClaimStats | null): string {
+  if (!claims.length) return '';
+  const count = (v: string) => claims.filter(c => c.verdict === v).length;
+  const parts = [`${count('supported')} supported`, `${count('contradicted')} contradicted`, `${count('insufficient')} not proven`, `${count('not_checked')} not checked`];
+  let text = `${claims.length} ${claims.length === 1 ? 'claim' : 'claims'}: ${parts.join(', ')}.`;
+  if (stats) {
+    text += ` Checked by fixed rules in ${stats.elapsed_ms} ms with no model call`;
+    text += stats.skipped ? `; ${stats.skipped} more ${stats.skipped === 1 ? 'sentence was' : 'sentences were'} not checked (limit reached).` : '.';
+  }
+  return text;
+}
+
+/** What the sentence asserts, as the verifier read it: the facts it compared with the source. */
+export function claimFacts(c: AnswerClaim): { label: string; value: string }[] {
+  const rows: [string, string | undefined][] = [
+    ['Entity', c.entity], ['Metric', c.metric], ['Period', c.period], ['Unit', c.unit], ['Direction', c.direction],
+    ['Qualifiers', c.qualifiers?.length ? c.qualifiers.join(', ') : undefined], ['Kind', c.kind + (c.causal ? ' (states a cause)' : '')],
+  ];
+  return rows.filter((r): r is [string, string] => !!r[1]).map(([label, value]) => ({ label, value }));
+}
+
+/** The passage of a source with the matched token separated, for highlighting without HTML. */
+export function spanParts(s: ClaimSpan): { before: string; match: string; after: string } {
+  return { before: s.before ?? '', match: s.match, after: s.after ?? '' };
+}
+
+/** Where a span came from, for the line above it: source id, title or document, and times in UTC. */
+export function spanOrigin(s: ClaimSpan): string {
+  const parts = [`[${s.source}]`, s.title || s.document_id || s.url || ''];
+  if (s.published_at) parts.push(`published ${s.published_at.slice(0, 10)}`);
+  if (s.retrieved_at) parts.push(`retrieved ${s.retrieved_at.replace('T', ' ').replace(/(:\d\d)?Z$/, '')} UTC`);
+  return parts.filter(Boolean).join(' · ');
 }

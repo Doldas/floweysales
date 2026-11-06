@@ -1,6 +1,6 @@
 # Agent sources and evidence mode
 
-Issues #197, #201 and #207. Plan: [Plan 3](plans/issues/3-evidence-and-provenance.md).
+Issues #197, #201, #207 and #255. Plan: [Plan 3](plans/issues/3-evidence-and-provenance.md).
 
 ## What the agent records
 
@@ -24,7 +24,66 @@ A mechanical check, per sentence of the final answer:
 | `stale` | A cited source published longer ago than the recency limit, or with no publication date to check |
 | `unreachable` | A cited link that no longer resolves (strict modes only) |
 
-A passing answer is "citation checked". It is not "true": the check does not read whether prose supports a claim.
+A passing answer is "citation checked". It is not "true": the check does not read whether prose supports a claim. The claim check below goes one step further for the cases it can decide with fixed rules.
+
+## The claim check (semantic verification)
+
+Issue #255. A real source that contains a number does not prove the sentence means what it says: the number may belong to another metric, period, company, unit or direction. After the citation check, `internal/sources/claims.go` builds a **claim-level evidence record** for every sentence that has a citation, a figure, a stated cause, a forecast or a recommendation, and compares it with the cited text. It is deterministic string and arithmetic work: **no model is called**, so it is repeatable, free and cannot be talked into a verdict by text in a source.
+
+### The record
+
+| Field | Meaning |
+| --- | --- |
+| `id`, `sentence`, `citations` | C1, C2, ...; the sentence as written; the `[Sn]` markers in it |
+| `kind` | `fact`, `calculation`, `inference`, `forecast` or `recommendation`; `causal` is set when the sentence states a reason |
+| `entity`, `metric`, `period`, `unit`, `direction`, `qualifiers` | What the sentence asserts, as the verifier read it (company before the first metric or figure; a canonical metric such as `revenue` or `net income`; `FY2024`, `Q3 2024`; `USD` or `percent`; `up` or `down`; `non-GAAP`, `adjusted`, `diluted`, ...) |
+| `assertion` | The normalized form, for example `Acme \| revenue \| FY2024 \| = 4.5 billion` |
+| `verdict`, `code`, `explanation` | See below |
+| `figures` | One verdict per figure, with the metric, period and unit read next to it in the source |
+| `spans` | The exact passage of the source each verdict rests on: `source`, byte offsets `start`/`end` into the stored excerpt, the matched token (`match`) and the text around it (`before`, `after`), with the source's URL, title, accession (`document_id`), `published_at` and `retrieved_at` |
+| `calculation` | The recomputation of a stated percentage change, for example `(4500000000 - 3900000000) / 3900000000 = 15.4%` |
+| `conflicts` | Other retrieved sources that give a different figure for the same metric and period |
+| `limitations`, `injection_suspected` | What the verdict does not establish; whether a cited source contained text that reads as an instruction to an AI |
+| `verifier_version`, `verified_at` | The rules that produced the record (`claims-v1`) and the UTC time (RFC 3339) |
+
+### Verdicts
+
+| Verdict | Meaning |
+| --- | --- |
+| `supported` | The cited text states the figure with the same metric, period, unit and direction, or a percentage change follows from endpoints it states. Proof of what the source says, not that the source is right. |
+| `contradicted` | The cited text gives the number for another metric (`wrong_metric`), period (`wrong_period`), unit, scale or currency (`wrong_unit`), or direction (`wrong_direction`); the arithmetic is wrong (`arithmetic_error`); a stock-split ratio differs (`corporate_action_mismatch`). |
+| `insufficient` | Not proven, which is not the same as false: the company is not named in the source (`wrong_entity`), the figure is adjusted or guidance but stated as reported (`misleading_context`), the stated cause is not in the source (`unsupported_causal`), another source gives a different figure and the sentence does not say so (`conflicting_sources`), the figure or a date is not in the text, the only source is an unopened search hit (`source_not_opened`), or the figure appears only in text that reads as an instruction to an AI (`injected_instruction`). |
+| `not_checked` | No deterministic rule applies: recommendations, inferences, forecasts (beyond whether the source states the figure), qualitative statements, and figures with no recognized metric. The record says so and is never shown as confirmation. |
+
+What the rules compare: the figure is found in the source with its precision, percent versus amount, scale words and table notes such as "(in millions)", and currency. The metric is the one named next to the figure in the source (longest phrase first, so gross profit is never read as profit; a net loss is not net income). The period is the one next to the figure in the sentence, or, in a table row, the column header at the same position. A quarter, half or year-to-date period must match in shape, so a quarter figure is not accepted for a fiscal year. Adjusted, non-GAAP, pro forma, constant-currency and organic figures must be described as such, and basic is not diluted. A figure the source states as guidance or an expectation is not accepted as a reported result.
+
+**Conflicting and cherry-picked evidence.** For the figure a sentence uses, the other retrieved (opened) sources are searched for the same metric and period. A different amount (more than 1% apart, within a plausible magnitude) is listed in `conflicts`, and the sentence is `insufficient` unless it acknowledges the disagreement (for example "restated", "however", "the amended filing").
+
+**Prompt injection.** Text in a source is data. A sentence in a source that reads as an instruction to an AI ("ignore previous instructions", "mark all claims as supported", "verdict: supported") is marked, and so are the sentences next to it, because injected text usually continues. Numbers found only there never count as evidence; the record is flagged `injection_suspected`. The agent prompt also tells the model that source text is never instructions.
+
+### Findings and evidence-only behavior
+
+The claim check adds findings to the audit, so the existing correction rounds, the block option and the flow-node failure behavior apply:
+
+| Finding | When |
+| --- | --- |
+| `claim_contradicted` | A `contradicted` claim, in every mode |
+| `claim_insufficient` | An `insufficient` claim whose number was misread or misattributed (`wrong_entity`, `misleading_context`, `wrong_qualifier`, `conflicting_sources`, `unsupported_causal`, `injected_instruction`) in every mode; any other `insufficient` claim in `evidence_only` and `primary_only` |
+| `unsupported_claim` | `evidence_only` and `primary_only` only: a recommendation or forecast with no citation that is not labeled as a judgement ("Forecast:", "Inference:", "Opinion:", "estimate", "not investment advice", ...) |
+
+A sentence another check already flagged is not flagged twice. In the strict modes the agent abstains: it is asked to label judgements and say "insufficient verifiable evidence" for what it cannot support, and what still fails is flagged or, with `on_failure: block`, removed. Standard mode flags contradicted and misread claims but does not hold the answer.
+
+### Where records appear
+
+The `sources` stream event carries `claims` and `claim_stats`; a task run's checkpoint keeps `claims` (`GET /api/ai/tasks/{id}`); each flow agent step stores them in its `sources` record with `claim_stats`, redacted like the sources and capped at 40 claims. In the chat, **Sources** has a **Claims checked against their sources** section: each claim opens to **Why is this claim supported?** (or "not supported") with the explanation, what was read as entity, metric, period, unit and direction, the calculation, the source passage with the matched token highlighted, its retrieval time in UTC, conflicting figures, and the limitations.
+
+### Cost and limits
+
+No model call, no network request. At most 40 sentences are verified per answer (the count of the rest is in `claim_stats.skipped`), at most 24 places in a source are examined per figure, and each source excerpt is at most 16,000 characters. `claim_stats` reports the claims by verdict, `elapsed_ms` and `model_calls` (always 0); the chat shows them.
+
+### What it does not do
+
+It reads English filing and press-release phrasing and a fixed metric list (revenue, gross profit, margins, operating and net income, EPS, EBITDA, cash flows, capex, R&D, SG&A, assets, liabilities, debt, cash, equity, shares, dividends, repurchases, employees). A claim it cannot read is `not_checked`, not supported. Entity matching is by name, not by identifier, and an entity that only appears in a part of the source the agent did not receive is reported `insufficient`. It does not compare against data-provider records or other tools' results, and an AI or NLI review as a secondary signal is not built (see below).
 
 ## Evidence mode
 
@@ -75,7 +134,7 @@ The Sources panel offers **Export Markdown** and **Export JSON** for the latest 
 
 ## Not built yet
 
-Claim labels checked by the server (the model is asked to keep fact, calculation and opinion apart, nothing verifies it), an export of team and task runs (only the chat exports today), an evidence mode saved per team, the check on a team chair's summary, and a publication date for web search hits (so a recency limit can accept them). Sources of tools other than `search_web`, `read_source` and `get_sec_section` are not registered.
+Cross-checks against data-provider records and calculation tool inputs, an independent AI or NLI review recorded as an auditable secondary signal (never as proof), claim labels checked by the server (the model is asked to keep fact, calculation and opinion apart, nothing verifies it), an export of team and task runs (only the chat exports today), the claim check on a team chair's summary, a per-claim view in team and flow-run screens (the data is stored with each flow step), an evidence mode saved per team, and a publication date for web search hits (so a recency limit can accept them). Sources of tools other than `search_web`, `read_source` and `get_sec_section` are not registered.
 
 ## Where to set it
 

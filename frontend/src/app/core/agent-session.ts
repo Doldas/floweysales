@@ -2,7 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 
 import type { Message, ModelProfile, Persona } from '../models';
 import { MarketState } from './market-state';
-import { defaultTypes, delegationProgress, parseEvidenceMode, policyFromSettings, settingsFromPolicy, settingsProblem, type AnswerFinding, type AnswerSource, type EvidenceMode, type EvidencePolicy, type EvidenceSettings } from './answer-sources';
+import { defaultTypes, delegationProgress, parseEvidenceMode, policyFromSettings, settingsFromPolicy, settingsProblem, type AnswerClaim, type AnswerFinding, type AnswerSource, type EvidenceMode, type EvidencePolicy, type EvidenceSettings, type ClaimStats } from './answer-sources';
 import { MAX_DELIVERABLES, parseChecklist, parseDeliverables, type SavedTask, type TaskDeliverable } from './task-view';
 import { EMPTY_NOTICES, applyNotice, dismissNotice, finishNotices, recoveryLine, type NoticeState } from './agent-notices';
 
@@ -102,6 +102,9 @@ export class AgentSession {
   /** The evidence policy the latest run was sent with, and its question, for exports. */
   readonly answerPolicy = signal<EvidencePolicy>({ mode: 'standard' });
   readonly answerQuestion = signal('');
+  /** Claim-level evidence records of the latest answer, with the cost of checking them. */
+  readonly answerClaims = signal<AnswerClaim[]>([]);
+  readonly claimStats = signal<ClaimStats | null>(null);
   readonly runStatus = computed(() => this.noticeState().status);
   readonly runStatusDetail = computed(() => this.noticeState().statusDetail);
   readonly notices = computed(() => this.noticeState().notices);
@@ -300,6 +303,8 @@ export class AgentSession {
     this.answerSources.set([]);
     this.answerAudit.set([]);
     this.answerRemoved.set([]);
+    this.answerClaims.set([]);
+    this.claimStats.set(null);
     this.assistantId = -1;
   }
 
@@ -331,6 +336,8 @@ export class AgentSession {
     this.answerRemoved.set([]);
     this.answerPolicy.set(policyFromSettings(this.evidenceSettings()));
     this.answerQuestion.set(content);
+    this.answerClaims.set([]);
+    this.claimStats.set(null);
     this.push({ role: 'user', content });
     this.wire.push({ role: 'user', content });
     this.streaming.set(true);
@@ -373,6 +380,8 @@ export class AgentSession {
     this.answerSources.set([]);
     this.answerAudit.set([]);
     this.answerRemoved.set([]);
+    this.answerClaims.set([]);
+    this.claimStats.set(null);
     // The saved conversation lives on the server; this view shows the continuation.
     this.wire = [];
     this.entries.set([]);
@@ -461,7 +470,7 @@ export class AgentSession {
       if (!line.startsWith('data:')) continue;
       const payload = line.slice(5).trim();
       if (!payload) continue;
-      let ev: { model?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean; type?: string; severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string; content?: string; name?: string; arguments?: string; result?: string; tool_error?: string; error?: string; message?: Message; sources?: AnswerSource[]; audit?: AnswerFinding[]; removed?: AnswerFinding[]; parent_call_id?: string; agent?: string; stance?: string };
+      let ev: { model?: string; call_id?: string; seq?: number; duration_ms?: number; truncated?: boolean; original_bytes?: number; redacted?: boolean; type?: string; severity?: string; code?: string; attempt?: number; max_attempts?: number; detail?: string; content?: string; name?: string; arguments?: string; result?: string; tool_error?: string; error?: string; message?: Message; sources?: AnswerSource[]; audit?: AnswerFinding[]; removed?: AnswerFinding[]; claims?: AnswerClaim[]; claim_stats?: ClaimStats; parent_call_id?: string; agent?: string; stance?: string };
       try {
         ev = JSON.parse(payload);
       } catch {
@@ -502,6 +511,8 @@ export class AgentSession {
           this.answerSources.set(ev.sources ?? []);
           this.answerAudit.set(ev.audit ?? []);
           this.answerRemoved.set(ev.removed ?? []);
+          this.answerClaims.set(ev.claims ?? []);
+          this.claimStats.set(ev.claim_stats ?? null);
           break;
         case 'error':
           this.error.set(ev.error || 'AI error');

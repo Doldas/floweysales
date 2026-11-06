@@ -61,6 +61,11 @@ type Event struct {
 	// and what the mechanical citation check found in the final answer.
 	Sources []sources.Source  `json:"sources,omitempty"`
 	Audit   []sources.Finding `json:"audit,omitempty"`
+	// Claims and ClaimStats are the claim-level evidence records of the final
+	// answer: for each factual sentence what it asserts, the verdict of the
+	// deterministic semantic check and the source spans it rests on.
+	Claims     []sources.Claim     `json:"claims,omitempty"`
+	ClaimStats *sources.ClaimStats `json:"claim_stats,omitempty"`
 	// Budget accompanies a "budget" event at the end of a team run.
 	Budget *BudgetSummary `json:"budget,omitempty"`
 	// Removed lists what the block option took out of the answer, and Policy
@@ -189,6 +194,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	var links sources.LinkCache
 	// audit is the citation check of an answer; strict modes also check that
 	// the sources it cites by link still resolve.
+	var lastClaims sources.ClaimReport
 	audit := func(answer string) []sources.Finding {
 		auditOpts := policy.auditOptions()
 		auditOpts.Now = opts.Now
@@ -196,7 +202,11 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		if strict {
 			found = append(found, links.Findings(ctx, answer, registry, checkLink)...)
 		}
-		return found
+		// The semantic claim check: does the cited text mean what the
+		// sentence says. It adds findings so that a misread figure is
+		// corrected, flagged or removed like any other failed check.
+		lastClaims = sources.VerifyClaims(answer, registry, sources.ClaimOptions{Strict: strict, Now: opts.Now})
+		return append(found, sources.ClaimFindings(lastClaims, found, strict)...)
 	}
 	evidenceRetries := 0
 	var lastAudit, lastRemoved []sources.Finding
@@ -205,6 +215,10 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		lastAudit = audit(answer)
 		if all := registry.All(); len(all) > 0 || len(lastAudit) > 0 || len(lastRemoved) > 0 {
 			ev := Event{Type: "sources", Sources: all, Audit: lastAudit, Removed: lastRemoved}
+			if len(lastClaims.Claims) > 0 {
+				stats := lastClaims.Stats
+				ev.Claims, ev.ClaimStats = lastClaims.Claims, &stats
+			}
 			if strict || policy.EvidenceLimits.active() {
 				ev.Policy = &policy
 			}
@@ -240,7 +254,7 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		cp := &Checkpoint{
 			Messages: append([]Message(nil), messages[1:]...), Ledger: append([]LedgerEntry(nil), ledger...),
 			Deliverables: deliverables, Steps: stepsBefore + step, ToolCalls: toolCalls, Status: status, NoTools: noTools,
-			Sources: sources.Compact(registry.All(), maxCheckpointSources, 16000), Audit: lastAudit, Removed: lastRemoved,
+			Sources: sources.Compact(registry.All(), maxCheckpointSources, 16000), Audit: lastAudit, Removed: lastRemoved, Claims: lastClaims.Claims,
 		}
 		if strict || policy.EvidenceLimits.active() {
 			cp.Evidence = &policy

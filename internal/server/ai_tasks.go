@@ -134,6 +134,7 @@ type taskView struct {
 	Sources   []sources.Source   `json:"sources,omitempty"`
 	Audit     []sources.Finding  `json:"audit,omitempty"`
 	Removed   []sources.Finding  `json:"removed,omitempty"`
+	Claims    []sources.Claim    `json:"claims,omitempty"`
 	Evidence  *ai.EvidencePolicy `json:"evidence,omitempty"`
 	Resumable bool               `json:"resumable"`
 }
@@ -146,7 +147,7 @@ func newTaskView(t storage.AgentTask, withLedger bool) taskView {
 		if json.Unmarshal([]byte(t.Checkpoint), &cp) == nil {
 			v.Ledger = cp.Ledger
 			v.Sources = sources.Compact(cp.Sources, len(cp.Sources), taskSourcePreview)
-			v.Audit, v.Removed, v.Evidence = cp.Audit, cp.Removed, cp.Evidence
+			v.Audit, v.Removed, v.Claims, v.Evidence = cp.Audit, cp.Removed, cp.Claims, cp.Evidence
 		}
 	}
 	v.Resumable = t.Status != ai.TaskComplete
