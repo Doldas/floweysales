@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { optedIn } from './workflow-scenarios';
 
 // Deliberately restricted to a disposable read-only account. Credentials are
 // injected through protected GitHub Environment secrets, never test fixtures.
@@ -81,7 +82,7 @@ test.describe('Deployed FloweySales — real backend, read-only account', () => 
   });
 
   test('real multi-turn Research Agent conversation — explicitly opted in', async ({ page }, testInfo) => {
-    test.skip(process.env.LIVE_E2E_AI !== 'true', 'Real AI conversation tests require explicit opt-in');
+    test.skip(!optedIn(process.env.LIVE_E2E_AI), 'Real AI conversation tests require explicit opt-in');
     test.skip(testInfo.project.name !== 'live-desktop', 'Send real AI messages on desktop only to avoid duplicate costs');
 
     test.setTimeout(240_000);
