@@ -4,19 +4,28 @@ on:
   push:
     tags:
       - 'pluginsdk/v*'
+  # Rehearsal: runs every gate for a prospective tag name against the selected
+  # commit, but never creates a tag or a release.
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Prospective tag to rehearse, e.g. pluginsdk/v0.2.0-rc.1 (no tag is created)'
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: sdk-release-${{ github.ref }}
+  group: sdk-release-${{ github.event.inputs.version_tag || github.ref }}
   cancel-in-progress: false
 
+env:
+  SDK_TAG: ${{ github.event.inputs.version_tag || github.ref_name }}
+
 jobs:
-  sdk:
+  verify:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -25,27 +34,77 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$GITHUB_REF_NAME" =~ ^pluginsdk/v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$ ]] || {
+          [[ "$SDK_TAG" =~ ^pluginsdk/v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$ ]] || {
             echo "::error::Expected pluginsdk/vMAJOR.MINOR.PATCH[-rc.N]"; exit 1;
           }
           git fetch origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::SDK release must be on main"; exit 1; }
           grep -q '^module github.com/Doldas/floweysales/pluginsdk$' pluginsdk/go.mod
           # A v2 SDK must change its Go module path before publishing.
-          version="${GITHUB_REF_NAME#pluginsdk/v}"
+          version="${SDK_TAG#pluginsdk/v}"
           major="${version%%.*}"
           [[ "$major" -lt 2 ]] || { echo "::error::Go v2+ needs /v2 module path"; exit 1; }
+          if [[ "$GITHUB_EVENT_NAME" == push ]] && [[ "$(git cat-file -t "$GITHUB_REF")" != tag ]]; then
+            echo "::warning::Tag is lightweight; prefer an annotated, reviewed tag."
+          fi
       - uses: actions/setup-go@v7
         with:
           go-version-file: pluginsdk/go.mod
           cache: false # pluginsdk is dependency-free and has no go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Check compatibility matrix and the version against it
+        run: |
+          node scripts/check-sdk-compat.mjs
+          node scripts/check-sdk-compat.mjs --sdk "${SDK_TAG#pluginsdk/}"
+      - name: Require a changelog section for this version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${SDK_TAG#pluginsdk/}"
+          grep -q "^## ${version}\$" pluginsdk/CHANGELOG.md || {
+            echo "::error::pluginsdk/CHANGELOG.md needs a '## ${version}' section (rename Unreleased in the release PR)."; exit 1;
+          }
       - name: Validate SDK module and conformance fixtures
         working-directory: pluginsdk
         run: |
           go mod tidy
           git diff --exit-code -- go.mod go.sum
+          go mod verify
           go vet ./...
           go test -race -count=1 ./...
+      - name: Public API compatibility against the previous SDK tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          go install golang.org/x/exp/cmd/apidiff@latest
+          prev="$(git tag --list 'pluginsdk/v*' --sort=-v:refname | grep -v -- '-rc\.' | grep -vx "$SDK_TAG" | head -n1 || true)"
+          if [[ -z "$prev" ]]; then echo "No previous stable SDK tag; nothing to compare."; exit 0; fi
+          echo "Comparing against $prev"
+          mkdir -p "$RUNNER_TEMP/old"
+          git archive "$prev" pluginsdk | tar -x -C "$RUNNER_TEMP/old"
+          pkgs="root:. httpx:./httpx research:./research plugintest:./plugintest"
+          for e in $pkgs; do
+            (cd "$RUNNER_TEMP/old/pluginsdk" && apidiff -m -w "$RUNNER_TEMP/old-${e%%:*}.api" "${e#*:}")
+            (cd pluginsdk && apidiff -m -w "$RUNNER_TEMP/new-${e%%:*}.api" "${e#*:}")
+          done
+          breaking=0
+          for e in $pkgs; do
+            n="${e%%:*}"
+            out="$(apidiff -m -incompatible "$RUNNER_TEMP/old-$n.api" "$RUNNER_TEMP/new-$n.api" || true)"
+            if [[ -n "$out" ]]; then echo "$out"; breaking=1; fi
+          done
+          [[ "$breaking" == 0 ]] && exit 0
+          new="${SDK_TAG#pluginsdk/v}"; old="${prev#pluginsdk/v}"
+          if [[ "${new%%.*}" -gt "${old%%.*}" ]]; then echo "Major bump accepts breaking API changes."; exit 0; fi
+          if [[ "${old%%.*}" == 0 ]]; then
+            # v0 may break, but only when announced as Breaking in the changelog.
+            sed -n "/^## ${new}\$/,/^## /p" pluginsdk/CHANGELOG.md | grep -q 'Breaking' || {
+              echo "::error::Incompatible API change in a v0 release must be listed as 'Breaking' in the changelog."; exit 1; }
+            exit 0
+          fi
+          echo "::error::Incompatible API change needs a new major version."; exit 1
       - name: Validate backend protocol contract
         run: go test ./...
       - name: Checkout official plugin consumers
@@ -62,13 +121,39 @@ jobs:
           go mod tidy
           go vet ./...
           go test -race -count=1 ./...
+      - name: Rehearsal summary
+        if: github.event_name == 'workflow_dispatch'
+        run: echo "Rehearsal of $SDK_TAG passed all gates. No tag or release was created."
+
+  publish:
+    # Requires approval from the `sdk-release` GitHub Environment reviewers
+    # (configure required reviewers in repository settings).
+    if: github.event_name == 'push'
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: sdk-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
       - name: Publish SDK release record
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
+          version="${SDK_TAG#pluginsdk/}"
+          {
+            sed -n "/^## ${version}\$/,/^## /p" pluginsdk/CHANGELOG.md | sed '1d;$d' || true
+            echo
+            echo "### Supported versions"
+            echo
+            echo "Wire protocol and SDK ranges: see \`pluginsdk/compat.json\` at this tag."
+            jq -r '.protocols[] | "- Protocol \(.protocol) (\(.status)): SDK >= \(.sdkMin), < \(.sdkMaxExclusive)"' pluginsdk/compat.json
+            echo
+            echo "Go module: \`go get github.com/Doldas/floweysales/pluginsdk@${version}\`"
+          } > "$RUNNER_TEMP/notes.md"
           args=()
-          [[ "$GITHUB_REF_NAME" == *-rc.* ]] && args+=(--prerelease)
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes "${args[@]}"
+          [[ "$SDK_TAG" == *-rc.* ]] && args+=(--prerelease)
+          gh release create "$SDK_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Plugin SDK ${version}" --notes-file "$RUNNER_TEMP/notes.md" "${args[@]}"
           echo 'Next: update official plugin go.mod to this tagged SDK via reviewed PR.'

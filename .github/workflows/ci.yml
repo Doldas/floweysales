@@ -21,8 +21,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - name: Test policy guardrails
         run: bash scripts/test-pr-policy.sh
+      - name: Test SDK contract gate and compatibility matrix scripts
+        run: |
+          bash scripts/test-sdk-contract.sh
+          node --test scripts/check-sdk-compat.test.mjs
+      - name: Check SDK compatibility matrix against protocol.go
+        run: node scripts/check-sdk-compat.mjs
+      - name: SDK contract change needs fixtures/tests and a changelog entry
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: bash scripts/check-sdk-contract.sh
       - name: Test repository gate audit
         run: node --test scripts/audit-repository-gates.test.mjs
       - name: Test documentation build and brand sync
