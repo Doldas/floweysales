@@ -58,7 +58,10 @@ type Trade struct {
 	Bars       int     `json:"bars"`
 	ReturnPct  float64 `json:"return_pct"`  // after costs, on the traded value
 	R          float64 `json:"r,omitempty"` // result in multiples of the initial risk, when there is a stop
-	Reason     string  `json:"reason"`      // stop, target, signal, max_bars or open
+	// EquityPct is the change in the account value this trade caused, after costs: what the
+	// position size made of ReturnPct. A Monte Carlo run resamples this figure, not ReturnPct.
+	EquityPct float64 `json:"equity_return_pct"`
+	Reason    string  `json:"reason"` // stop, target, signal, max_bars or open
 }
 
 // Point is one day of the curves, all starting at 100.
@@ -326,15 +329,16 @@ func (e *evaluator) level(l *Level, t int, stop bool) float64 {
 }
 
 type position struct {
-	entryIdx int
-	price    float64
-	qty      float64 // negative for a short
-	stop     float64
-	target   float64
-	hasStop  bool
-	hasTgt   bool
-	risk     float64 // currency at risk when the stop is hit, 0 without a stop
-	cost     float64 // entry cost paid
+	entryIdx  int
+	price     float64
+	qty       float64 // negative for a short
+	stop      float64
+	target    float64
+	hasStop   bool
+	hasTgt    bool
+	risk      float64 // currency at risk when the stop is hit, 0 without a stop
+	cost      float64 // entry cost paid
+	entryCash float64 // the account value just before the entry
 }
 
 type pending struct {
@@ -405,10 +409,11 @@ func Run(def Strategy, points []market.HistoryPoint, cfg Config) (Result, error)
 		value := pos.qty * price
 		exitCost := math.Abs(value) * costRate
 		cash += value - exitCost
+		equityPct := (cash/pos.entryCash - 1) * 100
 		// Return on the traded value, net of both costs.
 		pnl := sign*(price-pos.price)*math.Abs(pos.qty) - pos.cost - exitCost
 		tr := Trade{EntryDate: s.t[pos.entryIdx].Format(dateLayout), EntryPrice: round2(pos.price), ExitDate: s.t[t].Format(dateLayout), ExitPrice: round2(price),
-			Bars: t - pos.entryIdx, ReturnPct: round2(pnl / (pos.price * math.Abs(pos.qty)) * 100), Reason: reason}
+			Bars: t - pos.entryIdx, ReturnPct: round2(pnl / (pos.price * math.Abs(pos.qty)) * 100), EquityPct: round2(equityPct), Reason: reason}
 		if pos.hasStop {
 			tr.Stop = round2(pos.stop)
 		}
@@ -448,8 +453,9 @@ func Run(def Strategy, points []market.HistoryPoint, cfg Config) (Result, error)
 			}
 			if ok && qty > 0 {
 				fee := qty * px * costRate
+				entryCash := cash
 				cash -= sign*qty*px + fee
-				p := &position{entryIdx: t, price: px, qty: sign * qty, cost: fee}
+				p := &position{entryIdx: t, price: px, qty: sign * qty, cost: fee, entryCash: entryCash}
 				if def.Stop != nil {
 					p.stop, p.hasStop = entryOrder.stop, true
 					p.risk = qty * sign * (px - p.stop)
