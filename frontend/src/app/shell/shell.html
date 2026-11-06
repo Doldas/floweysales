@@ -102,11 +102,11 @@
 
       @if (market.trackedSymbol()) {
         <a routerLink="/markets" class="instrument-chip" [class.is-ignored]="instrumentUse() === 'ignored'" [title]="instrumentTitle()"
-           [attr.aria-label]="'Selected instrument: ' + instrumentTitle() + (isNarrow() ? '. Opens the instrument picker.' : '. Opens Markets.')"
+           [attr.aria-label]="chipVisibleText() + '. Selected instrument: ' + instrumentTitle() + (isNarrow() ? '. Opens the instrument picker.' : '. Opens Markets.')"
            (click)="onChipClick($event)">
-          <span class="chip-sym">{{ market.trackedSymbol() }}</span>
-          @if (market.trackedName()) { <span class="chip-name">{{ market.trackedName() }}</span> }
-          <span class="chip-meta">{{ market.trackedExchange() ? market.trackedExchange() + ' · ' : '' }}{{ market.trackedProvider() }}</span>
+          <span class="chip-sym">{{ market.trackedSymbol() }}</span>&ngsp;
+          @if (market.trackedName()) { <span class="chip-name">{{ market.trackedName() }}</span>&ngsp; }
+          <span class="chip-meta">{{ market.trackedExchange() ? market.trackedExchange() + ' · ' : '' }}{{ market.trackedProvider() }}</span>&ngsp;
           @if (instrumentUse() === 'ignored') { <span class="chip-note">Not used on this page</span> }
         </a>
         <button type="button" class="btn btn-ghost btn-icon star-btn" (click)="market.toggleFavoriteSelected()"
