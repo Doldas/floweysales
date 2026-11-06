@@ -10,7 +10,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +24,10 @@ type Client struct {
 	HTTP        *http.Client
 	UserAgent   string
 	MinInterval time.Duration
+	// MaxRetryWait caps how long a Retry-After hint is honored. A provider
+	// asking for a longer pause fails the call at once (the error carries the
+	// hint) instead of being retried too early. Zero means 5 seconds.
+	MaxRetryWait time.Duration
 
 	mu   sync.Mutex
 	last time.Time
@@ -56,6 +62,29 @@ func (c *Client) throttle(ctx context.Context) error {
 type StatusError struct {
 	Status int
 	Body   string
+	// RetryAfter is the provider's Retry-After hint, zero when absent.
+	RetryAfter time.Duration
+}
+
+// parseRetryAfter reads delta-seconds or an HTTP date; invalid or past values
+// give zero.
+func parseRetryAfter(v string, now time.Time) time.Duration {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0
+	}
+	if secs, err := strconv.Atoi(v); err == nil {
+		if secs < 0 {
+			return 0
+		}
+		return time.Duration(secs) * time.Second
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		if d := t.Sub(now); d > 0 {
+			return d
+		}
+	}
+	return 0
 }
 
 func (e *StatusError) Error() string { return fmt.Sprintf("HTTP %d: %s", e.Status, e.Body) }
@@ -78,9 +107,22 @@ func (c *Client) Get(ctx context.Context, endpoint string, headers map[string]st
 		if !retryable(err) {
 			return nil, err
 		}
+		wait := time.Duration(attempt+1) * 300 * time.Millisecond
+		if se := err.(*StatusError); se.RetryAfter > 0 {
+			limit := c.MaxRetryWait
+			if limit <= 0 {
+				limit = 5 * time.Second
+			}
+			if se.RetryAfter > limit {
+				return nil, fmt.Errorf("provider asked to wait %s (Retry-After), longer than the %s limit: %w", se.RetryAfter, limit, err)
+			}
+			if se.RetryAfter > wait {
+				wait = se.RetryAfter
+			}
+		}
 		if attempt < 2 {
 			select {
-			case <-time.After(time.Duration(attempt+1) * 300 * time.Millisecond):
+			case <-time.After(wait):
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			}
@@ -130,7 +172,7 @@ func (c *Client) do(ctx context.Context, method, endpoint string, body []byte, h
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, &StatusError{Status: resp.StatusCode, Body: Truncate(string(data), 200)}
+		return nil, &StatusError{Status: resp.StatusCode, Body: Truncate(string(data), 200), RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())}
 	}
 	return data, nil
 }
@@ -160,8 +202,8 @@ func ToFloat(v any) float64 {
 	case float64:
 		return t
 	case string:
-		var f float64
-		if _, err := fmt.Sscanf(t, "%f", &f); err == nil {
+		// Strict: "12abc", "NaN" and "Inf" are malformed, not 12 or infinity.
+		if f, err := strconv.ParseFloat(strings.TrimSpace(t), 64); err == nil && !math.IsNaN(f) && !math.IsInf(f, 0) {
 			return f
 		}
 	}
