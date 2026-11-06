@@ -2,7 +2,7 @@
 title: Settings and roles
 order: 9
 summary: What administrators set up on the Settings page, and what each person chooses for themselves.
-last-reviewed: 2026-11-04
+last-reviewed: 2026-11-06
 ---
 
 # Settings and roles
@@ -29,7 +29,7 @@ Flows use three permissions that an administrator can assign through roles: **fl
 | **User management** | Create, invite and manage accounts. |
 | **Role management** | Define roles. |
 | **Permission management** | Assign permissions to roles. |
-| **Mail configuration** | The SMTP server used to send email, such as tracker alerts and flow emails. |
+| **Mail configuration** | The SMTP server used to send email, such as invitations, tracker alerts and flow emails. Every message uses the same FloweySales design, with a plain-text version for clients that cannot show HTML. See [Email rendering](../email-rendering.md). |
 | **Trading limits** | Limits and costs for the **paper** portfolio only, and a reset of the simulated account. These apply to simulated orders. |
 | **Plugins** | Installed market-data providers and the plugin store. Install, update, roll back to a version, uninstall, and check for updates. Installing a provider that relies on an unofficial interface asks you to accept its terms first. See [Provider plugins](../plugins.md). |
 | **Updates** | The installed version, whether a newer one is available, what changed, and, when the host updater is installed, install with backup and automatic rollback. See [Automatic updates](../auto-updates.md). |
