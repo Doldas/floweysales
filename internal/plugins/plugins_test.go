@@ -897,7 +897,7 @@ func TestIncompatibleStoreVersionsAreNeverInstalled(t *testing.T) {
 	store.publish(future, fakeRelease(t, future))
 	m := openManager(t, store, t.TempDir(), nil)
 	ctx := context.Background()
-	if _, err := m.Install(ctx, "fake", "2.0.0", false); err == nil || !strings.Contains(err.Error(), "newer FloweySales") {
+	if _, err := m.Install(ctx, "fake", "2.0.0", false); err == nil || !strings.Contains(err.Error(), "protocol 2") {
 		t.Fatalf("explicit incompatible version: %v", err)
 	}
 	if got, err := m.Install(ctx, "fake", "", false); err != nil || got.Manifest.Version != "1.0.0" {
@@ -915,7 +915,7 @@ func TestPreflightJudgesInstalledPluginsAgainstTheTargetRelease(t *testing.T) {
 	}
 	one := func(target int) PreflightEntry {
 		t.Helper()
-		got := m.Preflight(target)
+		got := m.Preflight(target, "")
 		if len(got) != 1 || got[0].ID != "fake" {
 			t.Fatalf("preflight: %+v", got)
 		}

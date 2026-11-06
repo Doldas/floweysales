@@ -22,12 +22,25 @@ export type CompatibilityStatus = 'compatible' | 'incompatible' | 'needs_update'
 export interface PluginCompatibility {
   status: CompatibilityStatus; reason: string; plugin_protocol: number; app_protocol: number; evidence: string;
   checked_at?: string; affects?: string[]; compatible_versions?: string[];
+  /** The running release (absent for an untagged build) and the plugin's declared FloweySales range. */
+  app_version?: string; min_app_version?: string; max_app_version?: string;
+}
+export type UpgradeOutcome = 'verified' | 'needs_attention' | 'incompatible' | 'updated' | 'removed';
+export interface UpgradeEntry {
+  id: string; name: string; version: string; previous_version?: string; outcome: UpgradeOutcome;
+  retained: boolean; disabled: boolean; reason: string;
+}
+/** What happened to the installed plugins when FloweySales itself was upgraded. */
+export interface UpgradeReport {
+  at: string; from_build?: string; to_build?: string; from_version?: string; to_version?: string; plugins: UpgradeEntry[];
 }
 export interface InstalledPlugin {
   manifest: PluginManifest; installed_at: string; source: string; sha256: string; running: boolean;
   last_error?: string; env: PluginEnvVar[]; ready: boolean; latest_version?: string; update_available: boolean; log: string[];
   /** Absent only in data from an older server. */
   compatibility?: PluginCompatibility;
+  /** The version an update replaced; it can be restored without a download. */
+  previous_version?: string;
 }
 export interface StorePlugin {
   manifest: PluginManifest; released_at?: string; notes?: string; versions: string[]; latest_version?: string;
@@ -38,6 +51,8 @@ export interface PluginOverview {
   installed: InstalledPlugin[];
   store: { checked_at?: string; error?: string; warnings?: string[]; plugins: StorePlugin[] };
   trackers: Record<string, string[]>;
+  app_version?: string;
+  upgrade_report?: UpgradeReport;
 }
 
 /** One card in the plugin list: the installed copy and/or the store entry. */
@@ -163,4 +178,28 @@ export function updateAllHeadline(results: UpdateResult[]): string {
   const n = (o: UpdateResult['outcome']) => results.filter(r => r.outcome === o).length;
   const parts = [`${n('updated')} updated`, `${n('skipped')} skipped`, `${n('failed')} failed`];
   return `Update all finished: ${parts.join(', ')}. Plugins that were not updated keep their installed version and settings.`;
+}
+
+const OUTCOME_LABELS: Record<UpgradeOutcome, string> = {
+  verified: 'Verified', needs_attention: 'Needs attention', incompatible: 'Incompatible, not run', updated: 'Updated', removed: 'Removed',
+};
+
+/** Text label of one post-upgrade outcome; never colour alone. */
+export function upgradeOutcomeLabel(outcome: UpgradeOutcome): string { return OUTCOME_LABELS[outcome] ?? outcome; }
+
+/** Headline of the post-upgrade report: every outcome is counted, kept plugins are always named as kept. */
+export function upgradeReportHeadline(r: UpgradeReport): string {
+  const n = (o: UpgradeOutcome) => r.plugins.filter(p => p.outcome === o).length;
+  const kept = r.plugins.filter(p => p.outcome !== 'removed').length;
+  const parts = [`${n('verified')} verified`, `${n('needs_attention')} need attention`, `${n('incompatible')} incompatible`, `${n('updated')} updated`];
+  if (n('removed')) parts.push(`${n('removed')} removed`);
+  return `After the upgrade: ${parts.join(', ')}. ${kept} plugin${kept === 1 ? '' : 's'} kept with settings and data.`;
+}
+
+/** The FloweySales versions a plugin declares support for, in words; empty when it declares none. */
+export function appRangeLabel(c: Pick<PluginCompatibility, 'min_app_version' | 'max_app_version'> | undefined): string {
+  if (c?.min_app_version && c.max_app_version) return `FloweySales ${c.min_app_version} to ${c.max_app_version}`;
+  if (c?.min_app_version) return `FloweySales ${c.min_app_version} or newer`;
+  if (c?.max_app_version) return `FloweySales up to ${c.max_app_version}`;
+  return '';
 }

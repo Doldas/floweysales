@@ -46,6 +46,10 @@ type Manifest struct {
 	// Tools adds a tab of interactive tools. A plugin with Tools may have no provider.
 	Tools *ToolsInfo `json:"tools,omitempty"`
 	Env   []EnvVar   `json:"env,omitempty"`
+	// MinAppVersion and MaxAppVersion bound the FloweySales release (semantic
+	// version) the plugin works with; both are optional and inclusive.
+	MinAppVersion string `json:"min_app_version,omitempty"`
+	MaxAppVersion string `json:"max_app_version,omitempty"`
 }
 
 // ProviderInfo is the provider a plugin contributes.
@@ -169,6 +173,9 @@ func (m Manifest) Validate() error {
 	case len(m.Description) > 600 || len(m.Terms) > 4000 || len(m.Provider.Notes) > 1000:
 		return errors.New("manifest text fields are too long")
 	}
+	if err := m.validateAppRange(); err != nil {
+		return err
+	}
 	if err := m.validateProvider(); err != nil {
 		return err
 	}
@@ -183,4 +190,38 @@ func (m Manifest) Validate() error {
 		}
 	}
 	return nil
+}
+
+// validateAppRange checks the optional FloweySales version bounds.
+func (m Manifest) validateAppRange() error {
+	for name, v := range map[string]string{"min_app_version": m.MinAppVersion, "max_app_version": m.MaxAppVersion} {
+		if v != "" && !ValidVersion(v) {
+			return fmt.Errorf("%s %q is not a semantic version", name, v)
+		}
+	}
+	if m.MinAppVersion != "" && m.MaxAppVersion != "" && CompareVersions(m.MinAppVersion, m.MaxAppVersion) > 0 {
+		return errors.New("min_app_version is above max_app_version")
+	}
+	return nil
+}
+
+// AppRequirement checks the manifest's version bounds against an app version.
+// ok is false when the app version is outside the bounds; known is false when
+// the bounds cannot be judged because the app version is not a release version
+// (then ok is true and nothing is claimed).
+func (m Manifest) AppRequirement(appVersion string) (ok, known bool, reason string) {
+	if m.MinAppVersion == "" && m.MaxAppVersion == "" {
+		return true, true, ""
+	}
+	v := strings.TrimPrefix(appVersion, "v")
+	if !ValidVersion(v) {
+		return true, false, "The plugin declares which FloweySales versions it supports, but this build does not report a release version, so that is not verified."
+	}
+	if m.MinAppVersion != "" && CompareVersions(v, m.MinAppVersion) < 0 {
+		return false, true, fmt.Sprintf("The plugin needs FloweySales %s or newer; this is %s.", m.MinAppVersion, v)
+	}
+	if m.MaxAppVersion != "" && CompareVersions(v, m.MaxAppVersion) > 0 {
+		return false, true, fmt.Sprintf("The plugin supports FloweySales up to %s; this is %s.", m.MaxAppVersion, v)
+	}
+	return true, true, ""
 }

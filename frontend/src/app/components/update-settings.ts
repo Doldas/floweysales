@@ -10,7 +10,7 @@ interface Changes { status: string; commits: Commit[]; total_commits: number; mi
 interface CheckResult { comparison: string; main_commit?: string; main_error?: string; latest?: ImageInfo; changes?: Changes; changes_error?: string; error?: string; checked_at: string }
 interface Agent { engine: string; installed_at?: string; last_run_at?: string; timer: boolean; backups: boolean }
 interface Status { state: string; message?: string; request_id?: string; trigger?: string; started_at?: string; finished_at?: string; from_commit?: string; to_commit?: string; backup?: string; log_tail?: string[] }
-interface Overview { current: { commit?: string; build_time?: string; image: string; tag: string }; check?: CheckResult; can_apply: boolean; agent?: Agent; agent_error?: string; status: Status; status_error?: string; plugin_preflight?: { app_protocol: number; target_protocol: number; plugins: PreflightPlugin[] } }
+interface Overview { current: { commit?: string; build_time?: string; image: string; tag: string }; check?: CheckResult; can_apply: boolean; agent?: Agent; agent_error?: string; status: Status; status_error?: string; plugin_preflight?: { app_protocol: number; target_protocol: number; target_version?: string; plugins: PreflightPlugin[] } }
 
 /** Polling interval while an update runs; the API is briefly unreachable during the restart. */
 const POLL_MS = 3000;
@@ -79,6 +79,7 @@ docker compose -f compose.deploy.yml up -d app</pre>
    <section class="preflight" aria-labelledby="preflight-title">
     <h4 id="preflight-title">Installed plugins and this update</h4>
     <p>{{preflightHeadline(pf.plugins)}}</p>
+    <p class="muted">New release version: {{pf.target_version||'not declared by the image, so plugin version ranges are shown as unknown'}}.</p>
     <p class="muted">Plugin protocol: this version speaks {{pf.app_protocol}}; the new version {{pf.target_protocol?('speaks '+pf.target_protocol):'does not declare one, so compatibility is shown as unknown'}}. Compatibility with the new version is judged from what it declares; each plugin is verified with a handshake once it runs.</p>
     @if(pf.plugins.length){
     <ul class="plugin-list">

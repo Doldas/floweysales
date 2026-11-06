@@ -24,6 +24,10 @@ const RevisionLabel = "org.opencontainers.image.revision"
 // the update preview can judge installed plugins before the release runs.
 const PluginProtocolLabel = "org.floweysales.plugin-protocol"
 
+// VersionLabel is the standard OCI label carrying a release version; plugin
+// version requirements are judged against it.
+const VersionLabel = "org.opencontainers.image.version"
+
 const maxRegistryBody = 1 << 20
 
 var (
@@ -40,6 +44,8 @@ type ImageInfo struct {
 	Created string `json:"created,omitempty"`
 	// PluginProtocol is 0 when the image does not declare one.
 	PluginProtocol int `json:"plugin_protocol,omitempty"`
+	// AppVersion is the release version the image declares; empty for builds that are not tagged releases.
+	AppVersion string `json:"app_version,omitempty"`
 }
 
 // Registry reads public image metadata from an OCI distribution registry
@@ -181,6 +187,9 @@ func (r Registry) Lookup(ctx context.Context, image, tag string) (ImageInfo, err
 	}
 	if n, err := strconv.Atoi(config.Config.Labels[PluginProtocolLabel]); err == nil && n > 0 {
 		info.PluginProtocol = n
+	}
+	if v := strings.TrimPrefix(config.Config.Labels[VersionLabel], "v"); versionPattern.MatchString(v) {
+		info.AppVersion = v
 	}
 	return info, nil
 }

@@ -204,28 +204,6 @@ func (idx Index) find(id string) (IndexPlugin, bool) {
 	return IndexPlugin{}, false
 }
 
-// installable reports whether this backend can run v.
-func (v IndexVersion) installable() bool {
-	_, ok := v.Artifacts[Platform()]
-	return ok && v.Manifest.Protocol == ProtocolVersion
-}
-
-// Latest returns the newest installable stable version; a pre-release is
-// only chosen when includePrerelease is set (the installed one is one).
-func (p IndexPlugin) Latest(includePrerelease bool) (IndexVersion, bool) {
-	var best IndexVersion
-	found := false
-	for _, v := range p.Versions {
-		if !v.installable() || (IsPrerelease(v.Manifest.Version) && !includePrerelease) {
-			continue
-		}
-		if !found || CompareVersions(v.Manifest.Version, best.Manifest.Version) > 0 {
-			best, found = v, true
-		}
-	}
-	return best, found
-}
-
 // Version returns a specific version.
 func (p IndexPlugin) Version(version string) (IndexVersion, bool) {
 	for _, v := range p.Versions {

@@ -39,6 +39,9 @@ last-reviewed: 2026-11-06
 **Files**
 - Markdown files have Edit source, Preview, Rich text and (on wide screens) Split views, with a visible saved or unsaved state. A folder's `README.md` is shown as its overview. See [More areas](more-areas.md).
 
+**Plugins**
+- Plugins survive app upgrades: one that no longer fits is kept with its settings and data instead of being removed. Plugins can declare which FloweySales versions they support, an incompatible version cannot be installed, the version an update replaced can be restored, and a report after an upgrade shows what was kept and verified. See [Settings](settings.md).
+
 **Documentation**
 - This guide, a tutorial, and a weekly check of outside links.
 

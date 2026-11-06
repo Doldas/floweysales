@@ -26,7 +26,7 @@ func (e *Engine) ConfigurePlugins(m *plugins.Manager, defaultProvider market.Pro
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		m.VerifyAll(ctx)
+		m.CheckAfterStart(ctx)
 	}()
 }
 
@@ -205,6 +205,34 @@ func (e *Engine) registerPluginRoutes() {
 		e.clearProviderCaches()
 		log.Printf("[Plugins] %s installed %s %s (sha256 %s)", user.Email, installed.Manifest.ID, installed.Manifest.Version, installed.SHA256)
 		writeJSON(w, http.StatusOK, map[string]any{"installed": installed, "overview": e.pluginOverview()})
+	})
+	e.mux.HandleFunc("POST /api/admin/plugins/{id}/rollback", func(w http.ResponseWriter, r *http.Request) {
+		user, ok := e.pluginAdmin(w, r)
+		if !ok {
+			return
+		}
+		id := r.PathValue("id")
+		if !plugins.ValidPluginID(id) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid plugin id"})
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
+		defer cancel()
+		restored, err := e.plugins.Rollback(ctx, id)
+		switch {
+		case errors.Is(err, plugins.ErrNotInstalled):
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+			return
+		case errors.Is(err, plugins.ErrNoPrevious):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+			return
+		case err != nil:
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+			return
+		}
+		e.clearProviderCaches()
+		log.Printf("[Plugins] %s restored %s %s", user.Email, restored.Manifest.ID, restored.Manifest.Version)
+		writeJSON(w, http.StatusOK, map[string]any{"installed": restored, "overview": e.pluginOverview()})
 	})
 	e.mux.HandleFunc("PUT /api/admin/plugins/{id}/env/{name}", func(w http.ResponseWriter, r *http.Request) {
 		user, ok := e.pluginAdmin(w, r)

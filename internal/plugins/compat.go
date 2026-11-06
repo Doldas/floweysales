@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -29,6 +30,10 @@ type Compatibility struct {
 	Reason         string `json:"reason"`
 	PluginProtocol int    `json:"plugin_protocol"`
 	AppProtocol    int    `json:"app_protocol"`
+	// AppVersion is the running release version; empty when this build is not a tagged release.
+	AppVersion    string `json:"app_version,omitempty"`
+	MinAppVersion string `json:"min_app_version,omitempty"`
+	MaxAppVersion string `json:"max_app_version,omitempty"`
 	// Evidence says how the status was established.
 	Evidence  string     `json:"evidence"`
 	CheckedAt *time.Time `json:"checked_at,omitempty"`
@@ -46,12 +51,55 @@ type compatCheck struct {
 
 // declaredProblem reports why an installed plugin must not run, judged from
 // its recorded manifest alone; empty means nothing declared contradicts this build.
-func declaredProblem(p InstalledPlugin) string {
-	if p.Manifest.Protocol != ProtocolVersion {
-		return fmt.Sprintf("The plugin speaks protocol %d; this FloweySales speaks protocol %d.", p.Manifest.Protocol, ProtocolVersion)
+func (m *Manager) declaredProblem(p InstalledPlugin) string {
+	return m.manifestProblem(p.Manifest)
+}
+
+// manifestProblem is the shared gate for installed and candidate plugins: the
+// protocol, the manifest itself and the declared FloweySales version range.
+func (m *Manager) manifestProblem(mf Manifest) string {
+	if mf.Protocol != ProtocolVersion {
+		return fmt.Sprintf("The plugin speaks protocol %d; this FloweySales speaks protocol %d.", mf.Protocol, ProtocolVersion)
 	}
-	if err := p.Manifest.Validate(); err != nil {
+	if err := mf.Validate(); err != nil {
 		return "Its manifest is no longer accepted: " + err.Error() + "."
+	}
+	if ok, _, reason := mf.AppRequirement(m.cfg.AppVersion); !ok {
+		return reason
+	}
+	return ""
+}
+
+// installable reports whether this backend can run the store version v here:
+// it has a build for this platform and passes the protocol and version gate.
+func (m *Manager) installable(v IndexVersion) bool {
+	_, ok := v.Artifacts[Platform()]
+	return ok && m.manifestProblem(v.Manifest) == ""
+}
+
+// latest is the newest installable stable version of entry; a pre-release is
+// only chosen when includePrerelease is set.
+func (m *Manager) latest(entry IndexPlugin, includePrerelease bool) (IndexVersion, bool) {
+	var best IndexVersion
+	found := false
+	for _, v := range entry.Versions {
+		if !m.installable(v) || (IsPrerelease(v.Manifest.Version) && !includePrerelease) {
+			continue
+		}
+		if !found || CompareVersions(v.Manifest.Version, best.Manifest.Version) > 0 {
+			best, found = v, true
+		}
+	}
+	return best, found
+}
+
+// whyNotInstallable explains, in plain words, why v cannot be installed here.
+func (m *Manager) whyNotInstallable(v IndexVersion) string {
+	if problem := m.manifestProblem(v.Manifest); problem != "" {
+		return problem
+	}
+	if _, ok := v.Artifacts[Platform()]; !ok {
+		return "There is no build for " + Platform() + "."
 	}
 	return ""
 }
@@ -76,13 +124,16 @@ func (m *Manager) assess(p InstalledPlugin, snap *storeSnapshot) Compatibility {
 	if snap != nil {
 		if entry, ok := snap.index.find(p.Manifest.ID); ok {
 			for _, v := range entry.Versions {
-				if v.installable() {
+				if m.installable(v) {
 					compatible = append(compatible, v.Manifest.Version)
 				}
 			}
 			sort.Slice(compatible, func(i, j int) bool { return CompareVersions(compatible[i], compatible[j]) > 0 })
 		}
 	}
+	_, rangeKnown, rangeNote := p.Manifest.AppRequirement(m.cfg.AppVersion)
+	unverifiedRange := !rangeKnown
+	c.AppVersion, c.MinAppVersion, c.MaxAppVersion = m.cfg.AppVersion, p.Manifest.MinAppVersion, p.Manifest.MaxAppVersion
 	m.mu.Lock()
 	check, checked := m.checks[p.Manifest.ID]
 	m.mu.Unlock()
@@ -91,7 +142,7 @@ func (m *Manager) assess(p InstalledPlugin, snap *storeSnapshot) Compatibility {
 		c.CheckedAt = &at
 	}
 
-	if problem := declaredProblem(p); problem != "" {
+	if problem := m.declaredProblem(p); problem != "" {
 		c.Status, c.Reason, c.Evidence = CompatIncompatible, problem, "Declared manifest compared with this build."
 		c.Affects = affects(p)
 		if len(compatible) > 0 {
@@ -106,6 +157,9 @@ func (m *Manager) assess(p InstalledPlugin, snap *storeSnapshot) Compatibility {
 	case !checked:
 		c.Status, c.Evidence = CompatUnknown, "Declared protocol matches; no handshake has been run since FloweySales started."
 		c.Reason = "Compatibility is not verified yet."
+	case unverifiedRange:
+		c.Status, c.Evidence = CompatUnknown, "The handshake worked, but the declared FloweySales version range cannot be checked."
+		c.Reason = rangeNote
 	case check.reason != "":
 		c.Status, c.Evidence = CompatIncompatible, "Handshake with the installed binary failed."
 		c.Reason = check.reason + " It stays installed with its settings but is not run."
@@ -131,7 +185,7 @@ func (m *Manager) Verify(ctx context.Context, id string) (Compatibility, error) 
 		return Compatibility{}, ErrNotInstalled
 	}
 	result := compatCheck{at: time.Now().UTC()}
-	if problem := declaredProblem(p); problem != "" {
+	if problem := m.declaredProblem(p); problem != "" {
 		result.reason = problem
 	} else if sum, err := fileSHA256(filepath.Join(m.cfg.Dir, filepath.FromSlash(p.Binary))); err != nil {
 		result.reason = "The binary cannot be read: " + err.Error() + "."
@@ -179,7 +233,7 @@ type PreflightEntry struct {
 // Preflight compares every installed plugin with a target release that speaks
 // targetProtocol (0 when the release does not say). Installed plugins are
 // inventoried and judged; nothing is changed, executed or downloaded.
-func (m *Manager) Preflight(targetProtocol int) []PreflightEntry {
+func (m *Manager) Preflight(targetProtocol int, targetAppVersion string) []PreflightEntry {
 	snap := m.cachedStore()
 	installed := m.InstalledAll()
 	out := make([]PreflightEntry, 0, len(installed))
@@ -191,27 +245,61 @@ func (m *Manager) Preflight(targetProtocol int) []PreflightEntry {
 		case targetProtocol <= 0:
 			e.Target = CompatUnknown
 			e.Reason = "The new release does not declare which plugin protocol it speaks, so compatibility is not assumed."
+		case p.Manifest.Protocol == targetProtocol && !appRangeOK(p.Manifest, targetAppVersion):
+			_, _, why := p.Manifest.AppRequirement(strings.TrimPrefix(targetAppVersion, "v"))
+			e.Target = CompatIncompatible
+			e.Reason = why + " It stays installed but is not run until updated."
+			e.Update = m.versionsFor(snap, p.Manifest.ID, targetProtocol, targetAppVersion)
+			if len(e.Update) > 0 {
+				e.Target = CompatNeedsUpdate
+			}
+		case p.Manifest.Protocol == targetProtocol && !appRangeKnown(p.Manifest, targetAppVersion):
+			e.Target = CompatUnknown
+			e.Reason = "The plugin declares a FloweySales version range, but the new release does not declare its version, so compatibility is not assumed."
 		case p.Manifest.Protocol == targetProtocol:
 			e.Target = CompatCompatible
 			e.Reason = fmt.Sprintf("Speaks protocol %d, which the new release speaks. It is verified with a handshake once the new version runs.", targetProtocol)
 		default:
 			e.Target = CompatIncompatible
 			e.Reason = fmt.Sprintf("Speaks protocol %d; the new release speaks %d. It stays installed but is not run until updated.", p.Manifest.Protocol, targetProtocol)
-			if snap != nil {
-				if entry, ok := snap.index.find(p.Manifest.ID); ok {
-					for _, v := range entry.Versions {
-						if _, has := v.Artifacts[Platform()]; has && v.Manifest.Protocol == targetProtocol {
-							e.Update = append(e.Update, v.Manifest.Version)
-						}
-					}
-					sort.Slice(e.Update, func(i, j int) bool { return CompareVersions(e.Update[i], e.Update[j]) > 0 })
-				}
-			}
+			e.Update = m.versionsFor(snap, p.Manifest.ID, targetProtocol, targetAppVersion)
 			if len(e.Update) > 0 {
 				e.Target = CompatNeedsUpdate
 			}
 		}
 		out = append(out, e)
 	}
+	return out
+}
+
+// appRangeOK is false only when the manifest's version range is known to exclude appVersion.
+func appRangeOK(mf Manifest, appVersion string) bool {
+	ok, _, _ := mf.AppRequirement(strings.TrimPrefix(appVersion, "v"))
+	return ok
+}
+
+// appRangeKnown is false when the manifest declares a range that appVersion cannot be checked against.
+func appRangeKnown(mf Manifest, appVersion string) bool {
+	_, known, _ := mf.AppRequirement(strings.TrimPrefix(appVersion, "v"))
+	return known
+}
+
+// versionsFor lists store versions that run on this platform with the given
+// target protocol and app version, newest first.
+func (m *Manager) versionsFor(snap *storeSnapshot, id string, protocol int, appVersion string) []string {
+	if snap == nil {
+		return nil
+	}
+	entry, ok := snap.index.find(id)
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, v := range entry.Versions {
+		if _, has := v.Artifacts[Platform()]; has && v.Manifest.Protocol == protocol && appRangeOK(v.Manifest, appVersion) {
+			out = append(out, v.Manifest.Version)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return CompareVersions(out[i], out[j]) > 0 })
 	return out
 }

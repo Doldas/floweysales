@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   capabilityLabels, compareVersions, compatibilityBadge, isDomainProvider, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt, updateAllHeadline,
+  appRangeLabel, upgradeOutcomeLabel, upgradeReportHeadline, type UpgradeEntry,
   type InstalledPlugin, type PluginManifest, type PluginOverview, type StorePlugin,
 } from './plugin-store.ts';
 
@@ -20,6 +21,21 @@ const installed = (m: PluginManifest, extra: Partial<InstalledPlugin> = {}): Ins
 });
 const store = (m: PluginManifest, extra: Partial<StorePlugin> = {}): StorePlugin => ({
   manifest: m, versions: [m.version], latest_version: m.version, installable: true, update_available: false, ...extra,
+});
+
+test('post-upgrade report headline counts every outcome and says plugins are kept', () => {
+  const entry = (id: string, outcome: UpgradeEntry['outcome']): UpgradeEntry => ({ id, name: id, version: '1.0.0', outcome, retained: true, disabled: outcome === 'incompatible', reason: '' });
+  const r = { at: '2026-11-06T00:00:00Z', plugins: [entry('a', 'verified'), entry('b', 'needs_attention'), entry('c', 'incompatible'), entry('d', 'removed')] };
+  assert.equal(upgradeReportHeadline(r),
+    'After the upgrade: 1 verified, 1 need attention, 1 incompatible, 0 updated, 1 removed. 3 plugins kept with settings and data.');
+  assert.equal(upgradeOutcomeLabel('incompatible'), 'Incompatible, not run');
+});
+
+test('declared app version range reads in words', () => {
+  assert.equal(appRangeLabel({ min_app_version: '0.5.0', max_app_version: '0.9.0' }), 'FloweySales 0.5.0 to 0.9.0');
+  assert.equal(appRangeLabel({ min_app_version: '0.5.0' }), 'FloweySales 0.5.0 or newer');
+  assert.equal(appRangeLabel({ max_app_version: '0.9.0' }), 'FloweySales up to 0.9.0');
+  assert.equal(appRangeLabel({}), '');
 });
 
 test('versions order like semver, pre-releases first', () => {

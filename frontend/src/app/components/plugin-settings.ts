@@ -5,7 +5,7 @@ import { formatUtcDateTime } from '../ui/datetime';
 import { SkeletonComponent } from '../ui/skeleton';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import {
-  capabilityLabels, compatibilityBadge, isDomainProvider, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt, updateAllHeadline,
+  appRangeLabel, upgradeOutcomeLabel, upgradeReportHeadline, capabilityLabels, compatibilityBadge, isDomainProvider, matchesFilter, toolLabels, pluginRows, pluginStatus, uninstallPrompt, updateAllHeadline,
   type PluginOverview, type PluginRow, type UpdateResult,
 } from './plugin-store';
 
@@ -41,6 +41,19 @@ type View = 'all' | 'installed' | 'available';
    <p class="result">No provider plugins are installed, so market data, trackers and search are unavailable. Install at least one below.</p>
   }
  </div>
+
+ @if (o.upgrade_report; as r) {
+  <section class="card" aria-labelledby="upgrade-report-title">
+   <h3 id="upgrade-report-title">Plugins after the last upgrade</h3>
+   <p>{{ upgradeHeadline(r) }}</p>
+   <p class="muted small">{{ r.from_version || r.from_build || 'Previous build' }} to {{ r.to_version || r.to_build || 'this build' }} · {{ when(r.at) }}. Each result comes from a handshake with the kept binary; nothing was reinstalled or updated automatically.</p>
+   <ul>
+    @for (p of r.plugins; track p.id) {
+     <li><strong>{{ p.name }} {{ p.version }}</strong>: {{ outcomeLabel(p.outcome) }}{{ p.retained ? ' · retained unchanged' : '' }}{{ p.disabled ? ' · not run' : '' }}. <span class="muted">{{ p.reason }}</span></li>
+    }
+   </ul>
+  </section>
+ }
 
  <div class="toolbar">
   <input type="search" placeholder="Filter plugins" aria-label="Filter plugins" [value]="filter()" (input)="filter.set($any($event.target).value)">
@@ -117,6 +130,9 @@ type View = 'all' | 'installed' | 'available';
       @if (!(row.installed.update_available && row.installed.latest_version) && row.installed.compatibility?.status === 'needs_update' && row.installed.compatibility?.compatible_versions?.length) {
        <button class="btn btn-sm btn-primary" (click)="install(row, row.installed.compatibility?.compatible_versions?.[0])" [disabled]="busy()">Update to {{ row.installed.compatibility?.compatible_versions?.[0] }}</button>
       }
+      @if (row.installed.previous_version) {
+       <button class="btn btn-sm btn-outline-secondary" (click)="rollback(row)" [disabled]="busy()">Restore {{ row.installed.previous_version }}</button>
+      }
       <button class="btn btn-sm btn-outline-danger" (click)="uninstall(row)" [disabled]="busy()">Uninstall</button>
      } @else if (row.store?.installable) {
       <button class="btn btn-sm btn-primary" (click)="install(row, row.store?.latest_version)" [disabled]="busy()">Install</button>
@@ -141,7 +157,10 @@ type View = 'all' | 'installed' | 'available';
       @if (row.installed; as i) {
        <dt>Installed</dt><dd>{{ when(i.installed_at) }} from {{ i.source === 'file' ? 'a local file' : 'the store' }}</dd>
        <dt>SHA-256</dt><dd><code>{{ i.sha256 }}</code></dd>
-       @if (i.compatibility; as c) { <dt>Protocol</dt><dd>plugin {{ c.plugin_protocol }} · FloweySales {{ c.app_protocol }}</dd> }
+       @if (i.compatibility; as c) {
+        <dt>Protocol</dt><dd>plugin {{ c.plugin_protocol }} · FloweySales {{ c.app_protocol }}</dd>
+        <dt>Supported app versions</dt><dd>{{ appRange(c) || 'Not declared by the plugin' }} · running {{ c.app_version || 'an untagged build' }}</dd>
+       }
       }
       @if (row.store?.released_at) { <dt>Released</dt><dd>{{ when(row.store!.released_at!) }}</dd> }
      </dl>
@@ -261,6 +280,9 @@ export class PluginSettingsComponent {
  readonly isDomainProvider = isDomainProvider;
  readonly status = pluginStatus;
  readonly compat = compatibilityBadge;
+ readonly appRange = appRangeLabel;
+ readonly outcomeLabel = upgradeOutcomeLabel;
+ readonly upgradeHeadline = upgradeReportHeadline;
 
  readonly rows = computed(() => { const o = this.overview(); return o ? pluginRows(o) : []; });
  readonly visible = computed(() => this.rows().filter(r =>
@@ -387,6 +409,21 @@ export class PluginSettingsComponent {
    this.overview.set(await this.api<PluginOverview>(`/api/admin/plugins/${encodeURIComponent(row.id)}/env/${encodeURIComponent(name)}`, init));
    after();
    this.message.set(done);
+   this.market.refreshProviders();
+   void this.tools.refresh();
+  } catch (e) { this.message.set(String((e as Error).message ?? e)); }
+  finally { this.busy.set(false); this.working.set(''); }
+ }
+
+ async rollback(row: PluginRow): Promise<void> {
+  const prev = row.installed?.previous_version;
+  if (!prev || !confirm(`Restore ${row.manifest.name} ${prev}? The current version is kept so this can be undone. Settings and data are not changed.`)) return;
+  this.busy.set(true); this.working.set(row.id); this.message.set('');
+  try {
+   const res = await this.api<{ installed: { manifest: { name: string; version: string } }; overview: PluginOverview }>(
+    '/api/admin/plugins/' + encodeURIComponent(row.id) + '/rollback', { method: 'POST' });
+   this.overview.set(res.overview);
+   this.message.set(`${res.installed.manifest.name} ${res.installed.manifest.version} was restored.`);
    this.market.refreshProviders();
    void this.tools.refresh();
   } catch (e) { this.message.set(String((e as Error).message ?? e)); }

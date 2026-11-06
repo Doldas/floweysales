@@ -32,8 +32,10 @@ func openPlugins(defaults map[string]string) (*plugins.Manager, error) {
 		dir = filepath.Join(base, "floweysales", "plugins")
 	}
 	return plugins.Open(plugins.Config{
-		Dir:      dir,
-		StoreURL: app.ResolveConfig("PLUGIN_STORE_URL", plugins.DefaultStoreURL, defaults),
+		Dir:        dir,
+		AppVersion: app.Version,
+		AppBuild:   app.BuildCommit,
+		StoreURL:   app.ResolveConfig("PLUGIN_STORE_URL", plugins.DefaultStoreURL, defaults),
 		LookupEnv: func(name string) string {
 			return app.ResolveConfig(name, "", defaults)
 		},
@@ -53,6 +55,7 @@ func runPluginsCommand(args []string, defaults map[string]string, stdout, stderr
   install <id> [version]        install or update from the store
   install --file <path>         install a local plugin binary
   update [id]                   update one or all installed plugins
+  rollback <id>                 restore the version an update replaced
   uninstall <id>                remove a plugin
 
   --accept-terms                accept a plugin's terms (install/update)
@@ -171,6 +174,17 @@ Restart the backend after changes.
 			}
 		}
 		return code
+	case "rollback":
+		if len(rest) != 1 {
+			usage()
+			return 2
+		}
+		restored, err := m.Rollback(ctx, rest[0])
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "%s restored to %s\n", restored.Manifest.ID, restored.Manifest.Version)
 	case "uninstall":
 		if len(rest) != 1 {
 			usage()

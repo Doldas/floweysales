@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	commitPattern = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
-	repoPattern   = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+	versionPattern = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$`)
+	commitPattern  = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+	repoPattern    = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
 )
 
 // ValidRepository reports whether repo looks like "owner/name".
