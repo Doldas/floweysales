@@ -143,6 +143,17 @@ const boardStrategies = [
   { id: 'quality', label: 'Quality compounders', description: 'The highest and steadiest margins.' },
   { id: 'dip', label: 'Quality on a dip', description: 'Profitable companies that pulled back while the trend holds.' },
 ];
+/** Same shape as GET /api/market/indices: every index unavailable, no members. */
+function indices() {
+  const one = (id, name, region, country, currency, provider, nominal) => ({ id, name, region, country, currency, provider, nominal_count: nominal, benchmark_symbol: '',
+    methodology: { summary: 'Published by the provider.', url: null }, constituent_source: { name: 'Licensed list (not verified)', url: null, retrieved_at: null, license_verified: false },
+    as_of: null, status: 'unavailable', unavailable_reason: 'No verified licence for the constituent list.', licensing: 'Not verified.', exclusions: 'None recorded.',
+    share_class_policy: 'Merged by canonical identity.', history: { point_in_time: false, note: 'No point-in-time membership.' }, benchmark_note: 'Price index.',
+    count: 0, warnings: ['Unavailable: No verified licence for the constituent list.'], age_days: null, stale: false, available: false });
+  return { generated_at: '2026-10-28T08:00:00Z', notice: 'Membership is not a recommendation.', indices: [
+    one('index_sp500', 'S&P 500', 'north_america', 'US', 'USD', 'S&P Dow Jones Indices', 500), one('index_nasdaq100', 'Nasdaq-100', 'north_america', 'US', 'USD', 'Nasdaq, Inc.', 100),
+    one('index_omxs30', 'OMX Stockholm 30 (OMXS30)', 'europe', 'SE', 'SEK', 'Nasdaq Nordic', 30)] };
+}
 /** Same shape as GET /api/market/leaderboard; the order shifts with the strategy. */
 const methodWeights = { value: 0.22, quality: 0.2, growth: 0.2, momentum: 0.18, timing: 0.12, risk: 0.08 };
 const methodMetric = { value: 'earnings_yield_pct', quality: 'net_margin_pct', growth: 'revenue_growth_pct', momentum: 'momentum_12_1_pct', timing: 'pullback_fit', risk: 'volatility_pct' };
@@ -255,6 +266,7 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     ], checked_at: NOW },
     '/api/history': history(q.get('symbol') ?? 'NVDA', q.get('range') ?? '1M'),
     '/api/financials': financials(q.get('symbol') ?? 'NVDA'),
+    '/api/market/indices': indices(),
     '/api/market/leaderboard': leaderboard(q.get('universe') ?? 'custom', q.get('strategy') ?? 'best'),
     '/api/trading/size': { symbol: 'NVDA', side: 'buy', entry: 121.4, equity: 100114, risk_pct: 1, atr_mult: 2, atr: 3.2, stop_source: 'atr', result: { quantity: 156, stop: 115, risk_amount: 998.4, position_pct: 18.9 } },
     '/api/portfolio/analytics': portfolioAnalytics(),

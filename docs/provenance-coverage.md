@@ -25,3 +25,26 @@ reports for at least 80% of members, Plan 4 WP3 step 1). A region is added only 
 The check is `go run ./cmd/universe-coverage`, which can be run offline (it validates the candidate lists) and, by someone
 with provider access, measures each candidate market against the bar. See [universe-coverage.md](universe-coverage.md). Until
 a maintainer has run it with access and written a reviewed list into `universes.json`, the regions stay unsupported.
+
+## Index universes (#258)
+
+The Leaderboard has an **Index** selector for S&P 500, Nasdaq-100 and OMX Stockholm 30 (OMXS30). The registry is data
+(`internal/server/indices.json`, served by `GET /api/market/indices`). **All three are currently unavailable:** no
+constituent list has been verified as legally usable, so none is shown, none is guessed, and ranking an unavailable index
+(`GET /api/market/leaderboard?universe=index_sp500`) returns 422 with the reason. The hand-picked "Swedish large caps" list is
+not OMXS30 and is not presented as it.
+
+Each index records provider, methodology (summary and link), constituent source, retrieval and as-of dates (UTC), nominal and
+actual security counts, exclusions, share-class policy, currency and benchmark convention, licensing limits, and whether
+membership history is point-in-time. Validation (`validateIndex`, run at startup and in tests) refuses to publish an index as
+available without a verified licence, an https source, an as-of date, well-formed unique constituents (by ISIN or
+exchange-qualified symbol, never ticker alone) whose exchange suffix matches the index country.
+
+To enable an index a maintainer must: confirm in writing that the constituent list may be stored and shown (licence or an
+openly licensed source), add `constituents` (with ISINs where available), set `status` to `available`, `as_of`,
+`constituent_source.url`, `retrieved_at` and `license_verified`, and describe the verification in the PR. An available list is
+only current members, so the panel warns about survivorship bias; list freshness over 100 days is flagged stale.
+
+Not done yet: point-in-time membership, using an index as a backtest benchmark across currencies and total return, and a
+combined-universe mode in the UI (`combineIndexes` deduplicates by canonical identity and reports overlap, and is tested, but
+is not wired to an endpoint).

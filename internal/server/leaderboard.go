@@ -33,7 +33,7 @@ const (
 // universeSource says where a list of companies comes from. A source the
 // code cannot back with a name, date or link says so instead of inventing one.
 type universeSource struct {
-	Kind        string  `json:"kind"` // curated | disclosure | custom
+	Kind        string  `json:"kind"` // curated | disclosure | index | custom
 	Name        string  `json:"name"`
 	URL         *string `json:"url"`   // the original record, when there is one
 	AsOf        *string `json:"as_of"` // the date the list is as of, when known
@@ -762,6 +762,10 @@ func (e *Engine) registerLeaderboardRoutes() {
 			universe = "custom"
 		} else if universe == "" {
 			universe = leaderboardUniverses[0].ID
+		}
+		if idx, isIndex := findIndex(universe); isIndex && idx.Status != indexAvailable {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": idx.Name + " is unavailable: " + idx.UnavailableWhy, "index": viewIndex(idx, time.Now().UTC())})
+			return
 		}
 		symbols, err := leaderboardSymbols(universe, q.Get("symbols"), "")
 		if err != nil {

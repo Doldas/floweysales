@@ -405,6 +405,20 @@ export interface RankingPreferencesResponse {
   stored: boolean;
 }
 
+/** One index of GET /api/market/indices. An unavailable index has no constituents and says why. */
+export interface IndexInfo {
+  id: string; name: string; region: string; country: string; currency: string; provider: string;
+  nominal_count: number; benchmark_symbol: string;
+  methodology: { summary: string; url: string | null };
+  constituent_source: { name: string; url: string | null; retrieved_at: string | null; license_verified: boolean };
+  as_of: string | null; status: 'available' | 'unavailable'; unavailable_reason?: string;
+  licensing: string; exclusions: string; share_class_policy: string;
+  history: { point_in_time: boolean; note: string }; benchmark_note: string;
+  count: number; warnings: string[]; age_days: number | null; stale: boolean; available: boolean;
+}
+
+export interface IndicesResponse { indices: IndexInfo[]; generated_at: string; notice: string }
+
 export interface LeaderboardOption { id: string; label: string; description: string; benchmark?: string; source?: UniverseSource; region?: string; countries?: string[] }
 
 export interface LeaderboardResponse {

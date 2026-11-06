@@ -103,3 +103,16 @@ test.describe('where the companies come from', () => {
     expect(file.suggestedFilename()).toMatch(/^leaderboard-.*\.csv$/);
   });
 });
+
+test.describe('index universes', () => {
+  test('unavailable indices are inspectable, never ranked', async ({ page }) => {
+    await open(page, 'markets');
+    const board = page.getByRole('region', { name: /Leaderboard/ });
+    await board.getByRole('button', { name: /OMX Stockholm 30/ }).click();
+    const panel = board.getByRole('region', { name: 'About this index' });
+    await expect(panel).toContainText('Unavailable');
+    await expect(panel).toContainText('No list loaded');
+    await expect(panel).toContainText('Membership is not a ranking or a recommendation');
+    await expect(board.locator('.board-row').first()).toBeVisible();
+  });
+});

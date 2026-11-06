@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, catchError, map, of } from 'rxjs';
 import {
+  IndicesResponse,
   AboutInfo,
   ForumPost,
   FinancialsResponse,
@@ -94,6 +95,11 @@ export class MarketService {
       params['to_year'] = String(toYear);
     }
     return this.http.get<FinancialsResponse>('/api/financials', { params });
+  }
+
+  /** The index registry: each index with its provenance, or why it is unavailable. */
+  getIndices(): Observable<IndicesResponse> {
+    return this.http.get<IndicesResponse>('/api/market/indices');
   }
 
   /** Ranks a preset universe, or up to 25 symbols, for a strategy. */
