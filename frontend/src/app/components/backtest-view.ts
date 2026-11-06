@@ -2,7 +2,7 @@
  * Display helpers for the strategy backtest panel. Pure functions so they run
  * under node --test; the replay itself lives in the server (internal/backtest).
  */
-import type { BacktestParams, BacktestMetrics, BacktestPoint, BacktestRegime, BacktestResult, BacktestSegment, BacktestStress, BatchCell, BatchSpread, BatchSummary, MonteCarloResult, MonteCarloDist, SensitivityResult, SensitivityVariant } from '../models';
+import type { BacktestAssumption, BacktestBenchmarkInfo, BacktestParams, BacktestMetrics, BacktestPoint, BacktestRegime, BacktestResult, BacktestSegment, BacktestStress, BatchCell, BatchSpread, BatchSummary, MonteCarloResult, MonteCarloDist, SensitivityResult, SensitivityVariant } from '../models';
 
 export type Tone = 'pos' | 'neg' | 'mid';
 
@@ -15,6 +15,10 @@ export const WARNING_TEXTS: Record<string, string> = {
   symbols_unavailable: 'Some symbols had no price history and were left out of the universe.',
   few_trades: 'Fewer than 30 trades: averages and hit rates are too noisy to say whether the ranking has an edge.',
   slippage_not_modeled: 'Slippage is zero: every trade is assumed to fill at the closing price. Real fills, especially in thin stocks, are worse, so treat the result as an upper bound.',
+  same_close_fill: "The ranking is computed from a day's closing prices and the trades fill at that same close, which no one can do exactly. Set a fill delay to fill at a later close instead.",
+  mixed_currencies: 'The symbols trade in different currencies. Returns are in each local currency and are not converted, so the portfolio return mixes currencies.',
+  benchmark_currency_differs: 'The benchmark is quoted in a different currency than the symbols. The comparison ignores exchange-rate moves, so the excess return is not like for like.',
+  execution_not_modeled: 'Not modeled: bid-ask spread, order size against traded volume, partial fills, market impact, taxes and dividends. Cost and slippage are flat per-side rates.',
   few_periods_drive_result: 'The total return is zero or negative when the three best rebalance periods are left out, so the result leans on a few periods.',
 };
 
@@ -153,12 +157,12 @@ export function batchHeadline(s: BatchSummary): string[] {
 
 export interface SensitivityRow { key: string; setting: string; cagr: string; excess: string; drawdown: string; base: boolean; tone: Tone; error?: string }
 
-const SETTING_LABELS: Record<string, string> = { cost_bps: 'Trading cost', top: 'Holdings', rebalance: 'Rebalance' };
+const SETTING_LABELS: Record<string, string> = { cost_bps: 'Trading cost', slippage_bps: 'Slippage', delay_days: 'Fill delay', top: 'Holdings', rebalance: 'Rebalance' };
 
 /** "cost_bps", "50" reads "Trading cost 50 bps". */
 export function settingLabel(v: Pick<SensitivityVariant, 'parameter' | 'value' | 'base'>): string {
   if (v.base || v.parameter === 'base') return 'As asked';
-  const unit = v.parameter === 'cost_bps' ? ' bps per side' : v.parameter === 'top' ? ' companies' : '';
+  const unit = v.parameter === 'cost_bps' || v.parameter === 'slippage_bps' ? ' bps per side' : v.parameter === 'delay_days' ? ' trading day(s)' : v.parameter === 'top' ? ' companies' : '';
   return `${SETTING_LABELS[v.parameter] ?? v.parameter} ${v.value}${unit}`;
 }
 
@@ -185,15 +189,17 @@ export function sensitivityHeadline(r: Pick<SensitivityResult, 'summary'>): stri
 export function singleParams(p: BacktestParams): Record<string, string> {
   const params: Record<string, string> = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance };
   if (p.slippage) params['slippage_bps'] = String(p.slippage);
+  if (p.delay) params['delay_days'] = String(p.delay);
   if (p.from) { params['from'] = p.from; if (p.to) params['to'] = p.to; } else params['years'] = String(p.years || 5);
   if (p.symbols?.length) params['symbols'] = p.symbols.join(',');
   else params['universe'] = p.universe;
   return params;
 }
 
-export function batchParams(p: { universes: string[]; periods: string[]; strategy: string; top: number; rebalance: string; slippage?: number }): Record<string, string> {
+export function batchParams(p: { universes: string[]; periods: string[]; strategy: string; top: number; rebalance: string; slippage?: number; delay?: number }): Record<string, string> {
   const params: Record<string, string> = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance, universes: p.universes.join(','), periods: p.periods.join(',') };
   if (p.slippage) params['slippage_bps'] = String(p.slippage);
+  if (p.delay) params['delay_days'] = String(p.delay);
   return params;
 }
 
@@ -269,3 +275,25 @@ export function monteCarloHeadline(r: Pick<MonteCarloResult, 'simulation'>): str
   if (s.prob_ruin_pct > 0) lines.push(`In ${s.prob_ruin_pct.toFixed(1)}% of them everything was lost.`);
   return lines;
 }
+
+export interface AssumptionRow { name: string; value: string; modeled: boolean; status: string }
+
+/** Rows for the execution assumptions. What is not modeled says so in words, not by omission. */
+export function assumptionRows(list: readonly BacktestAssumption[] | undefined): AssumptionRow[] {
+  return (list ?? []).map(a => ({ name: a.name, value: a.value, modeled: a.modeled, status: a.modeled ? 'modeled' : 'not modeled' }));
+}
+
+/** Sentences that define the benchmark: what it is, what it leaves out, its currency and dates. */
+export function benchmarkLines(info: BacktestBenchmarkInfo | undefined): string[] {
+  if (!info) return [];
+  const where = info.source === 'universe_default' ? "the list's own index" : 'chosen by you';
+  const lines = [`Benchmark ${info.symbol} (${where}). ${info.basis}`];
+  const covers = info.first_bar && info.last_bar ? `${info.first_bar} to ${info.last_bar}` : 'dates not reported';
+  lines.push(`Quoted in ${info.currency ?? 'a currency the provider did not state'}; bars ${covers}.`);
+  if (info.note) lines.push(info.note);
+  else if (info.currency_comparable) lines.push('Same currency as the symbols.');
+  return lines;
+}
+
+/** Fill delay choices, in trading days. */
+export const DELAY_OPTIONS = [0, 1, 2] as const;
