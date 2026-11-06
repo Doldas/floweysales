@@ -22,6 +22,7 @@ last-reviewed: 2026-11-06
 
 **Research Agent**
 - The agent can hand a question to a team and show each member's answer with attribution.
+- Research answers can be exported as Markdown or JSON with the evidence policy, sources and check result. See [Research Agent](agents.md).
 - Evidence settings choose standard, evidence-only or primary-only answers, with an optional age limit and source classes. You can save your own default. See [Research Agent](agents.md).
 - Teams can have a ceiling on tokens, cost and tool calls.
 

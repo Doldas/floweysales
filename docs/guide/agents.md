@@ -77,6 +77,12 @@ Optional limits apply to the two strict modes:
 
 Evidence mode also applies to agent teams (every member answers under it; a chair's summary has no sources and is not checked), to teams the Research Agent delegates to, and to flow agent nodes (a failing node attempt is retried, or the failing sentences are blocked). The check finds unsupported figures, links and quotes. It does not judge whether a claim follows from its source, and the labels the model puts on claims are not verified.
 
+### Exporting an answer
+
+Under an answer, the Sources panel has **Export Markdown** and **Export JSON**. The file starts with the evidence policy the answer ran under and the citation check result, then the answer, then each source with its type, whether the agent opened it, its address, the search it came from, the document id and the UTC times it was published and retrieved, with a short excerpt. Addresses are stripped of credentials and secret-looking parameters. The export says what the check did not establish: it is research decision support, not a guarantee and not an instruction to trade.
+
+In the two strict modes the agent is also asked to mark calculations, estimates, assumptions, interpretations and opinions, to show the method and inputs of a calculation, and to say plainly when the allowed sources cannot answer. The server does not verify those labels.
+
 ## Agent team
 
 The Agent team page puts several fictional investor characters on one question. Each answers in its own style, using the same real data. A neutral chair can then compare the answers.

@@ -135,6 +135,11 @@
           <h4>Search results only (title and snippet)</h4>
           <ul>@for (s of groups().listed; track s.id) { <li><span class="sid">[{{ s.id }}]</span> {{ s.title || s.url }} @if (link(s.url); as href) { <a [href]="href" target="_blank" rel="noopener noreferrer">open</a> } @if (origin(s); as who) { <span class="text-muted">· {{ who }}</span> }</li> }</ul>
         }
+        <p class="mb-0 mt-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="exportAnswer('md')"><i class="bi bi-markdown" aria-hidden="true"></i> Export Markdown</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary ms-1" (click)="exportAnswer('json')"><i class="bi bi-filetype-json" aria-hidden="true"></i> Export JSON</button>
+          <span class="text-muted ms-1">Includes the evidence policy, sources and check result.</span>
+        </p>
       </details>
     }
     @if (!session.streaming() && session.recovery(); as recovered) {

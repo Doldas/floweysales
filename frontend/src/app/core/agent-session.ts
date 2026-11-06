@@ -99,6 +99,9 @@ export class AgentSession {
   readonly answerAudit = signal<AnswerFinding[]>([]);
   /** Statements the block option took out of the latest answer. */
   readonly answerRemoved = signal<AnswerFinding[]>([]);
+  /** The evidence policy the latest run was sent with, and its question, for exports. */
+  readonly answerPolicy = signal<EvidencePolicy>({ mode: 'standard' });
+  readonly answerQuestion = signal('');
   /** Claim-level evidence records of the latest answer, with the cost of checking them. */
   readonly answerClaims = signal<AnswerClaim[]>([]);
   readonly claimStats = signal<ClaimStats | null>(null);
@@ -331,6 +334,8 @@ export class AgentSession {
     this.answerSources.set([]);
     this.answerAudit.set([]);
     this.answerRemoved.set([]);
+    this.answerPolicy.set(policyFromSettings(this.evidenceSettings()));
+    this.answerQuestion.set(content);
     this.answerClaims.set([]);
     this.claimStats.set(null);
     this.push({ role: 'user', content });
