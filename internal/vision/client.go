@@ -70,6 +70,9 @@ type Client struct {
 	FallbackModel string
 	MaxTokens     int
 	HTTP          *http.Client
+	// OnResult, when set, receives the token usage and error of every request
+	// (never any content), for telemetry and cost accounting.
+	OnResult func(usage *Usage, err error)
 }
 
 // NewClient builds a client from a configuration.
@@ -134,9 +137,17 @@ func (c *Client) Describe(ctx context.Context, system, prompt string, images []I
 	}
 	rep, err := c.once(ctx, c.Model, system, prompt, images)
 	if CodeOf(err) == CodeModelMissing && c.FallbackModel != "" && c.FallbackModel != c.Model {
-		return c.once(ctx, c.FallbackModel, system, prompt, images)
+		c.report(nil, err)
+		rep, err = c.once(ctx, c.FallbackModel, system, prompt, images)
 	}
+	c.report(rep.Usage, err)
 	return rep, err
+}
+
+func (c *Client) report(u *Usage, err error) {
+	if c.OnResult != nil {
+		c.OnResult(u, err)
+	}
 }
 
 func (c *Client) once(ctx context.Context, model, system, prompt string, images []Image) (Reply, error) {

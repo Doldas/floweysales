@@ -168,6 +168,7 @@ type Engine struct {
 	backtestCache map[string]backtestCacheEntry
 	backtestCalls map[string]*backtestCall
 
+	vision            visionState
 	integrationMu     sync.Mutex
 	webSearchProvider string
 	secContact        string // saved SEC User-Agent, empty when the environment default is used
@@ -324,6 +325,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerAgentTaskRoutes()
 	e.registerEvidenceRoutes()
 	e.registerIntegrationSettingsRoutes()
+	e.registerVisionRoutes()
 	e.registerTradingSettingsRoutes()
 	e.registerUserManagementRoutes()
 	e.registerTrackerEmailRoutes()

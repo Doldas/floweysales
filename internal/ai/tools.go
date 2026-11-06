@@ -270,7 +270,7 @@ func ToolDefs() []Tool {
 			Type: "function",
 			Function: ToolFunction{
 				Name:        "read_source",
-				Description: "Open one search_web result of this run and read the page text. Pass the source_id the search returned (for example S3). Public http(s) HTML, plain text and text-based PDF only; pages that need a login or are scanned images cannot be read. Cite the page as [S3] only after reading it.",
+				Description: "Open one search_web result of this run and read the page text. Pass the source_id the search returned (for example S3). Public http(s) HTML, plain text and PDF. A PDF comes back with page-labelled text; scanned pages and pages with charts or tables as images are read by the vision model when an administrator has configured one, as page-cited visual_evidence whose values carry verified flags, and are otherwise reported as unread. A report viewer page is followed to its PDF on the same site. Pages that need a login or deny access (HTTP 403) cannot be read and must not be claimed as read. Cite the page as [S3] only after reading it.",
 				Parameters:  obj(map[string]any{"source_id": str("The source_id of a search_web result, such as S3.")}, "source_id"),
 			},
 		},

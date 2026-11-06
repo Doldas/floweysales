@@ -15,9 +15,9 @@ type RunScope struct {
 
 type runScopeKey struct{}
 
-// ensureRunScope returns a context that carries a run scope; a context that
+// WithRunScope returns a context that carries a run scope; a context that
 // already has one (a team run around member runs) keeps it.
-func ensureRunScope(ctx context.Context) context.Context {
+func WithRunScope(ctx context.Context) context.Context {
 	if _, ok := ctx.Value(runScopeKey{}).(*RunScope); ok {
 		return ctx
 	}
