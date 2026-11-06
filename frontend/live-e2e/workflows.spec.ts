@@ -1,23 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
+import {
+  classifyScenarios, fixtureLabel, fixtureProblems, maxWorkflows, optedIn, pickFixtures, redact, stepProblems, type FlowDef,
+} from './workflow-scenarios';
 
 // Real end-to-end workflow runs use ONLY explicit, disabled, disposable [E2E]
 // fixtures in the autotest account. No arbitrary saved flow is ever executed.
 // Workflow fixtures are discovered from the real account on each run.
 // No manually maintained GitHub flow IDs or names are necessary.
 
-type Flow = {
-  id: number;
-  name: string;
-  enabled: boolean;
-  interval_minutes: number;
-  event_key: string;
-  graph?: { nodes?: Array<{ type: string; tools?: string[]; flow_id?: number; function_id?: number }> };
-};
+type Flow = FlowDef;
 type Run = { id: number; status: string; error?: string; output?: string };
 
-// Explicit allowlist: no writes, notifications, HTTP calls, nested flows,
-// plugin executables, unsafe operations, scheduled triggers or trading.
-const allowedNodeTypes = new Set(['trigger', 'constant', 'transform', 'json_get', 'condition', 'merge', 'output', 'agent']);
 const terminal = new Set(['SUCCESS', 'FAILED', 'DEAD', 'CANCELLED', 'AWAITING_APPROVAL']);
 
 async function login(page: Page): Promise<void> {
@@ -79,7 +72,7 @@ test.describe('Discover and inspect real Flow Studio workflows', () => {
 });
 
 test.describe('Execute explicitly safe [E2E] workflows discovered automatically', () => {
-  test.skip(process.env.LIVE_E2E_WORKFLOWS !== 'true', 'Real workflow execution requires manual opt-in');
+  test.skip(!optedIn(process.env.LIVE_E2E_WORKFLOWS), 'Real workflow execution requires manual opt-in');
 
   test('execute and verify up to two isolated workflows via UI and real run history', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'live-desktop', 'Execute real workflows on desktop only to prevent duplicate runs');
@@ -88,23 +81,16 @@ test.describe('Execute explicitly safe [E2E] workflows discovered automatically'
     const list = await page.request.get('/api/admin/flows');
     expect(list.ok(), 'Account needs permission to read its [E2E] flow fixtures').toBe(true);
     const flows: Flow[] = (await list.json()).flows ?? [];
-    const fixtures = flows.filter(f => f.name.startsWith('[E2E] ')).sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id);
+    const limit = maxWorkflows(process.env.LIVE_E2E_MAX_WORKFLOWS);
+    const fixtures = pickFixtures(flows);
     expect(fixtures.length, 'Create at least one disabled [E2E] flow in My Flows before opting in to live executions').toBeGreaterThan(0);
-    expect(fixtures.length, 'At most two [E2E] flows may be executed per run to bound model usage').toBeLessThanOrEqual(2);
+    expect(fixtures.length, `At most ${limit} [E2E] flows may be executed per run (LIVE_E2E_MAX_WORKFLOWS, hard ceiling 6) to bound model usage`).toBeLessThanOrEqual(limit);
     const names = fixtures.map(f => f.name);
     expect(new Set(names).size, 'Each [E2E] fixture name must be unique for unambiguous UI selection').toBe(names.length);
 
     for (const flow of fixtures) {
       const id = flow.id;
-      expect(flow.name, 'Only explicit [E2E] prefixed test fixtures may run').toMatch(/^\[E2E\] /);
-      expect(flow.enabled, 'Fixtures must not be enabled as automations').toBe(false);
-      expect(flow.interval_minutes).toBe(0);
-      expect(flow.event_key ?? '').toBe('');
-      expect(flow.graph?.nodes?.length ?? 0, 'Fixture must contain nodes').toBeGreaterThan(1);
-      for (const node of flow.graph?.nodes ?? []) {
-        expect(allowedNodeTypes.has(node.type), `Node type ${node.type} not approved for live E2E`).toBe(true);
-        expect(node.tools ?? [], 'AI workflow fixtures must not have tool grants').toEqual([]);
-      }
+      expect(fixtureProblems(flow), `${fixtureLabel(flow)} is not safe to execute`).toEqual([]);
 
       const historyPath = `/api/admin/flows/${id}/runs`;
       const previous = await page.request.get(historyPath);
@@ -138,9 +124,11 @@ test.describe('Execute explicitly safe [E2E] workflows discovered automatically'
       const result = await trace.json();
       expect(Array.isArray(result.steps), 'Run history must contain a steps array').toBe(true);
       expect(result.steps.length, 'At least one node must be recorded').toBeGreaterThan(0);
+      // Structure/state invariants per scenario; never exact model wording.
+      expect(stepProblems(flow.graph, result.steps, classifyScenarios(flow.graph)), `${fixtureLabel(flow)} trace invariants`).toEqual([]);
 
       // No model outputs, financial data, prompts or node payloads in CI logs.
-      console.log(`[E2E] workflow fixture ${id}: success, node trace present`);
+      console.log(redact(`[E2E] ${fixtureLabel(flow)}: success, node trace present`));
     }
   });
 });
