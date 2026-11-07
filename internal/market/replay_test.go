@@ -199,3 +199,13 @@ func TestReplayBackendFreezesCallerOwnedFixtures(t *testing.T) {
 		t.Fatalf("replay return mutated future reads: %v", err)
 	}
 }
+
+func TestRateLimitFaultRejectsInvalidRetryHints(t *testing.T) {
+	var missing *markettest.RateLimitError
+	if _, ok := markettest.IsRateLimited(missing); ok {
+		t.Fatal("typed nil is not a rate-limit response")
+	}
+	if wait, ok := markettest.IsRateLimited(&markettest.RateLimitError{RetryAfter: -time.Second}); !ok || wait != 0 {
+		t.Fatalf("negative retry hint must be bounded: %v %v", wait, ok)
+	}
+}
