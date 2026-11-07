@@ -78,7 +78,7 @@ export function tradeMonteCarloHeadline(r: Pick<StrategyMonteCarloResult, 'simul
   if (s.prob_ruin_pct > 0) lines.push(`In ${s.prob_ruin_pct.toFixed(1)}% of them everything was lost.`);
   const stresses = tradeMonteCarloStresses(s.config);
   if (stresses.length) lines.push(`Stresses you chose (not observed): ${stresses.join('; ')}.`);
-  lines.push(`Simulation sampling uncertainty for the loss share: 95% Wilson interval ${simulationSamplingInterval(s.prob_loss_pct, s.config.runs)} (only finite Monte Carlo sampling noise; not a probability forecast or a confidence interval for actual future returns).`);
+  lines[0] += ` Simulation sampling uncertainty for the loss share: 95% Wilson interval ${simulationSamplingInterval(s.prob_loss_pct, s.config.runs)} (only finite Monte Carlo sampling noise; not a probability forecast or a confidence interval for actual future returns).`;
   return lines;
 }
 
