@@ -153,6 +153,10 @@ func (r *Registry) Register(tool, callID, argsJSON, result string) (string, []So
 		return r.registerRead(argsJSON, result)
 	case "delegate_to_team":
 		return r.registerDelegation(callID, result)
+	case "get_sec_filings":
+		return r.registerFilings(callID, result)
+	case "get_sec_facts":
+		return r.registerFacts(callID, result)
 	}
 	return result, nil
 }
@@ -448,7 +452,7 @@ func (o Options) ageProblem(src Source) string {
 
 func parseDate(raw string) (time.Time, bool) {
 	raw = strings.TrimSpace(raw)
-	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02"} {
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05", "2006-01-02", time.RFC1123, time.RFC1123Z, "Jan 2, 2006", "January 2, 2006", "2 Jan 2006", "2 January 2006"} {
 		if t, err := time.Parse(layout, raw); err == nil {
 			return t, true
 		}

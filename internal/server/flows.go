@@ -18,6 +18,7 @@ import (
 	"floweysales/internal/grounding"
 	"floweysales/internal/identity"
 	"floweysales/internal/persona"
+	"floweysales/internal/sources"
 	"floweysales/internal/storage"
 	"floweysales/internal/websearch"
 )
@@ -1652,6 +1653,12 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 				return "", fmt.Errorf("agent %s must output JSON object or array", n.ID)
 			}
 			previous = trimmed
+			// Citation markers inside the data would alter the declared
+			// structure, so they move to the step's source record.
+			if cleaned, cites, err := sources.ExtractJSONCitations(previous); err == nil && len(cites) > 0 {
+				previous = cleaned
+				nodeTools.SetCitations(cites)
+			}
 			if n.JSONContract != "" {
 				if err := enforceFlowJSONContract(previous, n.JSONContract); err != nil {
 					return "", fmt.Errorf("agent %s JSON contract failed: %w", n.ID, err)
@@ -1661,7 +1668,9 @@ func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.Agent
 		if previous == "" {
 			return "", fmt.Errorf("agent node %s returned no text", n.ID)
 		}
-		if len(previous) > 6000 {
+		if n.OutputMode != "json" {
+			previous = renderFlowCitations(previous, nodeTools.AnswerSources(nodeAttempts))
+		} else if len(previous) > 6000 {
 			previous = previous[:6000]
 		}
 		record(map[string]string{"node": n.ID, "label": n.Label, "output": previous, "tool_calls": nodeTools.JSON(), "sources": nodeTools.SourcesJSON()})

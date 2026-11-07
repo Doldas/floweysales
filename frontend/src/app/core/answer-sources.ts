@@ -260,3 +260,22 @@ export function spanOrigin(s: ClaimSpan): string {
   if (s.retrieved_at) parts.push(`retrieved ${s.retrieved_at.replace('T', ' ').replace(/(:\d\d)?Z$/, '')} UTC`);
   return parts.filter(Boolean).join(' · ');
 }
+
+/** A citation of a JSON output: the string at `path` (JSON Pointer) cites `sources`. */
+export interface JsonCitation { path: string; sources: string[]; text?: string }
+
+/**
+ * The evidence policy a node keeps after its output mode changes. JSON output
+ * cannot have statements removed (that would break its structure), so
+ * on_failure "block" is dropped; the node then fails when the check does.
+ */
+export function evidenceForOutputMode(policy: EvidencePolicy | undefined, outputMode: string): EvidencePolicy | undefined {
+  if (!policy || outputMode !== 'json' || policy.on_failure !== 'block') return policy;
+  const { on_failure: _dropped, ...rest } = policy;
+  return rest as EvidencePolicy;
+}
+
+/** One line for a JSON citation: where it is and which sources it cites. */
+export function jsonCitationLine(c: JsonCitation): string {
+  return `${c.path || '/'} cites ${c.sources.join(', ')}${c.text ? ': ' + c.text : ''}`;
+}

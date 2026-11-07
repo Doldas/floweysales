@@ -110,6 +110,10 @@ type AgentOptions struct {
 	// it on cited sources the agent did not open; when nil, the data source's
 	// LinkChecker is used if it has one.
 	CheckLink sources.LinkChecker
+	// JSONAnswer says the final answer is a JSON document (a flow node with
+	// JSON output). The citation check then reads the document's string values
+	// as sentences, so markers and figures in the data are checked the same way.
+	JSONAnswer bool
 	// Now is the clock of the recency limit; zero means the current time. A
 	// test or an evaluation case fixes it.
 	Now time.Time
@@ -199,6 +203,9 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	// the sources it cites by link still resolve.
 	var lastClaims sources.ClaimReport
 	audit := func(answer string) []sources.Finding {
+		if opts.JSONAnswer {
+			answer = sources.JSONProse(answer)
+		}
 		auditOpts := policy.auditOptions()
 		auditOpts.Now = opts.Now
 		found := sources.AuditWith(answer, registry, auditOpts)

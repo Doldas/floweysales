@@ -2,7 +2,7 @@
 title: What's new
 order: 13
 summary: What changed in the November 2026 release, and what is still not available.
-last-reviewed: 2026-11-06
+last-reviewed: 2026-11-07
 ---
 
 # What's new
@@ -10,6 +10,8 @@ last-reviewed: 2026-11-06
 ## November 2026 release
 
 **Agents**
+- Flow agent nodes keep their sources with the report. A Markdown report links each `[S1]` marker to its source and ends with the list of the sources it cites (title, address, filing number, publication and retrieval time in UTC, and whether the agent read the page or only saw a search result). A JSON node can now run in an evidence mode: the citation markers are moved out of the data into a separate list of citations kept with the step, so the declared JSON contract is unchanged. See [Flows](flows.md).
+- SEC filing lists and SEC facts, and web search hits that carry a publication date, now count as sources; a recency limit can accept a dated search hit. Team runs and saved tasks can be exported as Markdown or JSON with their sources and findings.
 - Agent answers get a claim check: each cited sentence is compared with the cited text for company, metric, period, unit and direction, and shown as supported, contradicted, not proven or not checked, with the source passage under **Why is this claim supported?** See [Agents, teams and evidence](agents.md).
 
 - PDFs are read page by page with page numbers. An administrator can set up an optional vision model that reads scanned pages and charts or tables that are pictures, with page-cited figures, automatic checks, run limits and a Document evidence panel. Report viewer pages are followed to the PDF on the same site; an access denial (HTTP 403) stays a denial. See [Reading PDFs and scanned reports](../pdf-vision.md).
