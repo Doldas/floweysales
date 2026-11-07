@@ -215,7 +215,7 @@ test('math source remains protected from Rich text on desktop and phone', async 
   await mockWorkspace(page, { '/docs/finance.md': original });
   await open(page, 'workspace');
   await page.getByRole('button', { name: 'docs', exact: true }).first().click();
-  await page.getByRole('button', { name: /finance\\.md/ }).click();
+  await page.getByRole('button', { name: /finance\.md/ }).click();
   const editor = page.locator('fse-markdown-editor');
   await expect(editor.getByLabel('Markdown source')).toHaveValue(original);
   await expect(editor.getByRole('tab', { name: 'Rich text' })).toBeDisabled();
