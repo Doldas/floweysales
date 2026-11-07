@@ -69,6 +69,7 @@ const (
 	CodePeriodUnconfirmed  = "period_unconfirmed"
 	CodeDirectionUnconf    = "direction_unconfirmed"
 	CodeSourceNotOpened    = "source_not_opened"
+	CodeSocialOnly         = "social_only_financial_claim"
 	CodeNoCitation         = "no_citation"
 	CodeUnsupportedCausal  = "unsupported_causal"
 	CodeConflictingSources = "conflicting_sources"
@@ -1051,6 +1052,15 @@ func verifyOne(text, bare, kind string, causal bool, cites []string, figs []clai
 			verdict, code, why = cv, cc, cw
 		} else {
 			worse(cv, cc, cw)
+		}
+	}
+	// A forum post may truthfully quote a figure, but this confirms only
+	// what a participant posted; it is not independent accounting evidence.
+	if verdict == Supported && len(cited) > 0 && len(figs) > 0 {
+		allSocial := true
+		for _, d := range cited { if d.src.Class != ClassSocial { allSocial = false; break } }
+		if allSocial {
+			verdict, code, why = Insufficient, CodeSocialOnly, "Social discussions describe opinions and posts, not independently verified reported financial figures. Check the company's filing or an original dataset."
 		}
 	}
 	if verdict == Supported && allListed {
