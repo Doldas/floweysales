@@ -105,3 +105,8 @@ test('the export carries provenance in UTC, the model, the seed and the assumpti
   assert.equal(json.simulation.model_version, 'mc-1');
   assert.equal(tradeMonteCarloFileName(stressed, 'csv'), 'monte-carlo-dip-buyer-v2-aapl-seed42.csv');
 });
+
+test('Monte Carlo seed cannot silently round unsafe large integers', () => {
+  assert.match(tradeMonteCarloError({ ...TRADE_MC_DEFAULTS, seed: '9007199254740993' }), /Seed must be a safe whole number/);
+  assert.equal(tradeMonteCarloError({ ...TRADE_MC_DEFAULTS, seed: '42' }), '');
+});
