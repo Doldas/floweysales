@@ -47,7 +47,13 @@ function escapeLineStart(line: string): string {
 function safeHref(href: string): string {
   const value = href.trim();
   if (!value || value === '#') return '';
-  if (/[\u0000-\u001f\s]/.test(value) && !/^https?:\/\//i.test(value)) return '';
+  if (/[\u0000-\u001f\u007f]/.test(value)) return '';
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const u = new URL(value);
+      if (!u.hostname || u.username || u.password) return '';
+    } catch { return ''; }
+  }
   if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(value) && !/^https?:\/\//i.test(value)) return '';
   if (value.startsWith('//')) return '';
   return value.replace(/ /g, '%20').replace(/\(/g, '%28').replace(/\)/g, '%29');
