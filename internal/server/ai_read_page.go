@@ -207,12 +207,19 @@ func readPublicPage(ctx context.Context, raw string) (string, string, bool, erro
 		if err != nil {
 			return "", "", false, err
 		}
-		if (isPDF || binary) && int64(len(body)) > limit {
-			return "", "", false, errors.New("the PDF is larger than 8 MB")
+		if int64(len(body)) > limit {
+			if isPDF || binary {
+				return "", "", false, errors.New("the PDF is larger than 8 MB")
+			}
+			return "", "", false, errors.New("the web page is larger than the 512 KB reading limit; its content was not read")
 		}
-		// Trust the bytes, not the label: a generic binary type is a PDF only
-		// by its magic number, and a labeled PDF that lacks it is refused.
-		if hasPDFMagic(body) {
+		// Check the format when the response claims to be PDF. Otherwise a
+		// mislabeled HTML error page can be presented as extracted PDF evidence.
+		magic := hasPDFMagic(body)
+		if isPDF && !magic {
+			return "", "", false, errors.New("the server labeled this resource as PDF but the response has no PDF signature; it was not read")
+		}
+		if magic {
 			isPDF = true
 		} else if binary {
 			return "", "", false, fmt.Errorf("cannot read content type %q; only HTML, plain text and PDF are supported", kind)
