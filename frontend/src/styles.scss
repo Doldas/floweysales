@@ -311,6 +311,22 @@ pre { color: var(--fs-text-2); }
   details > summary { cursor: pointer; }
 }
 
+// ---------------------------------------------------------------- density
+// Compact is a per-user display choice (data-density on the root, set by the Workspace service).
+// It tightens spacing and type only: no column, figure, warning or source line is dropped.
+:root[data-density='compact'] {
+  --fs-pane-pad-y: 0.4rem;
+  --fs-pane-pad-x: 0.75rem;
+  --fs-gap-sm: 0.35rem;
+  .fs-page { padding-top: 0.9rem; padding-bottom: 2rem; }
+  .card-header { padding: 0.45rem 0.85rem; gap: 0.5rem; }
+  .card-body { padding: 0.6rem 0.85rem; }
+  .fs-kpi { padding: 0.5rem 0.75rem; gap: 0.1rem; .fs-kpi-value { font-size: 1.15rem; } .fs-kpi-label, .fs-kpi-sub { font-size: 0.72rem; } }
+  .table > :not(caption) > * > * { padding: 0.25rem 0.5rem; }
+  .table { font-size: 0.8rem; }
+  .btn:not(.btn-icon) { --bs-btn-padding-y: 0.2rem; --bs-btn-font-size: 0.8125rem; }
+}
+
 @media (max-width: 700px) {
   .fs-native-forms :is(input, select, textarea), .form-control, .form-select { font-size: 16px !important; }
 }

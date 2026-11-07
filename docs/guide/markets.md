@@ -2,7 +2,7 @@
 title: Markets
 order: 3
 summary: The price chart, indicators, watchlist, feed status badge, fundamentals, quarterly financials and the World view.
-last-reviewed: 2026-11-04
+last-reviewed: 2026-11-07
 ---
 
 # Markets
@@ -37,6 +37,22 @@ If a figure is missing, the screen shows a dash, not zero.
 - **Analyze with agent** sends a prepared question about the instrument, range and studies to the [Research Agent](agents.md). The answer is AI-generated.
 
 Daily bars carry the date of the bar in UTC. Axis labels and tooltips use UTC.
+
+### Panes: fold, resize, full screen
+
+The **Price chart**, **Analysis insights** and the leaderboard **Ranking** are panes. Each pane header has a chevron button that folds the body, and the chart and ranking have a full-screen button (Escape leaves it).
+
+- **A fold hides only the body.** The title, a one-line summary and the facts that say where the data came from stay visible. Under the chart these are the source, the bar size and range, the currency, the time of the newest bar in UTC and, when studies are on, that they are calculated here from the bars. Above the ranking they are the provider, the price date and what a score means. The chart keeps its zoom and your studies while folded.
+- **Resize** the chart and the ranking by dragging the bar under them, or focus it and use the arrow keys (24 pixels), Page Up and Page Down (120), Home and End. Double-click it to return to the default height.
+- Folds and heights are saved in this browser, per pane. Nothing is removed from the page and nothing is saved on the server.
+
+### Compact density
+
+The density button in the top bar (or **Use compact density** in the More actions menu on phones) tightens padding and type size across the app so more rows and figures fit on a screen. No column, figure, warning or source line is dropped. The choice is yours alone and is saved in this browser.
+
+### Long ranking lists
+
+**Show all** on a long ranking draws only the rows in view while you scroll; every row stays in the list, in the CSV and JSON downloads and in the row count. Click or press Enter on a row to open it in Markets, or use **Score breakdown** on a row to see its factors, provider and price date.
 
 ## The feed status badge
 

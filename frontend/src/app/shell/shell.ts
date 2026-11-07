@@ -11,6 +11,7 @@ import { AgentSession } from '../core/agent-session';
 import { MarketState } from '../core/market-state';
 import { PluginTools } from '../core/plugin-tools';
 import { tabIcon } from '../components/plugin-tools';
+import { Workspace } from '../core/workspace.service';
 import { ThemeService } from '../theme.service';
 import { AgentDockComponent } from './agent-dock';
 import { FeedStatusComponent } from './feed-status';
@@ -47,6 +48,7 @@ export class ShellComponent {
   readonly activity = inject(ActivityStore);
   readonly pluginTools = inject(PluginTools);
   readonly theme = inject(ThemeService);
+  readonly workspace = inject(Workspace);
   readonly palette = inject(CommandPaletteService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
