@@ -105,6 +105,16 @@ try {
   await page.getByRole('button', { name: /rebalances/ }).click();
   await audit(page, 'Markets: backtest rebalance table', 'fs-backtest-panel');
 
+  // Strategies → replay → robustness panel: form, simulated table, exports and the assumptions.
+  await page.goto(new URL('#/strategies', base).href, { waitUntil: 'networkidle' });
+  await page.locator('fs-strategy-montecarlo').waitFor({ state: 'visible', timeout: 10000 });
+  await page.addScriptTag({ content: axeSource });
+  await audit(page, 'Strategies: robustness panel form', 'fs-strategy-montecarlo');
+  await page.getByRole('button', { name: 'Run simulation' }).click();
+  await page.locator('fs-strategy-montecarlo table').waitFor({ state: 'visible', timeout: 5000 });
+  await page.getByRole('button', { name: 'Export CSV' }).waitFor({ state: 'visible', timeout: 5000 });
+  await audit(page, 'Strategies: robustness panel result', 'fs-strategy-montecarlo');
+
   // Portfolio → Risk tab with alerts, correlation and suggestions.
   await page.goto(new URL('#/portfolio', base).href, { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'Risk', exact: true }).click();

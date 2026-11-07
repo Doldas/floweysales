@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"floweysales/internal/persona"
+	"floweysales/internal/sources"
 )
 
 // A team runs several agents on one question, each under its own system
@@ -74,6 +75,7 @@ type answerOf struct {
 // Every event carries the Agent it belongs to. emit is called from several
 // goroutines; RunTeam serializes the calls.
 func RunTeam(ctx context.Context, client *Client, src DataSource, opts TeamOptions, emit func(Event)) error {
+	ctx = WithRunScope(ctx)
 	if emit == nil {
 		emit = func(Event) {}
 	}
@@ -229,6 +231,19 @@ func runChair(ctx context.Context, client *Client, src DataSource, run RunFunc, 
 	})
 	if err != nil && failed == "" {
 		failed = err.Error()
+	}
+	// The chair has no sources of its own, so its figures are traced to the
+	// member answers it was given. This is deterministic and calls no model.
+	if strings.TrimSpace(final) != "" {
+		var said []sources.SummaryMember
+		for i, m := range opts.Members {
+			if strings.TrimSpace(answers[i].text) != "" {
+				said = append(said, sources.SummaryMember{Name: m.Name, Text: answers[i].text})
+			}
+		}
+		if found := sources.CheckSummary(final, said); len(found) > 0 {
+			send(Event{Type: "sources", Agent: "chair", Audit: found})
+		}
 	}
 	send(Event{Type: "member_done", Agent: "chair", Name: "Chair", Content: final, Error: failed})
 }

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="045-web-search-usage" author="floweysales" dbms="mysql">
+  <!-- Web search usage per provider and UTC day (#311). It holds counts and estimated cost only:
+       never a query, a result or a credential. The provider settings themselves are encrypted rows of
+       api_integration_secrets (ws_* kinds), so no other schema is needed. -->
+  <createTable tableName="web_search_usage" remarks="Searches, model tokens and estimated cost per web search provider and UTC day">
+   <column name="provider" type="VARCHAR(32)"><constraints nullable="false"/></column>
+   <column name="usage_day" type="DATE"><constraints nullable="false"/></column>
+   <column name="searches" type="BIGINT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+   <column name="prompt_tokens" type="BIGINT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+   <column name="output_tokens" type="BIGINT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+   <column name="cost_micros" type="BIGINT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+   <column name="failures" type="BIGINT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+  </createTable>
+  <addPrimaryKey tableName="web_search_usage" columnNames="provider,usage_day" constraintName="pk_web_search_usage"/>
+  <rollback><dropTable tableName="web_search_usage"/></rollback>
+ </changeSet>
+</databaseChangeLog>

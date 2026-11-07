@@ -19,6 +19,7 @@ import (
 	"floweysales/internal/identity"
 	"floweysales/internal/persona"
 	"floweysales/internal/storage"
+	"floweysales/internal/websearch"
 )
 
 type flowNode struct {
@@ -1135,6 +1136,7 @@ func (e *flowNodeError) Error() string { return e.Err.Error() }
 func (e *flowNodeError) Unwrap() error { return e.Err }
 
 func (e *Engine) executeFlowNestedWithInput(ctx context.Context, f storage.AgentFlow, parents map[int64]bool, depth int, input string) (flowOutput string, flowErr error) {
+	ctx = websearch.WithRunSpend(ctx) // nested flows share the run's web search budget
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}

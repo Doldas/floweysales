@@ -63,7 +63,10 @@ func openAPISecret(kind string, data []byte) (string, error) {
 // RestoreAPISecrets is called during normal AI config restoration at startup.
 func (e *Engine) RestoreAPISecrets(ctx context.Context) error {
 	e.restorePluginEnv(ctx)
-	for _, kind := range []string{"ai", "web_search", "sec"} {
+	if err := e.restoreWebSearch(ctx); err != nil {
+		return err
+	}
+	for _, kind := range []string{"ai", "sec"} {
 		entry, err := e.db.GetAPIIntegrationSecret(ctx, kind)
 		if storage.IsMissingAPIIntegration(err) {
 			continue
@@ -81,14 +84,9 @@ func (e *Engine) RestoreAPISecrets(ctx context.Context) error {
 			e.ConfigureAI(base, secret, model)
 		case "sec":
 			e.setSECContact(secret)
-		default:
-			e.integrationMu.Lock()
-			e.webSearchProvider = entry.Provider
-			e.webSearchAPIKey = registeredSecret(secret)
-			e.integrationMu.Unlock()
 		}
 	}
-	return nil
+	return e.restoreVision(ctx)
 }
 
 // setSECContact makes the SEC client identify itself with the saved contact;
@@ -110,10 +108,9 @@ func (e *Engine) registerIntegrationSettingsRoutes() {
 		_, err := apiSecretCipher()
 		_, aiKey, _ := e.aiDefaults()
 		e.integrationMu.Lock()
-		provider := e.webSearchProvider
-		webHasKey := e.webSearchAPIKey != ""
 		secSaved := e.secContact
 		e.integrationMu.Unlock()
+		provider, webHasKey := e.legacyWebSearchInfo()
 		secSource := "none"
 		switch ua := sec.Production().UserAgentValue(); {
 		case secSaved != "":
@@ -189,6 +186,14 @@ func (e *Engine) registerIntegrationSettingsRoutes() {
 			writeJSON(w, 400, map[string]string{"error": "Web search provider must be brave or tavily"})
 			return
 		}
+		if kind == "web_search" {
+			if err := e.putLegacyWebSearch(r.Context(), body.Provider, body.APIKey); err != nil {
+				writeJSON(w, 503, map[string]string{"error": "Unable to save encrypted credentials"})
+				return
+			}
+			writeJSON(w, 200, map[string]any{"saved": true, "has_key": true, "provider": body.Provider})
+			return
+		}
 		encrypted, err := sealAPISecret(kind, body.APIKey)
 		if err != nil {
 			writeJSON(w, 503, map[string]string{"error": "Credential encryption unavailable"})
@@ -201,11 +206,6 @@ func (e *Engine) registerIntegrationSettingsRoutes() {
 		if kind == "ai" {
 			base, _, model := e.aiDefaults()
 			e.ConfigureAI(base, body.APIKey, model)
-		} else {
-			e.integrationMu.Lock()
-			e.webSearchProvider = body.Provider
-			e.webSearchAPIKey = registeredSecret(body.APIKey)
-			e.integrationMu.Unlock()
 		}
 		writeJSON(w, 200, map[string]any{"saved": true, "has_key": true, "provider": body.Provider})
 	})
@@ -218,6 +218,14 @@ func (e *Engine) registerIntegrationSettingsRoutes() {
 			writeJSON(w, 404, map[string]string{"error": "Unknown integration"})
 			return
 		}
+		if kind == "web_search" {
+			if err := e.deleteLegacyWebSearch(r.Context()); err != nil {
+				writeJSON(w, 503, map[string]string{"error": "Unable to remove credential"})
+				return
+			}
+			writeJSON(w, 200, map[string]bool{"deleted": true})
+			return
+		}
 		if err := e.db.DeleteAPIIntegrationSecret(r.Context(), kind); err != nil {
 			writeJSON(w, 503, map[string]string{"error": "Unable to remove credential"})
 			return
@@ -228,11 +236,6 @@ func (e *Engine) registerIntegrationSettingsRoutes() {
 			e.ConfigureAI(base, "", model)
 		case "sec":
 			e.setSECContact("")
-		default:
-			e.integrationMu.Lock()
-			e.webSearchProvider = ""
-			e.webSearchAPIKey = ""
-			e.integrationMu.Unlock()
 		}
 		writeJSON(w, 200, map[string]bool{"deleted": true})
 	})

@@ -46,4 +46,5 @@
   <include file="042-agent-team-budget.xml" relativeToChangelogFile="true"/>
   <include file="043-evidence-settings.xml" relativeToChangelogFile="true"/>
   <include file="044-index-sources.xml" relativeToChangelogFile="true"/>
+  <include file="045-web-search-usage.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

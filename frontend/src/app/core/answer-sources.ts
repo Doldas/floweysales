@@ -5,6 +5,8 @@ export interface AnswerSource {
   document_id?: string; published_at?: string; retrieved_at?: string; excerpt?: string;
   /** The team member who retrieved it, when a delegated team did. */
   member?: string;
+  /** The web search provider that listed it, and "grounded_source" for a page Gemini cited. */
+  search_provider?: string; result_type?: string;
 }
 export interface AnswerFinding { kind: string; sentence: string; source?: string; detail: string }
 
@@ -43,6 +45,8 @@ const FINDING_LABELS: Record<string, string> = {
   claim_contradicted: 'Claim contradicted by the cited text',
   claim_insufficient: 'Claim not proven by the cited text',
   unsupported_claim: 'Judgement not labeled as such',
+  summary_figure_not_in_members: 'Figure in no member answer',
+  summary_misattributed: 'Figure attributed to the wrong member',
 };
 
 export function findingLabel(kind: string): string {
@@ -55,8 +59,23 @@ export function splitSources(list: readonly AnswerSource[]): { read: AnswerSourc
 }
 
 /** Who retrieved a source, for the line under its title: a delegated team's member is named. */
-export function sourceOrigin(s: Pick<AnswerSource, 'member'>): string {
-  return s.member ? `retrieved by team member ${s.member}` : '';
+export function sourceOrigin(s: Pick<AnswerSource, 'member'> & Partial<Pick<AnswerSource, 'search_provider' | 'result_type' | 'access'>>): string {
+  // A source the agent opened is no longer "only a snippet".
+  const found = s.access === 'read' ? '' : searchOrigin(s.search_provider, s.result_type);
+  const by = s.member ? `retrieved by team member ${s.member}` : '';
+  return [by, found].filter(Boolean).join(' · ');
+}
+
+const SEARCH_NAMES: Record<string, string> = {
+  searxng: 'SearXNG', brave: 'Brave Search', brave_search: 'Brave Search', tavily: 'Tavily',
+  google_grounding: 'Google Search (Gemini grounding)', google_cse: 'Google Custom Search',
+};
+
+/** Which search provider found a listed source. A grounded source was cited by Gemini and was not opened. */
+export function searchOrigin(provider: string | undefined, resultType: string | undefined): string {
+  if (!provider) return '';
+  const name = SEARCH_NAMES[provider] ?? provider.replace(/_search$/, '').replace(/_/g, ' ');
+  return resultType === 'grounded_source' ? `cited by Gemini through ${name}; not opened` : `found by ${name}; only a snippet`;
 }
 
 /** One line for the panel header. A clean audit says what was checked, never that the answer is true. */

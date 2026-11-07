@@ -16,7 +16,7 @@ import (
 	"floweysales/internal/storage"
 )
 
-var mutatingFlowRoute = regexp.MustCompile(`HandleFunc\("((?:POST|PUT|DELETE|PATCH) /api/admin/(?:flows|flow-|blueprint-)[^"]*)"`)
+var mutatingFlowRoute = regexp.MustCompile(`HandleFunc\("((?:POST|PUT|DELETE|PATCH) /api/admin/(?:flows|flow-|blueprint-|vision)[^"]*)"`)
 
 // Every mutating Flow Studio route must be audited or explicitly exempt, and
 // the audit table must not list routes that no longer exist.

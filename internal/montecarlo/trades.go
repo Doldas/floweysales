@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"sort"
 )
 
 // Trade-level methods resample the closed trades of a rule strategy instead of
@@ -20,6 +21,9 @@ const (
 // MinTrades is the fewest closed trades that are resampled. Below it the
 // spread of outcomes would rest on a handful of numbers.
 const MinTrades = 20
+
+// MaxDelayBars is the longest fill delay that can be stressed.
+const MaxDelayBars = 5
 
 const (
 	// MaxTradeCount bounds the number of trades in one simulated path.
@@ -47,6 +51,33 @@ type TradeConfig struct {
 	ExtraCostBps float64 `json:"extra_cost_bps_per_trade,omitempty"`
 	// DispersionScale multiplies each trade's distance from the average trade result.
 	DispersionScale float64 `json:"dispersion_scale"`
+	// DelayBars is a fill delay, in bars, that the replay did not model. Each trade's account-value
+	// change gets a random fill-price difference whose spread grows with the square root of the delay.
+	// It needs the instrument's daily volatility (InstrumentDailyVolPct) and the typical share of the
+	// account in a trade (Exposure), which the caller measures from the replay.
+	DelayBars             int     `json:"delay_bars,omitempty"`
+	InstrumentDailyVolPct float64 `json:"instrument_daily_vol_pct,omitempty"`
+	Exposure              float64 `json:"exposure,omitempty"`
+	// RegimeSharePct is the share of the trades in each path that fall in one stressed stretch, and
+	// RegimeScale multiplies the distance from the average trade inside that stretch (a calm period
+	// followed by a turbulent one). 0 turns it off.
+	RegimeSharePct float64 `json:"regime_share_pct,omitempty"`
+	RegimeScale    float64 `json:"regime_scale,omitempty"`
+	// PositionScale multiplies every trade's account-value change, as if each position were that many
+	// times larger. 1 is the replay's own size.
+	PositionScale float64 `json:"position_scale"`
+}
+
+// BestTradesN is how many of the best trades the concentration figure leaves out.
+const BestTradesN = 3
+
+// Concentration says how much of the observed result rests on a few trades.
+type Concentration struct {
+	BestTrades int `json:"best_trades_removed"`
+	// ReturnWithoutBestPct is the observed total return with the best trades removed.
+	ReturnWithoutBestPct float64 `json:"return_without_best_pct"`
+	// LargestLossPct is the worst single trade, as a change in the account value.
+	LargestLossPct float64 `json:"largest_loss_pct"`
 }
 
 // TradeResult is a simulated outcome over closed trades. Percentages are of the starting account value.
@@ -55,6 +86,8 @@ type TradeResult struct {
 	Config         TradeConfig `json:"config"`
 	ObservedTrades int         `json:"observed_trades"`
 	Observed       Observed    `json:"observed"`
+	// Concentration is measured on the observed trades and is not simulated.
+	Concentration Concentration `json:"concentration"`
 	// TerminalReturnPct is the total return after all trades of a path.
 	TerminalReturnPct Dist `json:"terminal_return_pct"`
 	// MaxDrawdownPct is the deepest fall of the account value measured at closed trades; zero or negative.
@@ -80,6 +113,12 @@ func (c TradeConfig) WithDefaults(observed int) TradeConfig {
 	if c.DispersionScale == 0 {
 		c.DispersionScale = 1
 	}
+	if c.PositionScale == 0 {
+		c.PositionScale = 1
+	}
+	if c.RegimeSharePct > 0 && c.RegimeScale == 0 {
+		c.RegimeScale = 2
+	}
 	return c
 }
 
@@ -104,6 +143,21 @@ func (c TradeConfig) Validate() error {
 	}
 	if c.DispersionScale < 0.5 || c.DispersionScale > 3 || math.IsNaN(c.DispersionScale) {
 		return errors.New("dispersion scale must be from 0.5 to 3")
+	}
+	if c.DelayBars < 0 || c.DelayBars > MaxDelayBars {
+		return fmt.Errorf("delay must be from 0 to %d bars", MaxDelayBars)
+	}
+	if c.DelayBars > 0 && !(c.InstrumentDailyVolPct > 0 && c.InstrumentDailyVolPct < 100 && c.Exposure > 0 && c.Exposure <= 10) {
+		return errors.New("a fill delay needs the instrument's daily volatility and the share of the account in a trade, and the replay did not give them")
+	}
+	if c.RegimeSharePct < 0 || c.RegimeSharePct > 100 || math.IsNaN(c.RegimeSharePct) {
+		return errors.New("stressed share must be a percentage from 0 to 100")
+	}
+	if c.RegimeSharePct > 0 && (c.RegimeScale < 1 || c.RegimeScale > 4 || math.IsNaN(c.RegimeScale)) {
+		return errors.New("stressed spread must be from 1 to 4 times")
+	}
+	if c.PositionScale < 0.25 || c.PositionScale > 3 || math.IsNaN(c.PositionScale) {
+		return errors.New("position size multiple must be from 0.25 to 3")
 	}
 	return nil
 }
@@ -148,8 +202,18 @@ func RunTrades(tradePct []float64, cfg TradeConfig) (TradeResult, error) {
 	mean /= float64(len(returns))
 	base := make([]float64, len(returns))
 	for i, r := range returns {
-		base[i] = math.Max(mean+(r-mean)*cfg.DispersionScale-cfg.ExtraCostBps/10000, -1)
+		base[i] = math.Max((mean+(r-mean)*cfg.DispersionScale)*cfg.PositionScale-cfg.ExtraCostBps/10000, -1)
 	}
+	baseMean := 0.0
+	for _, b := range base {
+		baseMean += b
+	}
+	baseMean /= float64(len(base))
+	delaySD := 0.0
+	if cfg.DelayBars > 0 {
+		delaySD = cfg.InstrumentDailyVolPct / 100 * math.Sqrt(float64(cfg.DelayBars)) * cfg.Exposure
+	}
+	stressed := int(math.Round(cfg.RegimeSharePct / 100 * float64(cfg.Trades)))
 
 	rng := rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x9e3779b97f4a7c15))
 	terminal := make([]float64, cfg.Runs)
@@ -165,6 +229,17 @@ func RunTrades(tradePct []float64, cfg TradeConfig) (TradeResult, error) {
 		} else {
 			rng.Shuffle(len(pool), func(i, j int) { pool[i], pool[j] = pool[j], pool[i] })
 			copy(path, pool)
+		}
+		if stressed > 0 {
+			start := rng.IntN(cfg.Trades - stressed + 1)
+			for i := start; i < start+stressed; i++ {
+				path[i] = math.Max(baseMean+(path[i]-baseMean)*cfg.RegimeScale, -1)
+			}
+		}
+		if delaySD > 0 {
+			for i := range path {
+				path[i] = math.Max(path[i]+rng.NormFloat64()*delaySD, -1)
+			}
 		}
 		end, worst := walk(path)
 		terminal[k], drawdown[k] = (end-1)*100, worst*100
@@ -182,6 +257,7 @@ func RunTrades(tradePct []float64, cfg TradeConfig) (TradeResult, error) {
 	res := TradeResult{
 		ModelVersion: ModelVersion, Config: cfg, ObservedTrades: len(returns),
 		Observed:          Observed{Days: len(returns), TotalReturnPct: round2((obsEnd - 1) * 100), MaxDrawdownPct: round2(obsWorst * 100)},
+		Concentration:     concentration(returns),
 		TerminalReturnPct: summarize(terminal), MaxDrawdownPct: summarize(drawdown),
 		ProbLossPct: pct(losses, cfg.Runs), ProbRuinPct: pct(ruined, cfg.Runs),
 	}
@@ -194,6 +270,15 @@ func RunTrades(tradePct []float64, cfg TradeConfig) (TradeResult, error) {
 	return res, nil
 }
 
+// concentration measures the observed trades: the result without the best few and the worst loss.
+func concentration(returns []float64) Concentration {
+	sorted := append([]float64(nil), returns...)
+	sort.Float64s(sorted)
+	kept := sorted[:len(sorted)-BestTradesN]
+	end, _ := walk(kept)
+	return Concentration{BestTrades: BestTradesN, ReturnWithoutBestPct: round2((end - 1) * 100), LargestLossPct: round2(sorted[0] * 100)}
+}
+
 func tradeAssumptions(c TradeConfig, observed int) []string {
 	out := []string{
 		fmt.Sprintf("%d simulated paths of %d trades each, drawn from %d closed trades with seed %d. Each trade is the change in the account value it caused, after the cost setting of the replay.", c.Runs, c.Trades, observed, c.Seed),
@@ -203,6 +288,15 @@ func tradeAssumptions(c TradeConfig, observed int) []string {
 	}
 	if c.DispersionScale != 1 {
 		out = append(out, fmt.Sprintf("Each trade's distance from the average trade was multiplied by %g; this is a stress you chose, not something observed.", c.DispersionScale))
+	}
+	if c.PositionScale != 1 {
+		out = append(out, fmt.Sprintf("Every trade's change in the account value was multiplied by %g, as if each position were that many times the size in the replay (concentrated exposure when above 1); this is a stress you chose, not something observed. Liquidity, margin and the market impact of larger positions are not modeled.", c.PositionScale))
+	}
+	if c.RegimeSharePct > 0 {
+		out = append(out, fmt.Sprintf("In every path one stretch of %g%% of the trades, at a random place, has its distance from the average trade multiplied by %g, to mimic a turbulent period; this is a stress you chose, not something observed.", c.RegimeSharePct, c.RegimeScale))
+	}
+	if c.DelayBars > 0 {
+		out = append(out, fmt.Sprintf("A fill delay of %d bar(s) is stressed by adding to every trade a random difference with zero mean and a spread of %.2f%% of the account (the instrument's daily volatility of %.2f%% times the square root of the delay times %.2f of the account in a trade). It widens the outcomes; it does not assume that delays on average cost or earn money, and it is not a re-fill at later prices.", c.DelayBars, c.InstrumentDailyVolPct*math.Sqrt(float64(c.DelayBars))*c.Exposure, c.InstrumentDailyVolPct, c.Exposure))
 	}
 	if c.ExtraCostBps > 0 {
 		out = append(out, fmt.Sprintf("An extra %g basis points of the account value were taken from every trade, for example slippage or a delayed fill; this is a stress you chose, not something observed.", c.ExtraCostBps))
