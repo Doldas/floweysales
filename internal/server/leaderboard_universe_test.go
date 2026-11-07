@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -127,5 +128,37 @@ func TestLeaderboardResponseSeparatesDiscoveryMetricsAndMethod(t *testing.T) {
 	_ = json.Unmarshal(body.Rows[0]["discovery"], &disc)
 	if disc["kind"] != "custom" || disc["url"] != nil {
 		t.Errorf("no URL is invented for a custom list: %v", disc)
+	}
+}
+
+func TestDiscoveryKeepsProviderSpecificFactsAndDistinctExchangeListings(t *testing.T) {
+	universe := leaderboardUniverse{ID: "cross", Label: "Cross market", Source: universeSource{Kind: "custom", Name: "Selected", Rule: "Selected symbols"}}
+	rows := []map[string]any{
+		{"symbol": "AZN.ST", "data_provider": "YAHOO", "as_of": "2026-10-01", "ttm_through": "2026-06-30"},
+		{"symbol": "AZN.L", "data_provider": "FINNHUB", "as_of": "2026-11-01", "ttm_through": "2026-09-30"},
+		{"symbol": "UNKNOWN", "as_of": "2025-01-01"},
+	}
+	annotateDiscovery(universe, "YAHOO", rows)
+	if rows[0]["identifier"] == rows[1]["identifier"] {
+		t.Fatalf("cross-exchange listings must not be collapsed: %v %v", rows[0]["identifier"], rows[1]["identifier"])
+	}
+	for i, provider := range []string{"YAHOO", "FINNHUB", "YAHOO"} {
+		meta, ok := rows[i]["metrics_source"].(map[string]any)
+		if !ok || meta["provider"] != provider {
+			t.Fatalf("row %d provider lineage: %+v", i, meta)
+		}
+		asOf := rows[i]["as_of"].(string)
+		if !reflect.DeepEqual(meta["fact"], metricsFact(provider, rows[i]["symbol"].(string), asOf)) {
+			t.Fatalf("row %d fact must identify its actual provider rather than a fallback: %+v", i, meta)
+		}
+		if meta["price_as_of"] != asOf {
+			t.Fatalf("row %d stale/as-of date was dropped: %+v", i, meta)
+		}
+		if rows[i]["discovery"].(map[string]any)["kind"] != "custom" {
+			t.Fatalf("custom source must be marked as such: %+v", rows[i])
+		}
+	}
+	if rows[2]["listing"].(listing).Known {
+		t.Fatal("unknown listing must not invent an exchange")
 	}
 }
