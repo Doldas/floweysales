@@ -223,3 +223,12 @@ test('a JSON citation names the path and the sources it cites', () => {
   assert.equal(jsonCitationLine({ path: '/summary', sources: ['S1', 'S2'], text: 'Revenue grew' }), '/summary cites S1, S2: Revenue grew');
   assert.equal(jsonCitationLine({ path: '', sources: ['S3'] }), '/ cites S3');
 });
+
+test('empty citation findings never pretend sources were opened', () => {
+  assert.doesNotMatch(auditSummary([]), /every cited source was retrieved|Citation check passed/);
+  assert.match(auditSummary([]), /does not establish/);
+});
+
+test('claim limit reached with zero returned claims is explicitly unverified', () => {
+  assert.match(claimsSummary([], { claims: 0, supported: 0, contradicted: 0, insufficient: 0, not_checked: 0, skipped: 2, elapsed_ms: 1, model_calls: 0, verifier_version: 'claims-v1' }), /Nothing is verified/);
+});

@@ -92,7 +92,7 @@ export function searchOrigin(provider: string | undefined, resultType: string | 
 
 /** One line for the panel header. A clean audit says what was checked, never that the answer is true. */
 export function auditSummary(findings: readonly AnswerFinding[]): string {
-  if (!findings.length) return 'Citation check passed: every cited source was retrieved and its figures appear in the text. This does not confirm the claims are true.';
+  if (!findings.length) return 'Citation check reported no problems; this does not establish that sources were opened or prove the claims true.';
   const n = findings.length;
   return `Citation check found ${n} ${n === 1 ? 'problem' : 'problems'}. Treat the flagged sentences with care.`;
 }
@@ -261,7 +261,7 @@ export function sortClaims(claims: readonly AnswerClaim[]): AnswerClaim[] {
 
 /** One line for the claims header; says how many claims were proven and what the check cost. */
 export function claimsSummary(claims: readonly AnswerClaim[], stats?: ClaimStats | null): string {
-  if (!claims.length) return '';
+  if (!claims.length) return stats?.skipped ? `${stats.skipped} sentences could not be checked because the verification limit was reached. Nothing is verified.` : '';
   const count = (v: string) => claims.filter(c => c.verdict === v).length;
   const parts = [`${count('supported')} supported`, `${count('contradicted')} contradicted`, `${count('insufficient')} not proven`, `${count('not_checked')} not checked`];
   let text = `${claims.length} ${claims.length === 1 ? 'claim' : 'claims'}: ${parts.join(', ')}.`;
