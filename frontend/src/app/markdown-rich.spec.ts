@@ -157,3 +157,10 @@ test('rich mode refuses escaped GFM table pipes rather than losing columns', () 
   assert.ok(richTextBlockers(md).includes('escaped table pipes'));
   assert.deepEqual(richTextBlockers('| Name | Logic |\n| --- | --- |\n| Base | 12 |'), []);
 });
+
+test('rich-text links refuse embedded credentials and newline injection', () => {
+  const make = (href: string) => htmlToMarkdown(el('div', {}, [el('p', {}, [el('a', { href }, [text('Report')])])]));
+  assert.doesNotMatch(make('https://user:secret@example.org/report'), /user:secret|\]\(/);
+  assert.doesNotMatch(make('https://example.org/hello\nworld'), /\]\(/);
+  assert.match(make('https://example.org/report'), /\[Report\]\(https:\/\/example.org\/report\)/);
+});
