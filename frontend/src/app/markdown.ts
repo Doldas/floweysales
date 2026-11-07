@@ -1,3 +1,4 @@
+import { isInlineDollarFormula, renderFormula } from './math';
 /**
  * A tiny, dependency-free Markdown renderer shared by chat bubbles, help pages, run output and the Workspace
  * (Markdown preview, rich-text editor and README overview).
@@ -73,6 +74,7 @@ export function resolveWorkspacePath(base: string, href: string): string | null 
 
 interface InlineState {
   code: string[];
+  math: string[];
   /** Opening tags of generated links, kept out of the text so emphasis rules never touch attributes. */
   tags: string[];
   options: MarkdownOptions;
@@ -114,6 +116,16 @@ function renderInline(text: string, state: InlineState): string {
   out = out.replace(/\[([^\]]+)\]\(([^\s)]+)\)/g, (_m, label: string, href: string) =>
     renderTarget(label, href, state, false),
   );
+  // Math must be extracted before backslash-escape and emphasis rules.
+  // Link attributes are already stashed above; fenced and inline code are isolated.
+  out = out.replace(/(^|[^\\])(?:\\\((.+?)\\\)|\$([^$\n]+)\$)/g,
+    (original, prefix: string, parens: string | undefined, dollars: string | undefined) => {
+      const body = parens ?? dollars ?? '';
+      if (dollars !== undefined && !isInlineDollarFormula(unescapeHtml(body))) return original;
+      const idx = state.math.push(renderFormula(unescapeHtml(body))) - 1;
+      return prefix + '\u0000M' + idx + '\u0000';
+    });
+
   // Backslash escapes for inline punctuation (also written by the rich-text editor).
   out = out.replace(/\\([\\`*_{}[\]()#+\-.!|~])/g, (_m, ch: string) => `&#${ch.charCodeAt(0)};`);
 
@@ -130,6 +142,7 @@ function renderInline(text: string, state: InlineState): string {
     return `<code>${state.code[Number(i)] ?? ''}</code>`;
   });
 
+  out = out.replace(/\u0000M(\d+)\u0000/g, (_m, i: string) => state.math[Number(i)] ?? '');
   return out;
 }
 
@@ -176,7 +189,7 @@ export function renderMarkdown(source: string, options: MarkdownOptions = {}): s
 
   const lines = escaped.split('\n');
   const out: string[] = [];
-  const inline: InlineState = { code: [], tags: [], options };
+  const inline: InlineState = { code: [], math: [], tags: [], options };
   let paragraph: string[] = [];
 
   const flushParagraph = () => {
@@ -208,6 +221,24 @@ export function renderMarkdown(source: string, options: MarkdownOptions = {}): s
       ) - 1;
       out.push(`\u0000F${idx}\u0000`);
       continue;
+    }
+
+    // Display TeX: \[...\] or $...$, plus the standalone
+    // [ ... ] shape sometimes returned by chat models for DCF equations.
+    const mathOpen = line.trim();
+    if (mathOpen === '\\[' || mathOpen === '$' || mathOpen === '[') {
+      const close = mathOpen === '$' ? '$' : mathOpen === '[' ? ']' : '\\]';
+      let j = i + 1;
+      while (j < lines.length && j - i <= 30 && lines[j].trim() !== close) j++;
+      const formula = lines.slice(i + 1, j).join('\n').trim();
+      if (j < lines.length && lines[j].trim() === close && formula.length <= 2000 &&
+        (mathOpen !== '[' || /\\(?:frac|text|times|sum|sqrt|mathrm)/.test(formula))) {
+        flushParagraph();
+        const idx = fences.push(renderFormula(unescapeHtml(formula), true)) - 1;
+        out.push('\u0000F' + idx + '\u0000');
+        i = j;
+        continue;
+      }
     }
 
     // Horizontal rule
