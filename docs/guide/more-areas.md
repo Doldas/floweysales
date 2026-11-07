@@ -49,3 +49,13 @@ For administrators. Theses and evidence shared by everyone on this workspace. Pi
 ## Notifications
 
 Email alerts for tracker signals: golden and death crosses and stop-loss events. You choose which trackers and events send an email; nothing is sent until you subscribe. Needs the administrator's mail configuration. See [Settings and roles](settings.md).
+
+
+### Workspace rich-text tables
+
+The shared Markdown editor now includes **Insert table** in Rich text mode. It creates an editable two-column starter table; changing its cells saves ordinary GitHub-Flavored Markdown in the original `.md` file. Use **Edit source** for advanced table alignment, merged cells, footnotes or unsupported structures: the editor intentionally refuses lossy rich-text editing for those constructs rather than silently discarding them.
+
+
+### Mathematical Markdown and source fidelity
+
+When a Workspace Markdown file contains TeX formulas (`\(...\)`, `\[...\]`, `$x^2$`, or `$$...$$`), Rich text is disabled to protect the original LaTeX from a lossy HTML-to-Markdown conversion. **Preview** continues to use the shared math renderer; **Edit source** preserves every delimiter and equation. Ordinary prices such as `$3.07 bn` are not treated as TeX. Code fences and inline code remain editable.

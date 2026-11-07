@@ -71,6 +71,7 @@ export const RICH_TEXT_LIMIT = 400_000;
             <span class="md-sep" aria-hidden="true"></span>
             <button type="button" class="md-tool" (click)="command('insertUnorderedList')" aria-label="Bulleted list" title="Bulleted list"><i class="bi bi-list-ul" aria-hidden="true"></i></button>
             <button type="button" class="md-tool" (click)="command('insertOrderedList')" aria-label="Numbered list" title="Numbered list"><i class="bi bi-list-ol" aria-hidden="true"></i></button>
+            <button type="button" class="md-tool" (click)="insertTable()" aria-label="Insert table" title="Insert a two-column table"><i class="bi bi-table" aria-hidden="true"></i></button>
             <button type="button" class="md-tool" (click)="block('blockquote')" aria-label="Quote" title="Quote"><i class="bi bi-quote" aria-hidden="true"></i></button>
             <button type="button" class="md-tool" (click)="command('insertHorizontalRule')" aria-label="Horizontal rule" title="Horizontal rule"><i class="bi bi-hr" aria-hidden="true"></i></button>
           </div>
@@ -282,6 +283,21 @@ export class MarkdownEditorComponent {
   protected block(tag: string): void {
     this.richEl()?.nativeElement.focus();
     document.execCommand('formatBlock', false, tag);
+    this.onRichInput();
+  }
+
+  /** Inserts only a fixed, safe table; richTextBlockers and the shared
+   * HTML-to-Markdown serializer keep all edits in the original .md file. */
+  protected insertTable(): void {
+    if (this.disabled() || this.blockers().length || this.mode() !== 'rich') return;
+    const el = this.richEl()?.nativeElement;
+    if (!el) return;
+    el.focus();
+    // No user data is interpolated into HTML. The common serializer converts
+    // this table to a GitHub-Flavored Markdown table on the input event.
+    document.execCommand('insertHTML', false,
+      '<table><thead><tr><th>Column 1</th><th>Column 2</th></tr></thead>' +
+      '<tbody><tr><td>Value 1</td><td>Value 2</td></tr></tbody></table><p></p>');
     this.onRichInput();
   }
 

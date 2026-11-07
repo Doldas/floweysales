@@ -52,6 +52,22 @@ export function usageLine(u: SearchUsage): string {
   return parts.join(' · ');
 }
 
+/** Aggregate search charges and calls without mixing estimated USD with provider invoices.
+ * A provider's usage may be unknown; this only sums reported counters. */
+export function searchUsageTotals(providers: readonly SearchProviderState[]): { today: SearchUsage; month: SearchUsage } {
+  const empty = (): SearchUsage => ({ searches: 0, prompt_tokens: 0, output_tokens: 0, est_cost_usd: 0, failures: 0 });
+  const today = empty(), month = empty();
+  for (const p of providers) {
+    for (const [dest, src] of [[today, p.usage_today], [month, p.usage_month]] as const) {
+      for (const key of ['searches', 'prompt_tokens', 'output_tokens', 'est_cost_usd', 'failures'] as const) {
+        const n = src?.[key];
+        if (typeof n === 'number' && Number.isFinite(n) && n >= 0) dest[key] += n;
+      }
+    }
+  }
+  return { today, month };
+}
+
 /** Every displayed time is UTC. Takes an ISO timestamp and never converts to the viewer's zone. */
 export function utcTime(iso: string | undefined): string {
   if (!iso || iso.startsWith('0001')) return '';
