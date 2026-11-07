@@ -8,6 +8,11 @@ publishes the section for the tagged version as the release notes. See
 
 ## Unreleased
 
+- Fix: `httpx` waits for a 429 `Retry-After` hint of up to 5 seconds before
+  retrying; a longer hint fails fast with the value in `StatusError.RetryAfter`.
+- Fix: `httpx.ToFloat` is strict. It rejects trailing text such as `12abc`,
+  NaN and Inf instead of returning a partial number. Plugins that relied on the
+  lenient parse must clean the value first.
 - Additive: release management gates (`compat.json`, API compatibility check,
   changelog-driven release notes). No API or protocol change.
 
