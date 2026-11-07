@@ -60,11 +60,11 @@ let nextId = 0;
     }
     .search-box:focus-within { border-color: var(--fs-accent); box-shadow: var(--fs-focus); }
     .search-icon { color: var(--fs-muted); }
-    .search-input { flex: 1 1 auto; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--fs-text); font-size: .875rem; }
+    .search-input { flex: 1 1 auto; min-width: 0; min-height: 1.75rem; border: 0; outline: 0; background: transparent; color: var(--fs-text); font-size: .875rem; }
     .search-input::placeholder { color: var(--fs-muted); }
     .provider-select {
       flex: 0 0 auto; border: 0; border-left: 1px solid var(--fs-border); background: transparent; color: var(--fs-muted);
-      font-size: .78rem; padding: .25rem .3rem .25rem .55rem; max-width: 7.5rem; outline: 0; cursor: pointer;
+      font-size: .78rem; padding: .25rem .3rem .25rem .55rem; max-width: min(7.5rem, 40%); min-width: 0; outline: 0; cursor: pointer;
     }
     .provider-select:focus-visible { color: var(--fs-text); box-shadow: var(--fs-focus); border-radius: 4px; }
     .provider-select option { background: var(--fs-surface); color: var(--fs-text); }

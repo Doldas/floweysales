@@ -314,8 +314,8 @@ const H_EQUITY = 160;
   display: flex; flex-direction: column; font-size: 0.85rem; small { color: var(--fs-muted); } }
 .pick:hover { background: var(--fs-surface-3); }
 .pick[aria-current='true'] { border-color: var(--fs-accent); background: var(--fs-accent-soft); }
-.main { display: grid; gap: 1rem; min-width: 0; }
-.panel { padding: 1rem 1.25rem; display: grid; gap: 0.9rem; min-width: 0; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; min-width: 0; }
+.panel { padding: 1rem 1.25rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.9rem; min-width: 0; }
 .panel-head { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: space-between; align-items: flex-start; }
 .panel h2 { font-size: 1.05rem; margin: 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
@@ -325,14 +325,14 @@ const H_EQUITY = 160;
 .custom-period { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; align-items: end; width: 100%; label { display: grid; gap: 0.15rem; font-size: 0.8125rem; color: var(--fs-muted); } }
 .saved-periods, .saved-chip { display: inline-flex; gap: 0.35rem; align-items: center; }
 .run-bar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; border-top: 1px solid var(--fs-border); padding-top: 0.8rem; }
-.cost { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--fs-muted); input { width: 5rem; } }
+.cost { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--fs-muted); input { width: 5rem; } }
 .now { font-size: 0.88rem; margin: 0; }
 .now.hit { color: var(--fs-pos); font-weight: 600; }
 .fit { display: grid; gap: 0.4rem; }
 .fit-params { display: grid; gap: 0.2rem; border: 0; padding: 0; margin: 0; }
 .fit-param { font-size: 0.85rem; display: flex; gap: 0.4rem; align-items: center; }
 .fit-controls { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-end; label { font-size: 0.78rem; color: var(--fs-muted); display: grid; gap: 0.15rem; } }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.6rem; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr)); gap: 0.6rem; }
 .tiles .fs-kpi { padding: 0.7rem 0.85rem; .fs-kpi-value { font-size: 1.1rem; } }
 .fs-kpi[data-tone='pos'] .fs-kpi-value { color: var(--fs-pos); }
 .fs-kpi[data-tone='neg'] .fs-kpi-value { color: var(--fs-neg); }

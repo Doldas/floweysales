@@ -131,12 +131,16 @@ type taskView struct {
 	// Sources, Audit and Removed are what the run retrieved, what the citation
 	// check found in its answer and what the block option removed; Evidence is
 	// the policy it ran under. Excerpts are cut to a preview.
-	Sources   []sources.Source   `json:"sources,omitempty"`
-	Audit     []sources.Finding  `json:"audit,omitempty"`
-	Removed   []sources.Finding  `json:"removed,omitempty"`
-	Claims    []sources.Claim    `json:"claims,omitempty"`
-	Evidence  *ai.EvidencePolicy `json:"evidence,omitempty"`
-	Resumable bool               `json:"resumable"`
+	Sources  []sources.Source   `json:"sources,omitempty"`
+	Audit    []sources.Finding  `json:"audit,omitempty"`
+	Removed  []sources.Finding  `json:"removed,omitempty"`
+	Claims   []sources.Claim    `json:"claims,omitempty"`
+	Evidence *ai.EvidencePolicy `json:"evidence,omitempty"`
+	// Answer is the last answer the agent gave (the model's text, which the
+	// block option may already have shortened), so a run can be exported with
+	// the sources and findings it rests on.
+	Answer    string `json:"answer,omitempty"`
+	Resumable bool   `json:"resumable"`
 }
 
 func newTaskView(t storage.AgentTask, withLedger bool) taskView {
@@ -148,6 +152,12 @@ func newTaskView(t storage.AgentTask, withLedger bool) taskView {
 			v.Ledger = cp.Ledger
 			v.Sources = sources.Compact(cp.Sources, len(cp.Sources), taskSourcePreview)
 			v.Audit, v.Removed, v.Claims, v.Evidence = cp.Audit, cp.Removed, cp.Claims, cp.Evidence
+			for i := len(cp.Messages) - 1; i >= 0; i-- {
+				if m := cp.Messages[i]; m.Role == "assistant" && len(m.ToolCalls) == 0 && strings.TrimSpace(m.Content) != "" {
+					v.Answer = m.Content
+					break
+				}
+			}
 		}
 	}
 	v.Resumable = t.Status != ai.TaskComplete

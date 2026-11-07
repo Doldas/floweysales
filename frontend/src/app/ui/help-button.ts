@@ -37,7 +37,7 @@ import { renderMarkdown } from '../markdown';
   `,
   styles: [`
     :host { display: inline-flex; vertical-align: middle; }
-    .help-btn { color: var(--fs-muted); font-size: .95rem; line-height: 1; padding: .15rem; border-radius: 50%; border: 0; background: none; }
+    .help-btn { color: var(--fs-muted); font-size: .95rem; line-height: 1; padding: .15rem; min-width: 1.5rem; min-height: 1.5rem; display: inline-grid; place-items: center; border-radius: 50%; border: 0; background: none; }
     .help-btn:hover { color: var(--fs-accent); }
     .help-btn:focus-visible { box-shadow: var(--fs-focus); outline: 0; }
     .help-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(26rem, 100vw); z-index: 1060; display: flex; flex-direction: column;

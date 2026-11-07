@@ -117,8 +117,8 @@ import { CLASS_LABELS, alertText, driftRows, driftText, heatStyle, riskBars, ris
   styles: [`
 :host { display: block; }
 .risk { display: grid; gap: 1rem; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.6rem; }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1rem; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: 0.6rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1rem; }
 .num { text-align: right; white-space: nowrap; }
 .note { font-size: 0.78rem; color: var(--fs-muted); }
 .bar { display: inline-block; width: 4rem; height: 6px; margin-left: 0.5rem; border-radius: 3px; background: var(--fs-surface-3); vertical-align: middle; overflow: hidden;

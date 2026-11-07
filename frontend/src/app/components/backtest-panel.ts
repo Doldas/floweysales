@@ -386,7 +386,7 @@ const CHART_H = 220;
 .bt-note { font-size: 0.75rem; color: var(--fs-muted); margin: 0; }
 .bt-assume { font-size: 0.8rem; margin: 0.5rem 0; ul { padding-left: 1.1rem; } summary { cursor: pointer; } }
 .bt-tag { font-size: 0.7rem; border: 1px solid var(--fs-border); border-radius: 999px; padding: 0 0.4rem; color: var(--fs-muted); &.off { color: var(--fs-warn, var(--fs-muted)); } }
-.bt-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.6rem; }
+.bt-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr)); gap: 0.6rem; }
 .bt-tiles .fs-kpi { padding: 0.7rem 0.85rem; .fs-kpi-value { font-size: 1.15rem; } }
 .fs-kpi[data-tone='pos'] .fs-kpi-value { color: var(--fs-pos); }
 .fs-kpi[data-tone='neg'] .fs-kpi-value { color: var(--fs-neg); }

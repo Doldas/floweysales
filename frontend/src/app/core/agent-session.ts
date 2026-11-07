@@ -393,6 +393,20 @@ export class AgentSession {
     void this.loadTasks();
   }
 
+  /**
+   * Fetches a saved task with its last answer, sources, findings and policy, for an export. Returns null when the
+   * task has no answer yet or cannot be read.
+   */
+  async taskForExport(id: number): Promise<{ title: string; answer: string; policy: EvidencePolicy | null; sources: AnswerSource[]; audit: AnswerFinding[]; removed: AnswerFinding[] } | null> {
+    try {
+      const res = await fetch(`/api/ai/tasks/${id}`, { credentials: 'same-origin' });
+      if (!res.ok) { this.error.set('The task could not be read.'); return null; }
+      const t = await res.json();
+      if (!t.answer) { this.error.set('This task has no answer to export yet.'); return null; }
+      return { title: t.title ?? '', answer: t.answer, policy: t.evidence ?? null, sources: t.sources ?? [], audit: t.audit ?? [], removed: t.removed ?? [] };
+    } catch { this.error.set('The task could not be read.'); return null; }
+  }
+
   async deleteTask(id: number): Promise<void> {
     try {
       const res = await fetch(`/api/ai/tasks/${id}`, { method: 'DELETE', credentials: 'same-origin' });

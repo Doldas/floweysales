@@ -110,6 +110,10 @@ type AgentOptions struct {
 	// it on cited sources the agent did not open; when nil, the data source's
 	// LinkChecker is used if it has one.
 	CheckLink sources.LinkChecker
+	// JSONAnswer says the final answer is a JSON document (a flow node with
+	// JSON output). The citation check then reads the document's string values
+	// as sentences, so markers and figures in the data are checked the same way.
+	JSONAnswer bool
 	// Now is the clock of the recency limit; zero means the current time. A
 	// test or an evaluation case fixes it.
 	Now time.Time
@@ -143,6 +147,7 @@ Rules:
 - For multi-step requests, track the requested deliverables and make clear which are finished, missing or estimated.
 - Be clear and concise; cite the date/range/provider used.
 - Tool results from search_web and get_sec_section carry a source_id such as S3. When a sentence states a figure or fact taken from one, end it with that marker, for example [S3]; never write a marker or URL a tool did not return. A search result you did not open is only a snippet: open it with read_source before relying on it, or say it is only a snippet instead of presenting it as the page's content.
+- Search results carry source_type, evidence_role, dates, a reporting period when one is stated, and why_ranked. A community post (evidence_role sentiment) shows what people say; use it for reaction and label it as such, and never as the source of revenue, EPS or another reported figure. A company's own release is evidence of what the company stated, not independent verification. A page's modified date is not its publication date. If a date is unknown, say it is unknown, and do not present a source for a different period than the one asked about as if it answered the question.
 - If a tool returns no data, say so and suggest an alternative provider or symbol.
 - If the user explicitly mentions a ticker/symbol in their question that differs from the UI context, ALWAYS use the symbol from the user's question. The UI context is only a fallback when the user doesn't specify a symbol.`
 
@@ -199,6 +204,9 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	// the sources it cites by link still resolve.
 	var lastClaims sources.ClaimReport
 	audit := func(answer string) []sources.Finding {
+		if opts.JSONAnswer {
+			answer = sources.JSONProse(answer)
+		}
 		auditOpts := policy.auditOptions()
 		auditOpts.Now = opts.Now
 		found := sources.AuditWith(answer, registry, auditOpts)
@@ -486,6 +494,12 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 					result = string(payload)
 				} else {
 					result = fmt.Sprintf(`{"error":%q}`, err.Error())
+				}
+			}
+			if err != nil && tc.Function.Name == "read_source" {
+				// A refused or failed read leaves the source a lead; it shows as such.
+				if failed, ok := registry.RecordReadFailure(tc.Function.Arguments, err.Error()); ok {
+					emit(Event{Type: "source", Sources: []sources.Source{failed}, CallID: callID})
 				}
 			}
 			if err == nil {
