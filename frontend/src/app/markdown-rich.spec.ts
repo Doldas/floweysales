@@ -136,3 +136,18 @@ test('content the rich editor cannot represent is named so the file stays in sou
   assert.ok(richTextBlockers('> a\n> > b').includes('nested blockquotes'));
   assert.ok(richTextBlockers('```\nnever closed').includes('an unclosed code fence'));
 });
+
+test('mathematical markup blocks lossy rich edits but keeps USD and fenced code editable', () => {
+  for (const md of [
+    '$$\\frac{1}{2}$$',
+    '$$\n\\text{TV}=31.3\n$$',
+    '\\[x^2+y^2\\]',
+    '\\(x^2\\)',
+    '$x^2$',
+  ]) assert.ok(richTextBlockers(md).includes('mathematical formulas'), md);
+  for (const md of [
+    'Price is $3.07 bn and $17.8 bn',
+    'Equations in code: ' + '\x60' + '\\(x^2\\)' + '\x60',
+    '\x60\x60\x60tex\n\\[\\frac{1}{2}\\]\n\x60\x60\x60',
+  ]) assert.ok(!richTextBlockers(md).includes('mathematical formulas'), md);
+});
