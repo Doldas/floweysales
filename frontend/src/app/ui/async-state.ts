@@ -24,14 +24,14 @@ export interface AsyncInput {
 
 export function asyncPhase(i: AsyncInput): AsyncPhase {
   if (i.error && !i.loading) return 'error';
-  if (i.loading) return i.elapsedMs >= SLOW_AFTER_MS ? 'slow' : 'loading';
+  if (i.loading) return Number.isFinite(i.elapsedMs) && i.elapsedMs >= SLOW_AFTER_MS ? 'slow' : 'loading';
   if (!i.hasData) return 'idle';
   return i.empty ? 'empty' : 'success';
 }
 
 /** Show a skeleton only for a load with nothing to show yet, after a short delay. */
 export function showSkeleton(i: AsyncInput): boolean {
-  return i.loading && !i.hasData && i.elapsedMs >= SKELETON_DELAY_MS;
+  return i.loading && !i.hasData && Number.isFinite(i.elapsedMs) && i.elapsedMs >= SKELETON_DELAY_MS;
 }
 
 /** "Still working… 12 s", or the plain stage; never a percentage that was not measured. */

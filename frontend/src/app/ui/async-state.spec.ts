@@ -80,3 +80,11 @@ test('invalid and skewed clocks never produce NaN status or false stalled warnin
   assert.equal(stallHint(Number.NaN, true), '');
   assert.equal(stallHint(Number.POSITIVE_INFINITY, false), '');
 });
+
+test('invalid timing measurements never trigger a slow state or skeleton', () => {
+  for (const elapsedMs of [NaN, Infinity, -Infinity]) {
+    const state = { loading: true, hasData: false, empty: false, error: '', elapsedMs };
+    assert.equal(asyncPhase(state), 'loading');
+    assert.equal(showSkeleton(state), false);
+  }
+});
