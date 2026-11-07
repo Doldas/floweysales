@@ -72,7 +72,7 @@ test('an answer with no sources says so', () => {
   assert.match(answerToMarkdown(buildAnswerExport({ answer: '', now })), /_No answer text\._[\s\S]*_The agent retrieved no sources\._/);
 });
 
-const member = (id: string, name: string, extra: object = {}) => ({ id, name, status: 'done' as const, streamed: '', final: '', steps: [], error: '', ...extra });
+const member = (id: string, name: string, extra: object = {}) => ({ id, name, status: 'done' as const, streamed: '', thinking: '', final: '', steps: [], error: '', ...extra });
 
 test('a team run exports every member and the chair with their own sources and findings', () => {
   const src = { id: 'S1', tool: 'search_web', class: 'web_page', access: 'listed', url: 'https://example.com/a?token=abc#x', title: 'Acme' };

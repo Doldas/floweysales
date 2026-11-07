@@ -92,6 +92,13 @@ func NewClient(baseURL, apiKey, model string) *Client {
 // to maxContinuations times and returned as one message, so the saved
 // conversation holds everything the user saw.
 func (c *Client) Complete(ctx context.Context, messages []Message, tools []Tool, onContent func(string)) (Message, error) {
+	return c.CompleteThinking(ctx, messages, tools, onContent, nil)
+}
+
+// CompleteThinking is Complete that also reports the model's reasoning as it
+// streams in. onThinking (may be nil) receives text a reasoning model sends
+// apart from its answer; it is for display only and never enters the transcript.
+func (c *Client) CompleteThinking(ctx context.Context, messages []Message, tools []Tool, onContent, onThinking func(string)) (Message, error) {
 	if c.BaseURL == "" {
 		return Message{}, errors.New("ai: no base URL configured")
 	}
@@ -99,7 +106,7 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []Tool,
 		return Message{}, errors.New("ai: no model configured")
 	}
 
-	msg, finishReason, err := c.completeOnce(ctx, messages, tools, onContent)
+	msg, finishReason, err := c.completeOnce(ctx, messages, tools, onContent, onThinking)
 	if err != nil {
 		return Message{}, err
 	}
@@ -116,7 +123,7 @@ func (c *Client) Complete(ctx context.Context, messages []Message, tools []Tool,
 		}
 		parts = append(parts, msg.Content)
 		messages = append(messages, msg, Message{Role: "user", Content: "Continue."})
-		msg, finishReason, err = c.completeOnce(ctx, messages, tools, onContent)
+		msg, finishReason, err = c.completeOnce(ctx, messages, tools, onContent, onThinking)
 		if err != nil {
 			return Message{}, err
 		}
@@ -153,12 +160,12 @@ func contextHint(messages []Message, tools []Tool, what string) string {
 // the finish_reason, and reports the token usage the endpoint sent. Usage is
 // asked for with stream_options; an endpoint that rejects that option gets
 // the request again without it, and its usage stays unknown.
-func (c *Client) completeOnce(ctx context.Context, messages []Message, tools []Tool, onContent func(string)) (Message, string, error) {
-	msg, fr, usage, err := c.send(ctx, messages, tools, onContent, c.OnUsage != nil)
+func (c *Client) completeOnce(ctx context.Context, messages []Message, tools []Tool, onContent, onThinking func(string)) (Message, string, error) {
+	msg, fr, usage, err := c.send(ctx, messages, tools, onContent, onThinking, c.OnUsage != nil)
 	var status *StatusError
 	if err != nil && c.OnUsage != nil && errors.As(err, &status) && (status.Code == 400 || status.Code == 422) &&
 		strings.Contains(strings.ToLower(status.Detail), "stream_options") {
-		msg, fr, usage, err = c.send(ctx, messages, tools, onContent, false)
+		msg, fr, usage, err = c.send(ctx, messages, tools, onContent, onThinking, false)
 	}
 	if err != nil {
 		return Message{}, "", err
@@ -169,7 +176,7 @@ func (c *Client) completeOnce(ctx context.Context, messages []Message, tools []T
 	return msg, fr, nil
 }
 
-func (c *Client) send(ctx context.Context, messages []Message, tools []Tool, onContent func(string), wantUsage bool) (Message, string, *Usage, error) {
+func (c *Client) send(ctx context.Context, messages []Message, tools []Tool, onContent, onThinking func(string), wantUsage bool) (Message, string, *Usage, error) {
 	if c.BaseURL == "" {
 		return Message{}, "", nil, errors.New("ai: no base URL configured")
 	}
@@ -256,6 +263,21 @@ func (c *Client) send(ctx context.Context, messages []Message, tools []Tool, onC
 			return Message{}, "", nil, errors.New("ai: empty response")
 		}
 		msg := one.Choices[0].Message
+		if onThinking != nil {
+			var extra struct {
+				Choices []struct {
+					Message struct {
+						ReasoningContent string `json:"reasoning_content"`
+						Reasoning        string `json:"reasoning"`
+					} `json:"message"`
+				} `json:"choices"`
+			}
+			if json.Unmarshal(raw, &extra) == nil && len(extra.Choices) > 0 {
+				if think := thinkingOf(extra.Choices[0].Message.ReasoningContent, extra.Choices[0].Message.Reasoning); think != "" {
+					onThinking(think)
+				}
+			}
+		}
 		fr := ""
 		if len(one.Choices) > 0 {
 			fr = one.Choices[0].FinishReason
@@ -266,7 +288,7 @@ func (c *Client) send(ctx context.Context, messages []Message, tools []Tool, onC
 		return msg, fr, one.Usage, nil
 	}
 
-	msg, fr, usage, err := c.readStream(body, onContent)
+	msg, fr, usage, err := c.readStream(body, onContent, onThinking)
 	if err != nil && stalled.Load() {
 		return Message{}, "", nil, errStalled
 	}
@@ -275,7 +297,7 @@ func (c *Client) send(ctx context.Context, messages []Message, tools []Tool, onC
 
 // readStream parses the SSE frames of a streaming completion and reassembles
 // content plus incremental tool-call fragments. Returns the message and the finish_reason.
-func (c *Client) readStream(body io.Reader, onContent func(string)) (Message, string, *Usage, error) {
+func (c *Client) readStream(body io.Reader, onContent, onThinking func(string)) (Message, string, *Usage, error) {
 	scan := bufio.NewScanner(body)
 	scan.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 
@@ -322,6 +344,9 @@ func (c *Client) readStream(body io.Reader, onContent func(string)) (Message, st
 			continue
 		}
 		delta := chunk.Choices[0].Delta
+		if think := thinkingOf(delta.ReasoningContent, delta.Reasoning); think != "" && onThinking != nil {
+			onThinking(think)
+		}
 		if delta.Content != "" {
 			content.WriteString(delta.Content)
 			if onContent != nil {

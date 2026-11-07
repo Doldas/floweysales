@@ -17,7 +17,7 @@ export const STANCE_ICON: Record<Stance, string> = { fits: 'bi-check-circle-fill
 export type MemberStep = ToolCall;
 export interface MemberState {
   id: string; name: string; status: 'waiting' | 'running' | 'done' | 'error';
-  streamed: string; final: string; stance?: Stance; steps: MemberStep[]; error: string;
+  streamed: string; /** The member's reasoning so far, shown apart from its answer. */ thinking: string; final: string; stance?: Stance; steps: MemberStep[]; error: string;
   /** The model this member answers with, from the server; it changes if a fallback takes over. */
   model?: string;
   /** Why the member has no tools, when that is so. */
@@ -27,7 +27,7 @@ export interface MemberState {
 }
 export interface TeamState { members: MemberState[]; chair: MemberState | null; finished: boolean; error: string; budget?: BudgetSummary }
 
-const blank = (id: string, name: string): MemberState => ({ id, name, status: 'waiting', streamed: '', final: '', steps: [], error: '' });
+const blank = (id: string, name: string): MemberState => ({ id, name, status: 'waiting', streamed: '', thinking: '', final: '', steps: [], error: '' });
 
 export function startTeam(members: { id: string; name: string }[], withChair: boolean): TeamState {
   return { members: members.map(m => blank(m.id, m.name)), chair: withChair ? blank('chair', 'Chair') : null, finished: false, error: '' };
@@ -49,6 +49,8 @@ export function applyTeamEvent(s: TeamState, ev: TeamEvent): TeamState {
       return ev.model ? patch(s, agent, m => ({ ...m, model: ev.model })) : s;
     case 'delta':
       return patch(s, agent, m => ({ ...m, streamed: m.streamed + (ev.content ?? '') }));
+    case 'thinking':
+      return patch(s, agent, m => ({ ...m, thinking: m.thinking + (ev.content ?? '') }));
     case 'tool_start':
       return patch(s, agent, m => ({ ...m, steps: startCall(m.steps, ev, Date.now(), m.name) }));
     case 'tool_result':
