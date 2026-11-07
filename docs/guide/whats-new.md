@@ -9,6 +9,9 @@ last-reviewed: 2026-11-06
 
 ## November 2026 release
 
+**Sources everywhere**
+- Prices, history, financial statements, SEC filings, valuations, backtests, strategy results, the wealth plan, portfolio risk and the Today briefing now show where they came from: provider, what was calculated and how, and the as-of and retrieval times in UTC. Open the **Source** button next to a figure. When no source was recorded it says "Source unknown" instead of guessing. Flow rows and agent tool results carry the same information. See [Where data comes from](provenance.md).
+
 **Agents**
 - Agent answers get a claim check: each cited sentence is compared with the cited text for company, metric, period, unit and direction, and shown as supported, contradicted, not proven or not checked, with the source passage under **Why is this claim supported?** See [Agents, teams and evidence](agents.md).
 

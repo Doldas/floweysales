@@ -135,7 +135,7 @@ func (r *Registry) Register(tool, callID, argsJSON, result string) (string, []So
 	case "delegate_to_team":
 		return r.registerDelegation(callID, result)
 	}
-	return result, nil
+	return attachToolProvenance(tool, result, time.Now()), nil
 }
 
 // ReadTarget resolves the source_id of a read_source call to the URL of a

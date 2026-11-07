@@ -59,7 +59,7 @@ func (e *Engine) registerPluginToolRoutes() {
 			// The plugin's message is shown to the caller; the input is never logged.
 			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		default:
-			writeJSON(w, http.StatusOK, result)
+			writeJSON(w, http.StatusOK, withProvenance(result, pluginProvenance(r.PathValue("plugin"), r.PathValue("tool"), time.Now().UTC())))
 		}
 	})
 }

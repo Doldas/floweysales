@@ -519,6 +519,7 @@ func tickPayload(record storage.TradingRecord) map[string]any {
 		"currency":   record.Currency,
 		"status":     record.Status,
 		"marketData": json.RawMessage(record.RawMarketJSON),
+		"provenance": recordProvenance(record),
 	}
 	if record.QuoteTime > 0 {
 		payload["quote_time"] = record.QuoteTime

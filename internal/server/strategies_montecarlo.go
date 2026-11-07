@@ -95,7 +95,7 @@ func (e *Engine) registerStrategyMonteCarloRoutes() {
 			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusOK, res)
+		writeJSON(w, http.StatusOK, withProvenance(res, strategyResultProvenance("montecarlo", res)))
 	})
 }
 

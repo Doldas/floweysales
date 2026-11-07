@@ -6,15 +6,29 @@ Which surfaces describe the origin of what they show, using the contract in
 | Surface | State | Notes |
 | --- | --- | --- |
 | World headlines (World page, company impact panel) | Covered | `provenance` on each headline, shown with `fs-source`. Web search results claim no publication time. |
-| Flow news rows | Planned | Rows should carry the same fact. |
-| Leaderboard | Partial | `provenance.fact` (the ranking, calculated, with method id and version), `provenance.universe_fact` (the list) and `metrics_source.fact` on each row (provider, price date, the provider's own page where the address follows from the provider and symbol), shown with `fs-source`. Data-age and bias statements are stated, not left implicit. Not covered: the Leaderboard flow node, the agent tool's rows and the per-metric fundamentals period. |
-| Quotes and feed status | Partial | Live ticks carry `poll_time` and, when known, `quote_time`, `delay_seconds`, `market_state` (with `market_basis`); `QuoteSnapshot` adds `market_session`. The feed status popover shows them. Session is computed from regular exchange hours for known tickers (no holidays) unless the provider states it. Not yet in the shared `provenance` format. |
-| Saved backtest runs | Partial | `provenance` on a saved run and in its JSON export: method id and version, production time, provider and last price date where recorded; `partial` for batch and settings checks, which do not record a provider. Shown with `fs-source`. Live (unsaved) backtests and the Strategies page are not yet covered. |
-| Strategy results | Planned | Calculated; needs method ids. |
-| Agent answers (chat) | Partial | See [agent-evidence.md](agent-evidence.md). Source registry and citation check for `search_web`, `read_source` and `get_sec_section` (`internal/sources`), in chat, agent teams and flow agent nodes. Sources a delegated team's members retrieved are registered when `delegate_to_team` returns (see [agent-personas.md](agent-personas.md#delegating-to-a-saved-team)). Sources are stored with task runs (checkpoint) and flow agent steps (run history). Other tools are not yet registered; a team chair's summary is not checked. |
-| Financial statements | Planned | |
+| Flow nodes (all rows) | Covered | Every data-producing investor node stamps each row with `provenance` (`flow_provenance.go`); select, only-new, report and notify nodes keep the fact the rows carry, and a report table ends with a Sources line naming the origins or the number of rows with an unknown source. News rows never invent a publication time. |
+| Leaderboard (page, flow node, agent tool) | Covered | `provenance.fact` (ranking, calculated, method id and version), `provenance.universe_fact` and `metrics_source.fact` per row on the page; the flow node stamps its rows; the agent tool returns `provenance`. Not covered: the per-metric fundamentals period (the row states the newest reported quarter, `ttm_through`). |
+| Quotes, history, ticks and feed status | Covered | `GET /api/quote`, `/api/history`, `/api/prices`, `/api/stats` and each streamed tick carry a shared `provenance` fact (provider, quote time as the as-of, poll or fetch time, provider page where known). A provider that gives no quote time gets none invented. The feed status popover still shows delay and session. |
+| Financial statements | Covered | `provenance` on `GET /api/financials` (provider, newest period end as-of) shown on the Financials page; SEC filings, facts and sections name EDGAR, the document, filing date and period. |
+| Saved and live backtests | Covered | Saved runs and exports (method id and version, time, provider, last price date; `partial` for batch and settings checks, which record no provider) and the live single, batch, Monte Carlo and sensitivity endpoints, shown with `fs-source`. |
+| Strategy results | Covered | Backtest, walk-forward and Monte Carlo results carry `provenance` with method ids `strategy.*`. |
+| Calculations (DCF, position size, wealth plan, portfolio analytics, positions, Today briefing) | Covered | Calculated facts naming inputs; assumptions (plan profile, DCF scenarios, risk settings) are stated as inputs, not observed values. Each Today part has its own fact. |
+| Plugin and domain-provider results | Covered | Observed, partial: the plugin is named as the provider and FloweySales says it does not verify the content. |
+| Agent tool results | Covered | `sources.ToolOrigins` classifies every tool; results of data tools get a `provenance` object, and a test fails when a tool is missing. Citable sources (search, read, SEC section, delegated teams) keep their numbered registry. |
+| Agent answers (chat, teams, tasks) | Partial | See [agent-evidence.md](agent-evidence.md). Answer text is model output; figures in prose are not traced back to a tool result. A team chair's summary is not citation-checked. |
 
-States: **Covered** (API and UI), **Planned** (not started).
+States: **Covered** (API and UI), **Partial** (some of it), **Exempt** (not data about markets or results, with a reason).
+
+## How coverage is measured (#204)
+
+The table is no longer only manual. `internal/server/provenance_registry.go` classifies every HTTP route as covered, partial or exempt with a reason, and `provenance_registry_test.go` reads the route table from the source and fails when:
+
+- a route is not classified (a new endpoint cannot ship without saying how its data is attributed);
+- a route marked covered no longer mentions provenance in its handler (or in the files it names);
+- a registry entry names a route that does not exist, or an exemption has no reason;
+- the share of fully covered data routes falls below 85%.
+
+Further guards: every investor flow node type must be classed as stamped or pass-through (`flow_provenance.go`); every agent tool must have an origin in `sources.ToolOrigins`; `frontend/src/app/core/provenance-surfaces.spec.ts` fails when a view stops binding `fs-source` to its provenance. Responses are serialized with the fact beside the data, so export (JSON, flow output) keeps it.
 
 ## Leaderboard regions (#209)
 

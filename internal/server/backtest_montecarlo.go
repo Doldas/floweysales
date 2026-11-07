@@ -158,7 +158,7 @@ func (e *Engine) registerBacktestMonteCarloRoutes() {
 			writeJSON(w, status, map[string]any{"error": strings.TrimSpace(err.Error())})
 			return
 		}
-		writeJSON(w, http.StatusOK, res)
+		writeJSON(w, http.StatusOK, withProvenance(res, liveBacktestProvenance("montecarlo", res)))
 	})
 }
 

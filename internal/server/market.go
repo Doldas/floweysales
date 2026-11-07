@@ -45,7 +45,7 @@ func (e *Engine) registerMarketRoutes() {
 			writeJSON(w, providerErrorStatus(err), map[string]any{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusOK, result)
+		writeJSON(w, http.StatusOK, withProvenance(result, researchProvenance(result, time.Now().UTC())))
 	})
 	e.mux.HandleFunc("GET /api/sec/section", func(w http.ResponseWriter, r *http.Request) {
 		ticker := r.URL.Query().Get("symbol")
@@ -60,7 +60,7 @@ func (e *Engine) registerMarketRoutes() {
 			writeJSON(w, 422, map[string]any{"error": err.Error()})
 			return
 		}
-		writeJSON(w, 200, result)
+		writeJSON(w, 200, withProvenance(result, secSectionProvenance(result)))
 	})
 	e.mux.HandleFunc("GET /api/providers", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, e.providers.Providers())
@@ -73,7 +73,7 @@ func (e *Engine) registerMarketRoutes() {
 			writeJSON(w, 502, map[string]any{"error": err.Error()})
 			return
 		}
-		writeJSON(w, 200, out)
+		writeJSON(w, 200, withProvenance(out, quoteProvenance(out)))
 	})
 	// Pure calculator; never creates orders or changes shared portfolio.
 	e.mux.HandleFunc("POST /api/valuation/dcf", func(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +96,7 @@ func (e *Engine) registerMarketRoutes() {
 			writeJSON(w, 422, map[string]any{"error": err.Error()})
 			return
 		}
-		writeJSON(w, 200, out)
+		writeJSON(w, 200, withProvenance(out, dcfProvenance(out, time.Now().UTC())))
 	})
 	e.mux.HandleFunc("GET /api/sec/filings", func(w http.ResponseWriter, r *http.Request) {
 		ticker := r.URL.Query().Get("symbol")
@@ -109,7 +109,7 @@ func (e *Engine) registerMarketRoutes() {
 			writeJSON(w, 502, map[string]any{"error": err.Error()})
 			return
 		}
-		writeJSON(w, 200, res)
+		writeJSON(w, 200, withProvenance(res, secFilingsProvenance(res)))
 	})
 	e.mux.HandleFunc("GET /api/sec/facts", func(w http.ResponseWriter, r *http.Request) {
 		ticker := r.URL.Query().Get("symbol")
@@ -122,7 +122,7 @@ func (e *Engine) registerMarketRoutes() {
 			writeJSON(w, 502, map[string]any{"error": err.Error()})
 			return
 		}
-		writeJSON(w, 200, res)
+		writeJSON(w, 200, withProvenance(res, secFactsProvenance(res)))
 	})
 	// --- PRICES & HISTORY ---
 
@@ -140,15 +140,16 @@ func (e *Engine) registerMarketRoutes() {
 		jList := make([]map[string]any, 0, len(records))
 		for _, rec := range records {
 			jList = append(jList, map[string]any{
-				"timestamp": rec.Timestamp,
-				"symbol":    rec.Symbol,
-				"provider":  rec.Provider,
-				"price":     rec.Price,
-				"stop_loss": rec.StopLoss,
-				"fast_ema":  rec.FastEMA,
-				"slow_ema":  rec.SlowEMA,
-				"currency":  rec.Currency,
-				"status":    rec.Status,
+				"timestamp":  rec.Timestamp,
+				"symbol":     rec.Symbol,
+				"provider":   rec.Provider,
+				"price":      rec.Price,
+				"stop_loss":  rec.StopLoss,
+				"fast_ema":   rec.FastEMA,
+				"slow_ema":   rec.SlowEMA,
+				"currency":   rec.Currency,
+				"status":     rec.Status,
+				"provenance": recordProvenance(rec),
 			})
 		}
 		writeJSON(w, http.StatusOK, jList)
@@ -158,7 +159,7 @@ func (e *Engine) registerMarketRoutes() {
 		corsHeader(w)
 		symbol := queryParam(r, "symbol", "BTC")
 		stats := e.db.GetSymbolStats(symbol)
-		writeJSON(w, http.StatusOK, stats)
+		writeJSON(w, http.StatusOK, withProvenance(stats, statsProvenance(symbol, time.Now().UTC())))
 	})
 
 	e.mux.HandleFunc("GET /api/symbols", func(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +198,7 @@ func (e *Engine) registerMarketRoutes() {
 			writeJSON(w, providerErrorStatus(err), map[string]any{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusOK, series)
+		writeJSON(w, http.StatusOK, withProvenance(series, historyProvenance(series, time.Now().UTC())))
 	})
 
 	// --- QUARTERLY FINANCIALS ---
@@ -220,7 +221,7 @@ func (e *Engine) registerMarketRoutes() {
 			writeJSON(w, providerErrorStatus(err), map[string]any{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusOK, res)
+		writeJSON(w, http.StatusOK, withProvenance(res, financialsProvenance(res, time.Now().UTC())))
 	})
 
 	// --- REALTIME STREAM (SSE) ---

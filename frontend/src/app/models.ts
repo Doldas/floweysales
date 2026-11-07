@@ -229,6 +229,8 @@ export interface HistoryPoint {
 
 /** Provider OHLC series served by GET /api/history. */
 export interface HistorySeries {
+  /** Where the data came from (internal/provenance.Fact), or absent when the server recorded none. */
+  provenance?: Provenance;
   symbol: string;
   provider: string;
   range: string;
@@ -260,6 +262,8 @@ export interface QuarterlyFinancial {
 
 /** Quarterly statements response envelope. */
 export interface FinancialsResponse {
+  /** Where the data came from (internal/provenance.Fact), or absent when the server recorded none. */
+  provenance?: Provenance;
   from_year?: number;
   to_year?: number;
   symbol: string;
@@ -480,6 +484,8 @@ export interface BacktestRebalance { date: string; holdings: string[]; turnover_
 
 /** The answer of GET /api/market/backtest. */
 export interface BacktestResult {
+  /** Where the data came from (internal/provenance.Fact), or absent when the server recorded none. */
+  provenance?: Provenance;
   universe: string;
   strategy: string;
   benchmark?: string;
@@ -651,7 +657,7 @@ export interface WealthPlan {
 }
 
 /** GET /api/plan, PUT /api/plan/profile and POST /api/plan/preview. */
-export interface PlanResponse { profile: PlanProfile | null; plan: WealthPlan | null }
+export interface PlanResponse { profile: PlanProfile | null; plan: WealthPlan | null; provenance?: Provenance }
 
 export interface PortfolioSuggestion { symbol: string; side: 'buy' | 'sell'; amount: number; reason: string }
 
@@ -675,6 +681,8 @@ export interface PortfolioAnalytics {
 }
 
 export interface PortfolioAnalyticsResponse {
+  /** Where the data came from (internal/provenance.Fact), or absent when the server recorded none. */
+  provenance?: Provenance;
   analytics: PortfolioAnalytics;
   benchmark: string;
   has_plan: boolean;
@@ -711,6 +719,8 @@ export interface EventsResponse { symbol: string; from: string; to: string; even
 /** GET /api/today: every part is optional (see internal/server/today.go). */
 export interface TodayBriefing {
   generated_at: string;
+  /** One fact per part, keyed "phase", "portfolio", "macro" and "worth_a_look.<part>". */
+  provenance?: Record<string, Provenance>;
   phase?: { id: string; name: string; probability_goal_pct: number; probability_label?: string; next_checklist_item?: string };
   macro?: { regime: 'risk_on' | 'caution' | 'risk_off'; reasons?: string; as_of?: string };
   portfolio?: { equity: number; unrealized_pnl: number; positions: number; day_change?: number; day_change_pct?: number; drawdown_from_peak_pct?: number; top_alert?: string };
@@ -761,6 +771,8 @@ export interface StrategyTrade {
 }
 export interface StrategyRunMetrics { cagr_pct: number; volatility_pct: number; sharpe: number; sortino: number; max_drawdown_pct: number; calmar: number }
 export interface StrategyRunResult {
+  /** Where the data came from (internal/provenance.Fact), or absent when the server recorded none. */
+  provenance?: Provenance;
   symbol: string; provider: string; range: string; generated_at: string; strategy: StrategyDef;
   config: { cost_bps: number; slippage_bps?: number }; parameters?: FitParameter[]; base_price: number; from: string; to: string; data_start?: string; data_end?: string; notice?: string;
   metrics: StrategyRunMetrics; buy_hold: StrategyRunMetrics; total_return_pct: number; buy_hold_return_pct: number;

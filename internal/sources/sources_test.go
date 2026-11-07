@@ -65,7 +65,7 @@ func TestSearchHitsAreListedAndSectionsAreRead(t *testing.T) {
 
 func TestUnknownToolsAndMalformedResultsPassThrough(t *testing.T) {
 	r := NewRegistry()
-	for _, c := range [][2]string{{"get_price_history", `{"a":1}`}, {"search_web", `not json`}, {"search_web", `{"results":[]}`}, {"get_sec_section", `{"error":"x"}`}} {
+	for _, c := range [][2]string{{"some_future_tool", `{"a":1}`}, {"get_price_history", `[1,2]`}, {"get_price_history", `{"error":"x"}`}, {"search_web", `not json`}, {"search_web", `{"results":[]}`}, {"get_sec_section", `{"error":"x"}`}} {
 		if out, added := r.Register(c[0], "c", "{}", c[1]); out != c[1] || len(added) != 0 {
 			t.Errorf("%s changed: %s", c[0], out)
 		}

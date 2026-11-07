@@ -793,7 +793,7 @@ func reportTable(input, title, columns string, limit int) (string, error) {
 		}
 		keys := make([]string, 0, len(rows[0]))
 		for k := range rows[0] {
-			if !seen[k] {
+			if !seen[k] && k != "provenance" { // shown in the Sources line below
 				keys = append(keys, k)
 			}
 		}
@@ -847,6 +847,7 @@ func reportTable(input, title, columns string, limit int) (string, error) {
 		}
 		b.WriteString("| " + strings.Join(cells, " | ") + " |\n")
 	}
+	b.WriteString(provenanceFooter(rows))
 	if err := checkFlowOutputSize("report table", b.Len()); err != nil {
 		return "", err
 	}
@@ -950,6 +951,14 @@ func splitFields(raw string) []string {
 // runInvestorNode executes one investor node. note, when set, is what the
 // run trace shows instead of the output.
 func (e *Engine) runInvestorNode(ctx context.Context, f storage.AgentFlow, n flowNode, depth int, input string) (output, note string, err error) {
+	output, note, err = e.runInvestorNodeRows(ctx, f, n, depth, input)
+	if err == nil {
+		output = stampFlowProvenance(n, e.parseProvider(n.Provider).String(), output, time.Now())
+	}
+	return output, note, err
+}
+
+func (e *Engine) runInvestorNodeRows(ctx context.Context, f storage.AgentFlow, n flowNode, depth int, input string) (output, note string, err error) {
 	switch n.Type {
 	case "screen":
 		output, err = screenRows(input, n.Rule, n.SortBy, n.Limit)
