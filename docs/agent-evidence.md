@@ -4,6 +4,8 @@ Issues #197, #201, #207 and #255. Plan: [Plan 3](plans/issues/3-evidence-and-pro
 
 ## What the agent records
 
+Every source also carries a `trust` block: source type, evidence role, dates kept apart, reporting period, evidence state and why it ranked where it did. See [Source trust, dates and ranking](source-trust.md).
+
 Each chat run keeps a registry of sources (`internal/sources`). `search_web` hits are **listed**: the agent saw a title and snippet, not the page. The `read_source` tool opens one hit by its `source_id`; the hit then becomes **read**, keeps its id, and the page text the model received is what the citation check compares figures against. `get_sec_section` results are **read** and carry the filing URL and accession. The model receives a `source_id` (S1, S2, ...) with each result and is asked to end a sentence with `[S3]` when the sentence rests on that source.
 
 The stream carries a `source` event for each source and a final `sources` event with all of them and the audit findings. The chat shows them in a Sources panel: findings first, then sources the agent read, then search results only.
@@ -23,6 +25,7 @@ A mechanical check, per sentence of the final answer:
 | `excluded_source` | A source of a type the evidence settings do not accept (see source types below) |
 | `stale` | A cited source published longer ago than the recency limit, or with no publication date to check |
 | `unreachable` | A cited link that no longer resolves (strict modes only) |
+| `sentiment_as_fact` | A financial figure (revenue, EPS, ...) stated as fact while every cited source is community discussion or opinion. See [Source trust](source-trust.md) |
 
 A passing answer is "citation checked". It is not "true": the check does not read whether prose supports a claim. The claim check below goes one step further for the cases it can decide with fixed rules.
 
@@ -138,7 +141,7 @@ The Sources panel offers **Export Markdown** and **Export JSON** for the latest 
 
 ## Not built yet
 
-Cross-checks against data-provider records and calculation tool inputs, an independent AI or NLI review recorded as an auditable secondary signal (never as proof), claim labels checked by the server (the model is asked to keep fact, calculation and opinion apart, nothing verifies it), an export of team and task runs (only the chat exports today), a per-claim view in team and flow-run screens (the data is stored with each flow step), an evidence mode saved per team, and a publication date for web search hits (so a recency limit can accept them). Sources of tools other than `search_web`, `read_source` and `get_sec_section` are not registered.
+Cross-checks against data-provider records and calculation tool inputs, an independent AI or NLI review recorded as an auditable secondary signal (never as proof), claim labels checked by the server (the model is asked to keep fact, calculation and opinion apart, nothing verifies it), an export of team and task runs (only the chat exports today), a per-claim view in team and flow-run screens (the data is stored with each flow step), an evidence mode saved per team. Sources of tools other than `search_web`, `read_source` and `get_sec_section` are not registered.
 
 ## Where to set it
 

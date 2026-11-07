@@ -426,3 +426,14 @@ func Rank(cands []*Candidate, o Options) ([]*Candidate, []Filtered) {
 	}
 	return out, filtered
 }
+
+var attributionWords = []string{"according to", "says", "said", "claim", "argue", "believe", "think", "commenters", "posters", "users", "redditors", "thread", "discussion", "post ", "posted", "sentiment", "opinion", "reaction", "speculat", "rumor", "rumour"}
+
+// IsUnattributedFinancialClaim reports whether a sentence states a financial
+// metric as fact, without attributing it to what people said. A sentence
+// like "Redditors argue revenue will double" is attributed; "Revenue was 5
+// billion" is not.
+func IsUnattributedFinancialClaim(sentence string) bool {
+	s := strings.ToLower(sentence)
+	return containsAny(s, financialWords) && !containsAny(s, attributionWords)
+}

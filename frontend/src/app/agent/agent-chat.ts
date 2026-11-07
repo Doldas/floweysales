@@ -2,7 +2,7 @@ import { answerToJson, answerToMarkdown, buildAnswerExport } from '../core/answe
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, effect, inject, input, signal, viewChild, OnInit } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
-import { EVIDENCE_MODES, auditSummary, claimFacts, claimsSummary, findingLabel, removedSummary, safeUrl, settingsSummary, sortClaims, sourceOrigin, spanOrigin, spanParts, splitSources, verdictLabel, whyLabel } from '../core/answer-sources';
+import { EVIDENCE_MODES, auditSummary, claimFacts, claimsSummary, findingLabel, removedSummary, safeUrl, settingsSummary, sortClaims, sourceOrigin, spanOrigin, spanParts, splitSources, verdictLabel, whyLabel, RANKING_PROFILES, sortSources, sourceCard, type AnswerSource } from '../core/answer-sources';
 import { AgentSession, type ChatEntry } from '../core/agent-session';
 import { renderMarkdown } from '../markdown';
 import { toolLabel } from '../components/agent-tools';
@@ -50,6 +50,11 @@ export class AgentChatComponent implements OnInit {
   readonly claimFacts = claimFacts;
   readonly spanParts = spanParts;
   readonly spanOrigin = spanOrigin;
+  readonly rankingProfiles = RANKING_PROFILES;
+  readonly rankingHint = computed(() => RANKING_PROFILES.find(p => p.id === this.session.evidenceSettings().rankingProfile)?.hint ?? '');
+  readonly sortBy = signal<'relevance' | 'date'>('relevance');
+  readonly card = sourceCard;
+  sorted(list: AnswerSource[]): AnswerSource[] { return sortSources(list, this.sortBy()); }
   link(url: string | undefined): string { return safeUrl(url); }
 
   /** Downloads the latest answer with its policy and sources as Markdown or JSON. */

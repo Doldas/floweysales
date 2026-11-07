@@ -17,6 +17,8 @@ last-reviewed: 2026-11-06
 **Web search**
 - Several web search providers can be set up together: free self-hosted SearXNG, Tavily, Brave, and Google Search through Gemini grounding (paid, only after an explicit approval and with spending ceilings). Automatic mode falls back in a set order with a limited number of tries; every skip and failure is listed. See [Settings and roles](settings.md).
 
+- Search results and sources are labeled by type (filing, company statement, news, analysis, community) and by what they can prove. Community posts such as Reddit stay discoverable as sentiment but never support a reported figure. Publication, update, file and retrieval dates are kept apart, unknown dates stay unknown, and each source has a **Why this source?** card. Choose Facts first, Balanced or Sentiment first and a freshness window under Evidence settings. See [Source trust](../source-trust.md).
+
 **Backtests**
 - Choose a custom period in UTC, test several lists and periods at once, and check how trading cost, holdings and rebalance interval change a result. See [Strategies and backtests](strategies.md).
 - The Strategies page can resample a replay's closed trades with a seed to show percentile bands and the spread of the worst fall. See [Strategies and backtests](strategies.md).

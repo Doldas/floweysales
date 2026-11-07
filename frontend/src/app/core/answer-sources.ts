@@ -7,6 +7,17 @@ export interface AnswerSource {
   member?: string;
   /** The web search provider that listed it, and "grounded_source" for a page Gemini cited. */
   search_provider?: string; result_type?: string;
+  /** Source type, evidence role, dates kept apart, period, evidence state and why it ranked where it did. */
+  trust?: SourceTrust;
+}
+export interface SourceTrust {
+  source_type: string; evidence_role: string; type_basis?: string;
+  published_at?: string; modified_at?: string; effective_at?: string; retrieved_at?: string;
+  file_created_at?: string; file_modified_at?: string; http_last_modified?: string;
+  date_source?: string; date_confidence?: string; date_notes?: string[];
+  period?: string; period_source?: string;
+  evidence_state?: string; access_note?: string;
+  rank?: number; why_ranked?: string[]; also_seen_at?: string[];
 }
 export interface AnswerFinding { kind: string; sentence: string; source?: string; detail: string }
 
@@ -47,6 +58,7 @@ const FINDING_LABELS: Record<string, string> = {
   unsupported_claim: 'Judgement not labeled as such',
   summary_figure_not_in_members: 'Figure in no member answer',
   summary_misattributed: 'Figure attributed to the wrong member',
+  sentiment_as_fact: 'Financial figure rests on discussion or opinion',
 };
 
 export function findingLabel(kind: string): string {
@@ -102,13 +114,28 @@ export function parseEvidenceMode(raw: string | null | undefined): EvidenceMode 
   return EVIDENCE_MODES.some(m => m.id === raw) ? (raw as EvidenceMode) : 'standard';
 }
 
+export type RankingProfile = 'facts_first' | 'balanced' | 'sentiment_first';
+export const RANKING_PROFILES: readonly { id: RankingProfile; label: string; hint: string }[] = [
+  { id: 'facts_first', label: 'Facts first', hint: 'Official and primary sources rank first. Community posts appear when the question asks for reaction.' },
+  { id: 'balanced', label: 'Balanced', hint: 'Community discussion counts more, but filings still win for reported figures.' },
+  { id: 'sentiment_first', label: 'Sentiment first', hint: 'Recent discussion ranks higher. It stays labeled as sentiment and never counts as a reported figure.' },
+];
+export function parseRankingProfile(raw: string | null | undefined): RankingProfile {
+  return RANKING_PROFILES.some(p => p.id === raw) ? (raw as RankingProfile) : 'facts_first';
+}
+
 export type SourceClass = 'primary_filing' | 'web_page';
 /** The mode and limits the server takes as `evidence` (see docs/agent-evidence.md). */
 export interface EvidencePolicy {
   mode: EvidenceMode; on_failure?: 'flag' | 'block'; max_age_days?: number; allow_classes?: SourceClass[]; deny_classes?: SourceClass[];
+  ranking_profile?: RankingProfile; search_window_days?: number;
 }
 /** What the settings form edits. */
-export interface EvidenceSettings { mode: EvidenceMode; block: boolean; maxAgeDays: number; filings: boolean; webPages: boolean }
+export interface EvidenceSettings {
+  mode: EvidenceMode; block: boolean; maxAgeDays: number; filings: boolean; webPages: boolean;
+  /** Order of web search results and the freshness window of "latest" searches (0 = none). */
+  rankingProfile: RankingProfile; searchWindowDays: number;
+}
 
 export const MAX_EVIDENCE_AGE_DAYS = 3650;
 
@@ -124,7 +151,10 @@ export function settingsFromPolicy(p: EvidencePolicy | null | undefined): Eviden
     : defaultTypes(mode);
   const deny = p?.deny_classes ?? [];
   const maxAge = Number(p?.max_age_days);
+  const win = Number(p?.search_window_days);
   return {
+    rankingProfile: parseRankingProfile(p?.ranking_profile),
+    searchWindowDays: Number.isInteger(win) && win > 0 && win <= MAX_EVIDENCE_AGE_DAYS ? win : 0,
     mode,
     block: p?.on_failure === 'block' && mode !== 'standard',
     maxAgeDays: Number.isInteger(maxAge) && maxAge > 0 && maxAge <= MAX_EVIDENCE_AGE_DAYS ? maxAge : 0,
@@ -135,8 +165,10 @@ export function settingsFromPolicy(p: EvidencePolicy | null | undefined): Eviden
 
 /** The request object for the settings; defaults are left out so the server applies its own. */
 export function policyFromSettings(s: EvidenceSettings): EvidencePolicy {
-  if (s.mode === 'standard') return { mode: 'standard' };
   const out: EvidencePolicy = { mode: s.mode };
+  if (s.rankingProfile !== 'facts_first') out.ranking_profile = s.rankingProfile;
+  if (s.searchWindowDays > 0) out.search_window_days = s.searchWindowDays;
+  if (s.mode === 'standard') return out;
   if (s.block) out.on_failure = 'block';
   if (s.maxAgeDays > 0) out.max_age_days = s.maxAgeDays;
   const def = defaultTypes(s.mode);
@@ -170,6 +202,7 @@ export function patchNodeEvidence(
 
 /** Why the settings cannot be used, or '' when they can. */
 export function settingsProblem(s: EvidenceSettings): string {
+  if (!Number.isInteger(s.searchWindowDays) || s.searchWindowDays < 0 || s.searchWindowDays > MAX_EVIDENCE_AGE_DAYS) return `The search window must be a whole number of days from 0 to ${MAX_EVIDENCE_AGE_DAYS}.`;
   if (s.mode === 'standard') return '';
   if (!Number.isInteger(s.maxAgeDays) || s.maxAgeDays < 0 || s.maxAgeDays > MAX_EVIDENCE_AGE_DAYS) return `The age limit must be a whole number of days from 0 to ${MAX_EVIDENCE_AGE_DAYS}.`;
   if (!s.filings && !s.webPages) return 'Choose at least one source type to count.';
@@ -259,4 +292,78 @@ export function spanOrigin(s: ClaimSpan): string {
   if (s.published_at) parts.push(`published ${s.published_at.slice(0, 10)}`);
   if (s.retrieved_at) parts.push(`retrieved ${s.retrieved_at.replace('T', ' ').replace(/(:\d\d)?Z$/, '')} UTC`);
   return parts.filter(Boolean).join(' · ');
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  official_filing: 'Official filing', exchange_announcement: 'Exchange announcement', government_data: 'Government data',
+  peer_reviewed: 'Peer-reviewed study', company_ir: 'Company investor relations', first_party_dataset: 'Data provider record',
+  established_news: 'Established news', professional_analysis: 'Professional analysis', community_social: 'Community / social',
+  marketing: 'Marketing', unknown: 'Unknown type',
+};
+const ROLE_LABELS: Record<string, string> = {
+  primary: 'Primary evidence', self_reported: 'Self-reported (what the party stated)', secondary: 'Secondary reporting',
+  opinion: 'Opinion', sentiment: 'Sentiment (what people say)', unknown: 'Role unknown',
+};
+const STATE_LABELS: Record<string, string> = {
+  snippet_only: 'Search snippet only', page_read: 'Page read', pdf_text: 'PDF text read',
+  vision_derived: 'Includes vision-derived content', access_denied: 'Access denied, not read', read_failed: 'Could not be read',
+};
+const DATE_SOURCE_LABELS: Record<string, string> = {
+  search_provider: 'search provider', json_ld: 'page structured data', meta_tag: 'page meta tag', time_element: 'page time element',
+  filing_index: 'filing index', pdf_cover: 'report cover', unknown: 'unknown',
+};
+
+export function sourceTypeLabel(t: string | undefined): string { return TYPE_LABELS[t ?? ''] ?? 'Unknown type'; }
+export function evidenceRoleLabel(r: string | undefined): string { return ROLE_LABELS[r ?? ''] ?? 'Role unknown'; }
+export function evidenceStateLabel(s: string | undefined, access?: string): string {
+  return STATE_LABELS[s ?? ''] ?? (access === 'read' ? 'Page read' : 'Search snippet only');
+}
+
+function day(v: string): string {
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(v);
+  return m ? m[1] : v;
+}
+
+/** The dates of a source, each labeled, with times in UTC. A missing date is shown as unknown, never as today. */
+export function sourceDates(t: SourceTrust | undefined): { label: string; value: string }[] {
+  if (!t) return [{ label: 'Published', value: 'unknown' }];
+  const src = DATE_SOURCE_LABELS[t.date_source ?? ''] ?? t.date_source;
+  const rows: { label: string; value: string }[] = [
+    { label: 'Published', value: t.published_at ? `${day(t.published_at)}${src && t.date_source !== 'unknown' ? ` (${src}, ${t.date_confidence ?? 'unknown'} confidence)` : ''}` : 'unknown' },
+  ];
+  if (t.modified_at) rows.push({ label: 'Updated', value: day(t.modified_at) });
+  if (t.effective_at) rows.push({ label: 'Data as of', value: day(t.effective_at) });
+  if (t.period) rows.push({ label: 'Report period', value: t.period });
+  if (t.file_created_at) rows.push({ label: 'File created', value: day(t.file_created_at) });
+  if (t.file_modified_at) rows.push({ label: 'File modified', value: day(t.file_modified_at) });
+  if (t.http_last_modified) rows.push({ label: 'HTTP Last-Modified', value: t.http_last_modified });
+  if (t.retrieved_at) rows.push({ label: 'Retrieved', value: `${t.retrieved_at.replace('T', ' ').replace(/(:\d\d)?(Z|[+-]00:00)$/, '')} UTC` });
+  return rows;
+}
+
+/** Everything a source card shows. File dates are only hints and are labeled so. */
+export function sourceCard(s: AnswerSource): {
+  type: string; role: string; state: string; denied: boolean; dates: { label: string; value: string }[]; notes: string[]; why: string[]; copies: string[];
+} {
+  const t = s.trust;
+  const notes = [...(t?.date_notes ?? [])];
+  if (t && !t.published_at && (t.file_created_at || t.file_modified_at || t.http_last_modified)) notes.push('File and server dates describe the file, not when the report was published.');
+  if (t?.access_note) notes.push(t.access_note);
+  return {
+    type: sourceTypeLabel(t?.source_type), role: evidenceRoleLabel(t?.evidence_role), state: evidenceStateLabel(t?.evidence_state, s.access),
+    denied: t?.evidence_state === 'access_denied', dates: sourceDates(t), notes, why: t?.why_ranked ?? [], copies: t?.also_seen_at ?? [],
+  };
+}
+
+/** Sort by the order the ranking gave, or by publication date with undated sources last. */
+export function sortSources<T extends AnswerSource>(list: readonly T[], by: 'relevance' | 'date'): T[] {
+  const rank = (s: T) => s.trust?.rank ?? Number.MAX_SAFE_INTEGER;
+  const time = (s: T) => { const v = Date.parse(s.trust?.published_at ?? s.published_at ?? ''); return Number.isNaN(v) ? null : v; };
+  return list.map((s, i) => ({ s, i })).sort((a, b) => {
+    if (by === 'date') {
+      const ta = time(a.s), tb = time(b.s);
+      if (ta !== tb) return ta === null ? 1 : tb === null ? -1 : tb - ta;
+    } else if (rank(a.s) !== rank(b.s)) return rank(a.s) - rank(b.s);
+    return a.i - b.i;
+  }).map(x => x.s);
 }

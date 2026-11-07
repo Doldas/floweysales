@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"floweysales/internal/ai"
 	"floweysales/internal/websearch"
 )
 
@@ -43,5 +44,12 @@ func (e *Engine) runWebSearch(ctx context.Context, query string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	return websearch.Render(outcome, acceptSearchURL)
+	// The ranking profile and freshness window are the user's, taken from the
+	// evidence policy of the run that is searching. Outside a run (a flow web
+	// search node) the default facts-first ranking applies.
+	var opts websearch.RenderOptions
+	if p, ok := ai.RunEvidencePolicy(ctx); ok {
+		opts.Profile, opts.WindowDays = p.RankingProfile, p.SearchWindowDays
+	}
+	return websearch.Render(outcome, acceptSearchURL, opts)
 }

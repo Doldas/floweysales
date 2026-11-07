@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/ledongthuc/pdf"
+
+	"floweysales/internal/sourcetrust"
 )
 
 const (
@@ -32,11 +34,12 @@ var readPageTitle = regexp.MustCompile(`(?is)<title\b[^>]*>(.*?)</title>`)
 // hosts, the resolved address pinned for the connection, and every redirect
 // checked again before it is followed.
 func (s engineSource) ReadPage(ctx context.Context, raw string) (string, error) {
-	body, final, isPDF, err := readPublicPage(ctx, raw)
+	body, final, isPDF, lastModified, err := readPublicPageH(ctx, raw)
 	if err != nil {
 		return "", err
 	}
 	out := map[string]any{"url": final}
+	htmlMarkup := ""
 	title, text := "", ""
 	var resolveNote string
 	if !isPDF {
@@ -44,19 +47,20 @@ func (s engineSource) ReadPage(ctx context.Context, raw string) (string, error) 
 			title = strings.TrimSpace(crawlerSpaces.ReplaceAllString(html.UnescapeString(crawlerTags.ReplaceAllString(m[1], " ")), " "))
 		}
 		text = htmlText(body)
+		htmlMarkup = body
 		// A report viewer or a thin landing page usually wraps a PDF on the
 		// same site. It is fetched through the same address checks as any
 		// page; a refusal (HTTP 403) stays a refusal and is never worked around.
 		if links := findPDFLinks(body, final); len(links) > 0 && (len(text) < viewerSparseChars || looksLikeViewer(final)) {
 			var lastErr error
 			for _, link := range links[:min(2, len(links))] {
-				pbody, pfinal, ispdf, perr := readPublicPage(ctx, link)
+				pbody, pfinal, ispdf, plm, perr := readPublicPageH(ctx, link)
 				if perr != nil {
 					lastErr = perr
 					continue
 				}
 				if ispdf {
-					body, isPDF = pbody, true
+					body, isPDF, lastModified, htmlMarkup = pbody, true, plm, ""
 					out["resolved_from"], out["document_url"] = final, pfinal
 					break
 				}
@@ -99,7 +103,25 @@ func (s engineSource) ReadPage(ctx context.Context, raw string) (string, error) 
 		}
 	}
 	out["title"], out["text"], out["truncated"] = title, text, truncated
-	out["retrieved_at"] = time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
+	out["retrieved_at"] = now.Format(time.RFC3339)
+	// Dates and period are kept apart: what the page states, the file's own
+	// dates and the HTTP header are separate fields, and only a stated report
+	// date or a page's structured date can become the publication date.
+	var created, modified string
+	if isPDF {
+		created, modified = pdfInfoDates([]byte(body))
+	}
+	read := (&sourcetrust.Meta{RetrievedAt: out["retrieved_at"].(string)}).ApplyPage(htmlMarkup, text, isPDF, created, modified, lastModified, now)
+	if v, ok := out["visual_evidence"].([]visualEvidence); ok && isPDF {
+		for _, ev := range v {
+			if len(ev.Observations) > 0 {
+				read.EvidenceState = sourcetrust.StateVisionDerived
+				break
+			}
+		}
+	}
+	out["read_meta"] = read
 	raw2, err := json.Marshal(out)
 	return string(raw2), err
 }
@@ -156,26 +178,33 @@ func readPageStatusError(status int, target *url.URL) error {
 // readPublicPage fetches an HTML, plain-text or PDF page, following at most
 // readPageMaxHops redirects. It returns the body and the address finally read.
 func readPublicPage(ctx context.Context, raw string) (string, string, bool, error) {
+	body, final, isPDF, _, err := readPublicPageH(ctx, raw)
+	return body, final, isPDF, err
+}
+
+// readPublicPageH is readPublicPage that also returns the Last-Modified header
+// of the final response, which is a weak hint about the file and nothing more.
+func readPublicPageH(ctx context.Context, raw string) (string, string, bool, string, error) {
 	current := raw
 	for hop := 0; hop <= readPageMaxHops; hop++ {
 		u, err := flowPublicURL(current)
 		if err != nil {
-			return "", "", false, err
+			return "", "", false, "", err
 		}
 		client, closeClient, err := flowPinnedClient(ctx, u)
 		if err != nil {
-			return "", "", false, err
+			return "", "", false, "", err
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 		if err != nil {
 			closeClient()
-			return "", "", false, err
+			return "", "", false, "", err
 		}
 		req.Header.Set("Accept", "text/html, text/plain, application/pdf")
 		resp, err := client.Do(req)
 		if err != nil {
 			closeClient()
-			return "", "", false, fmt.Errorf("HTTP request failed: %w", err)
+			return "", "", false, "", fmt.Errorf("HTTP request failed: %w", err)
 		}
 		if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 			loc := resp.Header.Get("Location")
@@ -183,7 +212,7 @@ func readPublicPage(ctx context.Context, raw string) (string, string, bool, erro
 			closeClient()
 			next, perr := url.Parse(loc)
 			if loc == "" || perr != nil {
-				return "", "", false, errors.New("the page redirected without a usable address")
+				return "", "", false, "", errors.New("the page redirected without a usable address")
 			}
 			current = u.ResolveReference(next).String()
 			continue
@@ -191,13 +220,13 @@ func readPublicPage(ctx context.Context, raw string) (string, string, bool, erro
 		defer closeClient()
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			return "", "", false, readPageStatusError(resp.StatusCode, u)
+			return "", "", false, "", readPageStatusError(resp.StatusCode, u)
 		}
 		kind := strings.ToLower(strings.Split(resp.Header.Get("Content-Type"), ";")[0])
 		isPDF := strings.Contains(kind, "application/pdf") || strings.Contains(kind, "application/x-pdf")
 		binary := strings.Contains(kind, "octet-stream") || strings.Contains(kind, "binary")
 		if !isPDF && !binary && !strings.Contains(kind, "text/html") && !strings.Contains(kind, "text/plain") && !strings.Contains(kind, "xhtml") {
-			return "", "", false, fmt.Errorf("cannot read content type %q; only HTML, plain text and PDF are supported", kind)
+			return "", "", false, "", fmt.Errorf("cannot read content type %q; only HTML, plain text and PDF are supported", kind)
 		}
 		limit := int64(readPageMaxBytes)
 		if isPDF || binary {
@@ -205,21 +234,41 @@ func readPublicPage(ctx context.Context, raw string) (string, string, bool, erro
 		}
 		body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 		if err != nil {
-			return "", "", false, err
+			return "", "", false, "", err
 		}
 		if (isPDF || binary) && int64(len(body)) > limit {
-			return "", "", false, errors.New("the PDF is larger than 8 MB")
+			return "", "", false, "", errors.New("the PDF is larger than 8 MB")
 		}
 		// Trust the bytes, not the label: a generic binary type is a PDF only
 		// by its magic number, and a labeled PDF that lacks it is refused.
 		if hasPDFMagic(body) {
 			isPDF = true
 		} else if binary {
-			return "", "", false, fmt.Errorf("cannot read content type %q; only HTML, plain text and PDF are supported", kind)
+			return "", "", false, "", fmt.Errorf("cannot read content type %q; only HTML, plain text and PDF are supported", kind)
 		}
-		return string(body), u.String(), isPDF, nil
+		return string(body), u.String(), isPDF, resp.Header.Get("Last-Modified"), nil
 	}
-	return "", "", false, errors.New("the page redirected too many times")
+	return "", "", false, "", errors.New("the page redirected too many times")
+}
+
+// pdfInfoDates reads CreationDate and ModDate from the PDF information
+// dictionary as RFC 3339. They describe the file, not the report, and are
+// weak hints. The parser gets untrusted input, so a panic yields nothing.
+func pdfInfoDates(data []byte) (created, modified string) {
+	defer func() {
+		if recover() != nil {
+			created, modified = "", ""
+		}
+	}()
+	r, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return "", ""
+	}
+	info := r.Trailer().Key("Info")
+	if info.IsNull() {
+		return "", ""
+	}
+	return sourcetrust.ParsePDFDate(info.Key("CreationDate").Text()), sourcetrust.ParsePDFDate(info.Key("ModDate").Text())
 }
 
 func hasPDFMagic(b []byte) bool {

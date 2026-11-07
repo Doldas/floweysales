@@ -1,6 +1,9 @@
 package sourcetrust
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // ForSearchResult builds the metadata of a search hit. Only what the provider
 // returned is used: a date from the provider is medium confidence (it may come
@@ -52,4 +55,57 @@ func (m *Meta) ApplyPage(markup, text string, isPDF bool, fileCreated, fileModif
 	}
 	m.Finish()
 	return m
+}
+
+// MergeRead folds the result of reading a source into the metadata it had as a
+// search hit. A date found on the page is checked against the provider's date
+// (disagreement is recorded, not resolved by guessing), file dates stay in
+// their own fields, and the evidence state moves from snippet to what was read.
+func (m *Meta) MergeRead(r *Meta, now time.Time) {
+	if r == nil {
+		return
+	}
+	m.SetPublished(r.PublishedAt, r.DateSource, r.DateConfidence, now)
+	m.SetModified(r.ModifiedAt, r.DateSource, now)
+	if r.EffectiveAt != "" {
+		m.EffectiveAt = r.EffectiveAt
+	}
+	for _, f := range []struct {
+		dst *string
+		v   string
+	}{{&m.FileCreatedAt, r.FileCreatedAt}, {&m.FileModifiedAt, r.FileModifiedAt}, {&m.HTTPLastModified, r.HTTPLastModified}} {
+		if f.v != "" {
+			*f.dst = f.v
+		}
+	}
+	for _, n := range r.DateNotes {
+		if !strings.HasPrefix(n, "only ") {
+			m.DateNotes = appendNote(m.DateNotes, n)
+		}
+	}
+	if r.Period != "" {
+		m.Period, m.PeriodSource = r.Period, r.PeriodSource
+	}
+	if r.RetrievedAt != "" {
+		m.RetrievedAt = r.RetrievedAt
+	}
+	if r.EvidenceState != "" {
+		m.EvidenceState = r.EvidenceState
+	}
+	m.Finish()
+}
+
+// MarkReadFailure records that a source could not be read. A refusal by the
+// site (HTTP 403 or 429) is its own state: the source stays a lead, and
+// nothing of it may be claimed as read.
+func (m *Meta) MarkReadFailure(reason string) {
+	low := strings.ToLower(reason)
+	switch {
+	case strings.Contains(low, "403") || strings.Contains(low, "429") || strings.Contains(low, "denied") || strings.Contains(low, "denying"):
+		m.EvidenceState = StateAccessDenied
+		m.AccessNote = "The site refused automated access; only the search snippet was seen."
+	default:
+		m.EvidenceState = StateReadFailed
+		m.AccessNote = "The page could not be read; only the search snippet was seen."
+	}
 }

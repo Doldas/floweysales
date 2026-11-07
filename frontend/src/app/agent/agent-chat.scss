@@ -160,3 +160,6 @@
   // On phones the label gives way to the summary, which is what the user needs to read.
   .settings-toggle .settings-label { display: none; }
 }
+
+.sources .source-list { list-style: none; padding-left: 0; .source-card { margin: 0 0 0.5rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--fs-border, #8883); } .badges { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0.2rem 0; } .why-source .facts { margin: 0.25rem 0; } }
+.sources .source-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0.4rem 0; select { max-width: 16rem; } }
