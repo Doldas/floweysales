@@ -138,7 +138,7 @@ export class BlueprintLibraryComponent {
  readonly canvasMenu = signal(false);
  readonly selectedTrigger = signal('');
  readonly triggerModel = computed(() => triggerDiagram(this.triggers()));
- readonly selectedTriggerInfo = computed(() => { const id = this.selectedTrigger().replace(/^(event|payload):/, ''); return this.triggers().find(t => t.event_key === id); });
+ readonly selectedTriggerInfo = computed(() => { const id = this.selectedTrigger().replace(/^(event|payload):/, ''); return this.triggers().find(t => String(t.id) === id); });
  readonly diagram = computed(() => functionDiagram(this.nodes(), this.edges(), { inputPorts, outputPorts }));
  onCanvasContextMenu(event: MouseEvent): void {
    event.preventDefault();
