@@ -59,6 +59,13 @@ export function provenanceLines(f: Provenance | null | undefined, format: (iso: 
 
 /** A link is only offered for http(s) addresses. */
 export function safeSourceUrl(f: Provenance | null | undefined): string {
-  const url = f?.url ?? '';
-  return /^https?:\/\//i.test(url) ? url : '';
+  const raw = f?.url ?? '';
+  try {
+    if (!raw || /[\\\u0000-\u001f\u007f]/.test(raw)) return '';
+    const parsed = new URL(raw);
+    if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password) return '';
+    return parsed.href;
+  } catch {
+    return '';
+  }
 }
