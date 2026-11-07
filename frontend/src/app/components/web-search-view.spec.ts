@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { searchUsageTotals, type SearchProviderState, test } from 'node:test';
 import { SEARCH_NAMES, attemptLine, formProblems, formatUsd, formFrom, kindHelp, moveProvider, providerBody, stateLabel, usageLine, utcTime } from './web-search-view.ts';
 import type { ProviderForm, SearchCatalogEntry, SearchProviderState } from './web-search-view.ts';
 
@@ -68,4 +68,17 @@ test('the save body never repeats a blank key and trims text', () => {
     free_monthly_searches: 0, input_per_mtok_usd: 0, output_per_mtok_usd: 0, daily_budget_usd: 0, monthly_budget_usd: 0, state: 'ready', status: {},
     usage_today: { searches: 0, prompt_tokens: 0, output_tokens: 0, est_cost_usd: 0, failures: 0 }, usage_month: { searches: 0, prompt_tokens: 0, output_tokens: 0, est_cost_usd: 0, failures: 0 } } as SearchProviderState;
   assert.equal(formFrom(state).api_key, '', 'the saved key never comes back into the form');
+});
+
+test('provider-wide summary sums calls and prices, ignoring missing/nonfinite counters', () => {
+  const sample = (searches: number, cost: number) => ({ searches, prompt_tokens: 120, output_tokens: 34, est_cost_usd: cost, failures: 1 });
+  const base = { usage_today: sample(2, 0.1), usage_month: sample(12, 0.5) } as SearchProviderState;
+  const second = { usage_today: sample(3, 0.2), usage_month: sample(25, 0.75) } as SearchProviderState;
+  const totals = searchUsageTotals([base, second]);
+  assert.equal(totals.today.searches, 5);
+  assert.equal(totals.month.searches, 37);
+  assert.equal(totals.today.est_cost_usd, 0.30000000000000004);
+  assert.equal(totals.month.est_cost_usd, 1.25);
+  assert.equal(totals.today.prompt_tokens, 240);
+  assert.equal(searchUsageTotals([]).today.searches, 0);
 });
