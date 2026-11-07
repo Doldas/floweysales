@@ -171,3 +171,12 @@ func TestClaimFindingsDoNotRepeatAnotherCheck(t *testing.T) {
 		t.Fatalf("block = %q, %+v", body, removed)
 	}
 }
+
+func TestSocialDiscussionCannotSolelyVerifyReportedFinancialFigure(t *testing.T) {
+ g := goldenNamed(t, "supported_table_revenue")
+ for i := range g.Sources { g.Sources[i].Class = ClassSocial }
+ result := VerifyClaims(g.Answer, registryFor(g.Sources), ClaimOptions{Strict: true, Now: fixedNow})
+ if len(result.Claims) != 1 { t.Fatalf("claims %+v", result.Claims) }
+ claim := result.Claims[0]
+ if claim.Verdict != Insufficient || claim.Code != CodeSocialOnly { t.Fatalf("a social post alone cannot verify revenue: %+v", claim) }
+}
