@@ -16,6 +16,8 @@ bottom of the visible area. Financials show labelled per-quarter cards on phones
 ranges, studies and tab bars scroll **within their own areas**, so the page never
 scrolls sideways.
 
+See [Workspace UX patterns](workspace-ux.md) for panes, density and the tablet and phone rules.
+
 Verification: the Angular production build and the Chromium `smoke:responsive`
 test run in CI. The test emulates a Samsung S24 (360 px, devicePixelRatio 3),
 other phones (320/384/600), tablets (768/1024) and desktop (1440). It checks
