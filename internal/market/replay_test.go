@@ -181,3 +181,15 @@ func TestReplayFinancialsMissingPeriods(t *testing.T) {
 		t.Fatalf("reports must be an empty list, not null: %#v", empty.Reports)
 	}
 }
+
+func TestReplayBackendFreezesCallerOwnedFixtures(t *testing.T) {
+ original := markettest.History(t, "history_nvda_1h.json")
+ b := markettest.New("YAHOO").Serve("YAHOO", "NVDA", original)
+ original.Points[len(original.Points)-1].Close = 999999
+ returned, err := b.History(context.Background(), "YAHOO", "NVDA", "1h")
+ if err != nil { t.Fatal(err) }
+ if returned.Points[len(returned.Points)-1].Close == 999999 { t.Fatal("a caller mutated the replay fixture after Serve") }
+ returned.Points[len(returned.Points)-1].Close = 123456
+ again, err := b.History(context.Background(), "YAHOO", "NVDA", "1h")
+ if err != nil || again.Points[len(again.Points)-1].Close == 123456 { t.Fatalf("replay return mutated future reads: %v", err) }
+}
