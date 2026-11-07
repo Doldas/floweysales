@@ -136,9 +136,45 @@ func annotateDiscovery(universe leaderboardUniverse, provider string, ranked []m
 		} else if universe.Source.Kind == "custom" {
 			why = "You supplied this symbol."
 		}
-		row["discovery"] = map[string]any{"why": why, "source": universe.Source.Name, "kind": universe.Source.Kind, "url": universe.Source.URL, "as_of": universe.Source.AsOf}
+		discovery := map[string]any{"why": why, "source": universe.Source.Name, "kind": universe.Source.Kind, "url": universe.Source.URL, "as_of": universe.Source.AsOf,
+			"list_id": universe.ID, "list_version": nil, "how": discoveryHow(universe)}
+		if universe.Source.Kind == "curated" || len(universe.Components) > 0 {
+			discovery["list_version"] = curatedUniversesVersion
+		}
+		if len(universe.Components) > 0 {
+			lists := []map[string]any{}
+			labels := []string{}
+			for _, c := range componentsOf(universe, symbol) {
+				lists = append(lists, map[string]any{"id": c.ID, "label": c.Label, "kind": c.Source.Kind, "source": c.Source.Name, "as_of": c.Source.AsOf, "rule": c.Source.Rule})
+				labels = append(labels, c.Label)
+			}
+			discovery["lists"] = lists
+			discovery["why"] = "On the Global scope because it is on the hand-picked " + strings.Join(labels, " and ") + " list; the maintainers chose it and no external record backs the choice."
+		}
+		row["discovery"] = discovery
+		row["identifier"] = identifierOf(universe, symbol)
+		rowProvider := provider
+		if dp, ok := row["data_provider"].(string); ok && dp != "" {
+			rowProvider = dp
+		}
 		priceAsOf, _ := row["as_of"].(string)
-		row["metrics_source"] = map[string]any{"provider": provider, "price_as_of": row["as_of"], "fundamentals_through": row["ttm_through"],
-			"record_url": providerRecordURL(provider, symbol), "fact": metricsFact(provider, symbol, priceAsOf)}
+		row["metrics_source"] = map[string]any{"provider": rowProvider, "price_as_of": row["as_of"], "fundamentals_through": row["ttm_through"],
+			"record_url": providerRecordURL(rowProvider, symbol), "fact": metricsFact(provider, symbol, priceAsOf)}
 	}
+}
+
+// discoveryHow is the rule that put a company on the list, in the words of
+// the query it answers: what was matched, against what, and as of when.
+func discoveryHow(u leaderboardUniverse) string {
+	switch {
+	case len(u.Components) > 0:
+		return "Matched by exact symbol against " + strings.Join(u.Components, ", ") + " (universes.json version " + curatedUniversesVersion + "). Not a search or a screen."
+	case u.Source.Kind == "curated":
+		return "Matched by exact symbol on the list " + u.ID + " (universes.json version " + curatedUniversesVersion + "). Not a search or a screen."
+	case u.Source.Kind == "custom":
+		return "Matched by the symbol you typed or kept on your watchlist."
+	case u.Source.Kind == "index" || u.Source.Kind == "disclosure":
+		return "Matched by exact symbol in the recorded list " + u.ID + "; " + u.Source.Rule
+	}
+	return "Rule: " + u.Source.Rule
 }
