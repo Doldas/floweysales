@@ -407,8 +407,9 @@ func (e *Engine) registerOrderRoutes() {
 		corsHeader(w)
 		_, _, positions, summary := e.portfolioState()
 		writeJSON(w, http.StatusOK, map[string]any{
-			"positions": positions,
-			"summary":   summary,
+			"positions":  positions,
+			"summary":    summary,
+			"provenance": positionsProvenance(time.Now().UTC()),
 		})
 	})
 }

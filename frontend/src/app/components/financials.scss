@@ -1,7 +1,8 @@
 :host { display: block; min-width: 0; }
 
 .financials-card .card-header { padding-block: 0.85rem; }
-.fin-year-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.financials-card .card-header { flex-wrap: wrap; gap: 0.5rem; }
+.fin-year-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; min-width: 0; max-width: 100%; }
 .fin-year-selectors { display: flex; align-items: center; gap: 0.4rem; select { width: auto; } }
 .fin-year-divider { color: var(--fs-muted); }
 

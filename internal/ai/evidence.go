@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"floweysales/internal/sources"
+	"floweysales/internal/sourcetrust"
 )
 
 // Evidence modes. The empty mode is standard.
@@ -38,6 +39,13 @@ type EvidenceLimits struct {
 	// In primary_only mode with no allow list only primary filings count.
 	AllowClasses []string `json:"allow_classes,omitempty"`
 	DenyClasses  []string `json:"deny_classes,omitempty"`
+	// RankingProfile orders web search results: facts_first (the default),
+	// balanced or sentiment_first. It changes the order only, never what a
+	// source is: community posts stay sentiment in every profile.
+	RankingProfile string `json:"ranking_profile,omitempty"`
+	// SearchWindowDays is the freshness window for "latest" searches; older
+	// sources stay listed as a fallback, ranked lower. Zero means no window.
+	SearchWindowDays int `json:"search_window_days,omitempty"`
 }
 
 // EvidencePolicy is a mode with its limits: what a user chooses in the chat,
@@ -70,6 +78,12 @@ func (p EvidencePolicy) Validate() error {
 		}
 	default:
 		return fmt.Errorf("on_failure must be flag or block")
+	}
+	if !sourcetrust.ValidProfile(p.RankingProfile) {
+		return fmt.Errorf("ranking_profile must be facts_first, balanced or sentiment_first")
+	}
+	if p.SearchWindowDays < 0 || p.SearchWindowDays > MaxEvidenceAgeDays {
+		return fmt.Errorf("search_window_days must be between 0 and %d", MaxEvidenceAgeDays)
 	}
 	if p.MaxAgeDays < 0 || p.MaxAgeDays > MaxEvidenceAgeDays {
 		return fmt.Errorf("max_age_days must be between 0 and %d", MaxEvidenceAgeDays)

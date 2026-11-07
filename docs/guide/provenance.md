@@ -58,6 +58,10 @@ Until the leaderboard adopts the badge, it explains itself in three panels (see 
 - **A leaderboard score** says how a company compares within a list. It does not predict anything.
 - **A backtest** replays the past with stated biases. It is not evidence of future results.
 
+## Where to find the source
+
+Next to prices, history, financial statements, filings, valuations, backtests, strategy results, your plan, portfolio risk and each part of the Today briefing there is a **Source** button. It lists the provider, whether the value was reported, calculated, assumed or estimated, the method and its inputs for calculated values, and the as-of and retrieval times in UTC. "Source unknown" means nothing recorded where the value came from. Rows that flow nodes produce carry the same information in a `provenance` field, and a report table ends with a Sources line.
+
 ## Data freshness and coverage
 
 Prices and reports come from the provider plugins your administrator installed. Delayed data is labeled as such in the feed badge, and stale prices or old fundamentals are flagged on the leaderboard. Coverage differs by provider and market. The leaderboard lists only regions whose lists were checked against the provider. When data is missing, the screen says so.

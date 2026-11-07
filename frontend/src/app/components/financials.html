@@ -44,6 +44,7 @@
         } @else if (!hasReports()) {
           <div class="alert alert-secondary d-flex gap-2 mb-0"><i class="bi bi-info-circle"></i><span>{{ note() }}</span></div>
         } @else {
+          <p class="small text-muted mb-2">Quarterly figures <fs-source [fact]="data()?.provenance" /></p>
           <div class="fin-trend" aria-label="Revenue by quarter, oldest to newest">
             @for (bar of trend(); track bar.period) {
               <div class="fin-bar" [title]="bar.period + ': ' + bar.label">

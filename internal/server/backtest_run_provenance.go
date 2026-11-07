@@ -29,22 +29,34 @@ var backtestMethodFormula = map[string]string{
 // filled in.
 func backtestRunProvenance(run storage.BacktestRun) provenance.Fact {
 	formula, kindOK := backtestMethodFormula[run.Kind]
+	if !kindOK {
+		return provenance.Unspecified("The saved result cannot be read, so its origin is unknown.")
+	}
+	return resultProvenance("backtest."+run.Kind, backtestMethodVersion, formula, backtestNote, []byte(run.Result), fmt.Sprintf("backtest_run:%d", run.ID))
+}
+
+const backtestNote = "Computed from provider prices and reported quarters. Dividends are not included and the universe is today's list, so survivorship bias applies."
+
+// resultProvenance is the origin of any calculated result whose JSON records
+// "provider", "generated_at" and "data_end": backtests, strategy runs and fits.
+// A value the result does not record is left out and the status is "partial".
+func resultProvenance(methodID, version, formula, note string, result []byte, runID string) provenance.Fact {
 	var doc struct {
 		Provider    string `json:"provider"`
 		GeneratedAt string `json:"generated_at"`
 		DataEnd     string `json:"data_end"`
 	}
-	if !kindOK || json.Unmarshal([]byte(run.Result), &doc) != nil {
-		return provenance.Unspecified("The saved result cannot be read, so its origin is unknown.")
+	if json.Unmarshal(result, &doc) != nil {
+		return provenance.Unspecified("The result cannot be read, so its origin is unknown.")
 	}
 
 	f := provenance.Fact{
 		Kind:   provenance.Calculated,
 		Status: provenance.Known,
-		Method: &provenance.Method{ID: "backtest." + run.Kind, Version: backtestMethodVersion, Formula: formula},
-		RunID:  fmt.Sprintf("backtest_run:%d", run.ID),
+		Method: &provenance.Method{ID: methodID, Version: version, Formula: formula},
+		RunID:  runID,
 	}
-	notes := []string{"Computed from provider prices and reported quarters. Dividends are not included and the universe is today's list, so survivorship bias applies."}
+	notes := []string{note}
 	if doc.Provider != "" {
 		f.Provider = doc.Provider
 		f.Inputs = []string{"provider:" + doc.Provider}

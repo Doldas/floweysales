@@ -34,8 +34,19 @@ func TestFlowAgentEvidenceModeIsValidatedAndApplied(t *testing.T) {
 	bad := map[string]flowNode{
 		"unknown mode":     {ID: "a", Type: "agent", Evidence: &ai.EvidencePolicy{Mode: "strict"}},
 		"block w/o strict": {ID: "a", Type: "agent", Evidence: &ai.EvidencePolicy{EvidenceLimits: ai.EvidenceLimits{OnFailure: "block"}}},
-		"json output":      {ID: "a", Type: "agent", OutputMode: "json", Evidence: &ai.EvidencePolicy{Mode: ai.EvidenceOnly}},
+		"json and block":   {ID: "a", Type: "agent", OutputMode: "json", Evidence: &ai.EvidencePolicy{Mode: ai.EvidenceOnly, EvidenceLimits: ai.EvidenceLimits{OnFailure: ai.OnFailureBlock}}},
 		"not an agent":     {ID: "a", Type: "http", Evidence: strict},
+	}
+	// A strict mode now checks JSON output too; the check reads its string values.
+	jsonNode := flowNode{ID: "a", Type: "agent", OutputMode: "json", Tools: []string{"search_web"}, Evidence: &ai.EvidencePolicy{Mode: ai.EvidenceOnly}}
+	if err := validateFlowAgentTools(jsonNode); err != nil {
+		t.Fatalf("strict evidence with JSON output: %v", err)
+	}
+	if o := flowAgentOptions(jsonNode, "sys"); !o.JSONAnswer || !strings.Contains(o.SystemPrompt, "do not add fields") {
+		t.Fatalf("JSON nodes are checked as JSON and told where markers go: %+v", o)
+	}
+	if o := flowAgentOptions(node, "sys"); o.JSONAnswer || !strings.Contains(o.SystemPrompt, "source_id") {
+		t.Fatalf("a prose node with tools is told to cite sources: %+v", o)
 	}
 	for name, n := range bad {
 		if validateFlowAgentTools(n) == nil {

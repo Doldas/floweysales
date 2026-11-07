@@ -127,13 +127,38 @@
             </details>
           }
         }
+        @if (groups().read.length || groups().listed.length) {
+          <div class="source-sort"><label for="source-sort">Sort sources by</label>
+            <select id="source-sort" class="form-select form-select-sm" (change)="sortBy.set($any($event.target).value)">
+              <option value="relevance" [selected]="sortBy() === 'relevance'">Relevance for this question</option>
+              <option value="date" [selected]="sortBy() === 'date'">Publication date (newest first)</option>
+            </select></div>
+        }
         @if (groups().read.length) {
           <h4>Read by the agent</h4>
-          <ul>@for (s of groups().read; track s.id) { <li><span class="sid">[{{ s.id }}]</span> {{ s.title || s.url }} @if (link(s.url); as href) { <a [href]="href" target="_blank" rel="noopener noreferrer">open</a> } @if (s.document_id) { <span class="text-muted">{{ s.document_id }}</span> } @if (origin(s); as who) { <span class="text-muted">· {{ who }}</span> }</li> }</ul>
+          <ul class="source-list">@for (s of sorted(groups().read); track s.id) { <li class="source-card" [attr.data-state]="card(s).state">
+            <span class="sid">[{{ s.id }}]</span> {{ s.title || s.url }} @if (link(s.url); as href) { <a [href]="href" target="_blank" rel="noopener noreferrer">open</a> } @if (s.document_id) { <span class="text-muted">{{ s.document_id }}</span> } @if (origin(s); as who) { <span class="text-muted">· {{ who }}</span> }
+            <div class="badges"><span class="badge text-bg-light">{{ card(s).type }}</span> <span class="badge text-bg-light">{{ card(s).role }}</span> <span class="badge" [class.text-bg-danger]="card(s).denied" [class.text-bg-secondary]="!card(s).denied">{{ card(s).state }}</span></div>
+            <details class="why-source"><summary>Why this source?</summary>
+              <dl class="facts">@for (d of card(s).dates; track d.label) { <dt>{{ d.label }}</dt><dd>{{ d.value }}</dd> }</dl>
+              @for (n of card(s).notes; track n) { <p class="mb-1 text-muted">{{ n }}</p> }
+              @if (card(s).why.length) { <ul class="mb-1">@for (w of card(s).why; track w) { <li>{{ w }}</li> }</ul> }
+              @if (card(s).copies.length) { <p class="mb-1 text-muted">Also seen at (counted as one source): {{ card(s).copies.join(', ') }}</p> }
+            </details>
+          </li> }</ul>
         }
         @if (groups().listed.length) {
-          <h4>Search results only (title and snippet)</h4>
-          <ul>@for (s of groups().listed; track s.id) { <li><span class="sid">[{{ s.id }}]</span> {{ s.title || s.url }} @if (link(s.url); as href) { <a [href]="href" target="_blank" rel="noopener noreferrer">open</a> } @if (origin(s); as who) { <span class="text-muted">· {{ who }}</span> }</li> }</ul>
+          <h4>Search results only, or not readable (title and snippet)</h4>
+          <ul class="source-list">@for (s of sorted(groups().listed); track s.id) { <li class="source-card" [attr.data-state]="card(s).state">
+            <span class="sid">[{{ s.id }}]</span> {{ s.title || s.url }} @if (link(s.url); as href) { <a [href]="href" target="_blank" rel="noopener noreferrer">open</a> } @if (s.document_id) { <span class="text-muted">{{ s.document_id }}</span> } @if (origin(s); as who) { <span class="text-muted">· {{ who }}</span> }
+            <div class="badges"><span class="badge text-bg-light">{{ card(s).type }}</span> <span class="badge text-bg-light">{{ card(s).role }}</span> <span class="badge" [class.text-bg-danger]="card(s).denied" [class.text-bg-secondary]="!card(s).denied">{{ card(s).state }}</span></div>
+            <details class="why-source"><summary>Why this source?</summary>
+              <dl class="facts">@for (d of card(s).dates; track d.label) { <dt>{{ d.label }}</dt><dd>{{ d.value }}</dd> }</dl>
+              @for (n of card(s).notes; track n) { <p class="mb-1 text-muted">{{ n }}</p> }
+              @if (card(s).why.length) { <ul class="mb-1">@for (w of card(s).why; track w) { <li>{{ w }}</li> }</ul> }
+              @if (card(s).copies.length) { <p class="mb-1 text-muted">Also seen at (counted as one source): {{ card(s).copies.join(', ') }}</p> }
+            </details>
+          </li> }</ul>
         }
         <p class="mb-0 mt-2">
           <button type="button" class="btn btn-sm btn-outline-secondary" (click)="exportAnswer('md')"><i class="bi bi-markdown" aria-hidden="true"></i> Export Markdown</button>
@@ -187,6 +212,15 @@
       @if (evidenceHint(); as hint) { <div class="profile-note">{{ hint }}</div> }
       <details class="evidence-settings small">
           <summary>Evidence settings</summary>
+          <div class="evidence-grid">
+            <label for="ranking-profile">Search result ranking</label>
+            <select id="ranking-profile" class="form-select form-select-sm" [disabled]="session.streaming()" (change)="session.updateEvidence({ rankingProfile: $any($event.target).value })">
+              @for (p of rankingProfiles; track p.id) { <option [value]="p.id" [selected]="p.id === session.evidenceSettings().rankingProfile">{{ p.label }}</option> }
+            </select>
+            <label for="search-window">Latest-news window (days, 0 = none)</label>
+            <input id="search-window" type="number" min="0" max="3650" step="1" class="form-control form-control-sm" [disabled]="session.streaming()" [value]="session.evidenceSettings().searchWindowDays" (change)="session.updateEvidence({ searchWindowDays: +$any($event.target).value })">
+          </div>
+          <p class="mb-1 text-muted">{{ rankingHint() }} Older sources stay listed below the window; nothing is hidden. Community posts are always labeled sentiment and never count as reported figures.</p>
           @if (session.evidenceMode() !== 'standard') {
           <div class="evidence-grid">
             <label for="evidence-failure">A statement that still fails the check</label>
@@ -238,6 +272,8 @@
               @if (checklistLine(t.deliverables); as line) { <small>{{ line }}</small> }
               <div class="task-actions">
                 <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="session.streaming() || !canResume(t) || !session.canSend()" (click)="session.resumeTask(t)">Resume</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" (click)="exportTask(t, 'md')" [attr.aria-label]="'Export task ' + t.title + ' as Markdown'">Export Markdown</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" (click)="exportTask(t, 'json')" [attr.aria-label]="'Export task ' + t.title + ' as JSON'">Export JSON</button>
                 <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="session.streaming()" (click)="session.deleteTask(t.id)" [attr.aria-label]="'Delete task ' + t.title">Delete</button>
               </div>
             </li>

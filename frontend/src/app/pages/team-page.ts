@@ -7,6 +7,7 @@ import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { toolLabel } from '../components/agent-tools';
 import { KIND_LABEL, changeLabel, stalenessNote, summaryLine, usdCompact } from '../components/portfolio-view';
 import { EVIDENCE_MODES, findingLabel } from '../core/answer-sources';
+import { buildTeamExport, teamToJson, teamToMarkdown } from '../core/answer-export';
 import { STANCE_ICON, STANCE_LABEL, defaultQuestion, evidenceLine, shownText, stanceCounts, togglePersona, type MemberState } from '../components/team-view';
 import { defaultOptionLabel, profileOption, profileSummary } from '../components/profile-view';
 import { budgetLine } from '../components/team-budget';
@@ -200,6 +201,13 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
       }
     </div>
     @if (s.budget; as b) { <p class="muted" role="status" aria-label="What the run used">{{ budgetText(b) }}</p> }
+    @if (s.finished && s.members.length) {
+      <p class="export-row">
+        <button type="button" class="btn btn-sm btn-outline-secondary" (click)="exportRun('md')">Export Markdown</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" (click)="exportRun('json')">Export JSON</button>
+        <span class="muted">Every member's answer with its sources and citation check, the chair summary and the question. Times are UTC; links lose credentials.</span>
+      </p>
+    }
     <p class="muted">Each character only sees your question and its own tool results, never another's answer. Fictional characters; not investment advice.</p>
   }
 </div>
@@ -229,7 +237,7 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
 .page-search { flex: 0 1 380px; min-width: min(100%, 260px); }
 .panel { padding: 1rem 1.25rem; display: grid; gap: 0.8rem; min-width: 0; margin-bottom: 1rem; }
 h2 { font-size: 1rem; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; small { font-size: 0.75rem; font-weight: 400; color: var(--fs-muted); } }
-.cast { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.6rem; }
+.cast { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: 0.6rem; }
 .member { text-align: left; border: 1px solid var(--fs-border); background: var(--fs-surface); color: var(--fs-text); border-radius: 8px; padding: 0.6rem 0.75rem; display: grid; gap: 0.15rem; }
 .member small, .arch { color: var(--fs-muted); font-size: 0.78rem; }
 .member:hover:not(:disabled) { background: var(--fs-surface-3); }
@@ -255,6 +263,7 @@ h2 { font-size: 1rem; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; al
 .check { display: flex; gap: 0.4rem; align-items: center; font-size: 0.85rem; }
 .err { color: var(--fs-neg); font-size: 0.85rem; margin: 0; }
 .muted { color: var(--fs-muted); font-size: 0.8rem; margin: 0; }
+.export-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0 0 1rem; }
 .tally { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1rem; }
 .badge-stance { font-size: 0.72rem; font-weight: 600; padding: 0.1rem 0.5rem; border-radius: 999px; white-space: nowrap; }
 .badge-stance.fits { background: var(--fs-pos-soft); color: var(--fs-pos); }
@@ -315,6 +324,23 @@ export class TeamPage {
 
   toggle(id: string): void { this.team.selected.update(list => togglePersona(list, id, this.team.maxTeam())); }
   suggest(): void { this.team.question.set(defaultQuestion(this.market.trackedSymbol())); }
+
+  /** Downloads the finished run: question, each member's answer with its sources and findings, and the chair. */
+  exportRun(format: 'md' | 'json'): void {
+    const s = this.team.state();
+    if (!s) return;
+    const mode = this.team.evidence();
+    const exp = buildTeamExport({
+      question: this.team.question(), members: s.members, chair: s.chair,
+      policy: mode === 'default' ? null : { mode },
+    });
+    const blob = new Blob([format === 'json' ? teamToJson(exp) : teamToMarkdown(exp)], { type: format === 'json' ? 'application/json' : 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `team-answer-${exp.exported_at.slice(0, 19).replace(/[:T]/g, '-')}Z.${format}`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
 
   html(source: string): SafeHtml {
     let out = this.cache.get(source);

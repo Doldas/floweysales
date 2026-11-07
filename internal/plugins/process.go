@@ -123,8 +123,12 @@ func (p *process) alive() bool {
 	case <-p.done:
 		return false
 	default:
-		return true
 	}
+	// readLoop records the exit before it closes done. A process that has
+	// exited but whose done channel is not closed yet must not be reused.
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.exitErr == nil
 }
 
 // call sends one request and decodes its result into out (which may be nil).

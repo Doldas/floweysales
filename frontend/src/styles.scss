@@ -335,3 +335,29 @@ pre { color: var(--fs-text-2); }
   /* Spinners must not flicker at 0.01 ms: stop them. The adjacent status text still says it is working. */
   .spin, .spinner-border, .spinner-grow, .progress-bar-animated, .dots i { animation: none !important; }
 }
+
+/* Responsive hardening (#257): touch targets of at least 24 CSS px (WCAG 2.5.8) on touch-size screens,
+   and room for 200% text on phones. */
+/* A scroll area must contain its visually hidden labels, or they push the page sideways. */
+.table-responsive, .fs-scroll-x { position: relative; }
+@media (max-width: 1023.98px), (pointer: coarse) {
+  .btn { min-height: 2rem; }
+  .btn-sm { min-height: 1.75rem; }
+  select:not(.form-select):not(.form-control), .fs-native-forms :is(input:not([type='checkbox'], [type='radio']), select) { min-height: 1.75rem; }
+}
+@media (max-width: 1023.98px) {
+  /* Links that stand alone in a list item or cell, not inside a sentence. */
+  .fs-content :is(li, td) > a:not(.btn, .nav-link, .pick):first-child:last-child,
+  .fs-content td > a.fw-semibold,
+  .fs-content p > a:only-child { display: inline-block; min-height: 1.5rem; padding-block: 0.15rem; }
+}
+@media (max-width: 991.98px) {
+  /* viewport-fit=cover: keep content out of notches and the home indicator in landscape and portrait. */
+  .fs-content { padding-inline: env(safe-area-inset-left) env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
+}
+@media (max-width: 575.98px) {
+  .fs-content { overflow-wrap: anywhere; }
+  /* Labels may wrap instead of pushing the page wider than the screen (large text, long translations). */
+  .fs-content :is(.btn, .fs-chip, .fs-status) { white-space: normal; max-width: 100%; }
+  .fs-content select { max-width: 100%; }
+}

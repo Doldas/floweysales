@@ -2,7 +2,7 @@
 title: Flow Studio
 order: 6
 summary: Build saved, repeatable research automations with agents, data steps and approvals, and understand what runs when and who may do what.
-last-reviewed: 2026-11-06
+last-reviewed: 2026-11-07
 ---
 
 # Flow Studio
@@ -40,6 +40,7 @@ A flow has exactly one trigger and 2 to 16 nodes with 1 to 32 connections, and i
 - **Agent:** asks the model a question, with your prompt and the data wired into it. By default an agent node has no tools and answers from its input. It can be set to require that every figure in its answer matches a number in its input or in its tool results. This is a mechanical check against invented numbers, not a fact check.
 - **Data and investor nodes:** watchlist quotes, technical scan, fundamentals, SEC filings, news headlines, leaderboard, backtest, insider activity, macro regime, corporate events, portfolio check and wealth plan. These produce rows from provider data computed on the server.
 - **Logic and shaping:** If / Else, Merge, JSON field, Loop, Value, Transform, Screen (keep rows that match a rule), Only new since last run, Report table and Output. Any node can be set to skip when its input is empty.
+- **Citations in agent output:** an agent node that uses research tools ends its Markdown report with the sources it cites and links each `[S1]` marker to its source. A JSON agent node never carries markers in its data: they move to the step's source record in Run history (**Citations in the JSON output**, one line per value with the sources it cites), and the JSON contract is checked on the data without them. Evidence mode works for JSON nodes too (the check reads the text values); removing failing statements is not available for JSON, so a failing node fails and its retries apply. See [Agents, teams and evidence](agents.md).
 - **Web:** HTTP JSON/XML, web crawler and web search.
 - **Notify, Write file and Emit event:** change something outside the run and are reserved for administrators. See [Approvals](#approvals-and-the-inbox). An email from a Notify node uses the shared FloweySales design: Markdown (headings, emphasis, lists, tables), JSON and XML output are shown as readable sections, and the message includes the flow, run and send time in UTC. If a result is too long for one email, the message says how much is shown and where the full output is. See [Email rendering](../email-rendering.md).
 
