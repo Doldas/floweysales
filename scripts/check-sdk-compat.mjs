@@ -27,7 +27,12 @@ export function compareVersions(a, b) {
 }
 
 export function checkCombination(matrix, sdk, protocol) {
-  const row = matrix.protocols.find((p) => p.protocol === Number(protocol));
+  // The CLI must not coerce missing or malformed protocol names to zero.
+  const requested = typeof protocol === 'number' ? protocol : Number(protocol);
+  if (!Number.isSafeInteger(requested) || requested < 1 || String(protocol).trim() === '') {
+    return { ok: false, reason: `invalid protocol "${protocol}"` };
+  }
+  const row = matrix.protocols.find((p) => p.protocol === requested);
   if (!row) return { ok: false, reason: `protocol ${protocol} is not in the compatibility matrix` };
   if (row.status !== 'supported' && row.status !== 'deprecated') {
     return { ok: false, reason: `protocol ${protocol} is ${row.status}` };

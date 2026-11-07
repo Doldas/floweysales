@@ -31,3 +31,11 @@ test('validation catches drift and bad rows', () => {
   assert.ok(errs.some((e) => e.includes('sdkMin must be below')));
   assert.ok(errs.some((e) => e.includes('must be "supported"')));
 });
+
+test('invalid protocol selectors fail closed rather than coercing to another protocol', () => {
+  for (const bad of ['', '1.5', '1x', NaN, Infinity, -1]) {
+    const result = checkCombination(matrix, 'v0.1.0', bad);
+    assert.equal(result.ok, false, String(bad));
+  }
+  assert.equal(checkCombination(matrix, 'v0.1.0', '1').ok, true);
+});
