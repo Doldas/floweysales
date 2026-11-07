@@ -58,6 +58,18 @@ Once a list is in place the index shows the provider, the as-of date, how many s
 
 Open **Coverage by region** to see which of the six world regions have a list. A region is listed as covered only when a list is offered and its prices and reports have been checked. Asia, Africa, South America and Oceania show "No supported market yet". Nothing is filled in for them. A maintainer can run `go run ./cmd/universe-coverage` to check candidate lists against a provider before any region is added (see the repository's `docs/universe-coverage.md`).
 
+## Global scope, filters and comparison
+
+**Global** (the first list) is the combination of every hand-picked list that has a reviewed source. It reaches North America and Europe and nothing else: the other four regions have no checked list, so they are shown as "No supported market yet" and nothing stands in for them. A company on two lists appears once; the same company code on two exchanges (for example AZN.ST and AZN.L) stays two separate securities.
+
+Open **Scope** to narrow any list by region, country (two-letter code), exchange (market identifier code such as XSTO) and currency (such as SEK). A company outside the scope is not hidden: it is counted in "From list to ranking" as "Outside your filters" and named under "Left out" with the reason. A ticker that does not say where it trades cannot pass a region, country or exchange filter. Sector and liquidity filters are not offered, because the data provider returns neither.
+
+**What a score is compared with** is your choice. *Within each region* (the default for Global) takes percentiles among companies of the same region, so a Swedish company is judged against European companies and a US one against North American ones; the merged table is ordered by score, but scores of different regions were not measured against each other. *Across all companies* uses one pool. A region with fewer than five ranked companies is flagged "Few peers in region": a percentile among so few means little.
+
+**Currencies, accounting and time zones.** Prices are shown in each listing's own currency and no exchange rate is applied, because FloweySales has no rate source with a named provider and date. Ratios (P/E, margins, growth) are unaffected, but 12-month return, momentum and drawdown are in local currency, so a weak currency can flatter a company; **Across all companies** with several currencies warns about this. The accounting standard is not recorded per company, so each row shows the date its trailing figures run through. Exchanges close at different hours, so rows dated the same day can be hours apart; dates are UTC calendar days. The "Coverage and comparability" panel lists, per region, how many companies were listed and ranked, the price dates, the currencies, exchanges and the provider.
+
+Global cannot be backtested: one benchmark and one currency do not fit a mixed set. Backtest one list at a time.
+
 ## Reading the table
 
 Each row shows rank, company with a grade, the score, six small factor bars, the price, P/E, revenue growth year on year, 12-1 month momentum, distance from the 52-week high, RSI and a **Why it ranks** column.
@@ -66,6 +78,7 @@ Each row shows rank, company with a grade, the score, six small factor bars, the
 - **Grade** is a coarser reading of the score: A at 75 or more, B from 62, C from 48, D from 35, E below that.
 - **Factors:** Value, Quality, Growth, Momentum, Entry timing and Low risk. Hover over a bar to see its number; a flat bar means no data.
 - **Why it ranks** lists the biggest contributors, warning flags (for example Overbought, Below 200-day, Death cross, Unprofitable, Shrinking revenue, No fundamentals, Stale price, Old fundamentals), a **confidence** level with a note, and **Against**, the strongest competing explanations for the rank.
+- Under **Score breakdown**, "Why it is here" also states how the company was matched (by exact symbol on a named list and its version), its ISIN (or "not recorded": an ISIN is shown only when it has been verified), and which region it was compared with. When a second provider filled in or disagreed with the primary one, "Where its numbers come from" says so.
 - Select a row to open the company in Markets. **Score breakdown** shows every metric, its value, percentile and weight.
 
 When the table mixes data of different ages (some prices older than the newest, companies with no reported quarter, an old newest price, or a list with no review date), a warning above the table says so and the method panel lists the counts.

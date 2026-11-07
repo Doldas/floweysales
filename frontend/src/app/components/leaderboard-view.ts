@@ -10,7 +10,7 @@ export const FACTOR_LABELS: Record<string, string> = {
 
 export const FLAG_LABELS: Record<string, string> = {
   overbought: 'Overbought', below_sma200: 'Below 200-day', death_cross: 'Death cross', unprofitable: 'Unprofitable',
-  shrinking_revenue: 'Shrinking revenue', no_fundamentals: 'No fundamentals', stale_price: 'Stale price', stale_fundamentals: 'Old fundamentals',
+  small_comparison_group: 'Few peers in region', shrinking_revenue: 'Shrinking revenue', no_fundamentals: 'No fundamentals', stale_price: 'Stale price', stale_fundamentals: 'Old fundamentals',
 };
 
 /** Which flow playbook automates a strategy. */
@@ -105,7 +105,7 @@ export function coverageSummary(rows: Pick<LeaderboardRow, 'coverage_pct'>[], un
 }
 
 export const SOURCE_KIND_LABEL: Record<string, string> = {
-  curated: 'Hand-picked by the maintainers', disclosure: 'Public disclosure', custom: 'Supplied by you', index: 'Published market index',
+  curated: 'Hand-picked by the maintainers', composite: 'Union of reviewed lists', disclosure: 'Public disclosure', custom: 'Supplied by you', index: 'Published market index',
 };
 
 export function sourceKindLabel(kind: string | undefined): string {
@@ -132,8 +132,8 @@ function csvCell(v: unknown): string {
 
 /** The ranked companies with their listing, discovery source and metric sources, for export. */
 export function universeCsv(rows: LeaderboardRow[]): string {
-  const head = ['rank', 'symbol', 'exchange', 'mic', 'country', 'why_on_list', 'list_source', 'list_source_kind', 'list_source_url', 'list_as_of', 'provider', 'price_as_of', 'fundamentals_through', 'provider_record_url'];
-  const lines = rows.map(r => [r.rank, r.symbol, r.listing?.exchange, r.listing?.mic, r.listing?.country, r.discovery?.why, r.discovery?.source, r.discovery?.kind,
+  const head = ['rank', 'symbol', 'isin', 'exchange', 'mic', 'country', 'currency', 'compared_with', 'why_on_list', 'how_matched', 'list_source', 'list_source_kind', 'list_source_url', 'list_as_of', 'provider', 'price_as_of', 'fundamentals_through', 'provider_record_url'];
+  const lines = rows.map(r => [r.rank, r.symbol, r.identifier?.isin ?? 'not recorded', r.listing?.exchange, r.listing?.mic, r.listing?.country, r.currency, r.compared_with, r.discovery?.why, r.discovery?.how, r.discovery?.source, r.discovery?.kind,
     r.discovery?.url, r.discovery?.as_of, r.metrics_source?.provider, r.metrics_source?.price_as_of, r.metrics_source?.fundamentals_through, recordLink(r.metrics_source?.record_url)].map(csvCell).join(','));
   return [head.join(','), ...lines].join('\n') + '\n';
 }
