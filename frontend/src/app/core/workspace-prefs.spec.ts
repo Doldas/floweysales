@@ -87,3 +87,11 @@ test('windowing a 20000 row table draws a small fixed number of rows', () => {
   assert.ok(w.end - w.start < 40);
   assert.ok(WINDOW_THRESHOLD < 20000);
 });
+
+test('row window clamps nonfinite counts and invalid overscan without losing rows', () => {
+  assert.deepEqual(rowWindow(NaN, 0, 500, 40), { start: 0, end: 0, before: 0, after: 0 });
+  const normal = rowWindow(100, 80, 200, 40, 0);
+  const invalid = rowWindow(100, 80, 200, 40, -Infinity);
+  assert.deepEqual(invalid, normal);
+  assert.ok(normal.end > normal.start);
+});
