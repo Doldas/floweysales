@@ -40,6 +40,23 @@ The check is `go run ./cmd/universe-coverage`, which can be run offline (it vali
 with provider access, measures each candidate market against the bar. See [universe-coverage.md](universe-coverage.md). Until
 a maintainer has run it with access and written a reviewed list into `universes.json`, the regions stay unsupported.
 
+### Global scope and comparability (#209)
+
+`universe=global` is the union of the curated lists, so it reaches exactly the regions that have one (North America and
+Europe); it is not a list anyone chose and it redistributes no index constituents. Region, country, exchange and
+currency filters narrow any list, and every company a filter removes is named with the reason. Percentiles are taken within
+each region by default for `global`, or across one pool on request. Prices stay in local currency: there is no FX source,
+so no rate is applied and the response states that (`scope.comparability.fx`). Not done: an FX source with a named provider
+and date, per-company accounting standard, sector and liquidity filters, and a market in Asia or Africa; each needs
+provider access (see [universe-coverage.md](universe-coverage.md)).
+
+### Identity and providers (#208)
+
+A company's row carries `identifier.isin` only when an ISIN has been recorded and verified (checksum-validated) in
+`universes.json`; none is recorded today and the row says "not recorded". `discovery.how` states how it was matched and
+`list_version` names the version of the list. A second provider can fill companies the first could not load and flag price
+disagreements; the row names the provider that supplied its figures.
+
 ## Index universes (#258)
 
 The Leaderboard has an **Index** selector for S&P 500, Nasdaq-100 and OMX Stockholm 30 (OMXS30). The registry is data

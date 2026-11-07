@@ -37,9 +37,16 @@ export function showSkeleton(i: AsyncInput): boolean {
 /** "Still working… 12 s", or the plain stage; never a percentage that was not measured. */
 export function progressText(stage: string, elapsedMs: number, done: number | null = null, total: number | null = null): string {
   const parts = [stage];
-  if (done !== null && total !== null && total > 0) parts.push(`${Math.min(done, total)} of ${total}`);
+  if (progressFraction(done, total) !== null) parts.push(`${Math.min(done!, total!)} of ${total}`);
   if (elapsedMs >= SLOW_AFTER_MS) parts.push(`still working, ${Math.floor(elapsedMs / 1000)} s`);
   return parts.join(' · ');
+}
+
+/** Only measured, finite nonnegative progress is determinate.
+ * Zero/unknown totals are an indeterminate status, not a misleading 0% bar. */
+export function progressFraction(done: number | null, total: number | null): number | null {
+  if (done === null || total === null || !Number.isFinite(done) || !Number.isFinite(total) || done < 0 || total <= 0) return null;
+  return Math.min(1, done / total);
 }
 
 /** Elapsed time since `since` (epoch ms), never negative; 0 when the start is unknown. */

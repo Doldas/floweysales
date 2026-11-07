@@ -419,7 +419,9 @@ func (e *Engine) userFMPKey(ctx context.Context, userID int64) (key string, stat
 // universesFor is the shared universes plus the index lists this caller has
 // supplied, which only they can see.
 func (e *Engine) universesFor(ctx context.Context) []leaderboardUniverse {
-	out := append([]leaderboardUniverse(nil), leaderboardUniverses...)
+	g := globalUniverse()
+	g.Symbols = nil // the members are on the component lists; the response lists none twice
+	out := append([]leaderboardUniverse{g}, leaderboardUniverses...)
 	for _, d := range indexRegistry {
 		if snap, err := e.snapshotFor(ctx, d); err == nil && snap != nil {
 			out = append(out, definitionWith(d, snap).universe())
