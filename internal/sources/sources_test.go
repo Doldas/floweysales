@@ -187,3 +187,27 @@ func TestQuoteCheckLeavesShortQuotesAndEllipsesAlone(t *testing.T) {
 		t.Fatalf("uncited quote: %+v", got)
 	}
 }
+
+func TestSearchSourcesPreserveDateAndSeparateSocialSentiment(t *testing.T) {
+	r := NewRegistry()
+	_, hits := r.Register("search_web", "call-1", `{"query":"earnings and discussion"}`,
+		`{"provider":"brave","retrieved_at_utc":"2026-11-07T12:00:00Z","results":[
+		{"title":"Official financials","url":"https://www.sec.gov/filing","published_at":"2026-11-06","modified_at":"2026-11-07","snippet":"Revenue"},
+		{"title":"Investor discussion","url":"https://www.reddit.com/r/stocks/post","published_at":"2026-11-07T08:00:00Z","snippet":"I think shares rise"},
+		{"title":"Unknown date","url":"https://example.org/analysis","published_at":"yesterday","modified_at":"bad","snippet":"Old opinion"}]}`)
+	if len(hits) != 3 {
+		t.Fatalf("expected 3 results: %+v", hits)
+	}
+	if hits[0].Class != ClassWebPage || hits[0].PublishedAt != "2026-11-06" || hits[0].ModifiedAt != "2026-11-07" {
+		t.Fatalf("wrong official metadata: %+v", hits[0])
+	}
+	if hits[1].Class != ClassSocial || hits[1].Access != AccessListed || hits[1].PublishedAt != "2026-11-07T08:00:00Z" {
+		t.Fatalf("Reddit is dated, social, and snippet-only: %+v", hits[1])
+	}
+	if hits[2].PublishedAt != "" || hits[2].ModifiedAt != "" {
+		t.Fatalf("invalid dates cannot be invented: %+v", hits[2])
+	}
+	if !ValidClass(ClassSocial) || sourceClassForURL("https://notreddit.com/r/abc") != ClassWebPage {
+		t.Fatal("social domain check is not restricted")
+	}
+}
