@@ -11,7 +11,7 @@ let nextId = 0;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <button type="button" class="src-btn" [class.is-unknown]="badge() === 'Source unknown'" [attr.aria-expanded]="open()"
-            [attr.aria-controls]="panelId" (click)="open.set(!open())">
+            [attr.aria-controls]="panelId" aria-haspopup="true" (click)="open.set(!open())">
       <i class="bi bi-info-circle" aria-hidden="true"></i> {{ badge() }}
     </button>
     @if (open()) {
@@ -37,6 +37,9 @@ let nextId = 0;
     dl { display: grid; grid-template-columns: auto 1fr; gap: .2rem .6rem; margin: 0 0 .4rem; }
     dt { color: var(--fs-muted); font-weight: 400; }
     dd { margin: 0; overflow-wrap: anywhere; }
+    @media (max-width: 600px) {
+      .src-panel { position: fixed; left: 1rem; right: 1rem; top: auto; bottom: 1rem; max-width: none; min-width: 0; max-height: min(60vh, 30rem); overflow-y: auto; }
+    }
   `],
 })
 export class SourceComponent {
@@ -49,7 +52,11 @@ export class SourceComponent {
   readonly lines = computed(() => provenanceLines(this.fact(), formatUtcDateTime));
   readonly link = computed(() => safeSourceUrl(this.fact()));
 
-  @HostListener('document:keydown.escape') close(): void { this.open.set(false); }
+  @HostListener('document:keydown.escape') close(): void {
+    if (!this.open()) return;
+    this.open.set(false);
+    this.host.nativeElement.querySelector<HTMLButtonElement>('button.src-btn')?.focus();
+  }
   @HostListener('document:click', ['$event']) outside(event: Event): void {
     if (this.open() && !this.host.nativeElement.contains(event.target as Node)) this.open.set(false);
   }
