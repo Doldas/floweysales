@@ -92,7 +92,7 @@ export function searchOrigin(provider: string | undefined, resultType: string | 
 
 /** One line for the panel header. A clean audit says what was checked, never that the answer is true. */
 export function auditSummary(findings: readonly AnswerFinding[]): string {
-  if (!findings.length) return 'Citation check reported no problems; this does not establish that sources were opened or prove the claims true.';
+  if (!findings.length) return 'Citation check reported no problems; this does not confirm the claims are true and does not establish that any cited source was opened.';
   const n = findings.length;
   return `Citation check found ${n} ${n === 1 ? 'problem' : 'problems'}. Treat the flagged sentences with care.`;
 }
