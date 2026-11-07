@@ -72,3 +72,11 @@ test('progress accessibility keeps true integer counts without fictional percent
   assert.match(stallHint(STALL_AFTER_MS, false), /duplicate work/);
   assert.doesNotMatch(stallHint(STALL_AFTER_MS, false), /reload the page/);
 });
+
+test('invalid and skewed clocks never produce NaN status or false stalled warnings', () => {
+  assert.equal(progressText('Research', Number.NaN), 'Research');
+  assert.equal(progressText('Research', -4000, 1, 4), 'Research · 1 of 4');
+  assert.equal(elapsedSince(1000, Number.NaN), 0);
+  assert.equal(stallHint(Number.NaN, true), '');
+  assert.equal(stallHint(Number.POSITIVE_INFINITY, false), '');
+});
