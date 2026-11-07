@@ -16,6 +16,13 @@ import { TradingChartComponent } from '../components/chart';
 import { SymbolSearchComponent } from '../shell/symbol-search';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import { INDICATOR_KEYS, INDICATOR_LABELS } from '../indicators';
+import { CHART_STYLES, DEFAULT_CHART_STYLE, parseChartStyle, type ChartStyleId } from '../core/chart-styles';
+
+const CHART_STYLE_KEY = 'fs.chartStyle';
+
+function readChartStyle(): ChartStyleId {
+  try { return parseChartStyle(localStorage.getItem(CHART_STYLE_KEY)); } catch { return DEFAULT_CHART_STYLE; }
+}
 import type { TrackedAsset } from '../services';
 
 interface Kpi { label: string; value: string; sub?: string; tone?: 'pos' | 'neg' | ''; icon: string }
@@ -35,6 +42,9 @@ export class MarketsPage {
   private readonly notify = inject(NotifyService);
   private readonly chart = viewChild(TradingChartComponent);
 
+  readonly chartStyles = CHART_STYLES;
+  /** How the price is drawn; kept in this browser. */
+  readonly chartStyle = signal<ChartStyleId>(readChartStyle());
   readonly indicatorKeys = INDICATOR_KEYS;
   readonly indicatorLabels = INDICATOR_LABELS;
   readonly confirmClear = signal(false);
@@ -124,6 +134,11 @@ export class MarketsPage {
     }
     this.confirmClear.set(false);
     this.market.clearHistory();
+  }
+
+  setChartStyle(id: ChartStyleId): void {
+    this.chartStyle.set(id);
+    try { localStorage.setItem(CHART_STYLE_KEY, id); } catch { /* the choice lasts for this visit */ }
   }
 
   resetZoom(): void {

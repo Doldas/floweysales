@@ -23,11 +23,14 @@ import {
   Filler,
   type ChartConfiguration,
   type ChartDataset,
+  type ChartType,
+  type Plugin,
   type ScriptableContext,
 } from 'chart.js';
 import zoomPlugin from 'chartjs-plugin-zoom';
 
 import { ThemeService } from '../theme.service';
+import { barsFor, DEFAULT_CHART_STYLE, isCandleStyle, type ChartStyleId, type Ohlc } from '../core/chart-styles';
 import { HistorySeries, TradingRecord } from '../models';
 import { formatNumber, formatUtcDateTime, formatUtcMonthDay, formatUtcTime } from '../ui/datetime';
 import {
@@ -41,7 +44,83 @@ import {
   type IndicatorKey,
 } from '../indicators';
 
+const UP_COLOR = '#16a34a';
+const DOWN_COLOR = '#dc2626';
+
+/** What the bar-drawing plugin needs from the component. */
+interface BarsOptions {
+  style: ChartStyleId;
+  bars: () => Ohlc[];
+}
+
+declare module 'chart.js' {
+  interface PluginOptionsByType<TType extends ChartType> {
+    fsBars?: BarsOptions;
+  }
+}
+
+/**
+ * Draws candles, hollow candles and OHLC bars beneath the studies. The price line
+ * dataset stays in the chart (signals, tooltips and the scale use it) but is made
+ * transparent while one of these styles is on.
+ */
+const barsPlugin: Plugin<'line'> = {
+  id: 'fsBars',
+  beforeDatasetsDraw(chart, _args, opts) {
+    const o = opts as BarsOptions | undefined;
+    if (!o || !isCandleStyle(o.style)) return;
+    const x = chart.scales['x'];
+    const y = chart.scales['y'];
+    if (!x || !y) return;
+    const bars = o.bars();
+    const first = Math.max(0, Math.floor(x.min));
+    const last = Math.min(bars.length - 1, Math.ceil(x.max));
+    if (last < first) return;
+    const step = Math.abs(x.getPixelForValue(first + 1) - x.getPixelForValue(first)) || 8;
+    const width = Math.max(1, Math.min(step * 0.7, 28));
+    const { ctx, chartArea } = chart;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(chartArea.left, chartArea.top, chartArea.width, chartArea.height);
+    ctx.clip();
+    ctx.lineWidth = 1;
+    for (let i = first; i <= last; i++) {
+      const b = bars[i];
+      const up = b.c >= b.o;
+      const color = up ? UP_COLOR : DOWN_COLOR;
+      const cx = Math.round(x.getPixelForValue(i)) + 0.5;
+      const yo = y.getPixelForValue(b.o);
+      const yc = y.getPixelForValue(b.c);
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(cx, y.getPixelForValue(b.h));
+      ctx.lineTo(cx, y.getPixelForValue(b.l));
+      if (o.style === 'ohlc') {
+        const half = Math.max(2, width / 2);
+        ctx.moveTo(cx - half, yo);
+        ctx.lineTo(cx, yo);
+        ctx.moveTo(cx, yc);
+        ctx.lineTo(cx + half, yc);
+        ctx.stroke();
+        continue;
+      }
+      ctx.stroke();
+      const left = Math.round(cx - width / 2) + 0.5;
+      const top = Math.min(yo, yc);
+      const height = Math.max(1, Math.abs(yo - yc));
+      if (o.style === 'hollow' && up) {
+        ctx.strokeRect(left, top, width, height);
+      } else {
+        ctx.fillRect(left, top, width, height);
+      }
+    }
+    ctx.restore();
+  },
+};
+
 Chart.register(
+  barsPlugin,
   BarController,
   BarElement,
   LineController,
@@ -158,12 +237,15 @@ export class TradingChartComponent implements AfterViewInit {
   readonly epoch = input(0);
   /** Enabled analysis studies (chips in the chart header). */
   readonly flags = input<IndicatorFlags>(DEFAULT_INDICATORS);
+  /** How the price series is drawn: candles, bars, line, area and so on. */
+  readonly chartStyle = input<ChartStyleId>(DEFAULT_CHART_STYLE);
 
   private chart: Chart | null = null;
   private rsiChart: Chart | null = null;
   private macdChart: Chart | null = null;
   private signals: (string | null)[] = [];
   private meta: PointMeta[] = [];
+  private barsCache: { key: string; bars: Ohlc[] } | null = null;
 
   /** How x-axis labels are formatted for the loaded series. */
   private xLabelMode: 'intraday' | 'sparse' | 'date' = 'date';
@@ -173,7 +255,7 @@ export class TradingChartComponent implements AfterViewInit {
     effect(() => {
       const def = this.theme.def();
       if (this.chart) {
-        (this.chart.data.datasets[0] ?? {}).borderColor = def.priceColor;
+        this.applyStyle(false);
         (this.chart.data.datasets[2] ?? {}).borderColor = def.fastEmaColor;
         (this.chart.data.datasets[3] ?? {}).borderColor = def.slowEmaColor;
         this.chart.update('none');
@@ -195,6 +277,11 @@ export class TradingChartComponent implements AfterViewInit {
 
     effect(() => {
       if (this.epoch() > 0) this.clear();
+    });
+
+    effect(() => {
+      this.chartStyle();
+      this.applyStyle();
     });
 
     // Re-render analysis whenever flags or the sub-chart canvases change.
@@ -332,6 +419,7 @@ export class TradingChartComponent implements AfterViewInit {
     d.datasets[4].data = highLine;
     d.datasets[5].data = lowLine;
     this.applyIndicators();
+    this.applyStyle(false);
     this.chart.update('none');
 
     const last = points[points.length - 1];
@@ -417,6 +505,43 @@ export class TradingChartComponent implements AfterViewInit {
 
   resetZoom(): void {
     this.chart?.resetZoom();
+  }
+
+  /** The bars the current style draws, recomputed only when the series or the style changes. */
+  private currentBars(): Ohlc[] {
+    const style = this.chartStyle();
+    const last = this.meta.at(-1);
+    const key = `${style}|${this.meta.length}|${this.meta[0]?.t}|${last?.t}|${last?.c}`;
+    if (this.barsCache?.key !== key) this.barsCache = { key, bars: barsFor(style, this.meta) };
+    return this.barsCache.bars;
+  }
+
+  /** Dresses the price dataset for the chosen style; bar styles hide the line and let the plugin draw. */
+  private applyStyle(update = true): void {
+    const chart = this.chart;
+    if (!chart) return;
+    const style = this.chartStyle();
+    const price = this.theme.def().priceColor;
+    const ds = chart.data.datasets[0] as ChartDataset<'line'>;
+    const bars = isCandleStyle(style);
+    const base = this.meta[0]?.c ?? 0;
+    ds.borderColor = bars ? 'transparent' : price;
+    ds.borderWidth = bars ? 0 : 2;
+    ds.tension = style === 'step' || bars ? 0 : 0.2;
+    ds.stepped = style === 'step';
+    ds.fill =
+      style === 'area'
+        ? { target: 'origin' }
+        : style === 'baseline'
+          ? { target: { value: base }, above: withAlpha(UP_COLOR, 0.18), below: withAlpha(DOWN_COLOR, 0.18) }
+          : false;
+    ds.segment =
+      style === 'baseline'
+        ? { borderColor: (c) => ((c.p1.parsed.y ?? base) >= base ? UP_COLOR : DOWN_COLOR) }
+        : {};
+    const plugins = chart.options.plugins as { fsBars?: BarsOptions };
+    plugins.fsBars = { style, bars: () => this.currentBars() };
+    if (update) chart.update('none');
   }
 
   private signalAt(index: number): string | null {
@@ -674,7 +799,23 @@ export class TradingChartComponent implements AfterViewInit {
             grid: { color: def.gridColor },
             ticks: { maxTicksLimit: 10, color: def.textColor },
           },
-          y: { grid: { color: def.gridColor }, ticks: { color: def.textColor } },
+          y: {
+            grid: { color: def.gridColor },
+            ticks: { color: def.textColor },
+            grace: '3%',
+            // Wicks reach beyond the closes the line dataset sets the scale from.
+            afterDataLimits: (scale) => {
+              if (!isCandleStyle(this.chartStyle())) return;
+              const bars = this.currentBars();
+              const x = this.chart?.scales['x'];
+              const from = Math.max(0, Math.floor(x?.min ?? 0));
+              const to = Math.min(bars.length - 1, Math.ceil(x?.max ?? bars.length - 1));
+              for (let i = from; i <= to; i++) {
+                scale.min = Math.min(scale.min, bars[i].l);
+                scale.max = Math.max(scale.max, bars[i].h);
+              }
+            },
+          },
           vol: { display: false, position: 'right', beginAtZero: true, grid: { display: false } },
         },
         plugins: {
