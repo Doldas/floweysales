@@ -50,3 +50,8 @@ that separates unavailable, stale, delayed and refreshed data in every module,
 instrument-switch cancellation tests in the frontend, opt-in live provider
 checks (credentials, terms, rate limits), freshness and rate-limit metrics
 with alerting, and an end-to-end quote, leaderboard, strategy, research test.
+
+
+### Recorded fixture isolation
+
+The `internal/market/markettest` fixture backend copies history bars when they are registered and each time they are returned. Mutating the caller's input slice or a fault-injected response therefore cannot change the original recording or subsequent replay reads. Search result slices are likewise snapshotted on registration. Live-provider checks remain opt-in and must respect upstream quotas.
