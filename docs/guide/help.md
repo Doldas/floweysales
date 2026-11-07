@@ -40,3 +40,8 @@ The About page says what FloweySales is for and shows this build:
 The build information comes from the server and is shown only to signed-in users.
 
 See also [What's new](whats-new.md) and [Troubleshooting](troubleshooting.md).
+
+
+### Finding a topic
+
+Help searches are case-insensitive and ignore punctuation around the keywords. Multiword searches still require all entered terms, so narrow searches such as **Research Agent** or **Flow Studio** work best. Help articles are human-written; AI answers remain a separate, potentially fallible source.

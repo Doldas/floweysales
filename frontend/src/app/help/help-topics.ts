@@ -170,7 +170,7 @@ export const CONTEXT_TOPICS = ['research-agent', 'agent-team', 'flows', 'markets
 
 /** Ranks topics by title, summary, keywords and body; best first. An empty query returns all. */
 export function searchHelp(query: string, topics: HelpTopic[] = HELP_TOPICS): HelpTopic[] {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const words = query.toLocaleLowerCase('en-US').split(/[^\p{L}\p{N}_]+/u).filter(Boolean);
   if (!words.length) return topics;
   const scored: { topic: HelpTopic; score: number }[] = [];
   for (const topic of topics) {
