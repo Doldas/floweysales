@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, input, output, signal } from '@angular/core';
 
-import { elapsedSince, progressFraction, progressText, stallHint } from './async-state';
+import { elapsedSince, progressAriaValue, progressFraction, progressText, stallHint } from './async-state';
 
 /**
  * Says what a long wait is doing: the stage, a count when one is measured, and
@@ -11,7 +11,7 @@ import { elapsedSince, progressFraction, progressText, stallHint } from './async
   selector: 'fs-progress-status',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="ps" role="status" aria-live="polite">
+    <div class="ps" role="status" aria-live="polite" aria-atomic="true">
       <span class="spinner-border spinner-border-sm text-secondary" aria-hidden="true"></span>
       <span>{{ text() }}</span>
       @if (cancellable()) { <button type="button" class="btn btn-sm btn-link p-0 ms-1" (click)="cancel.emit()">Cancel</button> }
@@ -19,7 +19,7 @@ import { elapsedSince, progressFraction, progressText, stallHint } from './async
     @if (hint(); as h) { <div class="ps-hint" role="status">{{ h }}</div> }
     @if (fraction() !== null) {
       <div class="progress" style="height: 3px" role="progressbar" [attr.aria-valuenow]="Math.min(done()!, total()!)" aria-valuemin="0"
-           [attr.aria-valuemax]="total()" [attr.aria-label]="stage()">
+           [attr.aria-valuemax]="total()" [attr.aria-label]="stage()" [attr.aria-valuetext]="ariaValue()">
         <div class="progress-bar" [style.width.%]="percent()"></div>
       </div>
     }
@@ -27,6 +27,7 @@ import { elapsedSince, progressFraction, progressText, stallHint } from './async
   styles: [`
     .ps { display: flex; align-items: center; gap: .5rem; color: var(--fs-muted); font-size: .85rem; margin-bottom: .35rem; min-height: 1.5rem; }
     .ps-hint { color: var(--fs-muted); font-size: .8rem; margin-bottom: .35rem; }
+    @media (prefers-reduced-motion: reduce) { .ps .spinner-border { animation: none; border-top-color: var(--fs-accent); } .progress-bar { transition: none; } }
   `],
 })
 export class ProgressStatusComponent implements OnInit {
@@ -45,6 +46,7 @@ export class ProgressStatusComponent implements OnInit {
   private readonly now = signal(Date.now());
   readonly text = computed(() => progressText(this.stage(), this.elapsed(), this.done(), this.total()));
   readonly fraction = computed(() => progressFraction(this.done(), this.total()));
+  readonly ariaValue = computed(() => progressAriaValue(this.done(), this.total()));
   readonly percent = computed(() => (this.fraction() ?? 0) * 100);
   protected readonly Math = Math;
 
