@@ -24,7 +24,7 @@ test('usage keeps searches and model tokens apart', () => {
   assert.equal(usageLine({ searches: 12, prompt_tokens: 3400, output_tokens: 1200, est_cost_usd: 0.168, failures: 2 }),
     '12 searches · 3,400 prompt tokens · 1,200 output tokens · est. $0.17 · 2 failed');
   assert.equal(formatUsd(0.0042), '$0.0042');
-  assert.equal(formatUsd(NaN), '$0.00');
+  assert.equal(formatUsd(NaN), 'unknown');
 });
 
 test('times are shown in UTC from the timestamp itself', () => {
