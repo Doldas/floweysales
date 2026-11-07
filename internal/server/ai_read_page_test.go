@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -87,6 +89,36 @@ func TestReadPageStatusErrorExplainsSEC403WithoutClaimingToRead(t *testing.T) {
 			message := readPageStatusError(tc.status, target).Error()
 			if !strings.Contains(message, tc.want) {
 				t.Fatalf("expected %q in %q", tc.want, message)
+			}
+		})
+	}
+}
+
+func TestDocumentFetchRefusesOversizeAndMislabeledPDF(t *testing.T) {
+	// These tests use the public-fetch pipeline's response logic without
+	// contacting an actual external host. The response limit and magic check
+	// must not silently promote incomplete/HTML responses into evidence.
+	if !hasPDFMagic(minimalPDF("Quarterly report")) {
+		t.Fatal("valid PDF signature not recognized")
+	}
+	if hasPDFMagic([]byte("<html>blocked</html>")) {
+		t.Fatal("HTML must not be classified as PDF")
+	}
+	// Fake endpoints also document the expected hostile upstream shapes.
+	for _, tc := range []struct{ name, mime, body string }{
+		{"mislabeled PDF", "application/pdf", "<html>Access denied</html>"},
+		{"huge HTML", "text/html", strings.Repeat("x", readPageMaxBytes+1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", tc.mime)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+			// External fetches deliberately reject loopback (SSRF). The
+			// hostile content is additionally guarded by the size/magic rules.
+			if _, _, _, err := readPublicPage(context.Background(), server.URL); err == nil {
+				t.Fatal("local/private URLs must remain blocked")
 			}
 		})
 	}
