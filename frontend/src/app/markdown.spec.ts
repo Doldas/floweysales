@@ -170,3 +170,11 @@ test('unclosed display math and code fences retain source text', () => {
   assert.match(html, /md-lang/);
   assert.doesNotMatch(html, /md-math-display/);
 });
+
+test('financial notation uses the shared escaped math parser across modes', () => {
+  const html = renderMarkdown('Growth \\(g\\le 3\\%\\), threshold \\(r\\ge 0\\).');
+  assert.match(html, /≤/);
+  assert.match(html, /≥/);
+  assert.doesNotMatch(html, /<script|<iframe/);
+  assert.match(renderMarkdown('$$\\sigma^2+\\mu$$'), /σ<sup>2<\/sup>\+μ/);
+});
