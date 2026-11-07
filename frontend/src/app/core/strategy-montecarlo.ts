@@ -19,7 +19,7 @@ export function tradeMonteCarloError(s: TradeMonteCarloSettings): string {
   const runs = num(s.runs);
   if (!Number.isInteger(runs) || runs < 100 || runs > 20000) return 'Runs must be a whole number from 100 to 20000.';
   const seed = num(s.seed);
-  if (!Number.isInteger(seed) || seed < 0) return 'Seed must be a whole number, 0 or more.';
+  if (!Number.isSafeInteger(seed) || seed < 0) return 'Seed must be a safe whole number, 0 or more.';
   if (s.drawdownLimit.trim() !== '' && !(num(s.drawdownLimit) > 0 && num(s.drawdownLimit) <= 100)) return 'Drawdown limit must be a percentage above 0 and up to 100.';
   if (s.extraCost.trim() !== '' && !(num(s.extraCost) >= 0 && num(s.extraCost) <= 500)) return 'Extra cost must be from 0 to 500 basis points per trade.';
   const d = num(s.dispersion);
