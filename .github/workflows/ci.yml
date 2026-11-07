@@ -177,6 +177,9 @@ jobs:
       - name: Playwright Help/About branding and theme checks (desktop and phone)
         working-directory: frontend
         run: npx playwright test --config playwright.config.ts e2e/help-about-branding.spec.ts
+      - name: Playwright responsive audit (phones, tablets, 200% text, touch targets)
+        working-directory: frontend
+        run: npx playwright test --config playwright.config.ts e2e/responsive-audit.spec.ts
       - name: Upload Playwright HTML report, screenshots, video and traces
         if: always()
         uses: actions/upload-artifact@v7

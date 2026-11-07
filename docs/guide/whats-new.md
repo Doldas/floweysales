@@ -9,6 +9,9 @@ last-reviewed: 2026-11-06
 
 ## November 2026 release
 
+**Phones and tablets**
+- Every page was checked on phone and tablet widths, in landscape and with text enlarged to 200%. Pages no longer scroll sideways, small buttons and links are at least 24 pixels, and content respects notches and the home indicator. See [Responsive UI](../responsive-ui.md).
+
 **Agents**
 - Agent answers get a claim check: each cited sentence is compared with the cited text for company, metric, period, unit and direction, and shown as supported, contradicted, not proven or not checked, with the source passage under **Why is this claim supported?** See [Agents, teams and evidence](agents.md).
 
