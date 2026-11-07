@@ -333,6 +333,8 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     '/api/admin/flow-notify-channels': { email: { configured: true }, webhook: { configured: false } },
     '/api/admin/flow-audit': { entries: [] },
     '/api/admin/flow-agent-tools': { tools: [{ name: 'get_sec_facts', description: 'SEC XBRL facts' }, { name: 'search_web', description: 'Web search' }], max_tools: 8, max_tool_calls: 16, default_tool_calls: 6 },
+    '/api/admin/vision': { encryption_ready: true, status: 'not_configured', enabled: false, base_url: '', model: '', fallback_model: '', supports_images: false, has_key: false, verified: false, verified_at: '', limits: { max_pages_per_document: 6, max_images_per_run: 20, max_tokens_per_run: 200000, max_image_bytes: 4194304, max_image_pixels: 16000000, max_output_tokens: 3000, timeout_seconds: 90, concurrency: 2 }, telemetry: { calls: 0, failures: 0, cache_hits: 0, images: 0, tokens: 0, last_error_code: '', last_error_at: '' } },
+    '/api/vision/status': { available: false },
     '/api/admin/integrations': { encryption_ready: true, ai: { has_key: false }, web_search: { provider: 'brave', has_key: false } },
     '/api/admin/users/list': { users: [{ id: 1, email, role, active: true }] },
     '/api/admin/roles': { roles: [{ name: 'SYS_ADMIN', permissions: [] }, { name: 'USER', permissions: ['research.read', 'ai.chat'] }], permissions: ['research.read', 'ai.chat', 'flows.read', 'flows.write', 'flows.run'] },

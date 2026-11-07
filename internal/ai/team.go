@@ -75,6 +75,7 @@ type answerOf struct {
 // Every event carries the Agent it belongs to. emit is called from several
 // goroutines; RunTeam serializes the calls.
 func RunTeam(ctx context.Context, client *Client, src DataSource, opts TeamOptions, emit func(Event)) error {
+	ctx = WithRunScope(ctx)
 	if emit == nil {
 		emit = func(Event) {}
 	}

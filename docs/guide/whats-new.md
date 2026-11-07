@@ -12,6 +12,8 @@ last-reviewed: 2026-11-06
 **Agents**
 - Agent answers get a claim check: each cited sentence is compared with the cited text for company, metric, period, unit and direction, and shown as supported, contradicted, not proven or not checked, with the source passage under **Why is this claim supported?** See [Agents, teams and evidence](agents.md).
 
+- PDFs are read page by page with page numbers. An administrator can set up an optional vision model that reads scanned pages and charts or tables that are pictures, with page-cited figures, automatic checks, run limits and a Document evidence panel. Report viewer pages are followed to the PDF on the same site; an access denial (HTTP 403) stays a denial. See [Reading PDFs and scanned reports](../pdf-vision.md).
+
 **Backtests**
 - Choose a custom period in UTC, test several lists and periods at once, and check how trading cost, holdings and rebalance interval change a result. See [Strategies and backtests](strategies.md).
 - The Strategies page can resample a replay's closed trades with a seed to show percentile bands and the spread of the worst fall. See [Strategies and backtests](strategies.md).
