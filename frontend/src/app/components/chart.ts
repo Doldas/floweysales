@@ -6,6 +6,8 @@ import {
   effect,
   inject,
   input,
+  output,
+  signal,
   viewChild,
 } from '@angular/core';
 import {
@@ -23,13 +25,24 @@ import {
   Filler,
   type ChartConfiguration,
   type ChartDataset,
-  type ChartType,
   type Plugin,
   type ScriptableContext,
 } from 'chart.js';
 import zoomPlugin from 'chartjs-plugin-zoom';
 
 import { ThemeService } from '../theme.service';
+import {
+  DRAWING_TOOLS,
+  MAX_DRAWINGS,
+  distanceToSegment,
+  fibPrices,
+  indexAtTime,
+  needsSecondPoint,
+  type Anchor,
+  type Drawing,
+  type DrawingKind,
+  type DrawingTool,
+} from '../core/chart-drawings';
 import { barsFor, DEFAULT_CHART_STYLE, isCandleStyle, type ChartStyleId, type Ohlc } from '../core/chart-styles';
 import { HistorySeries, TradingRecord } from '../models';
 import { formatNumber, formatUtcDateTime, formatUtcMonthDay, formatUtcTime } from '../ui/datetime';
@@ -53,11 +66,12 @@ interface BarsOptions {
   bars: () => Ohlc[];
 }
 
-declare module 'chart.js' {
-  interface PluginOptionsByType<TType extends ChartType> {
-    fsBars?: BarsOptions;
-  }
-}
+/**
+ * What each plugin reads from its component. It is kept beside the chart, not in the plugin
+ * options: Chart.js calls a function found in options and passes on what it returns.
+ */
+const barsState = new WeakMap<Chart, BarsOptions>();
+const drawingsState = new WeakMap<Chart, DrawingsOptions>();
 
 /**
  * Draws candles, hollow candles and OHLC bars beneath the studies. The price line
@@ -66,8 +80,8 @@ declare module 'chart.js' {
  */
 const barsPlugin: Plugin<'line'> = {
   id: 'fsBars',
-  beforeDatasetsDraw(chart, _args, opts) {
-    const o = opts as BarsOptions | undefined;
+  beforeDatasetsDraw(chart) {
+    const o = barsState.get(chart);
     if (!o || !isCandleStyle(o.style)) return;
     const x = chart.scales['x'];
     const y = chart.scales['y'];
@@ -119,7 +133,120 @@ const barsPlugin: Plugin<'line'> = {
   },
 };
 
+const DRAWING_COLORS: Record<DrawingKind, string> = { level: '#f59e0b', trend: '#38bdf8', fib: '#a78bfa' };
+const HIT_PX = 7;
+
+/** What the drawing plugin needs from the component. */
+interface DrawingsOptions {
+  list: () => Drawing[];
+  pending: () => Drawing | null;
+  selected: () => string | null;
+  times: () => number[];
+  text: () => string;
+}
+
+interface Seg { x1: number; y1: number; x2: number; y2: number; level?: number; price?: number }
+
+/** A drawing as line segments in canvas pixels. A level and a retracement run across the width they cover. */
+function segmentsOf(chart: Chart, d: Drawing, times: number[]): Seg[] {
+  const x = chart.scales['x'];
+  const y = chart.scales['y'];
+  if (!x || !y || !times.length) return [];
+  const px = (a: Anchor) => x.getPixelForValue(indexAtTime(times, a.t));
+  const py = (a: Anchor) => y.getPixelForValue(a.p);
+  const area = chart.chartArea;
+  if (d.kind === 'level') return [{ x1: area.left, y1: py(d.a), x2: area.right, y2: py(d.a), price: d.a.p }];
+  if (!d.b) return [];
+  if (d.kind === 'trend') return [{ x1: px(d.a), y1: py(d.a), x2: px(d.b), y2: py(d.b) }];
+  const left = Math.min(px(d.a), px(d.b));
+  const right = Math.max(px(d.a), px(d.b));
+  return fibPrices(d.a, d.b).map(l => {
+    const yy = y.getPixelForValue(l.price);
+    return { x1: left, y1: yy, x2: right, y2: yy, level: l.level, price: l.price };
+  });
+}
+
+/** Distance in pixels from a point to the nearest part of a drawing. */
+function distanceToDrawing(chart: Chart, d: Drawing, times: number[], px: number, py: number): number {
+  let best = Infinity;
+  for (const g of segmentsOf(chart, d, times)) best = Math.min(best, distanceToSegment(px, py, g.x1, g.y1, g.x2, g.y2));
+  return best;
+}
+
+/** Draws the user's levels, trend lines and retracements above the series. */
+const drawingsPlugin: Plugin<'line'> = {
+  id: 'fsDrawings',
+  afterDatasetsDraw(chart) {
+    const o = drawingsState.get(chart);
+    if (!o) return;
+    const times = o.times();
+    const items = [...o.list(), ...(o.pending() ? [o.pending()!] : [])];
+    if (!items.length || !times.length) return;
+    const { ctx, chartArea } = chart;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(chartArea.left, chartArea.top, chartArea.width, chartArea.height);
+    ctx.clip();
+    ctx.font = '11px Inter, sans-serif';
+    ctx.textBaseline = 'middle';
+    const price = (v: number) => formatNumber(v, { maximumFractionDigits: 4 });
+    for (const d of items) {
+      const color = DRAWING_COLORS[d.kind];
+      const chosen = d.id === o.selected();
+      const draft = d === o.pending();
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = chosen ? 2.5 : 1.5;
+      ctx.setLineDash(draft ? [5, 4] : d.kind === 'level' ? [6, 4] : []);
+      const segs = segmentsOf(chart, d, times);
+      for (const g of segs) {
+        ctx.beginPath();
+        ctx.moveTo(g.x1, g.y1);
+        ctx.lineTo(g.x2, g.y2);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      if (d.kind === 'fib' && d.b) {
+        // The move itself, dotted, so the levels are read against it.
+        const x = chart.scales['x'];
+        const y = chart.scales['y'];
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x.getPixelForValue(indexAtTime(times, d.a.t)), y.getPixelForValue(d.a.p));
+        ctx.lineTo(x.getPixelForValue(indexAtTime(times, d.b.t)), y.getPixelForValue(d.b.p));
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      for (const g of segs) {
+        if (g.price === undefined) continue;
+        const label = g.level === undefined ? price(g.price) : `${g.level} · ${price(g.price)}`;
+        const w = ctx.measureText(label).width + 8;
+        const lx = g.level === undefined ? chartArea.right - w - 2 : Math.max(chartArea.left + 2, g.x1 + 2);
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = color;
+        ctx.fillRect(lx, g.y1 - 8, w, 16);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#0b0e1a';
+        ctx.fillText(label, lx + 4, g.y1);
+      }
+      if (chosen || draft) {
+        ctx.fillStyle = color;
+        for (const a of [d.a, d.b]) {
+          if (!a) continue;
+          const x = chart.scales['x'].getPixelForValue(indexAtTime(times, a.t));
+          const y = chart.scales['y'].getPixelForValue(a.p);
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
+  },
+};
+
 Chart.register(
+  drawingsPlugin,
   barsPlugin,
   BarController,
   BarElement,
@@ -182,6 +309,10 @@ function withAlpha(color: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
+function newId(): string {
+  return `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
 /** Partial OHLC kept per data point for rich tooltips. */
 interface PointMeta {
   t: number;
@@ -196,8 +327,18 @@ interface PointMeta {
   selector: 'fse-trading-chart',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="legend-hint"><i class="bi bi-mouse" aria-hidden="true"></i> Scroll to zoom · drag to pan</div>
-    <div class="chart-container">
+    <div class="draw-bar" role="toolbar" aria-label="Drawing tools">
+      @for (t of tools; track t.id) {
+        <button type="button" class="fs-chip" [attr.aria-pressed]="tool() === t.id" [title]="t.hint" [attr.data-tool]="t.id"
+                [disabled]="t.id !== 'cursor' && drawings().length >= maxDrawings" (click)="pickTool(t.id)"><i class="bi" [class]="t.icon" aria-hidden="true"></i> {{ t.label }}</button>
+      }
+      <button type="button" class="fs-chip danger" [disabled]="!selectedId()" (click)="deleteSelected()"><i class="bi bi-x-lg" aria-hidden="true"></i> Delete selected</button>
+      <button type="button" class="fs-chip" [class.danger]="confirmClear()" [disabled]="!drawings().length" (click)="clearDrawings()"><i class="bi bi-trash3" aria-hidden="true"></i> {{ confirmClear() ? 'Confirm' : 'Clear drawings (' + drawings().length + ')' }}</button>
+    </div>
+    <div class="legend-hint">
+      @if (tool() === 'cursor') { <i class="bi bi-mouse" aria-hidden="true"></i> Scroll to zoom · drag to pan · click a drawing to select it } @else { <i class="bi bi-pencil" aria-hidden="true"></i> {{ toolHint() }} · Esc to cancel }
+    </div>
+    <div class="chart-container" [class.drawing]="tool() !== 'cursor'" tabindex="-1" (keydown)="onKeydown($event)">
       <canvas #canvas></canvas>
     </div>
     @if (flags().rsi) {
@@ -215,7 +356,10 @@ interface PointMeta {
     `
       :host { display: block; }
       :host { min-width: 0; }
-      .legend-hint { font-size: 0.75rem; color: var(--fs-muted); margin-bottom: 6px; display: flex; gap: 6px; align-items: center; }
+      .legend-hint { font-size: 0.75rem; color: var(--fs-muted); display: flex; gap: 6px; align-items: center; height: 1.1rem; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .draw-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin-bottom: 4px; .fs-chip { padding: 0.18rem 0.6rem; font-size: 0.75rem; } .fs-chip.danger { color: var(--bs-danger, #dc2626); } }
+      .chart-container { outline: none; }
+      .chart-container.drawing canvas { cursor: crosshair; touch-action: none; }
       .chart-container { height: var(--fs-pane-h, 380px); position: relative; min-width: 0; width: 100%; }
       .subchart-container { height: 96px; position: relative; min-width: 0; width: 100%; margin-top: 8px; }
       @media (max-width: 700px) {
@@ -239,6 +383,18 @@ export class TradingChartComponent implements AfterViewInit {
   readonly flags = input<IndicatorFlags>(DEFAULT_INDICATORS);
   /** How the price series is drawn: candles, bars, line, area and so on. */
   readonly chartStyle = input<ChartStyleId>(DEFAULT_CHART_STYLE);
+  /** The user's drawings for this instrument; changes are reported through drawingsChange. */
+  readonly drawings = input<Drawing[]>([]);
+  readonly drawingsChange = output<Drawing[]>();
+
+  readonly tools = DRAWING_TOOLS;
+  readonly maxDrawings = MAX_DRAWINGS;
+  readonly tool = signal<DrawingTool>('cursor');
+  readonly selectedId = signal<string | null>(null);
+  readonly confirmClear = signal(false);
+  readonly toolHint = () => DRAWING_TOOLS.find(t => t.id === this.tool())?.hint ?? '';
+  /** The drawing being placed: its first point is set and its second follows the pointer. */
+  private pending: Drawing | null = null;
 
   private chart: Chart | null = null;
   private rsiChart: Chart | null = null;
@@ -284,6 +440,20 @@ export class TradingChartComponent implements AfterViewInit {
       this.applyStyle();
     });
 
+    // Drawings changed from outside (another instrument loaded): redraw, and drop a selection that is gone.
+    effect(() => {
+      const list = this.drawings();
+      if (this.selectedId() && !list.some(d => d.id === this.selectedId())) this.selectedId.set(null);
+      this.chart?.draw();
+    });
+
+    // A drawing tool takes the drag; panning is for the cursor.
+    effect(() => {
+      const pan = this.tool() === 'cursor';
+      const zoom = this.chart?.options.plugins?.zoom?.pan;
+      if (zoom) zoom.enabled = pan;
+    });
+
     // Re-render analysis whenever flags or the sub-chart canvases change.
     // Reading the viewChild signals here subscribes us to @if insert/remove.
     effect(() => {
@@ -297,7 +467,109 @@ export class TradingChartComponent implements AfterViewInit {
   ngAfterViewInit(): void {
     const ctx = this.canvas().nativeElement.getContext('2d') as CanvasRenderingContext2D;
     this.chart = new Chart(ctx, this.buildConfig());
+    this.applyStyle(false);
+    const el = this.canvas().nativeElement;
+    el.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+    el.addEventListener('pointermove', (e) => this.onPointerMove(e));
     this.applyIndicators();
+  }
+
+  pickTool(id: DrawingTool): void {
+    this.pending = null;
+    this.tool.set(this.tool() === id ? 'cursor' : id);
+    this.chart?.draw();
+  }
+
+  deleteSelected(): void {
+    const id = this.selectedId();
+    if (!id) return;
+    this.selectedId.set(null);
+    this.drawingsChange.emit(this.drawings().filter(d => d.id !== id));
+  }
+
+  clearDrawings(): void {
+    if (!this.confirmClear()) {
+      this.confirmClear.set(true);
+      setTimeout(() => this.confirmClear.set(false), 4000);
+      return;
+    }
+    this.confirmClear.set(false);
+    this.selectedId.set(null);
+    this.pending = null;
+    this.drawingsChange.emit([]);
+  }
+
+  onKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      if (this.pending) this.pending = null;
+      else this.tool.set('cursor');
+      this.chart?.draw();
+    } else if ((event.key === 'Delete' || event.key === 'Backspace') && this.selectedId()) {
+      event.preventDefault();
+      this.deleteSelected();
+    }
+  }
+
+  /** The time and price under the pointer, snapped to the nearest bar in time; null outside the plot. */
+  private anchorAt(e: PointerEvent): Anchor | null {
+    const chart = this.chart;
+    if (!chart || !this.meta.length) return null;
+    const rect = this.canvas().nativeElement.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const a = chart.chartArea;
+    if (x < a.left || x > a.right || y < a.top || y > a.bottom) return null;
+    const idx = Math.max(0, Math.min(this.meta.length - 1, Math.round(chart.scales['x'].getValueForPixel(x) ?? 0)));
+    return { t: this.meta[idx].t, p: chart.scales['y'].getValueForPixel(y) ?? 0 };
+  }
+
+  private onPointerDown(e: PointerEvent): void {
+    const chart = this.chart;
+    if (!chart || e.button !== 0) return;
+    const tool = this.tool();
+    if (tool === 'cursor') {
+      const rect = this.canvas().nativeElement.getBoundingClientRect();
+      const times = this.meta.map((m) => m.t);
+      let best: { id: string; dist: number } | null = null;
+      for (const d of this.drawings()) {
+        const dist = distanceToDrawing(chart, d, times, e.clientX - rect.left, e.clientY - rect.top);
+        if (dist <= HIT_PX && (!best || dist < best.dist)) best = { id: d.id, dist };
+      }
+      this.selectedId.set(best?.id ?? null);
+      this.canvas().nativeElement.parentElement?.focus({ preventScroll: true });
+      chart.draw();
+      return;
+    }
+    e.preventDefault();
+    const anchor = this.anchorAt(e);
+    if (!anchor) return;
+    const kind: DrawingKind = tool;
+    if (!needsSecondPoint(kind)) {
+      this.finish({ id: newId(), kind, a: anchor });
+    } else if (!this.pending) {
+      this.pending = { id: newId(), kind, a: anchor, b: anchor };
+      this.canvas().nativeElement.parentElement?.focus({ preventScroll: true });
+      chart.draw();
+    } else if (anchor.t === this.pending.a.t && anchor.p === this.pending.a.p) {
+      return;
+    } else {
+      this.finish({ ...this.pending, b: anchor });
+    }
+  }
+
+  private onPointerMove(e: PointerEvent): void {
+    if (!this.pending) return;
+    const anchor = this.anchorAt(e);
+    if (!anchor) return;
+    this.pending = { ...this.pending, b: anchor };
+    this.chart?.draw();
+  }
+
+  private finish(d: Drawing): void {
+    this.pending = null;
+    this.tool.set('cursor');
+    this.selectedId.set(d.id);
+    this.drawingsChange.emit([...this.drawings(), d].slice(-MAX_DRAWINGS));
   }
 
   /**
@@ -539,8 +811,14 @@ export class TradingChartComponent implements AfterViewInit {
       style === 'baseline'
         ? { borderColor: (c) => ((c.p1.parsed.y ?? base) >= base ? UP_COLOR : DOWN_COLOR) }
         : {};
-    const plugins = chart.options.plugins as { fsBars?: BarsOptions };
-    plugins.fsBars = { style, bars: () => this.currentBars() };
+    barsState.set(chart, { style, bars: () => this.currentBars() });
+    drawingsState.set(chart, {
+      list: () => this.drawings(),
+      pending: () => this.pending,
+      selected: () => this.selectedId(),
+      times: () => this.meta.map((m) => m.t),
+      text: () => this.theme.def().textColor,
+    });
     if (update) chart.update('none');
   }
 

@@ -33,7 +33,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 **A first session**
 
 1. Pick an instrument with the search box at the top, for example a company name or ticker.
-2. Open **Markets** to see its price history and indicators. Pick a chart style above the chart: candles, hollow candles, OHLC bars, Heikin Ashi, line, area, step or baseline.
+2. Open **Markets** to see its price history and indicators. Pick a chart style above the chart: candles, hollow candles, OHLC bars, Heikin Ashi, line, area, step or baseline. Draw on the chart with the tools above it: a price level, a trend line or a Fibonacci retracement (saved in this browser for each instrument).
 3. Open **Research Agent** and ask a question such as "What changed in the latest quarterly report?".
 4. Check the sources the agent names before relying on an answer.
 
