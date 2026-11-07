@@ -160,7 +160,13 @@ export function regionCoverage(universes: readonly { label: string; region?: str
 
 /** The address of a safe, followable record: only http(s) links are shown. */
 export function recordLink(url: string | null | undefined): string | null {
-  return url && /^https?:\/\//i.test(url) ? url : null;
+  if (!url || /[\\\s\u0000-\u001f\u007f]/.test(url)) return null;
+  try {
+    const parsed = new URL(url);
+    return ['http:', 'https:'].includes(parsed.protocol) && parsed.hostname && !parsed.username && !parsed.password ? parsed.href : null;
+  } catch {
+    return null;
+  }
 }
 
 export const OBJECTIVE_OPTIONS: readonly { id: string; label: string }[] = [

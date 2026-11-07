@@ -174,3 +174,10 @@ test('an available index shows count, date and stale state', () => {
   assert.equal(facts['Constituent source'].link, null, 'only http(s) links are followed');
   assert.match(facts['Licensing'].value, /You confirmed you may use it\./);
 });
+
+test('discovery record links reject disguised external destinations and credentials', () => {
+  for (const bad of ['https://user:pass@example.org/x', 'https://', 'https://example.org/a b', 'https://example.org\\evil.com']) {
+    assert.equal(recordLink(bad), null, bad);
+  }
+  assert.equal(recordLink('https://example.org/a?x=1'), 'https://example.org/a?x=1');
+});
