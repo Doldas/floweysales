@@ -127,10 +127,14 @@ func (r *Registry) add(s Source) Source {
 // sufficient evidence of a regulator or issuer publication.
 func sourceClassForURL(raw string) string {
 	parsed, err := url.Parse(raw)
-	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") { return ClassWebPage }
+	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") {
+		return ClassWebPage
+	}
 	host := strings.ToLower(strings.TrimSuffix(parsed.Hostname(), "."))
 	for _, domain := range []string{"reddit.com", "stocktwits.com", "twitter.com", "x.com", "threads.net", "bsky.app"} {
-		if host == domain || strings.HasSuffix(host, "."+domain) { return ClassSocial }
+		if host == domain || strings.HasSuffix(host, "."+domain) {
+			return ClassSocial
+		}
 	}
 	return ClassWebPage
 }
@@ -245,8 +249,12 @@ func (r *Registry) registerSearch(callID, argsJSON, result string) (string, []So
 		modified, _ := hit["modified_at"].(string)
 		// Provider date metadata is untrusted. Never invent a publication date or
 		// treat the retrieval timestamp as the creation of the article.
-		if _, ok := parseDate(published); !ok { published = "" }
-		if _, ok := parseDate(modified); !ok { modified = "" }
+		if _, ok := parseDate(published); !ok {
+			published = ""
+		}
+		if _, ok := parseDate(modified); !ok {
+			modified = ""
+		}
 		s := r.add(Source{Tool: "search_web", CallID: callID, Query: args.Query, URL: link, Title: title,
 			Class: sourceClassForURL(link), Access: AccessListed, RetrievedAt: retrieved,
 			PublishedAt: published, ModifiedAt: modified, Excerpt: title + "\n" + snippet,
