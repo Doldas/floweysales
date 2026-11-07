@@ -23,7 +23,7 @@ Every caller gets the same JSON (`websearch.Render`). The Flow Studio fields (`p
 - `results[].type`: `web_result` or `grounded_source`, with `provider` on each.
 - `fallback` is present when more than one provider was involved: each provider tried or skipped, with the reason (never the query).
 - `usage`: searches, prompt and output tokens, and the estimated cost of this search.
-- Duplicate URLs (ignoring fragments, `utm_*`, `gclid`, `fbclid`, trailing slashes) are removed; only public `https` addresses are shown; at most 5 results; output is capped at 7,000 bytes by shortening, never by failing.
+- Duplicate URLs (ignoring fragments, `utm_*`, `gclid`, `fbclid`, trailing slashes) are removed; only public `https` addresses are shown; at most 5 results; output is capped at 11,000 bytes by shortening, never by failing.
 
 ### Google grounding
 
@@ -33,6 +33,8 @@ Gemini receives the query with the `google_search` tool and `x-goog-api-key` as 
 - `results[]` of type `grounded_source`: the pages in `groundingMetadata.groundingChunks`, deduplicated, with the title Google gave and **no snippet**. `grounded_answer.supports` maps passages of the answer to those sources, and `search_queries` lists the searches Google ran. The addresses are Google redirect URLs; they are not fetched here.
 
 Usage is tracked as upstream reports it: billed searches are the number of `webSearchQueries` (a prompt can run several), model tokens come from `usageMetadata` (thinking tokens count as output). Cost is estimated as billable searches (beyond the monthly free allowance) times the price per 1,000, plus tokens times the token prices you enter. If you enter no token prices, the model charge is not estimated.
+
+Each result also has a `trust` block (source type, evidence role, dates, period, `why_ranked`) and the answer has a `ranking` block with the profile, policy and the results filtered out. Results are classified and ranked after retrieval, identically for every provider. See [Source trust, dates and ranking](source-trust.md).
 
 ## Policy
 

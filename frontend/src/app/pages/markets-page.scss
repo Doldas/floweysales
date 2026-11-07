@@ -1,6 +1,6 @@
 :host { display: block; }
 
-.fs-page { display: grid; gap: 1.1rem; }
+.fs-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.1rem; }
 
 .quote-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem; }
 .quote-id { min-width: 0; }
@@ -9,13 +9,13 @@
 .quote-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; }
 .price { font-size: clamp(1.5rem, 3vw, 2.1rem); font-weight: 650; letter-spacing: -0.02em; }
 .cur { color: var(--fs-muted); font-weight: 500; }
-.chg { font-weight: 600; display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.15rem 0.5rem; border-radius: 999px; font-variant-numeric: tabular-nums; small { font-weight: 500; opacity: 0.8; } }
+.chg { font-weight: 600; display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.15rem 0.5rem; border-radius: 999px; font-variant-numeric: tabular-nums; small { font-weight: 500; } }
 .chg.up { color: var(--fs-pos); background: var(--fs-pos-soft); }
 .chg.down { color: var(--fs-neg); background: var(--fs-neg-soft); }
 .quote-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 
 .control-row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
-.control-search { flex: 1 1 320px; max-width: 560px; }
+.control-search { flex: 1 1 min(320px, 100%); min-width: 0; max-width: 560px; }
 .trackers { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.85rem; }
 .trackers-label { font-size: 0.75rem; color: var(--fs-muted); font-weight: 500; margin-right: 0.25rem; }
 .tracker-chip {
@@ -34,8 +34,14 @@
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 0.85rem; }
 
 .chart-range button { padding: 0.25rem 0.55rem; font-size: 0.75rem; }
-.studies { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; padding: 0.75rem 1.25rem 0; .fs-chip { padding: 0.18rem 0.6rem; font-size: 0.75rem; } }
+.studies { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; padding: 0.25rem 0 0; .fs-chip { padding: 0.18rem 0.6rem; font-size: 0.75rem; } }
 
+.chart-meta { display: flex; flex-wrap: wrap; gap: 0.15rem 1.25rem; margin: 0; padding: 0.4rem 0; font-size: 0.78rem;
+  div { display: flex; gap: 0.35rem; min-width: 0; }
+  dt { color: var(--fs-muted); font-weight: 500; }
+  dt::after { content: ':'; }
+  dd { margin: 0; overflow-wrap: anywhere; }
+}
 .insights-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr)); gap: 0.75rem; }
 .insight {
   padding: 0.75rem 0.85rem;
@@ -51,6 +57,5 @@
 .insight-sub { font-size: 0.75rem; color: var(--fs-muted); margin-top: 0.1rem; }
 
 @media (max-width: 575.98px) {
-  .studies { padding-inline: 1rem; }
   .quote-actions { width: 100%; .btn { flex: 1 1 auto; } }
 }

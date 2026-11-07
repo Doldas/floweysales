@@ -73,7 +73,9 @@ import { ProgressStatusComponent } from '../ui/progress-status';
   `,
   styles: [`
     .about-icon { border-radius: 14px; }
-    .about-dl { display: grid; grid-template-columns: auto 1fr; gap: .4rem 1rem; margin: 0; }
+    .about-dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .4rem 1rem; margin: 0; }
+    .about-dl dd { overflow-wrap: anywhere; }
+    @media (max-width: 575.98px) { .about-dl { grid-template-columns: minmax(0, 1fr); gap: 0 1rem; } .about-dl dd:not(:last-child) { margin-bottom: .6rem; } }
     .about-dl dt { color: var(--fs-muted); font-weight: 500; }
     .about-dl dd { margin: 0; }
     .about-links { list-style: none; padding: 0; margin: 0 0 .75rem; display: grid; gap: .4rem; }

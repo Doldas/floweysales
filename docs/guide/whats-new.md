@@ -2,20 +2,32 @@
 title: What's new
 order: 13
 summary: What changed in the November 2026 release, and what is still not available.
-last-reviewed: 2026-11-06
+last-reviewed: 2026-11-07
 ---
 
 # What's new
 
 ## November 2026 release
 
+**Sources everywhere**
+- Prices, history, financial statements, SEC filings, valuations, backtests, strategy results, the wealth plan, portfolio risk and the Today briefing now show where they came from: provider, what was calculated and how, and the as-of and retrieval times in UTC. Open the **Source** button next to a figure. When no source was recorded it says "Source unknown" instead of guessing. Flow rows and agent tool results carry the same information. See [Where data comes from](provenance.md).
+**Phones and tablets**
+- Every page was checked on phone and tablet widths, in landscape and with text enlarged to 200%. Pages no longer scroll sideways, small buttons and links are at least 24 pixels, and content respects notches and the home indicator. See [Responsive UI](../responsive-ui.md).
+
+**Workspace**
+- The Markets chart, its insights and the leaderboard ranking are panes you can fold, resize (mouse or keyboard) and open full screen. Folding keeps the source, bar size, currency, newest-bar time and warnings in view, and your choices are saved in this browser. A compact density setting in the top bar fits more on a screen without dropping any column. Long rankings draw only the rows in view. See [Markets](markets.md) and [Workspace UX patterns](../workspace-ux.md).
+
 **Agents**
+- Flow agent nodes keep their sources with the report. A Markdown report links each `[S1]` marker to its source and ends with the list of the sources it cites (title, address, filing number, publication and retrieval time in UTC, and whether the agent read the page or only saw a search result). A JSON node can now run in an evidence mode: the citation markers are moved out of the data into a separate list of citations kept with the step, so the declared JSON contract is unchanged. See [Flows](flows.md).
+- SEC filing lists and SEC facts, and web search hits that carry a publication date, now count as sources; a recency limit can accept a dated search hit. Team runs and saved tasks can be exported as Markdown or JSON with their sources and findings.
 - Agent answers get a claim check: each cited sentence is compared with the cited text for company, metric, period, unit and direction, and shown as supported, contradicted, not proven or not checked, with the source passage under **Why is this claim supported?** See [Agents, teams and evidence](agents.md).
 
 - PDFs are read page by page with page numbers. An administrator can set up an optional vision model that reads scanned pages and charts or tables that are pictures, with page-cited figures, automatic checks, run limits and a Document evidence panel. Report viewer pages are followed to the PDF on the same site; an access denial (HTTP 403) stays a denial. See [Reading PDFs and scanned reports](../pdf-vision.md).
 
 **Web search**
 - Several web search providers can be set up together: free self-hosted SearXNG, Tavily, Brave, and Google Search through Gemini grounding (paid, only after an explicit approval and with spending ceilings). Automatic mode falls back in a set order with a limited number of tries; every skip and failure is listed. See [Settings and roles](settings.md).
+
+- Search results and sources are labeled by type (filing, company statement, news, analysis, community) and by what they can prove. Community posts such as Reddit stay discoverable as sentiment but never support a reported figure. Publication, update, file and retrieval dates are kept apart, unknown dates stay unknown, and each source has a **Why this source?** card. Choose Facts first, Balanced or Sentiment first and a freshness window under Evidence settings. See [Source trust](../source-trust.md).
 
 **Backtests**
 - Choose a custom period in UTC, test several lists and periods at once, and check how trading cost, holdings and rebalance interval change a result. See [Strategies and backtests](strategies.md).

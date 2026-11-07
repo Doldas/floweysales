@@ -135,6 +135,11 @@
                 [attr.aria-label]="theme.theme() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'">
           <i class="bi" [class.bi-sun]="theme.theme() === 'dark'" [class.bi-moon-stars]="theme.theme() === 'light'" aria-hidden="true"></i>
         </button>
+        <button type="button" class="btn btn-ghost btn-icon wide-only density-toggle" (click)="workspace.toggleDensity()"
+                [attr.aria-pressed]="workspace.density() === 'compact'" aria-label="Compact density"
+                [title]="workspace.density() === 'compact' ? 'Compact density is on. Click for comfortable spacing.' : 'Switch to compact density: more rows and figures per screen.'">
+          <i class="bi" [class.bi-distribute-vertical]="workspace.density() === 'compact'" [class.bi-list-nested]="workspace.density() !== 'compact'" aria-hidden="true"></i>
+        </button>
         <div class="more-menu">
           <button type="button" class="btn btn-ghost btn-icon" (click)="moreOpen.update(v => !v)" [attr.aria-expanded]="moreOpen()"
                   aria-haspopup="menu" aria-label="More actions">
@@ -144,6 +149,9 @@
             <div class="dropdown-menu show more-dropdown" role="menu">
               <button type="button" class="dropdown-item" role="menuitem" (click)="palette.open(); moreOpen.set(false)">
                 <i class="bi bi-command me-2" aria-hidden="true"></i>Search or run…
+              </button>
+              <button type="button" class="dropdown-item" role="menuitem" (click)="workspace.toggleDensity(); moreOpen.set(false)">
+                <i class="bi bi-list-nested me-2" aria-hidden="true"></i>{{ workspace.density() === 'compact' ? 'Use comfortable density' : 'Use compact density' }}
               </button>
               <button type="button" class="dropdown-item" role="menuitem" (click)="theme.toggle(); moreOpen.set(false)">
                 <i class="bi me-2" [class.bi-sun]="theme.theme() === 'dark'" [class.bi-moon-stars]="theme.theme() === 'light'" aria-hidden="true"></i>

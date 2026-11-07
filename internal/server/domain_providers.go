@@ -123,7 +123,9 @@ func (e *Engine) registerDomainRoutes() {
 		default:
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write(raw)
+			if err := json.NewEncoder(w).Encode(withProvenance(json.RawMessage(raw), pluginProvenance(r.PathValue("provider"), r.PathValue("operation"), time.Now().UTC()))); err != nil {
+				_, _ = w.Write(raw)
+			}
 		}
 	})
 }

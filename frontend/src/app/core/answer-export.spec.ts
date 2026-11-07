@@ -2,7 +2,7 @@
 //   node --test src/app/core/answer-export.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ANSWER_EXPORT_SCHEMA, answerToJson, answerToMarkdown, buildAnswerExport, policyLabel, redactUrl } from './answer-export.ts';
+import { buildTeamExport, teamToJson, teamToMarkdown, TEAM_EXPORT_SCHEMA, ANSWER_EXPORT_SCHEMA, answerToJson, answerToMarkdown, buildAnswerExport, policyLabel, redactUrl } from './answer-export.ts';
 
 const now = new Date('2026-11-06T09:30:00.250Z');
 const sources = [
@@ -70,4 +70,38 @@ test('the Markdown export leads with the policy and keeps provenance in UTC', ()
 
 test('an answer with no sources says so', () => {
   assert.match(answerToMarkdown(buildAnswerExport({ answer: '', now })), /_No answer text\._[\s\S]*_The agent retrieved no sources\._/);
+});
+
+const member = (id: string, name: string, extra: object = {}) => ({ id, name, status: 'done' as const, streamed: '', final: '', steps: [], error: '', ...extra });
+
+test('a team run exports every member and the chair with their own sources and findings', () => {
+  const src = { id: 'S1', tool: 'search_web', class: 'web_page', access: 'listed', url: 'https://example.com/a?token=abc#x', title: 'Acme' };
+  const exp = buildTeamExport({
+    question: 'Is Acme a fit?',
+    members: [
+      member('owner', 'The Owner', { final: 'It fits [S1].\nSTANCE: fits', stance: 'fits', model: 'm1', sources: [src], audit: [{ kind: 'snippet_only', sentence: 'It fits [S1].', detail: 'Only a snippet.' }] }),
+      member('quant', 'The Quant', { final: 'Not enough data.', stance: 'insufficient_data' }),
+    ],
+    chair: member('chair', 'Chair', { final: 'Mixed views.' }),
+    now: new Date('2026-11-07T10:00:00Z'),
+  });
+  assert.equal(exp.schema, TEAM_EXPORT_SCHEMA);
+  assert.equal(exp.exported_at, '2026-11-07T10:00:00.000Z');
+  assert.equal(exp.members[0].export.answer, 'It fits [S1].');
+  assert.equal(exp.members[0].export.sources[0].url, 'https://example.com/a?token=REDACTED');
+  assert.equal(exp.members[0].export.check.findings, 1);
+  assert.equal(exp.members[1].export.sources.length, 0);
+  assert.equal(exp.chair?.export.answer, 'Mixed views.');
+  const json = JSON.parse(teamToJson(exp));
+  assert.equal(json.members.length, 2);
+  const md = teamToMarkdown(exp);
+  assert.match(md, /^# Agent team answer/);
+  assert.match(md, /## Chair summary/);
+  assert.match(md, /## The Owner/);
+  assert.match(md, /- \*\*Stance:\*\* fits/);
+  assert.match(md, /### Answer/);
+  assert.match(md, /#### \[S1\] Acme/);
+  assert.match(md, /Exported:\*\* 2026-11-07 10:00:00 UTC/);
+  assert.doesNotMatch(md, /token=abc|#x/);
+  assert.equal((md.match(/## Question/g) ?? []).length, 1);
 });

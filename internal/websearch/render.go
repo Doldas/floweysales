@@ -5,10 +5,12 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"floweysales/internal/sourcetrust"
 )
 
 // MaxOutput bounds the JSON handed to a model or stored in a flow trace.
-const MaxOutput = 7000
+const MaxOutput = 11000
 
 const maxRendered = 5
 
@@ -28,6 +30,26 @@ type renderedResult struct {
 	PublishedAt string `json:"published_at,omitempty"`
 	Type        string `json:"type"`
 	Provider    string `json:"provider"`
+	// Trust is the source type and evidence role, the dates kept apart, the
+	// reporting period if one is stated, the evidence state and why the result
+	// ranked where it did.
+	Trust *sourcetrust.Meta `json:"trust,omitempty"`
+}
+
+// RenderOptions are the user's ranking choices. The zero value is the
+// facts-first profile with no freshness window.
+type RenderOptions struct {
+	Profile    string
+	WindowDays int
+	Now        time.Time // zero means the current time
+}
+
+type renderedRanking struct {
+	Profile    string                 `json:"profile"`
+	Policy     string                 `json:"policy"`
+	Intent     sourcetrust.Intent     `json:"intent"`
+	WindowDays int                    `json:"window_days,omitempty"`
+	Filtered   []sourcetrust.Filtered `json:"filtered,omitempty"`
 }
 
 type renderedSupport struct {
@@ -58,6 +80,7 @@ type rendered struct {
 	Grounded    *renderedGrounded `json:"grounded_answer,omitempty"`
 	Fallback    []renderedAttempt `json:"fallback,omitempty"`
 	Usage       *renderedUsage    `json:"usage,omitempty"`
+	Ranking     *renderedRanking  `json:"ranking,omitempty"`
 	Note        string            `json:"note"`
 }
 
@@ -109,7 +132,11 @@ func tidy(v string, max int) string {
 // https pages through) and returns the form to show. Duplicates are removed.
 // If the output would be too long, the answer and the results are shortened;
 // the output never fails for length.
-func Render(out Outcome, accept func(string) (string, bool)) (string, error) {
+func Render(out Outcome, accept func(string) (string, bool), opts ...RenderOptions) (string, error) {
+	var ro RenderOptions
+	if len(opts) > 0 {
+		ro = opts[0]
+	}
 	resp := out.Response
 	if resp == nil {
 		return "", ErrNoProvider
@@ -121,26 +148,64 @@ func Render(out Outcome, accept func(string) (string, bool)) (string, error) {
 		r.ResultType = "grounded_answer"
 		r.Note = GroundedNote + " " + Note
 	}
-	kept := map[int]int{} // index in resp.Results -> index in r.Results
-	seen := map[string]int{}
+	// Each distinct public result is classified and dated from what the
+	// provider returned (nothing is fetched), then the set is ranked for the
+	// question. Syndicated copies become one result that lists the others.
+	now := ro.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	profile := ro.Profile
+	if !sourcetrust.ValidProfile(profile) {
+		profile = ""
+	}
+	intent := sourcetrust.DetectIntent(resp.Query)
+	var cands []*sourcetrust.Candidate
+	byCanon := map[string]*sourcetrust.Candidate{}
+	candOf := map[int]*sourcetrust.Candidate{} // index in resp.Results -> candidate
 	for i, hit := range resp.Results {
 		shown, ok := accept(hit.URL)
 		if !ok {
 			continue
 		}
 		key := CanonicalURL(shown)
-		if at, dup := seen[key]; dup {
-			kept[i] = at
-			continue
-		}
-		if len(r.Results) >= maxRendered {
+		if c, dup := byCanon[key]; dup {
+			candOf[i] = c
 			continue
 		}
 		snippet := tidy(hit.Snippet, 450)
-		kept[i], seen[key] = len(r.Results), len(r.Results)
-		r.Results = append(r.Results, renderedResult{Title: tidy(hit.Title, 180), URL: shown, Description: snippet, Snippet: snippet,
-			Age: tidy(hit.Age, 64), PublishedAt: tidy(hit.PublishedAt, 64), Type: hit.Type, Provider: resp.Provider})
+		meta := sourcetrust.ForSearchResult(shown, tidy(hit.Title, 180), snippet, tidy(hit.PublishedAt, 64), r.RetrievedAt, now)
+		c := &sourcetrust.Candidate{Index: len(cands), URL: shown, Title: tidy(hit.Title, 180), Snippet: snippet, Meta: meta}
+		byCanon[key], candOf[i] = c, c
+		cands = append(cands, c)
 	}
+	ranked, dropped := sourcetrust.Rank(cands, sourcetrust.Options{Profile: profile, Intent: intent, WindowDays: ro.WindowDays, Now: now, Limit: maxRendered})
+	pos := map[*sourcetrust.Candidate]int{}
+	for i, c := range ranked {
+		pos[c] = i
+		hit := resp.Results[firstIndex(candOf, c)]
+		r.Results = append(r.Results, renderedResult{Title: c.Title, URL: c.URL, Description: c.Snippet, Snippet: c.Snippet,
+			Age: tidy(hit.Age, 64), PublishedAt: c.Meta.PublishedAt, Type: hit.Type, Provider: resp.Provider, Trust: c.Meta})
+	}
+	// A support that pointed at a merged copy points at the result that kept it.
+	for _, c := range cands {
+		for _, other := range cands {
+			if _, shown := pos[c]; shown {
+				for _, u := range c.Meta.AlsoSeenAt {
+					if u == other.URL {
+						pos[other] = pos[c]
+					}
+				}
+			}
+		}
+	}
+	kept := map[int]int{} // index in resp.Results -> index in r.Results
+	for i, c := range candOf {
+		if at, ok := pos[c]; ok {
+			kept[i] = at
+		}
+	}
+	r.Ranking = &renderedRanking{Profile: profileName(profile), Policy: intent.Describe(profile, ro.WindowDays), Intent: intent, WindowDays: ro.WindowDays, Filtered: dropped}
 	if grounded {
 		g := &renderedGrounded{Text: tidy(resp.Answer, 1500), Model: "gemini", SearchQueries: resp.SearchQueries}
 		for _, sup := range resp.Supports {
@@ -179,6 +244,9 @@ func Render(out Outcome, accept func(string) (string, bool)) (string, error) {
 			r.Grounded.Text = tidy(r.Grounded.Text, len(r.Grounded.Text)/2)
 		case r.Grounded != nil && len(r.Grounded.Supports) > 0:
 			r.Grounded.Supports = r.Grounded.Supports[:len(r.Grounded.Supports)-1]
+		case r.Ranking != nil && len(r.Ranking.Filtered) > 0:
+			r.Ranking.Filtered = nil
+		case trimWhy(&r):
 		case len(r.Results) > 1:
 			r.Results = r.Results[:len(r.Results)-1]
 		case len(r.Fallback) > 0:
@@ -191,4 +259,36 @@ func Render(out Outcome, accept func(string) (string, bool)) (string, error) {
 			return string(data), nil
 		}
 	}
+}
+
+func profileName(p string) string {
+	if p == "" {
+		return sourcetrust.ProfileFactsFirst
+	}
+	return p
+}
+
+// firstIndex is the smallest index in the provider's list that maps to c.
+func firstIndex(m map[int]*sourcetrust.Candidate, c *sourcetrust.Candidate) int {
+	best := -1
+	for i, v := range m {
+		if v == c && (best < 0 || i < best) {
+			best = i
+		}
+	}
+	return best
+}
+
+// trimWhy shortens the reasons of the lowest-ranked result that still has more
+// than two, so a long output loses detail from the bottom before it loses a
+// result. It reports whether it changed anything.
+func trimWhy(r *rendered) bool {
+	for i := len(r.Results) - 1; i >= 0; i-- {
+		t := r.Results[i].Trust
+		if t != nil && len(t.WhyRanked) > 2 {
+			t.WhyRanked = t.WhyRanked[:2]
+			return true
+		}
+	}
+	return false
 }

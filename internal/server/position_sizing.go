@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"floweysales/internal/market"
 	"floweysales/internal/portfolio"
@@ -82,6 +83,7 @@ func (e *Engine) registerPositionSizingRoutes() {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"symbol": symbol, "side": side, "entry": in.Entry, "equity": summary.Equity, "risk_pct": riskOrDefault(req.RiskPct),
 			"atr_mult": mult, "atr": in.ATR, "stop_source": stopSource(in.Stop), "result": res,
+			"provenance": sizingProvenance(symbol, stopSource(in.Stop), time.Now().UTC()),
 		})
 	})
 }

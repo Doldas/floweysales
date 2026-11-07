@@ -14,7 +14,11 @@ import (
 	"time"
 
 	"floweysales/internal/grounding"
+	"floweysales/internal/sourcetrust"
 )
+
+// nowFunc is the clock of date validation; tests replace it.
+var nowFunc = time.Now
 
 // Access says how much of a source reached the model.
 const (
@@ -59,6 +63,10 @@ type Source struct {
 	// "grounded_source" for a page Gemini cited, which has no snippet of its own.
 	SearchProvider string `json:"search_provider,omitempty"`
 	ResultType     string `json:"result_type,omitempty"`
+	// Trust is what is known beyond the text: source type and evidence role,
+	// dates kept apart, reporting period, evidence state and why it ranked
+	// where it did (see internal/sourcetrust).
+	Trust *sourcetrust.Meta `json:"trust,omitempty"`
 }
 
 // Registry collects the sources of one run, in the order they were returned.
@@ -153,8 +161,12 @@ func (r *Registry) Register(tool, callID, argsJSON, result string) (string, []So
 		return r.registerRead(argsJSON, result)
 	case "delegate_to_team":
 		return r.registerDelegation(callID, result)
+	case "get_sec_filings":
+		return r.registerFilings(callID, result)
+	case "get_sec_facts":
+		return r.registerFacts(callID, result)
 	}
-	return result, nil
+	return attachToolProvenance(tool, result, time.Now()), nil
 }
 
 // ReadTarget resolves the source_id of a read_source call to the URL of a
@@ -187,9 +199,10 @@ func (r *Registry) registerRead(argsJSON, result string) (string, []Source) {
 		return result, nil
 	}
 	var page struct {
-		Title       string `json:"title"`
-		Text        string `json:"text"`
-		RetrievedAt string `json:"retrieved_at"`
+		Title       string            `json:"title"`
+		Text        string            `json:"text"`
+		RetrievedAt string            `json:"retrieved_at"`
+		ReadMeta    *sourcetrust.Meta `json:"read_meta"`
 	}
 	if json.Unmarshal([]byte(result), &page) != nil || strings.TrimSpace(page.Text) == "" {
 		return result, nil
@@ -205,6 +218,7 @@ func (r *Registry) registerRead(argsJSON, result string) (string, []Source) {
 		text = text[:maxReadExcerpt]
 	}
 	r.list[i].Excerpt = text
+	r.list[i].mergeRead(page.ReadMeta)
 	shown := r.list[i]
 	if len(shown.Excerpt) > maxExcerpt {
 		shown.Excerpt = shown.Excerpt[:maxExcerpt]
@@ -220,6 +234,46 @@ func (r *Registry) registerRead(argsJSON, result string) (string, []Source) {
 		return result, []Source{shown}
 	}
 	return string(out), []Source{shown}
+}
+
+// mergeRead folds what reading a page showed into the source's trust metadata
+// and keeps the plain published_at in step with it.
+func (s *Source) mergeRead(read *sourcetrust.Meta) {
+	if s.Trust == nil {
+		s.Trust = sourcetrust.ForSearchResult(s.URL, s.Title, "", s.PublishedAt, s.RetrievedAt, nowFunc())
+	}
+	if read != nil {
+		s.Trust.MergeRead(read, nowFunc())
+	} else {
+		s.Trust.EvidenceState = sourcetrust.StatePageRead
+	}
+	s.PublishedAt = s.Trust.PublishedAt
+}
+
+// RecordReadFailure notes on the source that a read_source call for it failed,
+// so it shows as a refused or unreadable lead and not as a read page. It
+// returns the updated source for the event stream.
+func (r *Registry) RecordReadFailure(argsJSON, reason string) (Source, bool) {
+	var args struct {
+		SourceID string `json:"source_id"`
+	}
+	if json.Unmarshal([]byte(argsJSON), &args) != nil {
+		return Source{}, false
+	}
+	i, ok := r.byID[strings.ToUpper(strings.TrimSpace(args.SourceID))]
+	if !ok || r.list[i].Access == AccessRead {
+		return Source{}, false
+	}
+	s := &r.list[i]
+	if s.Trust == nil {
+		s.Trust = sourcetrust.ForSearchResult(s.URL, s.Title, "", s.PublishedAt, s.RetrievedAt, nowFunc())
+	}
+	s.Trust.MarkReadFailure(reason)
+	shown := *s
+	if len(shown.Excerpt) > maxExcerpt {
+		shown.Excerpt = shown.Excerpt[:maxExcerpt]
+	}
+	return shown, true
 }
 
 func (r *Registry) registerSearch(callID, argsJSON, result string) (string, []Source) {
@@ -246,19 +300,27 @@ func (r *Registry) registerSearch(callID, argsJSON, result string) (string, []So
 		snippet, _ := hit["snippet"].(string)
 		resultType, _ := hit["type"].(string)
 		published, _ := hit["published_at"].(string)
+		// The search renderer classifies, dates and ranks each hit; a hit
+		// without that (an older trace) is classified here with the same rules.
 		modified, _ := hit["modified_at"].(string)
-		// Provider date metadata is untrusted. Never invent a publication date or
-		// treat the retrieval timestamp as the creation of the article.
-		if _, ok := parseDate(published); !ok {
-			published = ""
-		}
 		if _, ok := parseDate(modified); !ok {
 			modified = ""
 		}
+		var trust *sourcetrust.Meta
+		if hit["trust"] != nil {
+			if raw, err := json.Marshal(hit["trust"]); err == nil {
+				var m sourcetrust.Meta
+				if json.Unmarshal(raw, &m) == nil && m.Type != "" {
+					trust = &m
+				}
+			}
+		}
+		if trust == nil {
+			trust = sourcetrust.ForSearchResult(link, title, snippet, published, retrieved, nowFunc())
+		}
 		s := r.add(Source{Tool: "search_web", CallID: callID, Query: args.Query, URL: link, Title: title,
-			Class: sourceClassForURL(link), Access: AccessListed, RetrievedAt: retrieved,
-			PublishedAt: published, ModifiedAt: modified, Excerpt: title + "\n" + snippet,
-			SearchProvider: searchProvider, ResultType: resultType})
+			Class: sourceClassForURL(link), Access: AccessListed, PublishedAt: trust.PublishedAt, ModifiedAt: modified, RetrievedAt: retrieved, Excerpt: title + "\n" + snippet,
+			SearchProvider: searchProvider, ResultType: resultType, Trust: trust})
 		hit["source_id"] = s.ID
 		added = append(added, s)
 	}
@@ -319,7 +381,8 @@ func (r *Registry) registerDelegation(callID, result string) (string, []Source) 
 				src.Access = AccessListed
 			}
 			s := r.add(Source{Tool: "delegate_to_team", CallID: callID, Member: name, Query: src.Query, URL: src.URL, Title: src.Title,
-				Class: src.Class, Access: src.Access, DocumentID: src.DocumentID, PublishedAt: src.PublishedAt, ModifiedAt: src.ModifiedAt, RetrievedAt: src.RetrievedAt, Excerpt: src.Excerpt})
+				Class: src.Class, Access: src.Access, DocumentID: src.DocumentID, PublishedAt: src.PublishedAt, ModifiedAt: src.ModifiedAt, RetrievedAt: src.RetrievedAt, Excerpt: src.Excerpt,
+				SearchProvider: src.SearchProvider, ResultType: src.ResultType, Trust: src.Trust})
 			added = append(added, s)
 			shown = append(shown, map[string]string{"source_id": s.ID, "url": s.URL, "title": s.Title, "access": s.Access})
 		}
@@ -356,7 +419,8 @@ func (r *Registry) registerSection(callID, result string) (string, []Source) {
 		return result, nil
 	}
 	s := r.add(Source{Tool: "get_sec_section", CallID: callID, URL: sec.DocumentURL, Title: strings.TrimSpace(sec.Form + " " + sec.Item),
-		Class: ClassPrimaryFiling, Access: AccessRead, DocumentID: sec.Accession, PublishedAt: sec.Filed, RetrievedAt: sec.RetrievedAt, Excerpt: sec.Excerpt})
+		Class: ClassPrimaryFiling, Access: AccessRead, DocumentID: sec.Accession, PublishedAt: sec.Filed, RetrievedAt: sec.RetrievedAt, Excerpt: sec.Excerpt,
+		Trust: sourcetrust.ForFiling(sec.Form, sec.Filed, sec.RetrievedAt, nowFunc())})
 	var doc map[string]json.RawMessage
 	if json.Unmarshal([]byte(result), &doc) != nil {
 		return result, []Source{s}
@@ -381,6 +445,9 @@ const (
 	Excluded    = "excluded_source" // a source of a type the user's settings do not accept
 	Stale       = "stale"           // a source older than the recency limit, or with no date to check
 	Unreachable = "unreachable"     // a cited link that no longer resolves
+	// SentimentAsFact: a reported financial figure that rests only on community
+	// discussion or opinion, which can show what people think, not what was reported.
+	SentimentAsFact = "sentiment_as_fact"
 )
 
 // ValidClass reports whether class is a source type a setting may name.
@@ -446,15 +513,7 @@ func (o Options) ageProblem(src Source) string {
 	return ""
 }
 
-func parseDate(raw string) (time.Time, bool) {
-	raw = strings.TrimSpace(raw)
-	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02"} {
-		if t, err := time.Parse(layout, raw); err == nil {
-			return t, true
-		}
-	}
-	return time.Time{}, false
-}
+func parseDate(raw string) (time.Time, bool) { return sourcetrust.ParseDate(raw) }
 
 // Finding is one problem the audit found, tied to the sentence it is in.
 type Finding struct {
@@ -504,6 +563,7 @@ func AuditWith(answer string, r *Registry, opts Options) []Finding {
 		cited := map[string]bool{}
 		var excerpts []string
 		var listedOnly = true
+		var sentimentCited, factCapable int
 		for _, c := range citation.FindAllStringSubmatch(text, -1) {
 			id := "S" + c[1]
 			if cited[id] {
@@ -516,6 +576,11 @@ func AuditWith(answer string, r *Registry, opts Options) []Finding {
 				continue
 			}
 			excerpts = append(excerpts, src.Excerpt)
+			if src.Trust != nil && (src.Trust.Role == sourcetrust.RoleSentiment || src.Trust.Role == sourcetrust.RoleOpinion) {
+				sentimentCited++
+			} else {
+				factCapable++
+			}
 			if kind, detail := opts.classProblem(src.Class); kind != "" {
 				if kind == NotPrimary {
 					detail = id + " " + detail
@@ -552,6 +617,9 @@ func AuditWith(answer string, r *Registry, opts Options) []Finding {
 				out = append(out, Finding{Kind: Uncited, Sentence: shown, Detail: "States a figure that appears in a retrieved source without citing it."})
 			}
 		case len(excerpts) > 0:
+			if sentimentCited > 0 && factCapable == 0 && sourcetrust.IsUnattributedFinancialClaim(text) {
+				out = append(out, Finding{Kind: SentimentAsFact, Sentence: shown, Detail: "States a financial figure as fact, but every cited source is community discussion or opinion. Those show what people think, not reported figures; cite the filing or attribute the figure to the discussion."})
+			}
 			if listedOnly {
 				out = append(out, Finding{Kind: SnippetOnly, Sentence: shown, Detail: "The cited source is a search result the agent did not open; only its title and snippet were seen."})
 			}

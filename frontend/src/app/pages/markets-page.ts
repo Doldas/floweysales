@@ -8,6 +8,9 @@ import { AgentSession } from '../core/agent-session';
 import { MarketState } from '../core/market-state';
 import { NotifyService } from '../core/notify.service';
 import { AssetInfoComponent } from '../components/asset-info';
+import { PaneComponent } from '../ui/pane';
+import { chartMeta, chartSummary, type ChartMetaInput } from '../core/chart-meta';
+import { formatUtcDateTime } from '../ui/datetime';
 import { LeaderboardComponent } from '../components/leaderboard';
 import { TradingChartComponent } from '../components/chart';
 import { SymbolSearchComponent } from '../shell/symbol-search';
@@ -20,7 +23,7 @@ interface Kpi { label: string; value: string; sub?: string; tone?: 'pos' | 'neg'
 @Component({
   selector: 'fs-markets-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, SymbolSearchComponent],
+  imports: [PaneComponent, HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, SymbolSearchComponent],
   templateUrl: './markets-page.html',
   styleUrl: './markets-page.scss',
 })
@@ -37,6 +40,25 @@ export class MarketsPage {
 
   readonly change = computed(() => this.market.dayChange() ?? this.market.rangeChange());
   readonly changeLabel = computed(() => (this.market.dayChange() !== null ? 'today' : this.market.historyRange()));
+
+  private readonly chartInput = computed<ChartMetaInput>(() => {
+    const s = this.market.marketSeries();
+    return {
+      provider: s?.provider || this.market.provider(),
+      interval: s?.interval,
+      currency: s?.currency || this.market.currency(),
+      range: this.market.historyRange(),
+      times: s?.points?.map(p => p.t),
+      emaFast: s?.emaConfig?.fastPeriod,
+      emaSlow: s?.emaConfig?.slowPeriod,
+      studies: this.market.enabledIndicatorKeys().map(k => INDICATOR_LABELS[k]),
+    };
+  });
+  readonly chartFacts = computed(() => chartMeta(this.chartInput(), formatUtcDateTime));
+  readonly chartSummary = computed(() => chartSummary(this.chartInput()));
+
+  /** Phones start with the shorter chart they always had; the user can still resize it. */
+  readonly chartHeight = typeof window !== 'undefined' && window.innerWidth <= 700 ? 270 : 380;
 
   readonly kpis = computed<Kpi[]>(() => {
     const cur = this.market.currency();

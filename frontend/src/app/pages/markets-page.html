@@ -72,17 +72,22 @@
       }
     </section>
 
-    <!-- Chart -->
-    <section class="card chart-card" aria-labelledby="chart-title">
-      <div class="card-header">
-        <h2 class="card-title me-auto" id="chart-title">Price chart</h2>
+    <!-- Chart: a pane the user can fold, resize and open full screen; source, bars, units and newest bar stay visible when folded -->
+    <fs-pane class="chart-card" paneId="markets.chart" heading="Price chart" [resizable]="true" [focusable]="true" mode="var" [defaultHeight]="chartHeight" [min]="200" [max]="900">
+      <span paneSummary>{{ chartSummary() }}</span>
+      <span paneActions style="display: contents">
         <div class="fs-segmented chart-range" role="group" aria-label="History range">
           @for (r of market.historyRanges; track r) {
             <button type="button" [attr.aria-pressed]="market.historyRange() === r" (click)="market.setHistoryRange(r)">{{ r }}</button>
           }
         </div>
         <button type="button" class="btn btn-ghost btn-icon btn-sm" (click)="resetZoom()" aria-label="Reset zoom" title="Reset zoom"><i class="bi bi-arrows-angle-contract"></i></button>
-      </div>
+      </span>
+      <dl paneMeta class="chart-meta" aria-label="Chart data details" data-testid="chart-meta">
+        @for (f of chartFacts(); track f.label) {
+          <div><dt>{{ f.label }}</dt><dd>{{ f.value }}</dd></div>
+        }
+      </dl>
       @if (market.loadingHistory()) { <div class="progress rounded-0" style="height: 2px"><div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div></div> }
       <div class="studies" role="group" aria-label="Chart analysis studies">
         <i class="bi bi-sliders2 text-muted" aria-hidden="true"></i>
@@ -90,19 +95,16 @@
           <button type="button" class="fs-chip" [attr.aria-pressed]="market.indicators()[k]" (click)="market.toggleIndicator(k)">{{ indicatorLabels[k] }}</button>
         }
       </div>
-      <div class="card-body pt-2">
+      <div class="pt-2">
         <fse-trading-chart [epoch]="market.chartEpoch()" [flags]="market.indicators()" />
       </div>
-    </section>
+    </fs-pane>
 
     <!-- Insights -->
     @if (market.insights().length) {
-      <section class="card insights-card" aria-labelledby="insights-title">
-        <div class="card-header">
-          <h2 class="card-title me-auto" id="insights-title">Analysis insights</h2>
-          <span class="badge text-bg-secondary">{{ market.trackedSymbol() }} · {{ market.historyRange() }}</span>
-        </div>
-        <div class="card-body insights-grid">
+      <fs-pane paneId="markets.insights" heading="Analysis insights">
+        <span paneSummary>{{ market.trackedSymbol() }} · {{ market.historyRange() }} · {{ market.insights().length }} figures, calculated from the loaded bars</span>
+        <div class="insights-grid">
           @for (ins of market.insights(); track ins.label) {
             <div class="insight" [class.pos]="ins.tone === 'pos'" [class.neg]="ins.tone === 'neg'">
               <div class="insight-label">{{ ins.label }}</div>
@@ -111,7 +113,7 @@
             </div>
           }
         </div>
-      </section>
+      </fs-pane>
     }
 
     @if (market.hasAssetFundamentals()) {

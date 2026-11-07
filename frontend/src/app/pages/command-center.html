@@ -26,14 +26,17 @@
         <div class="today-chips">
           @if (briefing()?.phase; as p) {
             <a class="today-chip" routerLink="/plan"><i class="bi bi-bullseye" aria-hidden="true"></i><span><strong>{{ p.name }}</strong> phase · {{ p.probability_goal_pct.toFixed(0) }}% {{ p.id === 'income' ? 'money lasts' : 'chance of your goal' }}</span></a>
+            <fs-source [fact]="briefing()?.provenance?.['phase']" />
           } @else {
             <a class="today-chip" routerLink="/plan"><i class="bi bi-bullseye" aria-hidden="true"></i><span><strong>Set up your plan</strong> · phase, allocation and goal</span></a>
           }
           @if (briefing()?.macro; as m) {
             <span class="today-chip" [attr.data-regime]="m.regime" [title]="m.reasons || ''"><i class="bi" [class]="regimeIcon(m.regime)" aria-hidden="true"></i><span>Macro: <strong>{{ regimeLabels[m.regime] || m.regime }}</strong></span></span>
+            <fs-source [fact]="briefing()?.provenance?.['macro']" />
           }
           @if (briefing()?.portfolio; as pf) {
             <a class="today-chip" routerLink="/portfolio"><i class="bi bi-wallet2" aria-hidden="true"></i><span>Portfolio {{ pf.equity | number: '1.0-0' }}@if (pf.day_change !== undefined) { · today {{ signedChange(pf.day_change, pf.day_change_pct) }} }@if (pf.drawdown_from_peak_pct !== undefined) { · {{ pf.drawdown_from_peak_pct }}% from peak }</span></a>
+            <fs-source [fact]="briefing()?.provenance?.['portfolio']" />
             @if (pf.top_alert) { <a class="today-chip" routerLink="/portfolio"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><span>Alert: {{ alertName(pf.top_alert) }}</span></a> }
           }
         </div>
@@ -41,9 +44,9 @@
           @if (w.leaderboard || w.insider || w.earnings) {
             <h3 class="today-sub">Worth a look</h3>
             <ul class="today-list">
-              @if (w.leaderboard; as l) { <li><i class="bi bi-trophy" aria-hidden="true"></i><span><strong>{{ l.symbol }}</strong> tops the leaderboard (score {{ l.score }}, grade {{ l.grade }})@if (l.reasons) { <span class="text-muted"> · {{ l.reasons }}</span> }</span></li> }
-              @if (w.insider; as i) { <li><i class="bi bi-person-check" aria-hidden="true"></i><span><strong>{{ i.symbol }}</strong> insider buy of {{ i.largest_buy_value | number: '1.0-0' }}@if (i.largest_buyer) { by {{ i.largest_buyer }} }@if (i.cluster_buy) { , several buyers }@if (i.latest) { <span class="text-muted"> · {{ i.latest }}</span> }</span></li> }
-              @if (w.earnings; as e) { <li><i class="bi bi-calendar-event" aria-hidden="true"></i><span><strong>{{ e.symbol }}</strong> reports earnings on {{ e.date }}@if (!e.confirmed) { <span class="text-muted"> (estimated)</span> }</span></li> }
+              @if (w.leaderboard; as l) { <li><i class="bi bi-trophy" aria-hidden="true"></i><span><strong>{{ l.symbol }}</strong> tops the leaderboard (score {{ l.score }}, grade {{ l.grade }})@if (l.reasons) { <span class="text-muted"> · {{ l.reasons }}</span> }<fs-source [fact]="briefing()?.provenance?.['worth_a_look.leaderboard']" /></span></li> }
+              @if (w.insider; as i) { <li><i class="bi bi-person-check" aria-hidden="true"></i><span><strong>{{ i.symbol }}</strong> insider buy of {{ i.largest_buy_value | number: '1.0-0' }}@if (i.largest_buyer) { by {{ i.largest_buyer }} }@if (i.cluster_buy) { , several buyers }@if (i.latest) { <span class="text-muted"> · {{ i.latest }}</span> }<fs-source [fact]="briefing()?.provenance?.['worth_a_look.insider']" /></span></li> }
+              @if (w.earnings; as e) { <li><i class="bi bi-calendar-event" aria-hidden="true"></i><span><strong>{{ e.symbol }}</strong> reports earnings on {{ e.date }}@if (!e.confirmed) { <span class="text-muted"> (estimated)</span> }<fs-source [fact]="briefing()?.provenance?.['worth_a_look.earnings']" /></span></li> }
             </ul>
           }
         }

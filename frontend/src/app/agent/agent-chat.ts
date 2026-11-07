@@ -2,14 +2,14 @@ import { answerToJson, answerToMarkdown, buildAnswerExport } from '../core/answe
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, effect, inject, input, signal, viewChild, OnInit } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
-import { EVIDENCE_MODES, auditSummary, claimFacts, claimsSummary, findingLabel, removedSummary, safeUrl, settingsSummary, sortClaims, sourceOrigin, spanOrigin, spanParts, splitSources, verdictLabel, whyLabel } from '../core/answer-sources';
+import { EVIDENCE_MODES, auditSummary, claimFacts, claimsSummary, findingLabel, removedSummary, safeUrl, settingsSummary, sortClaims, sourceOrigin, spanOrigin, spanParts, splitSources, verdictLabel, whyLabel, RANKING_PROFILES, sortSources, sourceCard, type AnswerSource } from '../core/answer-sources';
 import { AgentSession, type ChatEntry } from '../core/agent-session';
 import { renderMarkdown } from '../markdown';
 import { toolLabel } from '../components/agent-tools';
 import { defaultOptionLabel, profileOption, profileSummary } from '../components/profile-view';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import { ToolCallComponent } from '../components/tool-call';
-import { canResume, checklistLine, taskStatusLabel } from '../core/task-view';
+import { canResume, checklistLine, taskStatusLabel, type SavedTask } from '../core/task-view';
 import { formatUtcDateTime } from '../ui/datetime';
 import type { ToolCall } from '../components/tool-call-view';
 
@@ -50,7 +50,29 @@ export class AgentChatComponent implements OnInit {
   readonly claimFacts = claimFacts;
   readonly spanParts = spanParts;
   readonly spanOrigin = spanOrigin;
+  readonly rankingProfiles = RANKING_PROFILES;
+  readonly rankingHint = computed(() => RANKING_PROFILES.find(p => p.id === this.session.evidenceSettings().rankingProfile)?.hint ?? '');
+  readonly sortBy = signal<'relevance' | 'date'>('relevance');
+  readonly card = sourceCard;
+  sorted(list: AnswerSource[]): AnswerSource[] { return sortSources(list, this.sortBy()); }
   link(url: string | undefined): string { return safeUrl(url); }
+
+  /** Downloads a saved task's last answer with the sources and findings it rests on. */
+  async exportTask(task: SavedTask, format: 'md' | 'json'): Promise<void> {
+    const t = await this.session.taskForExport(task.id);
+    if (!t) return;
+    const exp = buildAnswerExport({ answer: t.answer, question: t.title, policy: t.policy, sources: t.sources, findings: t.audit, removed: t.removed });
+    this.download(format === 'json' ? answerToJson(exp) : answerToMarkdown(exp), format, `research-task-${task.id}-${exp.exported_at.slice(0, 19).replace(/[:T]/g, '-')}Z`);
+  }
+
+  private download(body: string, format: 'md' | 'json', name: string): void {
+    const blob = new Blob([body], { type: format === 'json' ? 'application/json' : 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${name}.${format}`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
 
   /** Downloads the latest answer with its policy and sources as Markdown or JSON. */
   exportAnswer(format: 'md' | 'json'): void {

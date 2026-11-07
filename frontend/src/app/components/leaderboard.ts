@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, afterRenderEffect, computed, inject, signal, viewChild, ElementRef } from '@angular/core';
 import { HelpButtonComponent } from '../ui/help-button';
 import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -13,7 +13,9 @@ import type { IndexInfo, LeaderboardOption, LeaderboardResponse, LeaderboardRow,
 import { EMPTY_SCOPE, SCOPE_REGIONS, coverageLines, formToScope, scopeError, scopeIsActive, unsupportedRegions, type ScopeForm } from '../core/leaderboard-scope';
 import { LEADERBOARD_FACTORS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES } from './investor-nodes';
 import { ProgressStatusComponent } from '../ui/progress-status';
+import { PaneComponent, type PaneView } from '../ui/pane';
 import { SkeletonComponent } from '../ui/skeleton';
+import { WINDOW_THRESHOLD, rowWindow } from '../core/workspace-prefs';
 import { SourceComponent } from '../ui/source';
 import { BacktestPanelComponent } from './backtest-panel';
 import { IndexSourcesComponent } from './index-sources';
@@ -30,7 +32,7 @@ const STORE_KEY = 'fs.leaderboard';
 @Component({
   selector: 'fs-leaderboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HelpButtonComponent, DecimalPipe, FormsModule, RouterLink, BacktestPanelComponent, IndexSourcesComponent, ProgressStatusComponent, SkeletonComponent, SourceComponent],
+  imports: [PaneComponent, HelpButtonComponent, DecimalPipe, FormsModule, RouterLink, BacktestPanelComponent, IndexSourcesComponent, ProgressStatusComponent, SkeletonComponent, SourceComponent],
   template: `
 <section class="card board" aria-labelledby="board-title">
   <div class="card-header board-head">
@@ -293,8 +295,13 @@ const STORE_KEY = 'fs.leaderboard';
     @if (!d.rows.length) {
       <div class="fs-empty m-3"><i class="bi bi-inbox"></i><h3>No company had enough data to rank</h3><p class="mb-0">Check that a market-data provider plugin is installed and enabled.</p></div>
     } @else {
-      <div class="fs-scroll-x">
-        <table class="table table-hover align-middle mb-0 board-table">
+      <fs-pane paneId="markets.leaderboard" heading="Ranking" [level]="3" [resizable]="true" [focusable]="true" [collapsible]="false" [defaultHeight]="680" [min]="240" [max]="1200"
+               (view)="onView($event)">
+        <span paneSummary>{{ d.rows.length }} ranked · {{ visibleRows().length }} shown{{ windowed() ? ' (' + (win().end - win().start) + ' drawn while you scroll)' : '' }}</span>
+        <p paneMeta class="pane-meta-line" data-testid="leaderboard-meta">
+          Source {{ d.provider || 'unknown' }} · prices as of {{ d.as_of || 'unknown' }} (UTC dates) · scores are 0&ndash;100 percentiles within {{ universeLabel() }}, not predictions
+        </p>
+        <table class="table table-hover align-middle mb-0 board-table" [attr.aria-rowcount]="windowed() ? visibleRows().length + 1 : null">
           <caption class="visually-hidden">{{ strategyInfo()?.label }} ranking of {{ universeLabel() }}</caption>
           <thead>
             <tr>
@@ -311,9 +318,10 @@ const STORE_KEY = 'fs.leaderboard';
               <th scope="col">Why it ranks</th>
             </tr>
           </thead>
-          <tbody>
-            @for (r of visibleRows(); track r.symbol) {
-              <tr class="board-row" [class.active]="r.symbol === market.trackedSymbol()" tabindex="0" (click)="open(r)" (keydown.enter)="open(r)"
+          <tbody #tbody>
+            @if (windowed() && win().before > 0) { <tr class="spacer" aria-hidden="true"><td colspan="11" [style.height.px]="win().before"></td></tr> }
+            @for (r of drawnRows(); track r.symbol; let i = $index) {
+              <tr class="board-row" [attr.aria-rowindex]="windowed() ? win().start + i + 2 : null" [class.active]="r.symbol === market.trackedSymbol()" tabindex="0" (click)="open(r)" (keydown.enter)="open(r)"
                   [attr.aria-label]="'Open ' + r.symbol + ', rank ' + r.rank + ', score ' + r.score">
                 <td class="num rank">{{ r.rank }}</td>
                 <td class="company"><span class="sym">{{ r.symbol }}</span> <span class="grade" [attr.data-grade]="r.grade" [title]="'Grade ' + r.grade">{{ r.grade }}</span></td>
@@ -397,9 +405,10 @@ const STORE_KEY = 'fs.leaderboard';
                 </tr>
               }
             }
+            @if (windowed() && win().after > 0) { <tr class="spacer" aria-hidden="true"><td colspan="11" [style.height.px]="win().after"></td></tr> }
           </tbody>
         </table>
-      </div>
+      </fs-pane>
       <p class="board-sub mb-0 px-3 pt-2" data-testid="leaderboard-disclaimer">
         {{ d.provenance?.disclaimer ?? 'Research suggestion, not personalized financial advice. Scores are percentiles within this list, not predictions.' }}
         @if (d.provenance; as p) {
@@ -447,10 +456,10 @@ const STORE_KEY = 'fs.leaderboard';
 .index-panel { border: 1px solid var(--fs-border); border-radius: 0.5rem; padding: 0.75rem 1rem; font-size: 0.8125rem; }
 .index-unavailable { border-left: 3px solid var(--fs-warn, #b7791f); padding-left: 0.6rem; }
 .index-warning { color: var(--fs-muted); margin: 0.25rem 0; }
-.index-facts { margin: 0.5rem 0; display: grid; gap: 0.3rem; div { display: grid; grid-template-columns: 9rem 1fr; gap: 0.5rem; } dt { color: var(--fs-muted); font-weight: 500; } dd { margin: 0; } }
+.index-facts { margin: 0.5rem 0; display: grid; gap: 0.3rem; div { display: grid; grid-template-columns: minmax(0, 9rem) minmax(0, 1fr); gap: 0.5rem; } dt { color: var(--fs-muted); font-weight: 500; } dd { margin: 0; } }
 @media (max-width: 575.98px) { .index-facts div { grid-template-columns: 1fr; gap: 0; } }
 .regions { font-size: 0.8125rem; summary { cursor: pointer; color: var(--fs-muted); } ul { margin: 0.4rem 0; padding-left: 1.1rem; } }
-.board-controls { display: grid; gap: 0.6rem; padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--fs-border); }
+.board-controls { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--fs-border); }
 .strategies { display: flex; flex-wrap: wrap; gap: 0.35rem; .fs-chip { padding: 0.2rem 0.65rem; font-size: 0.78rem; } }
 .board-note { font-size: 0.75rem; color: var(--fs-muted); margin: 0; padding: 0.75rem 1.25rem; }
 .board-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.75rem 1.25rem; border-top: 1px solid var(--fs-border);
@@ -459,6 +468,10 @@ const STORE_KEY = 'fs.leaderboard';
   th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fs-muted); font-weight: 600; white-space: nowrap; }
   td, th { padding: 0.5rem 0.6rem; }
   .num { text-align: right; white-space: nowrap; small { color: var(--fs-muted); font-size: 0.68rem; } } }
+.pane-meta-line { margin: 0; padding: 0.35rem 0; font-size: 0.76rem; color: var(--fs-muted); }
+.board-table thead th { position: sticky; top: 0; z-index: 1; background: var(--fs-surface); box-shadow: 0 1px 0 var(--fs-border); }
+.spacer td { padding: 0 !important; border: 0 !important; }
+:host-context([data-density='compact']) .board-table { font-size: 0.76rem; td, th { padding: 0.25rem 0.45rem; } .reason { font-size: 0.72rem; } }
 .board-row { cursor: pointer; &.active td { background: var(--fs-accent-soft); } &:focus-visible { outline: 2px solid var(--fs-accent); outline-offset: -2px; } }
 .rank { color: var(--fs-muted); font-weight: 600; width: 2rem; }
 .company { white-space: nowrap; .sym { font-weight: 650; margin-right: 0.3rem; } }
@@ -487,7 +500,7 @@ const STORE_KEY = 'fs.leaderboard';
 .method-lead, .method-note { color: var(--fs-text-2); margin: 0.4rem 0; }
 .method-facts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.25rem; margin: 0.5rem 0 0; div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: 0.5rem; } dt { color: var(--fs-muted); font-weight: 600; } dd { margin: 0; overflow-wrap: anywhere; } }
 .method-factors { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
-.mf-line { display: grid; grid-template-columns: 7rem 1fr 2.5rem; align-items: center; gap: 0.6rem; }
+.mf-line { display: grid; grid-template-columns: minmax(0, 7rem) minmax(1.5rem, 1fr) auto; align-items: center; gap: 0.6rem; }
 .mf-bar { height: 6px; border-radius: 3px; background: var(--fs-surface-3); overflow: hidden; span { display: block; height: 100%; background: var(--fs-accent); } }
 .mf-q { color: var(--fs-muted); }
 .method details { margin-top: 0.25rem; summary { cursor: pointer; color: var(--fs-accent-text); } ul, ol { padding-left: 1.1rem; margin: 0.3rem 0; display: grid; gap: 0.2rem; } }
@@ -496,8 +509,8 @@ const STORE_KEY = 'fs.leaderboard';
 .plain { list-style: none; padding: 0 !important; margin: 0 !important; }
 .bias { padding-left: 1.1rem; margin: 0.3rem 0; display: grid; gap: 0.25rem; }
 .age-warn { display: block; white-space: normal; margin: 0.5rem 1.25rem; padding: 0.5rem 0.75rem; font-size: 0.8rem; }
-.prefs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 0.6rem; margin: 0.4rem 0; label { display: grid; gap: 0.2rem; font-size: 0.78rem; color: var(--fs-text-2); } .prefs-check { display: flex; gap: 0.4rem; align-items: center; } .prefs-wide { grid-column: 1 / -1; } }
-.scope-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: 0.6rem; margin: 0.5rem 0; label { display: grid; gap: 0.2rem; font-size: 0.78rem; color: var(--fs-text-2); } fieldset { border: 0; margin: 0; padding: 0; legend { font-size: 0.78rem; color: var(--fs-text-2); margin-bottom: 0.2rem; } } .prefs-check { display: flex; gap: 0.4rem; align-items: center; } }
+.prefs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 0.6rem; margin: 0.4rem 0; label { display: grid; gap: 0.2rem; font-size: 0.78rem; color: var(--fs-text-2); min-width: 0; } select, input:not([type='checkbox']) { min-width: 0; max-width: 100%; } .prefs-check { display: flex; gap: 0.4rem; align-items: center; } .prefs-wide { grid-column: 1 / -1; } }
+.scope-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: 0.6rem; margin: 0.5rem 0; select, input:not([type=checkbox]) { min-width: 0; max-width: 100%; } label { min-width: 0; display: grid; gap: 0.2rem; font-size: 0.78rem; color: var(--fs-text-2); } fieldset { border: 0; margin: 0; padding: 0; legend { font-size: 0.78rem; color: var(--fs-text-2); margin-bottom: 0.2rem; } } .prefs-check { display: flex; gap: 0.4rem; align-items: center; } }
 .scope-actions { display: flex; gap: 0.5rem; margin-bottom: 0.4rem; }
 .fingerprint { overflow-wrap: anywhere; }
 .explain-btn { padding: 0; font-size: 0.74rem; color: var(--fs-accent-text); text-decoration: underline; }
@@ -566,6 +579,16 @@ export class LeaderboardComponent {
   readonly universeLabel = computed(() => this.universe() === WATCHLIST ? 'your watchlist' : this.universes().find(u => u.id === this.universe())?.label ?? this.universe());
   readonly watchlistSymbols = computed(() => [...new Set(this.market.trackedAssets().map(a => a.symbol.toUpperCase()))].slice(0, 25));
   readonly visibleRows = computed(() => (this.showAll() ? this.data()?.rows ?? [] : (this.data()?.rows ?? []).slice(0, 10)));
+  // Long lists draw only the rows in view (every row stays in the data and the exports).
+  readonly windowed = computed(() => this.visibleRows().length > WINDOW_THRESHOLD);
+  private readonly view = signal<PaneView>({ top: 0, height: 700 });
+  private readonly rowHeight = signal(64);
+  readonly win = computed(() => {
+    const n = this.visibleRows().length;
+    return this.windowed() ? rowWindow(n, this.view().top, this.view().height, this.rowHeight()) : { start: 0, end: n, before: 0, after: 0 };
+  });
+  readonly drawnRows = computed(() => (this.windowed() ? this.visibleRows().slice(this.win().start, this.win().end) : this.visibleRows()));
+  private readonly tbody = viewChild<ElementRef<HTMLElement>>('tbody');
   readonly unrankedList = computed(() => (this.data()?.unranked ?? []).map(u => u.symbol).join(', '));
   readonly selectionText = computed(() => selectionLines(this.data()?.selection).join(' → '));
   readonly countryText = computed(() => coverageBreakdown(this.data()?.selection?.countries));
@@ -578,7 +601,21 @@ export class LeaderboardComponent {
   });
   readonly playbook = computed(() => STRATEGY_PLAYBOOK[this.strategy()] ?? 'top10-buy-now');
 
+  onView(v: PaneView): void {
+    this.view.set(v);
+  }
+
   constructor() {
+    afterRenderEffect(() => {
+      if (!this.windowed()) return;
+      this.win();
+      const rows = this.tbody()?.nativeElement.querySelectorAll<HTMLElement>('tr.board-row');
+      if (!rows?.length) return;
+      let total = 0;
+      rows.forEach(r => (total += r.offsetHeight));
+      const mean = Math.round(total / rows.length);
+      if (mean > 20 && Math.abs(mean - this.rowHeight()) > 3) this.rowHeight.set(mean);
+    });
     try {
       const saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
       if (typeof saved.universe === 'string' && saved.universe !== WATCHLIST) this.universe.set(saved.universe);

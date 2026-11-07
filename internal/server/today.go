@@ -179,6 +179,8 @@ func (e *Engine) buildToday(ctx context.Context, u identity.User, canResearch bo
 	if len(worth) > 0 {
 		body["worth_a_look"] = worth
 	}
+	// Every part says where it came from; a part left out has no entry.
+	body["provenance"] = todayProvenance(body, time.Now().UTC())
 	return body
 }
 

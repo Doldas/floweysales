@@ -27,7 +27,7 @@ let nextId = 0;
   `,
   styles: [`
     :host { position: relative; display: inline-block; }
-    .src-btn { border: 0; background: transparent; color: var(--fs-muted); font-size: .75rem; padding: .1rem .25rem; border-radius: 4px; }
+    .src-btn { border: 0; background: transparent; color: var(--fs-muted); font-size: .75rem; padding: .1rem .25rem; min-height: 24px; min-width: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; }
     .src-btn:hover { color: var(--fs-accent); }
     .src-btn:focus-visible { box-shadow: var(--fs-focus); outline: 0; }
     .src-btn.is-unknown { color: var(--fs-warn-text, var(--fs-muted)); }

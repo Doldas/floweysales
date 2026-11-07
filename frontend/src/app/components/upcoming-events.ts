@@ -44,7 +44,7 @@ const DAY = 86_400_000;
   `,
   styles: [`
 :host { display: block; }
-.upcoming { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.5rem 1.5rem; padding: 0.9rem 1.25rem; margin-bottom: 1rem; }
+.upcoming { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: 0.5rem 1.5rem; padding: 0.9rem 1.25rem; margin-bottom: 1rem; }
 .item { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
 .label { font-size: 0.75rem; color: var(--fs-muted); }
 .value { font-size: 1.1rem; font-weight: 650; font-variant-numeric: tabular-nums; small { font-size: 0.7rem; font-weight: 400; color: var(--fs-muted); } }

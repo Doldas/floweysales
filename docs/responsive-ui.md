@@ -16,6 +16,8 @@ bottom of the visible area. Financials show labelled per-quarter cards on phones
 ranges, studies and tab bars scroll **within their own areas**, so the page never
 scrolls sideways.
 
+See [Workspace UX patterns](workspace-ux.md) for panes, density and the tablet and phone rules.
+
 Verification: the Angular production build and the Chromium `smoke:responsive`
 test run in CI. The test emulates a Samsung S24 (360 px, devicePixelRatio 3),
 other phones (320/384/600), tablets (768/1024) and desktop (1440). It checks
@@ -24,6 +26,15 @@ and chart height, the paper portfolio, and the agent dock bounds. A separate USE
 session checks research mode: no paper portfolio, history-based chart, and custom
 financial year ranges. A test on a real Samsung S24 is still recommended,
 especially with the on-screen keyboard open or font scaling enabled.
+
+## Audit and regression tests
+
+The phone and tablet audit (#257) is in [responsive-audit.md](responsive-audit.md). `frontend/e2e/responsive-audit.spec.ts`
+runs in CI on every page at 320 to 1024 px, in phone landscape, at 200% text and in dark mode with reduced motion. It fails on
+sideways scrolling, content outside the screen, touch targets under 24 px and endless animation under reduced motion.
+
+Rules for new views: give CSS grids an explicit `minmax(0, 1fr)` column, write card grids as `minmax(min(100%, N rem), 1fr)`,
+put tables in a scroll area (`fs-scroll-x` or `table-responsive`), and let labels wrap instead of using `nowrap`.
 
 ## Loading states
 

@@ -2,7 +2,7 @@
 title: Agents, teams and evidence
 order: 7
 summary: The Research Agent, agent teams of fictional investor characters, choosing a model, and the evidence modes that hold an answer until its citations check out.
-last-reviewed: 2026-11-06
+last-reviewed: 2026-11-07
 ---
 
 # Agents, teams and evidence

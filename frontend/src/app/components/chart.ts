@@ -137,14 +137,14 @@ interface PointMeta {
       :host { display: block; }
       :host { min-width: 0; }
       .legend-hint { font-size: 0.75rem; color: var(--fs-muted); margin-bottom: 6px; display: flex; gap: 6px; align-items: center; }
-      .chart-container { height: 380px; position: relative; min-width: 0; width: 100%; }
+      .chart-container { height: var(--fs-pane-h, 380px); position: relative; min-width: 0; width: 100%; }
       .subchart-container { height: 96px; position: relative; min-width: 0; width: 100%; margin-top: 8px; }
       @media (max-width: 700px) {
-        .chart-container { height: 270px; }
+        .chart-container { height: var(--fs-pane-h, 270px); }
         .subchart-container { height: 92px; }
         .legend-hint { font-size: 0.7rem; }
       }
-      @media (max-width: 390px) { .chart-container { height: 240px; } }
+      @media (max-width: 390px) { .chart-container { height: var(--fs-pane-h, 240px); } }
     `,
   ],
 })
