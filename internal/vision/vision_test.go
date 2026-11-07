@@ -359,3 +359,13 @@ func TestConfigStatusAndValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestBudgetRejectsInvalidReservationAndUnknownUsage(t *testing.T) {
+ b := NewBudget(Limits{})
+ if n := b.Reserve(-5); n != 0 { t.Fatalf("negative reservation: %d", n) }
+ before := b.Snapshot()
+ b.Release(-4)
+ if b.Snapshot() != before { t.Fatal("negative release changed budget") }
+ b.Record(nil, true)
+ if n := b.Reserve(1); n != 0 { t.Fatalf("unknown billing must stop further image calls, got %d", n) }
+}
