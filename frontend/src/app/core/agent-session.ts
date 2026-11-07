@@ -451,7 +451,8 @@ export class AgentSession {
     } catch (err) {
       if ((err as Error)?.name !== 'AbortError') {
         const msg = (err as Error)?.message || 'Request failed';
-        this.error.set(msg);
+        // A body that dies mid-stream raises a bare network error such as "Error in input stream".
+        this.error.set(err instanceof TypeError ? `The connection to the server was cut while the answer streamed (${msg}). A proxy or network timeout is the usual cause; ask again.` : msg);
       }
     } finally {
       // Any step still marked running was interrupted.

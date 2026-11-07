@@ -282,10 +282,11 @@ func (e *Engine) registerAgentTaskRoutes() {
 		if !ok {
 			return
 		}
-		send, ok := startSSE(w)
+		send, stopSSE, ok := startSSE(w)
 		if !ok {
 			return
 		}
+		defer stopSSE()
 		ask := strings.TrimSpace(req.Message)
 		if ask == "" {
 			ask = "Continue the task from where it stopped. Reuse the evidence gathered so far, finish what is missing and report every deliverable."

@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"floweysales/internal/ai"
 	"floweysales/internal/market"
@@ -355,10 +357,11 @@ func (e *Engine) registerAIRoutes() {
 				return
 			}
 		}
-		send, ok := startSSE(w)
+		send, stopSSE, ok := startSSE(w)
 		if !ok {
 			return
 		}
+		defer stopSSE()
 
 		client := ai.NewClient(baseURL, apiKey, model)
 		opts := e.chatAgentOptions(r, req.SystemPrompt, req.Persona, req.Tools)
@@ -477,29 +480,61 @@ func (e *Engine) resolveChatEndpoint(w http.ResponseWriter, r *http.Request, req
 	return baseURL, apiKey, model, true
 }
 
+// sseHeartbeat is how often an idle stream sends a comment line. A model that
+// thinks, loads or runs a tool for a while sends nothing, and a proxy in front
+// of the app (Cloudflare, a tunnel, a reverse proxy) closes a stream that stays
+// silent, which the browser reports as "Error in input stream" or a network error.
+var sseHeartbeat = 10 * time.Second
+
 // startSSE sends the event-stream headers and returns the function that
-// writes one event. It reports false when the response cannot stream.
-func startSSE(w http.ResponseWriter) (func(ai.Event), bool) {
+// writes one event and the function that ends the stream's heartbeat, which the
+// handler must call before it returns. It reports false when the response
+// cannot stream.
+func startSSE(w http.ResponseWriter) (func(ai.Event), func(), bool) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "streaming unsupported"})
-		return nil, false
+		return nil, nil, false
 	}
 	// Send the SSE headers up front so the browser starts rendering.
 	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-cache, no-transform")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
+
+	var mu sync.Mutex // events come from several goroutines in a team run
+	write := func(chunk string) {
+		mu.Lock()
+		defer mu.Unlock()
+		_, _ = w.Write([]byte(chunk))
+		flusher.Flush()
+	}
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		tick := time.NewTicker(sseHeartbeat)
+		defer tick.Stop()
+		for {
+			select {
+			case <-tick.C:
+				write(": keep-alive\n\n")
+			case <-done:
+				return
+			}
+		}
+	}()
+	var once sync.Once
+	stop := func() { once.Do(func() { close(done); <-finished }) }
 	return func(ev ai.Event) {
 		data, err := json.Marshal(ev)
 		if err != nil {
 			return
 		}
-		_, _ = w.Write([]byte("data: " + string(data) + "\n\n"))
-		flusher.Flush()
-	}, true
+		write("data: " + string(data) + "\n\n")
+	}, stop, true
 }
 
 // uiContextLine describes what the user is looking at, or "" when nothing.
