@@ -91,6 +91,12 @@
       <div class="history-load-slot" [attr.aria-busy]="market.loadingHistory()">
         @if (market.loadingHistory()) { <fs-progress-status stage="Loading price history" /> }
       </div>
+      <div class="studies chart-styles" role="radiogroup" aria-label="Chart style">
+        <i class="bi bi-bar-chart-line text-muted" aria-hidden="true"></i>
+        @for (st of chartStyles; track st.id) {
+          <button type="button" class="fs-chip" role="radio" [attr.aria-checked]="chartStyle() === st.id" [title]="st.hint" [attr.data-style]="st.id" (click)="setChartStyle(st.id)"><i class="bi" [class]="st.icon" aria-hidden="true"></i> {{ st.label }}</button>
+        }
+      </div>
       <div class="studies" role="group" aria-label="Chart analysis studies">
         <i class="bi bi-sliders2 text-muted" aria-hidden="true"></i>
         @for (k of indicatorKeys; track k) {
@@ -98,7 +104,7 @@
         }
       </div>
       <div class="pt-2">
-        <fse-trading-chart [epoch]="market.chartEpoch()" [flags]="market.indicators()" />
+        <fse-trading-chart [epoch]="market.chartEpoch()" [flags]="market.indicators()" [chartStyle]="chartStyle()" />
       </div>
     </fs-pane>
 
