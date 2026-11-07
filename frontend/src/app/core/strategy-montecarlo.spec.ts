@@ -2,7 +2,7 @@
 //   node --test src/app/core/strategy-montecarlo.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TRADE_MC_DEFAULTS, closedTradeCount, tradeMonteCarloError, tradeMonteCarloHeadline, tradeMonteCarloReadiness, tradeMonteCarloRequest, tradeMonteCarloRows } from './strategy-montecarlo.ts';
+import { TRADE_MC_DEFAULTS, closedTradeCount, tradeMonteCarloConcentration, tradeMonteCarloCsv, tradeMonteCarloError, tradeMonteCarloFileName, tradeMonteCarloJson, tradeMonteCarloStresses, tradeMonteCarloHeadline, tradeMonteCarloReadiness, tradeMonteCarloRequest, tradeMonteCarloRows } from './strategy-montecarlo.ts';
 import type { StrategyMonteCarloResult } from '../models';
 
 const sim = {
@@ -59,4 +59,49 @@ test('too few closed trades are explained before the run, and open trades are no
   assert.match(tradeMonteCarloReadiness(0), /Only 0 closed trades/);
   assert.match(tradeMonteCarloReadiness(1), /Only 1 closed trade in/);
   assert.equal(closedTradeCount([{ reason: 'stop' }, { reason: 'open' }, { reason: 'target' }]), 2);
+});
+
+test('the new stresses are validated and sent only when switched on', () => {
+  assert.match(tradeMonteCarloError({ ...TRADE_MC_DEFAULTS, delayBars: '9' }), /Fill delay/);
+  assert.match(tradeMonteCarloError({ ...TRADE_MC_DEFAULTS, delayBars: '1.5' }), /Fill delay/);
+  assert.match(tradeMonteCarloError({ ...TRADE_MC_DEFAULTS, regimeShare: '150' }), /Stressed share/);
+  assert.match(tradeMonteCarloError({ ...TRADE_MC_DEFAULTS, regimeShare: '20', regimeScale: '9' }), /Stressed spread/);
+  assert.match(tradeMonteCarloError({ ...TRADE_MC_DEFAULTS, positionScale: '5' }), /Position size/);
+  assert.equal(tradeMonteCarloError({ ...TRADE_MC_DEFAULTS, delayBars: '2', regimeShare: '25', positionScale: '1.5' }), '');
+  const run = { symbol: 'AAPL', range: '5Y' as const, cost_bps: 10 };
+  const plain = tradeMonteCarloRequest(run, TRADE_MC_DEFAULTS);
+  assert.equal(plain.delay_bars, undefined);
+  assert.equal(plain.regime_share_pct, undefined);
+  assert.equal(plain.position_scale, undefined);
+  const on = tradeMonteCarloRequest(run, { ...TRADE_MC_DEFAULTS, delayBars: '2', regimeShare: '25', regimeScale: '3', positionScale: '2' });
+  assert.deepEqual([on.delay_bars, on.regime_share_pct, on.regime_scale, on.position_scale], [2, 25, 3, 2]);
+});
+
+const stressed = {
+  ...sim, symbol: 'AAPL', strategy: 'Dip buyer, v2', provider: 'YAHOO', range: '5Y', from: '2021-01-04', to: '2026-01-02', data_start: '2021-01-04', data_end: '2026-01-02',
+  generated_at: '2026-11-06T10:00:00Z', cost_bps: 10,
+  simulation: { ...sim.simulation, assumptions: ['Assumes, with "quotes"'], limitations: ['Not a forecast'],
+    config: { ...sim.simulation.config, delay_bars: 2, regime_share_pct: 30, regime_scale: 3, position_scale: 1.5, extra_cost_bps_per_trade: 25 },
+    concentration: { best_trades_removed: 3, return_without_best_pct: -4.2, largest_loss_pct: -3.1 } },
+} as unknown as StrategyMonteCarloResult;
+
+test('chosen stresses and observed concentration are said in words and marked as not predictions', () => {
+  assert.deepEqual(tradeMonteCarloStresses(stressed.simulation.config), ['25 bps extra cost per trade', '2-bar fill delay', '30% of trades in a stretch with spread x3', 'positions x1.5 the size']);
+  assert.match(tradeMonteCarloHeadline(stressed).at(-1)!, /Stresses you chose \(not observed\)/);
+  assert.equal(tradeMonteCarloStresses(sim.simulation.config).length, 0);
+  assert.match(tradeMonteCarloConcentration(stressed), /Observed, not simulated: without its best 3 trades the replay returned -4\.2% \(it returned \+12\.3%\).*-3\.1%/);
+  assert.equal(tradeMonteCarloConcentration(sim), '');
+});
+
+test('the export carries provenance in UTC, the model, the seed and the assumptions, and escapes CSV', () => {
+  const csv = tradeMonteCarloCsv(stressed);
+  for (const want of ['strategy,"Dip buyer, v2"', 'provider,YAHOO', 'data_start_utc,2021-01-04', 'generated_at_utc,2026-11-06T10:00:00Z', 'model_version,mc-1', 'seed,42', 'delay_bars,2',
+    'total_return_pct,12.34,-8.00,3.00,10.00,18.00,31.00', 'drawdown_limit_breach,7.25', 'return_without_best_pct,-4.20', 'assumption,"Assumes, with ""quotes"""', 'limitation,Not a forecast']) {
+    assert.ok(csv.includes(want), `missing ${want}`);
+  }
+  assert.match(csv, /not predictions and not guaranteed/);
+  const json = JSON.parse(tradeMonteCarloJson(stressed));
+  assert.equal(json.simulation.config.seed, 42);
+  assert.equal(json.simulation.model_version, 'mc-1');
+  assert.equal(tradeMonteCarloFileName(stressed, 'csv'), 'monte-carlo-dip-buyer-v2-aapl-seed42.csv');
 });
