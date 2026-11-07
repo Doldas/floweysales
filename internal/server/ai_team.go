@@ -156,10 +156,11 @@ func (e *Engine) registerTeamRoutes() {
 		if !ok {
 			return
 		}
-		send, ok := startSSE(w)
+		send, stopSSE, ok := startSSE(w)
 		if !ok {
 			return
 		}
+		defer stopSSE()
 
 		maxSteps, maxCalls := e.agentLimits()
 		agent := ai.AgentOptions{MaxSteps: maxSteps, MaxToolCalls: min(maxCalls, teamMemberToolCall), AnswerAfterToolBudget: true}
