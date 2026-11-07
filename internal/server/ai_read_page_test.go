@@ -91,3 +91,33 @@ func TestReadPageStatusErrorExplainsSEC403WithoutClaimingToRead(t *testing.T) {
 		})
 	}
 }
+
+func TestDocumentFetchRefusesOversizeAndMislabeledPDF(t *testing.T) {
+	tests := []struct {
+		name  string
+		kind  string
+		body  []byte
+		limit int64
+		want  string
+	}{
+		{"valid PDF", "application/pdf", minimalPDF("Quarterly report"), readPDFMaxBytes, ""},
+		{"mislabeled PDF", "application/pdf", []byte("<html>Access denied</html>"), readPDFMaxBytes, "no PDF signature"},
+		{"huge HTML", "text/html", []byte(strings.Repeat("x", readPageMaxBytes+1)), readPageMaxBytes, "larger than"},
+		{"generic binary", "application/octet-stream", []byte("not a pdf"), readPDFMaxBytes, "cannot read"},
+		{"normal HTML", "text/html", []byte("<html>valid</html>"), readPageMaxBytes, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			isPDF, err := validateReadPageBody(tc.kind, tc.body, tc.limit)
+			if tc.want == "" && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
+				t.Fatalf("want %q, got pdf=%v error=%v", tc.want, isPDF, err)
+			}
+			if tc.name == "valid PDF" && !isPDF {
+				t.Fatal("valid PDF signature lost")
+			}
+		})
+	}
+}

@@ -10,6 +10,7 @@ import { AgentSession } from '../core/agent-session';
 import { MarketState } from '../core/market-state';
 import { MarketService, describeHttpError } from '../services';
 import type { IndexInfo, LeaderboardOption, LeaderboardResponse, LeaderboardRow, RankingPreferencesResponse } from '../models';
+import { EMPTY_SCOPE, SCOPE_REGIONS, coverageLines, formToScope, scopeError, scopeIsActive, unsupportedRegions, type ScopeForm } from '../core/leaderboard-scope';
 import { LEADERBOARD_FACTORS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES } from './investor-nodes';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import { PaneComponent, type PaneView } from '../ui/pane';
@@ -91,6 +92,33 @@ const STORE_KEY = 'fs.leaderboard';
       </ul>
       <p class="text-muted mb-0">A region is listed as covered only when a list of companies is offered and its prices and reports have been checked. Nothing is filled in for the rest.</p>
     </details>
+    <details class="regions scope-form" data-testid="leaderboard-scope" [open]="scopeActive() || universe() === 'global'">
+      <summary>Scope: regions, countries, exchanges, currencies@if (scopeActive()) { <span class="fs-status no-dot is-info">filtered</span> }</summary>
+      <div class="scope-grid">
+        <fieldset>
+          <legend>Regions</legend>
+          @for (r of scopeRegions; track r.id) {
+            <label class="prefs-check"><input type="checkbox" [checked]="scopeForm().regions.includes(r.id)" [disabled]="!coveredRegions().includes(r.id)" (change)="toggleRegion(r.id)" />
+              {{ r.label }}@if (!coveredRegions().includes(r.id)) { <small class="text-muted">No supported market yet</small> }</label>
+          }
+        </fieldset>
+        <label>Countries <input class="form-control form-control-sm" type="text" [ngModel]="scopeForm().countries" (ngModelChange)="patchScope({ countries: $event })" placeholder="SE, DK, US" autocomplete="off" /></label>
+        <label>Exchanges (MIC) <input class="form-control form-control-sm" type="text" [ngModel]="scopeForm().exchanges" (ngModelChange)="patchScope({ exchanges: $event })" placeholder="XSTO, XLON" autocomplete="off" /></label>
+        <label>Currencies <input class="form-control form-control-sm" type="text" [ngModel]="scopeForm().currencies" (ngModelChange)="patchScope({ currencies: $event })" placeholder="SEK, USD" autocomplete="off" /></label>
+        <label>Percentiles are taken
+          <select class="form-select form-select-sm" [ngModel]="scopeForm().compare" (ngModelChange)="patchScope({ compare: $event })">
+            <option value="">Default ({{ universe() === 'global' ? 'within each region' : 'across the whole list' }})</option>
+            <option value="region">Within each region</option>
+            <option value="all">Across all companies</option>
+          </select></label>
+      </div>
+      @if (scopeError()) { <p class="text-neg" role="alert">{{ scopeError() }}</p> }
+      <div class="scope-actions">
+        <button type="button" class="btn btn-sm btn-primary" (click)="applyScope()" [disabled]="!!scopeError()">Apply scope</button>
+        <button type="button" class="btn btn-sm btn-ghost" (click)="clearScope()" [disabled]="!scopeActive() && !scopeForm().compare">Clear</button>
+      </div>
+      <p class="text-muted mb-0">Not covered: {{ unsupported().join(', ') }}. No list has been checked there, so they cannot be selected and nothing is substituted. Sector and liquidity filters are not offered: the data provider returns neither.</p>
+    </details>
     <div class="strategies" role="group" aria-label="Strategy">
       @for (s of strategies(); track s.id) {
         <button type="button" class="fs-chip" [attr.aria-pressed]="strategy() === s.id" (click)="setStrategy(s.id)" [title]="s.description">{{ s.label }}</button>
@@ -139,6 +167,26 @@ const STORE_KEY = 'fs.leaderboard';
   }
 
   @if (data(); as d) {
+    @if (d.scope; as sc) {
+      <section class="method" aria-labelledby="scope-title" data-testid="leaderboard-scope-result">
+        <div class="method-head"><h3 id="scope-title">Coverage and comparability</h3></div>
+        @if (sc.filters.active) { <p class="method-note">Filtered to {{ sc.filters.description }}. Companies outside it are listed under &ldquo;Left out&rdquo; with the reason.</p> }
+        <p class="method-note"><strong>{{ sc.comparability.mode_label }}.</strong>
+          @if (sc.comparability.mode === 'region') { Each score says &ldquo;better than most companies in its own region&rdquo;, so scores from different regions are merged by value but were not measured against each other. } @else { Each score says &ldquo;better than most companies in this list&rdquo;. }</p>
+        <ul class="plain" data-testid="coverage-lines">
+          @for (line of coverageLines(sc); track line) { <li>{{ line }}</li> }
+        </ul>
+        @for (w of sc.comparability.warnings; track w) { <p class="index-warning" role="status">{{ w }}</p> }
+        <details>
+          <summary>Currencies, accounting and time zones</summary>
+          <ul>
+            <li>{{ sc.comparability.fx.note }}</li>
+            <li>{{ sc.comparability.accounting }}</li>
+            <li>{{ sc.comparability.timezones }}</li>
+          </ul>
+        </details>
+      </section>
+    }
     @if (d.universe_info; as u) {
       <section class="method origin" aria-labelledby="origin-title" data-testid="leaderboard-origin">
         <div class="method-head">
@@ -317,11 +365,16 @@ const STORE_KEY = 'fs.leaderboard';
                       <section>
                         <h5>Why it is here</h5>
                         <p>{{ r.discovery?.why || 'No inclusion reason is recorded.' }}</p>
+                        @if (r.discovery?.how) { <p>{{ r.discovery!.how }}@if (r.discovery?.list_version) { (list version {{ r.discovery!.list_version }}) }</p> }
+                        <p>ISIN: {{ r.identifier?.isin || 'not recorded' }}@if (r.identifier?.name) { &middot; {{ r.identifier!.name }} }</p>
+                        @if (r.compared_with) { <p>Compared with {{ r.compared_with }}.</p> }
                         <p>{{ r.listing?.exchange || 'Listing unknown' }}@if (r.listing?.mic) { &middot; MIC {{ r.listing!.mic }} }@if (r.listing?.country) { &middot; {{ r.listing!.country }} }.
                           @if (r.discovery?.url) { <a [href]="r.discovery!.url!" target="_blank" rel="noopener noreferrer">Original record</a> } @else { No link to an original record is recorded. }</p>
                       </section>
                       <section>
                         <h5>Where its numbers come from</h5>
+                        @if (r.provider_note) { <p>{{ r.provider_note }}</p> }
+                        @if (r.provider_conflict) { <p class="text-neg">Providers disagree: {{ r.provider_conflict.detail }}</p> }
                         <p>Provider: {{ r.metrics_source?.provider || 'unknown' }}. Prices as of {{ r.metrics_source?.price_as_of || 'unknown' }}; fundamentals through {{ r.metrics_source?.fundamentals_through || 'not available' }}.
                           @if (recordLink(r.metrics_source?.record_url); as link) { <a [href]="link" target="_blank" rel="noopener noreferrer">Provider&rsquo;s page for {{ r.symbol }}</a> } @else { No link to the provider&rsquo;s own record is recorded. }
                           @if (r.metrics_source?.fact) { <fs-source [fact]="r.metrics_source!.fact" /> }</p>
@@ -369,9 +422,11 @@ const STORE_KEY = 'fs.leaderboard';
           </button>
         }
         <button type="button" class="btn btn-sm btn-agent" (click)="askAgent()"><i class="bi bi-stars" aria-hidden="true"></i>Research the top 5</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" (click)="showBacktest.set(!showBacktest())" [attr.aria-expanded]="showBacktest()" aria-controls="board-backtest">
-          <i class="bi bi-clock-history" aria-hidden="true"></i>Backtest this strategy
-        </button>
+        @if (universe() !== 'global') {
+          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="showBacktest.set(!showBacktest())" [attr.aria-expanded]="showBacktest()" aria-controls="board-backtest">
+            <i class="bi bi-clock-history" aria-hidden="true"></i>Backtest this strategy
+          </button>
+        }
         @if (access.flowsWrite()) {
           <a class="btn btn-sm btn-outline-secondary" routerLink="/flows" [queryParams]="{ template: playbook() }"><i class="bi bi-diagram-3" aria-hidden="true"></i>Automate as a flow</a>
         }
@@ -381,7 +436,7 @@ const STORE_KEY = 'fs.leaderboard';
         </span>
       </div>
     }
-    @if (showBacktest()) {
+    @if (showBacktest() && universe() !== 'global') {
       <div id="board-backtest">
         <fs-backtest-panel [universe]="universe() === watchlist ? 'custom' : universe()" [strategy]="strategy()" [strategyLabel]="strategyInfo()?.label ?? strategy()"
           [symbols]="universe() === watchlist ? watchlistSymbols() : []" [markets]="universes()" />
@@ -455,6 +510,8 @@ const STORE_KEY = 'fs.leaderboard';
 .bias { padding-left: 1.1rem; margin: 0.3rem 0; display: grid; gap: 0.25rem; }
 .age-warn { display: block; white-space: normal; margin: 0.5rem 1.25rem; padding: 0.5rem 0.75rem; font-size: 0.8rem; }
 .prefs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 0.6rem; margin: 0.4rem 0; label { display: grid; gap: 0.2rem; font-size: 0.78rem; color: var(--fs-text-2); } .prefs-check { display: flex; gap: 0.4rem; align-items: center; } .prefs-wide { grid-column: 1 / -1; } }
+.scope-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: 0.6rem; margin: 0.5rem 0; label { display: grid; gap: 0.2rem; font-size: 0.78rem; color: var(--fs-text-2); } fieldset { border: 0; margin: 0; padding: 0; legend { font-size: 0.78rem; color: var(--fs-text-2); margin-bottom: 0.2rem; } } .prefs-check { display: flex; gap: 0.4rem; align-items: center; } }
+.scope-actions { display: flex; gap: 0.5rem; margin-bottom: 0.4rem; }
 .fingerprint { overflow-wrap: anywhere; }
 .explain-btn { padding: 0; font-size: 0.74rem; color: var(--fs-accent-text); text-decoration: underline; }
 .three { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 0.8rem; margin-bottom: 0.6rem; h5 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fs-muted); margin: 0 0 0.25rem; } p { margin: 0 0 0.3rem; font-size: 0.78rem; overflow-wrap: anywhere; } }
@@ -475,6 +532,15 @@ export class LeaderboardComponent {
   readonly pct = pct;
   readonly num = num;
 
+  readonly scopeRegions = SCOPE_REGIONS;
+  readonly coverageLines = coverageLines;
+  readonly scopeForm = signal<ScopeForm>({ ...EMPTY_SCOPE, regions: [] });
+  /** The scope in force: what the last response was computed for. */
+  private readonly appliedScope = signal<ScopeForm>({ ...EMPTY_SCOPE, regions: [] });
+  readonly scopeActive = computed(() => scopeIsActive(this.appliedScope()));
+  readonly scopeError = computed(() => scopeError(this.scopeForm()));
+  readonly coveredRegions = computed(() => this.regions().filter(r => r.universes.length).map(r => r.id));
+  readonly unsupported = computed(() => unsupportedRegions(this.coveredRegions()));
   readonly universe = signal('us_mega');
   readonly indices = signal<IndexInfo[]>([]);
   readonly indicesError = signal('');
@@ -600,6 +666,26 @@ export class LeaderboardComponent {
     this.load();
   }
 
+  patchScope(change: Partial<ScopeForm>): void {
+    this.scopeForm.update(f => ({ ...f, ...change }));
+  }
+
+  toggleRegion(id: string): void {
+    this.scopeForm.update(f => ({ ...f, regions: f.regions.includes(id) ? f.regions.filter(r => r !== id) : [...f.regions, id] }));
+  }
+
+  applyScope(): void {
+    if (this.scopeError()) return;
+    this.appliedScope.set({ ...this.scopeForm(), regions: [...this.scopeForm().regions] });
+    this.showAll.set(false);
+    this.load();
+  }
+
+  clearScope(): void {
+    this.scopeForm.set({ ...EMPTY_SCOPE, regions: [] });
+    this.applyScope();
+  }
+
   setStrategy(id: string): void {
     if (id === this.strategy()) return;
     this.strategy.set(id);
@@ -612,7 +698,7 @@ export class LeaderboardComponent {
     this.loading.set(true);
     this.error.set('');
     const symbols = this.universe() === WATCHLIST ? this.watchlistSymbols() : [];
-    this.request = this.api.getLeaderboard(this.universe(), this.strategy(), symbols, this.ignorePrefs()).subscribe({
+    this.request = this.api.getLeaderboard(this.universe(), this.strategy(), symbols, this.ignorePrefs(), formToScope(this.appliedScope())).subscribe({
       next: res => { this.data.set(res); this.loading.set(false); },
       error: err => { this.error.set(describeHttpError(err)); this.loading.set(false); },
     });

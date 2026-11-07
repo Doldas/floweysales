@@ -68,3 +68,8 @@ In the tool-call view of `read_source`, **Document evidence** shows the document
 - A persistent, cross-run source cache and benchmarks against real Swedish and US reports.
 - Region (bounding box) overlays; the box is stored when the model gives one.
 - Per-user or per-team opt-out of sending document images to the configured endpoint (today the administrator's decision applies to every run).
+
+
+### Input integrity and incomplete responses
+
+The document reader now rejects HTML exceeding its 512 KB fetch limit, instead of silently treating a partial page as a complete source. It also rejects responses labeled PDF when their content lacks a PDF file signature (e.g. an HTML error page mislabeled as `application/pdf`). Large PDFs remain subject to the 8 MB limit. These are **errors**, not evidence: the agent must not cite an unread or truncated page as an extracted document. HTTP 403 restrictions remain unchanged.
