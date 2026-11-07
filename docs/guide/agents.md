@@ -130,3 +130,6 @@ The shared Markdown renderer accepts both standalone `$$...$$` equations and mul
 
 
 Long-running AI and Flow tasks use a shared progress indicator. A numeric progress bar appears only when the application has a finite, measured total number of steps; screen readers hear the actual completed/total counts. Motion is reduced when the system's Reduced Motion preference is enabled. For work that cannot be cancelled, the status avoids recommending a reload that might repeat an action or lose edits; check connection/state first.
+
+
+Financial expression support also includes comparison operators (≤, ≥, ≠) and selected Greek symbols. This is a bounded renderer, not a general TeX engine or arithmetic verifier; unsupported expressions remain escaped source.
