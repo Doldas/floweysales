@@ -69,3 +69,8 @@ Prices and reports come from the provider plugins your administrator installed. 
 ## Investment-risk notice
 
 FloweySales is a research aid. Data and model output can be incomplete, delayed or wrong. Nothing here is personal investment advice, and nothing knows your goals, taxes or risk tolerance. Fully automatic live trading is not supported.
+
+
+### Evidence link integrity
+
+Source detail panels only offer navigable HTTP(S) URLs with a valid hostname and no embedded credentials or control characters. Links from agents and providers remain untrusted evidence, not proof that their contents have been read or verified.
