@@ -5,8 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
-	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -95,30 +93,30 @@ func TestReadPageStatusErrorExplainsSEC403WithoutClaimingToRead(t *testing.T) {
 }
 
 func TestDocumentFetchRefusesOversizeAndMislabeledPDF(t *testing.T) {
-	// These tests use the public-fetch pipeline's response logic without
-	// contacting an actual external host. The response limit and magic check
-	// must not silently promote incomplete/HTML responses into evidence.
-	if !hasPDFMagic(minimalPDF("Quarterly report")) {
-		t.Fatal("valid PDF signature not recognized")
+	tests := []struct {
+		name string
+		kind string
+		body []byte
+		limit int64
+		want string
+	}{
+		{"valid PDF", "application/pdf", minimalPDF("Quarterly report"), readPDFMaxBytes, ""},
+		{"mislabeled PDF", "application/pdf", []byte("<html>Access denied</html>"), readPDFMaxBytes, "no PDF signature"},
+		{"huge HTML", "text/html", []byte(strings.Repeat("x", readPageMaxBytes+1)), readPageMaxBytes, "larger than"},
+		{"generic binary", "application/octet-stream", []byte("not a pdf"), readPDFMaxBytes, "cannot read"},
+		{"normal HTML", "text/html", []byte("<html>valid</html>"), readPageMaxBytes, ""},
 	}
-	if hasPDFMagic([]byte("<html>blocked</html>")) {
-		t.Fatal("HTML must not be classified as PDF")
-	}
-	// Fake endpoints also document the expected hostile upstream shapes.
-	for _, tc := range []struct{ name, mime, body string }{
-		{"mislabeled PDF", "application/pdf", "<html>Access denied</html>"},
-		{"huge HTML", "text/html", strings.Repeat("x", readPageMaxBytes+1)},
-	} {
+	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", tc.mime)
-				_, _ = w.Write([]byte(tc.body))
-			}))
-			defer server.Close()
-			// External fetches deliberately reject loopback (SSRF). The
-			// hostile content is additionally guarded by the size/magic rules.
-			if _, _, _, err := readPublicPage(context.Background(), server.URL); err == nil {
-				t.Fatal("local/private URLs must remain blocked")
+			isPDF, err := validateReadPageBody(tc.kind, tc.body, tc.limit)
+			if tc.want == "" && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)) {
+				t.Fatalf("want %q, got pdf=%v error=%v", tc.want, isPDF, err)
+			}
+			if tc.name == "valid PDF" && !isPDF {
+				t.Fatal("valid PDF signature lost")
 			}
 		})
 	}
