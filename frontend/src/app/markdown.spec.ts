@@ -143,3 +143,30 @@ test('fenced and unsupported TeX remain safe literals', () => {
   assert.match(html, /md-math-error/);
   assert.doesNotMatch(html, /<img/);
 });
+
+test('standard single-line and multi-line $$ math is typeset once, preserving money', () => {
+  const source = [
+    'Value $3.07 bn, discount $17.8 bn.',
+    '',
+    '$$\\frac{3.07\\times(1+0.02)}{0.12-0.02}$$',
+    '',
+    '$$',
+    '\\text{TV}=\\frac{3.07}{0.1}',
+    '$$',
+    '',
+    '\\[\\sqrt{9}=3\\]',
+  ].join('\n');
+  const html = renderMarkdown(source);
+  assert.equal((html.match(/md-math-display/g) ?? []).length, 3);
+  assert.equal((html.match(/md-frac/g) ?? []).length, 2);
+  assert.match(html, /\$3\.07 bn/);
+  assert.match(html, /\$17\.8 bn/);
+  assert.doesNotMatch(html, /\$\$/);
+});
+
+test('unclosed display math and code fences retain source text', () => {
+  const html = renderMarkdown('$$\n\\frac{1}{2}\n\n' + '\x60\x60\x60' + 'tex\n$$\n\\frac{3}{4}\n' + '\x60\x60\x60');
+  assert.match(html, /\$\$/);
+  assert.match(html, /md-lang/);
+  assert.doesNotMatch(html, /md-math-display/);
+});
