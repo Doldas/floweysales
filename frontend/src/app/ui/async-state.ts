@@ -36,6 +36,7 @@ export function showSkeleton(i: AsyncInput): boolean {
 
 /** "Still working… 12 s", or the plain stage; never a percentage that was not measured. */
 export function progressText(stage: string, elapsedMs: number, done: number | null = null, total: number | null = null): string {
+  elapsedMs = Number.isFinite(elapsedMs) ? Math.max(0, elapsedMs) : 0;
   const parts = [stage];
   if (progressFraction(done, total) !== null) parts.push(`${Math.min(done!, total!)} of ${total}`);
   if (elapsedMs >= SLOW_AFTER_MS) parts.push(`still working, ${Math.floor(elapsedMs / 1000)} s`);
@@ -57,11 +58,11 @@ export function progressAriaValue(done: number | null, total: number | null): st
 
 /** Elapsed time since `since` (epoch ms), never negative; 0 when the start is unknown. */
 export function elapsedSince(since: number | null | undefined, now: number): number {
-  return typeof since === 'number' && Number.isFinite(since) ? Math.max(0, now - since) : 0;
+  return typeof since === 'number' && Number.isFinite(since) && Number.isFinite(now) ? Math.max(0, now - since) : 0;
 }
 
 /** After a long silent wait: say so and name the way out. Empty before that. */
 export function stallHint(elapsedMs: number, canCancel: boolean): string {
-  if (elapsedMs < STALL_AFTER_MS) return '';
+  if (!Number.isFinite(elapsedMs) || elapsedMs < STALL_AFTER_MS) return '';
   return canCancel ? 'This is taking longer than usual. You can cancel and try again.' : 'This is taking longer than usual. It may still finish; check the connection before retrying to avoid duplicate work.';
 }
