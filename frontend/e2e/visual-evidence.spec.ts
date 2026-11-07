@@ -34,3 +34,28 @@ test.describe('UI evidence: Flow Studio and Research Agent', () => {
     });
   });
 });
+
+test('Monte Carlo result keeps replay outcomes separate from simulated uncertainty', async ({ page }, testInfo) => {
+  await open(page, 'strategies');
+  const run = page.getByRole('button', { name: 'Run test' });
+  await expect(run).toBeEnabled();
+  await run.click();
+  const panel = page.locator('fs-strategy-montecarlo');
+  await expect(panel.getByRole('heading', { name: 'How robust is this result?' })).toBeVisible();
+  await panel.getByRole('button', { name: 'Run simulation' }).click();
+
+  await expect(panel.getByText(/95% Wilson interval/)).toBeVisible();
+  await expect(panel.getByText(/not a probability forecast/)).toBeVisible();
+  const table = panel.getByRole('table');
+  await expect(table).toBeVisible();
+  await expect(table).toHaveAttribute('aria-describedby', 'smc-evidence-notice');
+  await expect(table.getByRole('columnheader', { name: 'Happened' })).toBeVisible();
+  await expect(table.getByRole('columnheader', { name: 'Median' })).toBeVisible();
+  await expect(panel.getByRole('heading', { name: 'What this assumes' })).toBeVisible();
+  await expect(panel.getByRole('heading', { name: 'What it cannot tell you' })).toBeVisible();
+
+  await testInfo.attach('monte-carlo-observed-vs-simulated.png', {
+    body: await page.screenshot({ fullPage: true, animations: 'disabled' }),
+    contentType: 'image/png',
+  });
+});

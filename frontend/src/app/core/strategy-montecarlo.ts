@@ -57,6 +57,15 @@ export function tradeMonteCarloRows(r: Pick<StrategyMonteCarloResult, 'simulatio
   ];
 }
 
+/** 95% Wilson interval for simulation sampling noise, *not* a market-confidence interval. */
+export function simulationSamplingInterval(percent: number, runs: number): string {
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100 || !Number.isSafeInteger(runs) || runs < 1) return 'unavailable';
+  const p = percent / 100, z = 1.96, z2 = z * z;
+  const center = (p + z2 / (2 * runs)) / (1 + z2 / runs);
+  const half = z * Math.sqrt((p * (1 - p) + z2 / (4 * runs)) / runs) / (1 + z2 / runs);
+  return `${(100 * Math.max(0, center - half)).toFixed(1)}–${(100 * Math.min(1, center + half)).toFixed(1)}%`;
+}
+
 /** Lines above the table: sample size, seed and the probabilities, each said to be of simulated paths. */
 export function tradeMonteCarloHeadline(r: Pick<StrategyMonteCarloResult, 'simulation'>): string[] {
   const s = r.simulation;
@@ -69,6 +78,7 @@ export function tradeMonteCarloHeadline(r: Pick<StrategyMonteCarloResult, 'simul
   if (s.prob_ruin_pct > 0) lines.push(`In ${s.prob_ruin_pct.toFixed(1)}% of them everything was lost.`);
   const stresses = tradeMonteCarloStresses(s.config);
   if (stresses.length) lines.push(`Stresses you chose (not observed): ${stresses.join('; ')}.`);
+  lines[0] += ` Simulation sampling uncertainty for the loss share: 95% Wilson interval ${simulationSamplingInterval(s.prob_loss_pct, s.config.runs)} (only finite Monte Carlo sampling noise; not a probability forecast or a confidence interval for actual future returns).`;
   return lines;
 }
 

@@ -2,7 +2,7 @@
 //   node --test src/app/core/strategy-montecarlo.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TRADE_MC_DEFAULTS, closedTradeCount, tradeMonteCarloConcentration, tradeMonteCarloCsv, tradeMonteCarloError, tradeMonteCarloFileName, tradeMonteCarloJson, tradeMonteCarloStresses, tradeMonteCarloHeadline, tradeMonteCarloReadiness, tradeMonteCarloRequest, tradeMonteCarloRows } from './strategy-montecarlo.ts';
+import { TRADE_MC_DEFAULTS, closedTradeCount, tradeMonteCarloConcentration, tradeMonteCarloCsv, tradeMonteCarloError, tradeMonteCarloFileName, tradeMonteCarloJson, tradeMonteCarloStresses, tradeMonteCarloHeadline, tradeMonteCarloReadiness, tradeMonteCarloRequest, tradeMonteCarloRows, simulationSamplingInterval } from './strategy-montecarlo.ts';
 import type { StrategyMonteCarloResult } from '../models';
 
 const sim = {
@@ -109,4 +109,15 @@ test('the export carries provenance in UTC, the model, the seed and the assumpti
 test('Monte Carlo seed cannot silently round unsafe large integers', () => {
   assert.match(tradeMonteCarloError({ ...TRADE_MC_DEFAULTS, seed: '9007199254740993' }), /Seed must be a safe whole number/);
   assert.equal(tradeMonteCarloError({ ...TRADE_MC_DEFAULTS, seed: '42' }), '');
+});
+
+test('sampling intervals identify numerical Monte Carlo uncertainty, not predictive accuracy', () => {
+  assert.equal(simulationSamplingInterval(-1, 2000), 'unavailable');
+  assert.equal(simulationSamplingInterval(10, 0), 'unavailable');
+  assert.match(simulationSamplingInterval(0, 2000), /^0\.0–0\.2%$/);
+  assert.match(simulationSamplingInterval(100, 2000), /^99\.8–100\.0%$/);
+  const headline = tradeMonteCarloHeadline(sim).join(' ');
+  assert.match(headline, /Wilson interval/);
+  assert.match(headline, /not a probability forecast/);
+  assert.match(headline, /seed 42/);
 });
