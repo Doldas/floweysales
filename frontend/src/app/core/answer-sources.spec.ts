@@ -2,7 +2,7 @@
 //   node --test src/app/core/answer-sources.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EVIDENCE_MODES, evidenceForOutputMode, jsonCitationLine, type EvidencePolicy, auditSummary, claimFacts, claimsSummary, sortClaims, spanOrigin, spanParts, verdictLabel, whyLabel, type AnswerClaim, delegationProgress, parseEvidenceMode, findingLabel, patchNodeEvidence, policyFromSettings, removedSummary, safeUrl, sourceOrigin, settingsFromPolicy, settingsProblem, settingsSummary, splitSources } from './answer-sources.ts';
+import { EVIDENCE_MODES, auditSummary, claimFacts, claimsSummary, sortClaims, spanOrigin, spanParts, verdictLabel, whyLabel, type AnswerClaim, delegationProgress, parseEvidenceMode, findingLabel, patchNodeEvidence, policyFromSettings, removedSummary, safeUrl, sourceOrigin, settingsFromPolicy, settingsProblem, settingsSummary, splitSources, parseRankingProfile, sourceCard, sourceDates, sortSources, evidenceStateLabel, type AnswerSource, evidenceForOutputMode, jsonCitationLine, type EvidencePolicy } from './answer-sources.ts';
 
 test('sources split by whether the agent opened them', () => {
   const { read, listed } = splitSources([
@@ -37,7 +37,7 @@ test('an unknown stored evidence mode falls back to standard', () => {
 });
 
 test('settings become the request object, leaving defaults out', () => {
-  const base = { mode: 'evidence_only' as const, block: false, maxAgeDays: 0, filings: true, webPages: true };
+  const base = { mode: 'evidence_only' as const, block: false, maxAgeDays: 0, filings: true, webPages: true, rankingProfile: 'facts_first' as const, searchWindowDays: 0 };
   assert.deepEqual(policyFromSettings(base), { mode: 'evidence_only' });
   assert.deepEqual(policyFromSettings({ ...base, block: true, maxAgeDays: 90 }), { mode: 'evidence_only', on_failure: 'block', max_age_days: 90 });
   // Primary sources only counts filings alone unless web pages are switched on.
@@ -51,9 +51,9 @@ test('settings become the request object, leaving defaults out', () => {
 test('a saved policy fills the form and survives the round trip', () => {
   const policy = { mode: 'primary_only' as const, on_failure: 'block' as const, max_age_days: 365, allow_classes: ['primary_filing' as const, 'web_page' as const] };
   const s = settingsFromPolicy(policy);
-  assert.deepEqual(s, { mode: 'primary_only', block: true, maxAgeDays: 365, filings: true, webPages: true });
+  assert.deepEqual(s, { mode: 'primary_only', block: true, maxAgeDays: 365, filings: true, webPages: true, rankingProfile: 'facts_first', searchWindowDays: 0 });
   assert.deepEqual(policyFromSettings(s), policy);
-  assert.deepEqual(settingsFromPolicy(null), { mode: 'standard', block: false, maxAgeDays: 0, filings: true, webPages: true });
+  assert.deepEqual(settingsFromPolicy(null), { mode: 'standard', block: false, maxAgeDays: 0, filings: true, webPages: true, rankingProfile: 'facts_first', searchWindowDays: 0 });
   // Block means nothing in standard mode; unknown modes and bad ages fall back.
   assert.equal(settingsFromPolicy({ mode: 'standard', on_failure: 'block' }).block, false);
   assert.equal(settingsFromPolicy({ mode: 'strict' as never, max_age_days: -4 }).maxAgeDays, 0);
@@ -61,7 +61,7 @@ test('a saved policy fills the form and survives the round trip', () => {
 });
 
 test('settings that cannot run are described, and a summary says what they do', () => {
-  const ok = { mode: 'evidence_only' as const, block: true, maxAgeDays: 30, filings: true, webPages: true };
+  const ok = { mode: 'evidence_only' as const, block: true, maxAgeDays: 30, filings: true, webPages: true, rankingProfile: 'facts_first' as const, searchWindowDays: 0 };
   assert.equal(settingsProblem(ok), '');
   assert.match(settingsProblem({ ...ok, filings: false, webPages: false }), /at least one source type/);
   assert.match(settingsProblem({ ...ok, maxAgeDays: 99999 }), /0 to 3650/);
@@ -153,6 +153,63 @@ test('a span keeps the matched token apart and names its source with UTC times',
   assert.deepEqual(spanParts(span), { before: 'Total revenue', match: '4,500', after: '3,900' });
   assert.equal(spanOrigin(span), '[S1] · Acme 10-K · published 2025-02-01 · retrieved 2026-11-05 12:00 UTC');
   assert.equal(spanOrigin({ source: 'S2', start: 0, end: 1, match: 'x' }), '[S2]');
+});
+
+const src = (over: Partial<AnswerSource>): AnswerSource => ({ id: 'S1', tool: 'search_web', class: 'web_page', access: 'listed', ...over });
+
+test('ranking profile and search window travel with the policy, even in standard mode', () => {
+  const base = { mode: 'standard' as const, block: false, maxAgeDays: 0, filings: true, webPages: true, rankingProfile: 'balanced' as const, searchWindowDays: 14 };
+  assert.deepEqual(policyFromSettings(base), { mode: 'standard', ranking_profile: 'balanced', search_window_days: 14 });
+  assert.deepEqual(policyFromSettings({ ...base, rankingProfile: 'facts_first', searchWindowDays: 0 }), { mode: 'standard' });
+  const back = settingsFromPolicy({ mode: 'standard', ranking_profile: 'sentiment_first', search_window_days: 30 });
+  assert.equal(back.rankingProfile, 'sentiment_first');
+  assert.equal(back.searchWindowDays, 30);
+  assert.equal(parseRankingProfile('bogus'), 'facts_first');
+  assert.match(settingsProblem({ ...base, searchWindowDays: 99999 }), /0 to 3650/);
+});
+
+test('a source card labels type, role, state and keeps file dates apart', () => {
+  const card = sourceCard(src({ trust: {
+    source_type: 'company_ir', evidence_role: 'self_reported', evidence_state: 'pdf_text', published_at: 'October 30, 2024', date_source: 'pdf_cover', date_confidence: 'medium',
+    file_created_at: '2026-10-01T00:00:00Z', http_last_modified: 'Tue, 03 Nov 2026 10:00:00 GMT', retrieved_at: '2026-11-07T12:01:00Z', period: 'Q3 2024', why_ranked: ['covers the requested period Q3 2024'],
+  } }));
+  assert.equal(card.type, 'Company investor relations');
+  assert.match(card.role, /Self-reported/);
+  assert.equal(card.state, 'PDF text read');
+  const labels = card.dates.map(d => d.label);
+  assert.deepEqual(labels, ['Published', 'Report period', 'File created', 'HTTP Last-Modified', 'Retrieved']);
+  assert.match(card.dates[0].value, /report cover, medium confidence/);
+  assert.match(card.dates[4].value, /2026-11-07 12:01 UTC/);
+  assert.equal(card.why.length, 1);
+});
+
+test('unknown dates are shown as unknown and file dates are not called the publication date', () => {
+  const card = sourceCard(src({ trust: { source_type: 'unknown', evidence_role: 'unknown', file_created_at: '2026-10-01T00:00:00Z', date_source: 'unknown', date_confidence: 'none' } }));
+  assert.deepEqual(card.dates[0], { label: 'Published', value: 'unknown' });
+  assert.ok(card.notes.some(n => /not when the report was published/.test(n)));
+  assert.deepEqual(sourceDates(undefined), [{ label: 'Published', value: 'unknown' }]);
+});
+
+test('access denied, snippet only and vision-derived are different states', () => {
+  assert.equal(evidenceStateLabel('access_denied'), 'Access denied, not read');
+  assert.equal(evidenceStateLabel('snippet_only'), 'Search snippet only');
+  assert.equal(evidenceStateLabel('vision_derived'), 'Includes vision-derived content');
+  assert.equal(sourceCard(src({ trust: { source_type: 'official_filing', evidence_role: 'primary', evidence_state: 'access_denied', access_note: 'The site refused automated access.' } })).denied, true);
+  assert.equal(evidenceStateLabel(undefined, 'read'), 'Page read');
+});
+
+test('sources sort by rank or by date with undated last', () => {
+  const list = [
+    src({ id: 'S1', trust: { source_type: 'u', evidence_role: 'u', rank: 2, published_at: '2026-01-01' } }),
+    src({ id: 'S2', trust: { source_type: 'u', evidence_role: 'u', rank: 1 } }),
+    src({ id: 'S3', trust: { source_type: 'u', evidence_role: 'u', rank: 3, published_at: '2026-06-01' } }),
+  ];
+  assert.deepEqual(sortSources(list, 'relevance').map(s => s.id), ['S2', 'S1', 'S3']);
+  assert.deepEqual(sortSources(list, 'date').map(s => s.id), ['S3', 'S1', 'S2']);
+});
+
+test('the sentiment-as-fact finding has a label', () => {
+  assert.equal(findingLabel('sentiment_as_fact'), 'Financial figure rests on discussion or opinion');
 });
 
 test('switching a node to JSON output drops the removal option and nothing else', () => {

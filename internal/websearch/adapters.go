@@ -235,6 +235,7 @@ func (b *brave) Search(ctx context.Context, query string) (Response, error) {
 				URL         string `json:"url"`
 				Description string `json:"description"`
 				Age         string `json:"age"`
+				PageAge     string `json:"page_age"` // ISO date-time when Brave knows the page date
 			} `json:"results"`
 		} `json:"web"`
 	}
@@ -244,7 +245,7 @@ func (b *brave) Search(ctx context.Context, query string) (Response, error) {
 	out := Response{Provider: Brave, Query: query, RetrievedAt: time.Now().UTC(), Usage: Usage{Searches: 1}}
 	for _, hit := range parsed.Web.Results {
 		out.Results = append(out.Results, Result{Title: clamp(hit.Title, 240), URL: hit.URL, Snippet: clamp(hit.Description, 450),
-			Age: clamp(hit.Age, 64), Type: TypeWebResult})
+			Age: clamp(hit.Age, 64), PublishedAt: clamp(hit.PageAge, 64), Type: TypeWebResult})
 	}
 	return out, nil
 }

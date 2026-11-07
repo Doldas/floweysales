@@ -147,4 +147,64 @@ test.describe('search source attribution', () => {
     await expect(page.getByText('found by SearXNG; only a snippet')).toBeVisible();
     await expect(page.getByText(/cited by Gemini through Google Search \(Gemini grounding\); not opened/)).toBeVisible();
   });
+
+  const trustSources = [
+    { id: 'S1', tool: 'search_web', class: 'web_page', access: 'read', title: 'Acme Q3 2024 interim report', url: 'https://investors.acme.example/q3.pdf', search_provider: 'brave',
+      trust: { source_type: 'company_ir', evidence_role: 'self_reported', evidence_state: 'pdf_text', published_at: 'October 30, 2024', date_source: 'pdf_cover', date_confidence: 'medium',
+        file_created_at: '2026-10-01T00:00:00Z', http_last_modified: 'Tue, 03 Nov 2026 10:00:00 GMT', retrieved_at: '2026-11-07T12:01:00Z', period: 'Q3 2024', rank: 1, why_ranked: ['company ir (self reported)', 'covers the requested period Q3 2024'] } },
+    { id: 'S2', tool: 'search_web', class: 'web_page', access: 'listed', title: 'Acme earnings thread', url: 'https://www.reddit.com/r/stocks/comments/1/acme/', search_provider: 'brave',
+      trust: { source_type: 'community_social', evidence_role: 'sentiment', evidence_state: 'snippet_only', published_at: '2026-11-06T09:00:00Z', date_source: 'search_provider', date_confidence: 'medium', rank: 2, why_ranked: ['community social (sentiment)'] } },
+    { id: 'S3', tool: 'search_web', class: 'web_page', access: 'listed', title: 'Acme 10-Q', url: 'https://www.sec.gov/Archives/acme-10q.htm', search_provider: 'brave',
+      trust: { source_type: 'official_filing', evidence_role: 'primary', evidence_state: 'access_denied', access_note: 'The site refused automated access; only the search snippet was seen.', date_source: 'unknown', date_confidence: 'none', rank: 3 } },
+  ];
+
+  async function askWithTrustSources(page: import('@playwright/test').Page) {
+    await page.route('**/api/ai/chat', route => route.fulfill({
+      status: 200, contentType: 'text/event-stream',
+      body: [{ type: 'run_start', model: 'small-model' }, { type: 'delta', content: 'People are excited [S2].' }, { type: 'sources', sources: trustSources }, { type: 'done' }]
+        .map(e => `data: ${JSON.stringify(e)}\n\n`).join(''),
+    }));
+    await open(page, 'agent');
+    await page.getByRole('textbox', { name: 'Message the research agent' }).fill('What do people think about Acme?');
+    await page.keyboard.press('Enter');
+    await page.getByText('Sources (3)').click();
+  }
+
+  test('source cards show type, role, separate dates and different evidence states', async ({ page }) => {
+    await askWithTrustSources(page);
+    await expect(page.getByText('Company investor relations')).toBeVisible();
+    await expect(page.getByText('Sentiment (what people say)')).toBeVisible();
+    await expect(page.getByText('PDF text read')).toBeVisible();
+    await expect(page.getByText('Search snippet only')).toBeVisible();
+    await expect(page.getByText('Access denied, not read')).toBeVisible();
+    await page.getByText('Why this source?').first().click();
+    await expect(page.getByText('October 30, 2024 (report cover, medium confidence)')).toBeVisible();
+    await expect(page.getByText('HTTP Last-Modified')).toBeVisible();
+    await expect(page.getByText('2026-11-07 12:01 UTC')).toBeVisible();
+    await page.getByLabel('Sort sources by').selectOption('date');
+    await expect(page.locator('.source-list').nth(1).locator('li.source-card').first()).toContainText('Acme earnings thread');
+  });
+
+  test('source cards fit a phone screen', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 });
+    await askWithTrustSources(page);
+    await page.getByText('Why this source?').first().click();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test('the ranking profile and freshness window are user settings', async ({ page }, info) => {
+    test.skip(info.project.name === 'mobile', 'the composer settings are covered on desktop; the mobile composer is covered by the source card layout test');
+    let body: Record<string, unknown> | undefined;
+    await page.route('**/api/ai/chat', async route => { body = route.request().postDataJSON(); await route.fulfill({ status: 200, contentType: 'text/event-stream', body: `data: ${JSON.stringify({ type: 'done' })}\n\n` }); });
+    await open(page, 'agent');
+    await page.getByText('Evidence settings').click();
+    await page.getByLabel('Search result ranking').selectOption('balanced');
+    await page.getByLabel(/Latest-news window/).fill('14');
+    await page.getByLabel(/Latest-news window/).blur();
+    await page.getByRole('textbox', { name: 'Message the research agent' }).fill('hello');
+    await page.keyboard.press('Enter');
+    await expect.poll(() => (body?.['evidence'] as Record<string, unknown> | undefined)?.['ranking_profile']).toBe('balanced');
+    expect((body?.['evidence'] as Record<string, unknown>)['search_window_days']).toBe(14);
+  });
 });
