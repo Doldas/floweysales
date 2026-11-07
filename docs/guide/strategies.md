@@ -160,3 +160,8 @@ Saving stores the question and the server's answer, so you can reopen it, summar
 - Contiguous parts of a period show whether a result holds over time. They are not independent out-of-sample tests, because nothing is fitted on one part and tested on another. Only the walk-forward fit separates fitting from testing, and the strategy's original numbers were still written by someone who had seen the past.
 - Settings were chosen by someone who had seen the past. Segments and settings checks show robustness. They are not proof of future skill.
 - Strategies built from rules run on one instrument at a time.
+
+
+## Understanding simulation uncertainty
+
+The simulated loss fraction now includes a 95% Wilson sampling interval. It quantifies how much the *finite number of simulated paths* might alter the displayed percentage **under exactly the selected resampling model**. It is **not** a confidence interval for actual future market losses: market regimes, correlated trades, liquidity and incorrect strategy assumptions can dominate sampling noise. The observed replay remains a separate column in the table, and the simulation cannot overwrite it. Read the assumptions and limitations below the distribution before exporting the result.

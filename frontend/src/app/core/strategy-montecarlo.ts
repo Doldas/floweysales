@@ -57,12 +57,22 @@ export function tradeMonteCarloRows(r: Pick<StrategyMonteCarloResult, 'simulatio
   ];
 }
 
+/** 95% Wilson interval for simulation sampling noise, *not* a market-confidence interval. */
+export function simulationSamplingInterval(percent: number, runs: number): string {
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100 || !Number.isSafeInteger(runs) || runs < 1) return 'unavailable';
+  const p = percent / 100, z = 1.96, z2 = z * z;
+  const center = (p + z2 / (2 * runs)) / (1 + z2 / runs);
+  const half = z * Math.sqrt((p * (1 - p) + z2 / (4 * runs)) / runs) / (1 + z2 / runs);
+  return `${(100 * Math.max(0, center - half)).toFixed(1)}–${(100 * Math.min(1, center + half)).toFixed(1)}%`;
+}
+
 /** Lines above the table: sample size, seed and the probabilities, each said to be of simulated paths. */
 export function tradeMonteCarloHeadline(r: Pick<StrategyMonteCarloResult, 'simulation'>): string[] {
   const s = r.simulation;
   const lines = [
     `${s.config.runs} simulated paths of ${s.config.trades} trades (${s.config.method.replace('_', ' ')}, seed ${s.config.seed}, model ${s.model_version}), drawn from ${s.observed_trades} closed trades. In ${s.prob_loss_pct.toFixed(1)}% of them the account ended below where it began.`,
   ];
+  lines.push(`Simulation sampling uncertainty for the loss share: 95% Wilson interval ${simulationSamplingInterval(s.prob_loss_pct, s.config.runs)} (only finite Monte Carlo sampling noise; not a probability forecast or a confidence interval for actual future returns).`);
   if (s.prob_breach_pct !== undefined && s.config.drawdown_limit_pct !== undefined) {
     lines.push(`In ${s.prob_breach_pct.toFixed(1)}% of them a fall of ${Math.abs(s.config.drawdown_limit_pct)}% or more happened at some point.`);
   }
