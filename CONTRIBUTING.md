@@ -29,7 +29,7 @@ node --test frontend/src/app/components/flow-history.spec.ts frontend/src/app/co
 
 Browser tests: `cd frontend && npm run build && npm run e2e` (Playwright, mock backend; see the README). They run in CI after a merge into `main`.
 
-Market-data providers are plugins, developed and released in [Doldas/floweysales-plugins](https://github.com/Doldas/floweysales-plugins). This repository owns the interfaces they build on: the wire protocol, manifest and store format (`docs/plugins.md`) and the SDK module `pluginsdk/`. The backend must not import the SDK or any plugin; CI fails if it does. A protocol or contract change needs matching updates to `pluginsdk/testdata/contract/` (tested by both the SDK and the backend) and a new `pluginsdk/v<semver>` tag after merge.
+Market-data providers are plugins, developed and released in [Doldas/floweysales-plugins](https://github.com/Doldas/floweysales-plugins). This repository owns the interfaces they build on: the wire protocol, manifest and store format (`docs/plugins.md`) and the SDK module `pluginsdk/`. The backend must not import the SDK or any plugin; CI fails if it does. A protocol or contract change needs matching updates to `pluginsdk/testdata/contract/` (tested by both the SDK and the backend) a `pluginsdk/CHANGELOG.md` entry and, if protocol support changes, `pluginsdk/compat.json`. CI (`scripts/check-sdk-contract.sh`) fails SDK source changes that lack tests/fixtures and a changelog entry; use `SDK-Contract: none (reason)` in the PR description for contract-neutral edits. A new `pluginsdk/v<semver>` tag follows after merge (see `docs/releasing.md`).
 
 `npm run build` creates the Angular bundle; the GitHub Pages site in `site/` is **static documentation**, not a hosted trading engine.
 

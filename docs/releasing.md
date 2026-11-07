@@ -41,6 +41,23 @@ The updater stores user data, secrets and installed provider plugins in persiste
 4. Update `Doldas/floweysales-plugins/go.mod` via a separate reviewed PR to the **stable SDK tag**, run plugin tests, then release only plugins with changes or compatibility fixes. Do not mandate a new version for every plugin when SDK changes remain compatible.
 5. Check app runtime/protocol compatibility and store index publication, and record supported SDK, wire protocol and plugin versions in the release notes.
 
+### SDK compatibility matrix, gates and policy
+
+`pluginsdk/compat.json` records which SDK versions speak which wire protocol (currently protocol 1: SDK `>= 0.1.0, < 2.0.0`) and the minimum SDK for official plugins. `node scripts/check-sdk-compat.mjs` fails if the matrix disagrees with `ProtocolVersion` in `pluginsdk/protocol.go`; `--sdk vX.Y.Z [--protocol N]` answers whether a combination is supported and exits non-zero for known-incompatible ones (tested in `scripts/check-sdk-compat.test.mjs`). The app's runtime gate (see `docs/plugins.md`) enforces protocol and version ranges on installed plugins.
+
+Enforced in CI on every PR (`policy` job, `scripts/check-sdk-contract.sh`): a change to `pluginsdk/**/*.go` must also change a contract fixture or test and add a `pluginsdk/CHANGELOG.md` entry, or declare `SDK-Contract: none (reason)` in the PR description. The PR template carries the matching checklist item.
+
+The `Plugin SDK release` workflow additionally:
+
+- compares the exported API with the previous stable SDK tag using `apidiff`. An incompatible change needs a major bump, or in v0 an explicit `Breaking` line in the changelog;
+- requires a `## <version>` section in `pluginsdk/CHANGELOG.md` (rename Unreleased in the release PR) and uses it, plus the supported protocol/SDK ranges, as the release notes;
+- publishes only after approval of the `sdk-release` GitHub Environment (configure required reviewers in repository settings);
+- supports a rehearsal: run it manually (Actions, **Plugin SDK release**, `version_tag` such as `pluginsdk/v0.2.0-rc.1`) to execute every gate on a chosen `main` commit without creating a tag or release.
+
+Go module releases are source tags, so the artifact is reproducible from the tag: `go mod verify` and the tidy check run before publishing, and the module has no third-party dependencies.
+
+**Deprecation and rollback.** Mark a protocol `deprecated` in `compat.json` for at least one minor SDK release and one app release before removing it, and announce it in the changelog. A bad SDK tag is never deleted or moved (the Go module proxy caches it): add a `retract` directive to `pluginsdk/go.mod` in a patch release, keep official plugins pinned to the last good tag, and revert the consumer PR in `floweysales-plugins`.
+
 A `pluginsdk/v*` tag must never trigger the application `v*` workflow. SDK changes do not automatically restart containers.
 
 ## Release readiness checklist
@@ -58,7 +75,7 @@ A `pluginsdk/v*` tag must never trigger the application `v*` workflow. SDK chang
 
 ## Open follow-up work
 
-This is the **first implementation slice**, not completion of all #265/#266 criteria. Future work should add automated migration-upgrade matrix testing, stronger supply-chain attestations and signing, explicit compatibility manifest/validation, a container release rehearsal with real disposable MySQL, release-aware update UX and disaster recovery drills. Until those tests are implemented, tag and promotion remain human-reviewed.
+This is the **first implementation slice**, not completion of all #265/#266 criteria. Future work should add automated migration-upgrade matrix testing, stronger supply-chain attestations and signing, a rehearsed SDK tag and stable consumer upgrade, a container release rehearsal with real disposable MySQL, release-aware update UX and disaster recovery drills. Until those tests are implemented, tag and promotion remain human-reviewed.
 
 ## Cached and verified MySQL JDBC dependency (#276)
 
