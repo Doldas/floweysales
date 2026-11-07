@@ -25,6 +25,8 @@ export function parseCodes(raw: string): string[] {
 
 /** Checks the codes the way the server will, so a typo is caught before a slow request. */
 export function scopeError(f: ScopeForm): string {
+  const unknown = f.regions.find(r => !SCOPE_REGIONS.some(known => known.id === r));
+  if (unknown) return `Unsupported region "${unknown}". Choose a region listed by the application.`;
   for (const [name, raw] of [['country', f.countries], ['exchange', f.exchanges], ['currency', f.currencies]] as const) {
     const bad = parseCodes(raw).find(c => !/^[A-Z0-9]{2,4}$/.test(c));
     if (bad) return `"${bad}" is not a valid ${name} code. Use 2 to 4 letters or digits, for example SE, XSTO or SEK.`;
