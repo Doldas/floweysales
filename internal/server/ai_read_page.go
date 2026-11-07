@@ -221,7 +221,6 @@ func hasPDFMagic(b []byte) bool {
 	return bytes.Contains(head, []byte("%PDF-"))
 }
 
-
 // validateReadPageBody is also used by tests: a truncated response or a PDF
 // label without a PDF signature is never promoted to trusted source evidence.
 func validateReadPageBody(kind string, body []byte, limit int64) (bool, error) {
