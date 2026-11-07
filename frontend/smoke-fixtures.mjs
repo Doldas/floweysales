@@ -296,6 +296,28 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
     '/api/market/leaderboard': leaderboard(q.get('universe') ?? 'custom', q.get('strategy') ?? 'best'),
     '/api/trading/size': { symbol: 'NVDA', side: 'buy', entry: 121.4, equity: 100114, risk_pct: 1, atr_mult: 2, atr: 3.2, stop_source: 'atr', result: { quantity: 156, stop: 115, risk_amount: 998.4, position_pct: 18.9 } },
     '/api/portfolio/analytics': portfolioAnalytics(),
+    // World was previously unmocked (404), so refresh-failure E2E tests never
+    // reached a successful initial snapshot. All content below is synthetic.
+    '/api/world': {
+      generated_at: '2026-10-28T15:30:00Z',
+      sources: ['Playwright synthetic fixture'],
+      notes: ['Synthetic headlines for browser regression tests only.'],
+      sectors: [],
+      themes: [{
+        id: 'synthetic-macro',
+        label: 'Synthetic macro theme',
+        driver: 'synthetic market conditions',
+        count: 1,
+        headlines: [{
+          title: 'Synthetic market update',
+          url: 'https://example.org/test-world-headline',
+          source: 'Playwright fixture',
+          via: 'synthetic',
+          published: NOW - 3600,
+        }],
+        exposures: [],
+      }],
+    },
     '/api/events': { symbol: q.get('symbol') ?? 'NVDA', from: q.get('from'), to: q.get('to'), events: [
       { symbol: 'NVDA', kind: 'dividend', date: q.get('to') < '2026-10-30' ? '2026-08-14' : '2026-11-14', amount: 0.01, currency: 'USD', confirmed: true, provider: 'YAHOO' },
       { symbol: 'NVDA', kind: 'earnings', date: '2026-11-20', confirmed: false, provider: 'YAHOO' }] },

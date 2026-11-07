@@ -107,6 +107,9 @@ thead th { border-top: 0; color: var(--fs-muted); font-weight: 600; font-size: 0
 .pos { color: var(--fs-pos); } .neg { color: var(--fs-neg); }
 .themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr)); gap: 1rem; align-items: start; }
 .theme { margin-bottom: 0; }
+/* News headlines must remain touchable in real World results, not just in
+   the empty state. Inline-only links measured 17px high at phone widths. */
+.headlines a { display: inline-block; min-height: 24px; padding-block: 0.2rem; }
 ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.35rem; }
 li { font-size: 0.88rem; }
 .role { font-size: 0.7rem; font-weight: 600; padding: 0.05rem 0.45rem; border-radius: 999px; white-space: nowrap; margin-right: 0.3rem; }
