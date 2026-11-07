@@ -119,8 +119,9 @@ export function formProblems(form: ProviderForm, info: SearchCatalogEntry, hasKe
     out.push('Approving paid use needs a daily or a monthly spending ceiling.');
   }
   for (const v of [form.daily_budget_usd, form.monthly_budget_usd, form.price_per_1000_usd, form.input_per_mtok_usd, form.output_per_mtok_usd]) {
-    if (!(v >= 0)) { out.push('Prices and budgets cannot be negative.'); break; }
+    if (!Number.isFinite(v) || v < 0) { out.push('Prices and budgets must be finite and nonnegative.'); break; }
   }
+  if (!Number.isSafeInteger(form.free_monthly_searches) || form.free_monthly_searches < 0) out.push('Free monthly search quota must be a nonnegative whole number.');
   return out;
 }
 
