@@ -32,3 +32,8 @@ npx playwright show-report
 The attached screenshots are human/AI **review evidence**, not pixel-difference golden baselines. Pixel-perfect screenshot regression (with reviewed, stable baseline PNGs) can be introduced separately after the UI stabilizes; it is intentionally not asserted in this PR, to avoid misleading pass/fail results.
 
 Related: #289 (end-to-end workflow journeys and UI/UX checks).
+
+
+### Financial Markdown rendering journey
+
+The Workspace Markdown suite now exercises a complete mobile/desktop DCF note against the mocked file API. It checks preserved dollar amounts, fractions, a four-column valuation table, literal inline code, no page-level horizontal overflow and exact original source after Preview → Edit source. Every run attaches a screenshot (`workspace-financial-markdown.png`) to the Playwright HTML report. This verifies rendering and layout only, **not the arithmetic correctness or financial provenance**. As the parser grows, update the shared sample and add independent calculation checks rather than treating the visual screenshot as verified financial data.
