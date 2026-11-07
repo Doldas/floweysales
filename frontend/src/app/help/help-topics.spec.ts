@@ -39,3 +39,10 @@ test('a topic links to its guide page, or to the guide front page', () => {
   assert.equal(guideUrl(topicById('leaderboard')), 'https://doldas.github.io/floweysales/guide/leaderboard.html');
   assert.equal(guideUrl(topicById('glossary')), 'https://doldas.github.io/floweysales/guide/');
 });
+
+test('help search ignores punctuation and repeated whitespace around topics', () => {
+  assert.equal(searchHelp('  flows?!  ')[0].id, 'flows');
+  assert.equal(searchHelp('Research Agent...')[0].id, 'research-agent');
+  assert.equal(searchHelp(' -- ').length, HELP_TOPICS.length);
+  assert.deepEqual(searchHelp('flows zz-not-a-topic'), []);
+});
