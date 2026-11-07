@@ -100,6 +100,9 @@ func WithBudget(ctx context.Context, b *Budget) context.Context {
 
 // BudgetFrom returns the budget in ctx, if any.
 func BudgetFrom(ctx context.Context) *Budget {
+	if ctx == nil {
+		return nil
+	}
 	b, _ := ctx.Value(budgetKey{}).(*Budget)
 	return b
 }

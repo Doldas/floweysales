@@ -375,3 +375,16 @@ func TestBudgetRejectsInvalidReservationAndUnknownUsage(t *testing.T) {
 		t.Fatalf("unknown billing must stop further image calls, got %d", n)
 	}
 }
+
+func TestBudgetFromMissingContextIsSafe(t *testing.T) {
+	if BudgetFrom(nil) != nil {
+		t.Fatal("nil context must not create or expose a budget")
+	}
+	if BudgetFrom(context.Background()) != nil {
+		t.Fatal("missing run budget must remain missing")
+	}
+	budget := NewBudget(Limits{})
+	if BudgetFrom(WithBudget(context.Background(), budget)) != budget {
+		t.Fatal("vision budget should round-trip within its run context")
+	}
+}
