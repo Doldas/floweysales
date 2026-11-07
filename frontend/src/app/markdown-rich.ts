@@ -237,6 +237,9 @@ export function richTextBlockers(source: string): string[] {
     // delimiters, macro syntax and mathematical meaning.
     if (/\\\(|\\\[|\$\$/.test(bare) || /(^|[^\\])\$([^$\n]+)\$/.test(bare) &&
       /(?:\\[A-Za-z]+|[=^_{}+\-*/])/.test(bare)) add('mathematical formulas');
+    // The simple GFM table preview splits on pipes; rich editing of an
+    // escaped pipe would silently change cell boundaries. Preserve source.
+    if (/^\s*\|/.test(line) && /\\\|/.test(line)) add('escaped table pipes');
     if (/<!--/.test(bare)) add('HTML comments');
     else if (/<\/?[A-Za-z][A-Za-z0-9-]*(\s[^>]*)?\/?>/.test(bare)) add('raw HTML');
     if (/\[\^[^\]]+\]/.test(bare)) add('footnotes');
