@@ -1,0 +1,5 @@
+{"symbol":"NVDA","provider":"FINNHUB","source":"finnhub","reports":[
+{"period":"Q4 FY2025","period_basis":"fiscal","period_end":"2025-01-26","revenue":39331000000,"net_income":22091000000,"eps":0.89,"currency":"USD","form":"10-K"},
+{"period":"Q2 FY2025","period_basis":"fiscal","period_end":"2024-07-28","revenue":30040000000,"net_income":16599000000,"eps":0.67,"currency":"USD","form":"10-Q"},
+{"period":"Q1 FY2025","period_basis":"fiscal","period_end":"2024-04-28","net_income":14881000000,"currency":"USD","form":"10-Q"}
+],"note":"Q3 FY2025 not returned by provider"}

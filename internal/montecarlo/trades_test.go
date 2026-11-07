@@ -128,3 +128,82 @@ func TestTradeLimitationsDiscloseSmallSamples(t *testing.T) {
 		t.Fatal("drawdown basis must be disclosed")
 	}
 }
+
+func TestSensitivitiesAreSeededAndLabeled(t *testing.T) {
+	cfg := TradeConfig{Runs: 400, Seed: 5, DelayBars: 2, InstrumentDailyVolPct: 1.5, Exposure: 1, RegimeSharePct: 30, RegimeScale: 3, PositionScale: 1.5}
+	a, err := RunTrades(tradeSeries(40), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := RunTrades(tradeSeries(40), cfg)
+	if !reflect.DeepEqual(a, b) {
+		t.Fatal("sensitivities must be reproducible with the same seed")
+	}
+	cfg.Seed = 6
+	c, _ := RunTrades(tradeSeries(40), cfg)
+	if reflect.DeepEqual(a.TerminalReturnPct, c.TerminalReturnPct) {
+		t.Fatal("a different seed should change the percentiles")
+	}
+	text := strings.Join(a.Assumptions, " ")
+	for _, want := range []string{"fill delay of 2 bar", "stretch of 30%", "multiplied by 1.5"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("assumption %q missing: %s", want, text)
+		}
+	}
+}
+
+func TestSensitivitiesWidenTheBand(t *testing.T) {
+	width := func(c TradeConfig) float64 {
+		c.Runs, c.Seed = 500, 8
+		r, err := RunTrades(tradeSeries(40), c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r.TerminalReturnPct.P95 - r.TerminalReturnPct.P5
+	}
+	base := width(TradeConfig{})
+	for name, c := range map[string]TradeConfig{
+		"delay":    {DelayBars: 3, InstrumentDailyVolPct: 2, Exposure: 1},
+		"regime":   {RegimeSharePct: 40, RegimeScale: 3},
+		"position": {PositionScale: 2},
+	} {
+		if width(c) <= base {
+			t.Fatalf("%s must widen the band", name)
+		}
+	}
+}
+
+func TestSensitivitiesRejectBadSettings(t *testing.T) {
+	for name, bad := range map[string]TradeConfig{
+		"delay too long":        {DelayBars: 9, InstrumentDailyVolPct: 1, Exposure: 1},
+		"delay without inputs":  {DelayBars: 1},
+		"share over 100":        {RegimeSharePct: 120, RegimeScale: 2},
+		"regime scale too high": {RegimeSharePct: 10, RegimeScale: 9},
+		"position too big":      {PositionScale: 5},
+		"position too small":    {PositionScale: 0.1},
+	} {
+		if _, err := RunTrades(tradeSeries(40), bad); err == nil {
+			t.Fatalf("%s must be refused", name)
+		}
+	}
+}
+
+func TestConcentrationUsesObservedTradesOnly(t *testing.T) {
+	res, err := RunTrades(tradeSeries(40), TradeConfig{Runs: 200, Seed: 1, PositionScale: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Concentration.BestTrades != BestTradesN || res.Concentration.LargestLossPct != -2 {
+		t.Fatalf("concentration wrong: %+v", res.Concentration)
+	}
+	if res.Concentration.ReturnWithoutBestPct >= res.Observed.TotalReturnPct {
+		t.Fatalf("removing the best trades must lower the return: %+v vs %v", res.Concentration, res.Observed.TotalReturnPct)
+	}
+}
+
+func TestNoTradesIsRefusedWithCount(t *testing.T) {
+	_, err := RunTrades([]float64{}, TradeConfig{})
+	if err == nil || !strings.Contains(err.Error(), "only 0 closed trades") {
+		t.Fatalf("expected a count in the refusal, got %v", err)
+	}
+}

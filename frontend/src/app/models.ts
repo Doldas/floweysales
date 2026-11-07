@@ -801,6 +801,7 @@ export interface StrategyRunResult {
 /** POST /api/strategies/montecarlo: the replay's observed figures next to simulated trade-level outcomes. */
 export interface StrategyMonteCarloRequest extends StrategyRunRequest {
   method?: string; runs?: number; trades?: number; seed?: number; drawdown_limit?: number; extra_cost_bps?: number; dispersion_scale?: number;
+  delay_bars?: number; regime_share_pct?: number; regime_scale?: number; position_scale?: number;
 }
 export interface StrategyMonteCarloResult {
   symbol: string; provider: string; range: string; generated_at: string; strategy: string; strategy_id?: string; cost_bps: number;
@@ -808,7 +809,9 @@ export interface StrategyMonteCarloResult {
   observed: { total_return_pct: number; buy_hold_return_pct: number; closed_trades: number; open_trade_excluded?: boolean; warnings: string[] };
   simulation: {
     model_version: string;
-    config: { method: string; runs: number; trades: number; seed: number; drawdown_limit_pct?: number; extra_cost_bps_per_trade?: number; dispersion_scale: number };
+    config: { method: string; runs: number; trades: number; seed: number; drawdown_limit_pct?: number; extra_cost_bps_per_trade?: number; dispersion_scale: number;
+      delay_bars?: number; instrument_daily_vol_pct?: number; exposure?: number; regime_share_pct?: number; regime_scale?: number; position_scale?: number };
+    concentration?: { best_trades_removed: number; return_without_best_pct: number; largest_loss_pct: number };
     observed_trades: number; observed: { days: number; total_return_pct: number; max_drawdown_pct: number };
     terminal_return_pct: MonteCarloDist; max_drawdown_pct: MonteCarloDist;
     prob_loss_pct: number; prob_breach_pct?: number; prob_ruin_pct: number; assumptions: string[]; limitations: string[];

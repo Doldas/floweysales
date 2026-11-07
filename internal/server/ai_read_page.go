@@ -36,29 +36,72 @@ func (s engineSource) ReadPage(ctx context.Context, raw string) (string, error) 
 	if err != nil {
 		return "", err
 	}
+	out := map[string]any{"url": final}
 	title, text := "", ""
-	if isPDF {
-		if text, err = pdfText([]byte(body)); err != nil {
-			return "", err
-		}
-	} else {
+	var resolveNote string
+	if !isPDF {
 		if m := readPageTitle.FindStringSubmatch(body); m != nil {
 			title = strings.TrimSpace(crawlerSpaces.ReplaceAllString(html.UnescapeString(crawlerTags.ReplaceAllString(m[1], " ")), " "))
 		}
 		text = htmlText(body)
+		// A report viewer or a thin landing page usually wraps a PDF on the
+		// same site. It is fetched through the same address checks as any
+		// page; a refusal (HTTP 403) stays a refusal and is never worked around.
+		if links := findPDFLinks(body, final); len(links) > 0 && (len(text) < viewerSparseChars || looksLikeViewer(final)) {
+			var lastErr error
+			for _, link := range links[:min(2, len(links))] {
+				pbody, pfinal, ispdf, perr := readPublicPage(ctx, link)
+				if perr != nil {
+					lastErr = perr
+					continue
+				}
+				if ispdf {
+					body, isPDF = pbody, true
+					out["resolved_from"], out["document_url"] = final, pfinal
+					break
+				}
+			}
+			if !isPDF {
+				resolveNote = fmt.Sprintf("a PDF linked from this page (%s) could not be read", links[0])
+				if lastErr != nil {
+					resolveNote += ": " + lastErr.Error()
+				}
+				if text == "" {
+					return "", errors.New(resolveNote + ". It was not read; do not claim its content")
+				}
+				out["pdf_links"] = links
+				out["pdf_link_error"] = resolveNote
+			}
+		}
 	}
-	if text == "" {
-		return "", errors.New("the page has no readable text; it may need JavaScript, a login, or be a scanned document")
+	truncated := false
+	if isPDF {
+		res, err := s.e.readPDF(ctx, []byte(body))
+		if err != nil {
+			return "", err
+		}
+		text, truncated = res.Text, res.Truncated
+		if text == "" {
+			msg := "the PDF has no readable text"
+			if len(res.Report.Limitations) > 0 {
+				msg += ": " + strings.Join(res.Report.Limitations, "; ")
+			}
+			return "", errors.New(msg + ". It was not read; do not claim its content")
+		}
+		out["document"] = res.Report
+		out["visual_evidence"] = res.Evidence
+	} else {
+		if text == "" {
+			return "", errors.New("the page has no readable text; it may need JavaScript, a login, or be a scanned document")
+		}
+		if len(text) > readPageMaxText {
+			text, truncated = text[:readPageMaxText], true
+		}
 	}
-	truncated := len(text) > readPageMaxText
-	if truncated {
-		text = text[:readPageMaxText]
-	}
-	out, err := json.Marshal(map[string]any{
-		"url": final, "title": title, "text": text, "truncated": truncated,
-		"retrieved_at": time.Now().UTC().Format(time.RFC3339),
-	})
-	return string(out), err
+	out["title"], out["text"], out["truncated"] = title, text, truncated
+	out["retrieved_at"] = time.Now().UTC().Format(time.RFC3339)
+	raw2, err := json.Marshal(out)
+	return string(raw2), err
 }
 
 // htmlText strips scripts, styles and markup and collapses whitespace.
@@ -151,22 +194,35 @@ func readPublicPage(ctx context.Context, raw string) (string, string, bool, erro
 			return "", "", false, readPageStatusError(resp.StatusCode, u)
 		}
 		kind := strings.ToLower(strings.Split(resp.Header.Get("Content-Type"), ";")[0])
-		isPDF := strings.Contains(kind, "application/pdf")
-		if !isPDF && !strings.Contains(kind, "text/html") && !strings.Contains(kind, "text/plain") && !strings.Contains(kind, "xhtml") {
+		isPDF := strings.Contains(kind, "application/pdf") || strings.Contains(kind, "application/x-pdf")
+		binary := strings.Contains(kind, "octet-stream") || strings.Contains(kind, "binary")
+		if !isPDF && !binary && !strings.Contains(kind, "text/html") && !strings.Contains(kind, "text/plain") && !strings.Contains(kind, "xhtml") {
 			return "", "", false, fmt.Errorf("cannot read content type %q; only HTML, plain text and PDF are supported", kind)
 		}
 		limit := int64(readPageMaxBytes)
-		if isPDF {
+		if isPDF || binary {
 			limit = readPDFMaxBytes
 		}
 		body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 		if err != nil {
 			return "", "", false, err
 		}
-		if isPDF && int64(len(body)) > limit {
+		if (isPDF || binary) && int64(len(body)) > limit {
 			return "", "", false, errors.New("the PDF is larger than 8 MB")
+		}
+		// Trust the bytes, not the label: a generic binary type is a PDF only
+		// by its magic number, and a labeled PDF that lacks it is refused.
+		if hasPDFMagic(body) {
+			isPDF = true
+		} else if binary {
+			return "", "", false, fmt.Errorf("cannot read content type %q; only HTML, plain text and PDF are supported", kind)
 		}
 		return string(body), u.String(), isPDF, nil
 	}
 	return "", "", false, errors.New("the page redirected too many times")
+}
+
+func hasPDFMagic(b []byte) bool {
+	head := b[:min(len(b), 1024)]
+	return bytes.Contains(head, []byte("%PDF-"))
 }

@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 
 import { toolLabel } from './agent-tools';
+import { parseDocumentEvidence, visionPageLabel } from './document-evidence';
 import { argsSummary, displayNotes, durationText, findLines, formatBytes, prettyText, type ToolCall } from './tool-call-view';
 
 /**
@@ -35,6 +36,39 @@ import { argsSummary, displayNotes, durationText, findLines, formatBytes, pretty
       <label class="raw"><input type="checkbox" [checked]="raw()" (change)="raw.set($any($event.target).checked)" /> Raw text</label>
     </div>
     @for (note of notes(); track note) { <p class="step-note"><i class="bi bi-info-circle" aria-hidden="true"></i> {{ note }}</p> }
+
+    @if (evidence(); as ev) {
+      <section class="evidence" aria-label="Document evidence">
+        <h5>Document evidence</h5>
+        <p class="step-note">{{ ev.summary }}</p>
+        <p class="step-note">
+          <a [href]="ev.url" target="_blank" rel="noopener noreferrer">{{ ev.url }}</a>
+          @if (ev.resolvedFrom) { (opened from the viewer page {{ ev.resolvedFrom }}) }
+          &middot; {{ ev.pagesExamined }} of {{ ev.pagesTotal }} pages examined
+        </p>
+        <ul class="ev-pages">
+          @for (p of ev.pages; track p.page) {
+            <li><strong>Page {{ p.page }}</strong> {{ p.label }}@if (vlabel(p.vision)) { , {{ vlabel(p.vision) }} }@if (p.note) { &mdash; {{ p.note }} }</li>
+          }
+        </ul>
+        @if (ev.observations.length) {
+          <div class="ev-table" role="region" aria-label="Figures read by the vision model" tabindex="0">
+            <table>
+              <thead><tr><th>Page</th><th>Item</th><th>Value as printed</th><th>Period</th><th>Checks</th></tr></thead>
+              <tbody>
+                @for (o of ev.observations; track $index) {
+                  <tr [class.unverified]="!o.verified">
+                    <td>{{ o.page }}</td><td>{{ o.label }}</td><td>{{ o.original }} {{ o.unit }}</td><td>{{ o.period || 'not stated' }}</td>
+                    <td>{{ o.verified ? 'Passed' : 'Not verified' }}@if (o.flagText.length) { : {{ o.flagText.join('; ') }} }</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+        @for (l of ev.limitations; track l) { <p class="step-note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> {{ l }}</p> }
+      </section>
+    }
 
     @if (call().args) {
       <section>
@@ -91,6 +125,11 @@ h5 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color
 .step-pre { margin: 0; min-width: 0; max-width: 100%; max-height: 220px; overflow: auto; font-size: 0.74rem; background: var(--fs-sunken); border: 1px solid var(--fs-border); border-radius: var(--bs-border-radius); padding: 0.5rem 0.6rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .step-pre:not(.is-clamped) { max-height: 60vh; }
 .step-pre.err { color: var(--fs-neg); }
+.ev-pages { margin: 0; padding-left: 1.1rem; font-size: 0.76rem; }
+.ev-table { overflow-x: auto; max-width: 100%; }
+.ev-table table { border-collapse: collapse; font-size: 0.74rem; min-width: 30rem; }
+.ev-table th, .ev-table td { border-bottom: 1px solid var(--fs-border); padding: 0.2rem 0.4rem; text-align: left; vertical-align: top; }
+.ev-table tr.unverified td { color: var(--fs-text-2); }
   `],
 })
 export class ToolCallComponent {
@@ -119,6 +158,8 @@ export class ToolCallComponent {
     return this.clamped() ? text.slice(0, ToolCallComponent.CLAMP) + '\n…' : text;
   });
 
+  readonly evidence = computed(() => (this.call().name === 'read_source' ? parseDocumentEvidence(this.call().result) : null));
+  vlabel(v: string): string { return visionPageLabel(v); }
   pretty(text: string | undefined): string { return prettyText(text); }
   size(n: number | undefined): string { return formatBytes(n); }
 

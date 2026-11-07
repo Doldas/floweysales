@@ -3,7 +3,7 @@ import type { Subscription } from 'rxjs';
 import { MarketService, describeHttpError } from '../services';
 import type { StrategyMonteCarloResult, StrategyRunRequest, StrategyRunResult } from '../models';
 import {
-  MIN_TRADES, TRADE_MC_DEFAULTS, closedTradeCount, tradeMonteCarloError, tradeMonteCarloHeadline, tradeMonteCarloReadiness, tradeMonteCarloRequest, tradeMonteCarloRows,
+  MIN_TRADES, TRADE_MC_DEFAULTS, closedTradeCount, tradeMonteCarloConcentration, tradeMonteCarloCsv, tradeMonteCarloError, tradeMonteCarloFileName, tradeMonteCarloHeadline, tradeMonteCarloJson, tradeMonteCarloReadiness, tradeMonteCarloRequest, tradeMonteCarloRows,
   type TradeMonteCarloSettings,
 } from '../core/strategy-montecarlo';
 
@@ -41,6 +41,25 @@ import {
           <option value="2">Double</option>
         </select>
       </label>
+      <label for="smc-delay">Fill delay (bars) <input id="smc-delay" class="form-control form-control-sm" type="number" min="0" max="5" step="1" placeholder="none" [value]="settings().delayBars" (input)="set('delayBars', $any($event.target).value)"></label>
+      <label for="smc-regime">Turbulent stretch (% of trades) <input id="smc-regime" class="form-control form-control-sm" type="number" min="0" max="100" placeholder="none" [value]="settings().regimeShare" (input)="set('regimeShare', $any($event.target).value)"></label>
+      <label for="smc-regime-scale">Spread in that stretch
+        <select id="smc-regime-scale" class="form-select form-select-sm" [value]="settings().regimeScale" (change)="set('regimeScale', $any($event.target).value)">
+          <option value="1.5">1.5 times</option>
+          <option value="2">2 times</option>
+          <option value="3">3 times</option>
+          <option value="4">4 times</option>
+        </select>
+      </label>
+      <label for="smc-size">Position size
+        <select id="smc-size" class="form-select form-select-sm" [value]="settings().positionScale" (change)="set('positionScale', $any($event.target).value)">
+          <option value="0.5">Half</option>
+          <option value="1">As in the replay</option>
+          <option value="1.5">1.5 times (more concentrated)</option>
+          <option value="2">Double (more concentrated)</option>
+          <option value="3">Triple (more concentrated)</option>
+        </select>
+      </label>
     </div>
     <button type="button" class="btn btn-sm btn-outline-primary mt-2" (click)="run()" [disabled]="loading()">{{ loading() ? 'Simulating…' : 'Run simulation' }}</button>
   }
@@ -59,6 +78,11 @@ import {
             }
           </tbody>
         </table>
+      </div>
+      @if (concentration(); as c) { <p class="smc-note mb-1">{{ c }}</p> }
+      <div class="d-flex gap-2 mb-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" (click)="download('csv')"><i class="bi bi-filetype-csv" aria-hidden="true"></i> Export CSV</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" (click)="download('json')"><i class="bi bi-filetype-json" aria-hidden="true"></i> Export JSON</button>
       </div>
       <h3 class="h6 mb-1">What this assumes</h3>
       <ul class="smc-list small">@for (a of m.simulation.assumptions; track a) { <li>{{ a }}</li> }</ul>
@@ -92,6 +116,7 @@ export class StrategyMonteCarloComponent {
   readonly readiness = computed(() => tradeMonteCarloReadiness(closedTradeCount(this.replay().trades)));
   readonly rows = computed(() => (this.sim() ? tradeMonteCarloRows(this.sim()!) : []));
   readonly headline = computed(() => (this.sim() ? tradeMonteCarloHeadline(this.sim()!) : []));
+  readonly concentration = computed(() => (this.sim() ? tradeMonteCarloConcentration(this.sim()!) : ''));
   readonly minTrades = MIN_TRADES;
 
   constructor() {
@@ -116,5 +141,18 @@ export class StrategyMonteCarloComponent {
       next: res => { this.sim.set(res); this.loading.set(false); },
       error: err => { this.error.set(describeHttpError(err)); this.loading.set(false); },
     });
+  }
+
+  /** Saves the shown simulation, with strategy, market, UTC data dates, model version, seed, assumptions and limitations, as a file. */
+  download(kind: 'csv' | 'json'): void {
+    const m = this.sim();
+    if (!m) return;
+    const blob = new Blob([kind === 'csv' ? tradeMonteCarloCsv(m) : tradeMonteCarloJson(m)], { type: kind === 'csv' ? 'text/csv;charset=utf-8' : 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = tradeMonteCarloFileName(m, kind);
+    a.click();
+    URL.revokeObjectURL(url);
   }
 }

@@ -107,6 +107,13 @@ test('a source a delegated team member retrieved names that member', () => {
   assert.equal(sourceOrigin({}), '');
 });
 
+test('a listed source names the search provider and says it was only a snippet', () => {
+  assert.equal(sourceOrigin({ search_provider: 'searxng', access: 'listed' }), 'found by SearXNG; only a snippet');
+  assert.equal(sourceOrigin({ search_provider: 'brave_search', member: 'Owner' }), 'retrieved by team member Owner · found by Brave Search; only a snippet');
+  assert.match(sourceOrigin({ search_provider: 'google_grounding', result_type: 'grounded_source' }), /cited by Gemini.*not opened/);
+  assert.equal(sourceOrigin({ search_provider: 'searxng', access: 'read' }), '', 'an opened page is not a snippet');
+});
+
 const claim = (over: Partial<AnswerClaim>): AnswerClaim => ({
   id: 'C1', sentence: 'Acme revenue was $4.5 billion in fiscal 2024 [S1].', kind: 'fact', verdict: 'supported', code: 'match',
   explanation: 'The cited text states the figure.', limitations: 'Not proof the source is right.', verifier_version: 'claims-v1', verified_at: '2026-11-06T10:00:00Z', ...over,

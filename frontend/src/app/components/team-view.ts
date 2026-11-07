@@ -83,6 +83,10 @@ export function shownText(m: MemberState): string {
 /** The citation check result under a member's answer, or '' when the member retrieved no sources. */
 export function evidenceLine(m: MemberState): string {
   if (!m.sources?.length && !m.audit?.length && !m.removed?.length) return '';
+  if (m.id === 'chair') {
+    const n = m.audit?.length ?? 0;
+    return `Summary check found ${n} ${n === 1 ? 'figure' : 'figures'} that the members did not write or that sit with another member. The chair may only restate member answers. A clean check does not confirm the figures are true.`;
+  }
   return [removedSummary(m.removed ?? []), auditSummary(m.audit ?? [])].filter(Boolean).join(' ');
 }
 
