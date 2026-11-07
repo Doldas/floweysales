@@ -187,22 +187,26 @@ func TestSocialDiscussionCannotSolelyVerifyReportedFinancialFigure(t *testing.T)
 	}
 }
 
-func TestStrictEvidenceAbstainsForCitedButUnverifiableRecommendations(t *testing.T) {
-	for _, name := range []string{"recommendation_not_checked", "inference_not_checked", "qualitative_not_checked", "strict_unlabeled_forecast"} {
+// Strict mode blocks *unlabeled* consequential assertions, but must not
+// reject an explicit refusal or an innocuous quoted description just because
+// a deterministic numeric verifier has no metric to compare.
+func TestStrictEvidenceDistinguishesAbstentionFromUnsupportedJudgement(t *testing.T) {
+	for _, name := range []string{"strict_unlabeled_recommendation", "strict_unlabeled_forecast"} {
 		g := goldenNamed(t, name)
 		rep := VerifyClaims(g.Answer, registryFor(g.Sources), ClaimOptions{Strict: true, Now: fixedNow})
 		findings := ClaimFindings(rep, nil, true)
-		if len(rep.Claims) == 0 || len(findings) == 0 {
-			t.Fatalf("%s: non-verifiable statement was silently accepted: %+v", name, rep)
+		if len(findings) == 0 || findings[0].Kind != ClaimUnsupported {
+			t.Fatalf("%s: unlabeled judgement must be flagged: %+v", name, findings)
 		}
-		for _, c := range rep.Claims {
-			if c.Verdict == NotChecked && len(ClaimFindings(ClaimReport{Claims: []Claim{c}}, nil, true)) == 0 {
-				t.Fatalf("%s: not_checked cannot mean verified", name)
-			}
+	}
+	for _, name := range []string{"qualitative_not_checked", "inference_not_checked"} {
+		g := goldenNamed(t, name)
+		rep := VerifyClaims(g.Answer, registryFor(g.Sources), ClaimOptions{Strict: true, Now: fixedNow})
+		if len(rep.Claims) != 1 || rep.Claims[0].Verdict != NotChecked {
+			t.Fatalf("%s: unknown qualitative judgement must stay unverified: %+v", name, rep)
 		}
-		_, removed := Block(g.Answer, findings)
-		if len(removed) == 0 {
-			t.Fatalf("%s: strict blocker should remove an unsupported sentence", name)
+		if findings := ClaimFindings(rep, nil, true); len(findings) != 0 {
+			t.Fatalf("%s: an unverified description must not trigger correction-loop findings: %+v", name, findings)
 		}
 	}
 }
