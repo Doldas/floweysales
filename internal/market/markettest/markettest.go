@@ -104,6 +104,9 @@ func New(providers ...string) *Backend {
 func (b *Backend) Serve(provider, symbol string, s market.HistorySeries) *Backend {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	// Store a snapshot, not a slice owned by the caller. A later mutation
+	// of the fixture must not change a supposedly deterministic replay.
+	s.Points = append([]market.HistoryPoint(nil), s.Points...)
 	b.history[provider+"|"+symbol] = s
 	return b
 }
@@ -120,7 +123,7 @@ func (b *Backend) ServeFinancials(f market.FinancialsResponse) *Backend {
 func (b *Backend) ServeSearch(query string, r []market.SearchResult) *Backend {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.searches[query] = r
+	b.searches[query] = append([]market.SearchResult(nil), r...)
 	return b
 }
 
