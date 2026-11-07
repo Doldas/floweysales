@@ -73,3 +73,8 @@ In the tool-call view of `read_source`, **Document evidence** shows the document
 ### Input integrity and incomplete responses
 
 The document reader now rejects HTML exceeding its 512 KB fetch limit, instead of silently treating a partial page as a complete source. It also rejects responses labeled PDF when their content lacks a PDF file signature (e.g. an HTML error page mislabeled as `application/pdf`). Large PDFs remain subject to the 8 MB limit. These are **errors**, not evidence: the agent must not cite an unread or truncated page as an extracted document. HTTP 403 restrictions remain unchanged.
+
+
+### Usage safety
+
+If a multimodal provider omits token usage or sends invalid counters, document analysis does **not** assume the call was free: further vision image reservations are denied for that run to avoid uncontrolled costs. Negative image reservations/releases are ignored. Administrators should review incomplete extraction evidence and configure appropriate run budgets.
