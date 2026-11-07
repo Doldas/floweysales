@@ -47,3 +47,8 @@ test('coverage lines state counts, dates in UTC, currencies and providers', () =
   assert.match(unknown, /^Region not known: 0 of 1 ranked; no prices/);
   assert.deepEqual(coverageLines(undefined), []);
 });
+
+test('unknown regions are refused before submitting the leaderboard scope', () => {
+  assert.match(scopeError({ ...EMPTY_SCOPE, regions: ['europe', 'not_a_real_region'] }), /Unsupported region/);
+  assert.equal(scopeError({ ...EMPTY_SCOPE, regions: ['africa', 'asia'] }), '');
+});
