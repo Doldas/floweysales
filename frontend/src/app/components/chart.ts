@@ -585,7 +585,7 @@ export class TradingChartComponent implements AfterViewInit {
 
     const points = series.points;
     const iv = (series.interval || '').toLowerCase();
-    const intraday = /^(5m|15m|1h|4h|5|15|60)$/.test(iv);
+    const intraday = /^(\d+m|\d+h|5|15|30|60)$/.test(iv);
     const weekly = iv.includes('w');
     const longTerm = !intraday && ['3Y', '5Y', '10Y', 'MAX'].includes(series.range);
     const sparse = weekly || longTerm;

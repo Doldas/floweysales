@@ -91,6 +91,13 @@
       <div class="history-load-slot" [attr.aria-busy]="market.loadingHistory()">
         @if (market.loadingHistory()) { <fs-progress-status stage="Loading price history" /> }
       </div>
+      <div class="studies chart-intervals" role="radiogroup" aria-label="Bar length">
+        <i class="bi bi-clock-history text-muted" aria-hidden="true"></i>
+        <button type="button" class="fs-chip" role="radio" [attr.aria-checked]="shownInterval() === 'auto'" [title]="'The provider\'s own bars' + (nativeInterval() ? ' (' + nativeInterval() + ')' : '')" data-interval="auto" (click)="chooseInterval('auto')">Auto@if (nativeInterval()) { · {{ nativeInterval() }} }</button>
+        @for (iv of intervals; track iv.id) {
+          <button type="button" class="fs-chip" role="radio" [attr.aria-checked]="shownInterval() === iv.id" [disabled]="!mergeable().includes(iv.id)" [title]="intervalHint(iv.id)" [attr.data-interval]="iv.id" (click)="chooseInterval(iv.id)">{{ iv.label }}</button>
+        }
+      </div>
       <div class="studies chart-styles" role="radiogroup" aria-label="Chart style">
         <i class="bi bi-bar-chart-line text-muted" aria-hidden="true"></i>
         @for (st of chartStyles; track st.id) {
