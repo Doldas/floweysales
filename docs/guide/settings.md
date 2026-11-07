@@ -24,7 +24,7 @@ Flows use three permissions that an administrator can assign through roles: **fl
 
 | Tab | What it holds |
 | --- | --- |
-| **API integrations** | The AI provider (an OpenAI-compatible endpoint, a default model, the maximum model rounds and tool calls per answer, and a catalog of models with display labels), web search (see below), and the SEC EDGAR contact that SEC requests must carry. Credentials are encrypted on the server and never shown again; the screen only says whether a key is configured. |
+| **API integrations** | The AI provider (an OpenAI-compatible endpoint, a default model, the maximum model rounds and tool calls per answer, and a catalog of models with display labels), web search (several providers, see below), the SEC EDGAR contact that SEC requests must carry, and the optional **Vision model** that reads scanned PDF pages and charts or tables that are pictures (see [Reading PDFs and scanned reports](../pdf-vision.md)). Credentials are encrypted on the server and never shown again; the screen only says whether a key is configured. |
 | **Model profiles** | Named model choices such as "Fast and cheap" or "Deep research". Users and agent teams pick a profile by name; they never see the endpoint or the key. Each profile can name a fallback model, whether the model supports tools, its context size and costs (unknown stays unknown), and lower step and tool-call budgets. See [Model profiles and saved teams](../model-profiles.md). |
 | **User management** | Create, invite and manage accounts. |
 | **Role management** | Define roles. |

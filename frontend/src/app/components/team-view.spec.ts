@@ -110,3 +110,12 @@ test('the budget event is kept on the state, and a run without one has none', ()
   assert.deepEqual(s.budget, summary);
   assert.equal(run([{ type: 'member_start', agent: 'a', name: 'Alpha' }, { type: 'done' }]).budget, undefined);
 });
+
+test('the chair summary check says what it checks and never that the figures are true', () => {
+  const s = run([
+    { type: 'member_start', agent: 'chair' },
+    { type: 'sources', agent: 'chair', audit: [{ kind: 'summary_figure_not_in_members', sentence: 'Revenue grew 18%.', detail: 'x' }] },
+  ]);
+  assert.match(evidenceLine(s.chair!), /Summary check found 1 figure that the members did not write/);
+  assert.match(evidenceLine(s.chair!), /does not confirm the figures are true/);
+});

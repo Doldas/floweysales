@@ -4,6 +4,7 @@ import { UpdateSettingsComponent } from './update-settings';
 import { PluginSettingsComponent } from './plugin-settings';
 import { TradingSettingsComponent } from './trading-settings';
 import { ModelProfilesSettingsComponent } from './model-profiles-settings';
+import { VisionSettingsComponent } from './vision-settings';
 import { FormsModule } from '@angular/forms';
 import { WebSearchSettingsComponent } from './web-search-settings';
 
@@ -14,7 +15,7 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
 @Component({
  selector:'fse-api-settings', host:{class:'fs-native-forms'},
  standalone:true,
- imports:[FormsModule,AdminAccessSettingsComponent,UpdateSettingsComponent,PluginSettingsComponent,TradingSettingsComponent,ModelProfilesSettingsComponent,WebSearchSettingsComponent],
+ imports:[FormsModule,AdminAccessSettingsComponent,UpdateSettingsComponent,PluginSettingsComponent,TradingSettingsComponent,ModelProfilesSettingsComponent,WebSearchSettingsComponent,VisionSettingsComponent],
  template:`
  <div class="api-settings">
   @if(!encryptionReady()){
@@ -69,6 +70,7 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
     <button class="btn btn-sm btn-outline-secondary" [disabled]="busy()||!newModel().trim()||!newLabel().trim()" (click)="addModel()">Add AI model</button>
    </div>
    <div class="card wide"><fse-web-search-settings></fse-web-search-settings></div>
+   <fse-vision-settings></fse-vision-settings>
    <div class="card">
     <h3>SEC EDGAR contact</h3>
     <p>Status: <strong>{{secStatus()}}</strong></p>

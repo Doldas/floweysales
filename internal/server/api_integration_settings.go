@@ -86,7 +86,7 @@ func (e *Engine) RestoreAPISecrets(ctx context.Context) error {
 			e.setSECContact(secret)
 		}
 	}
-	return nil
+	return e.restoreVision(ctx)
 }
 
 // setSECContact makes the SEC client identify itself with the saved contact;
