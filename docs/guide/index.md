@@ -50,3 +50,6 @@ This guide covers only what is built. Each page says what a screen does, what yo
 ## Where to go next
 
 New here? Start with [Getting started](getting-started.md). The project's own notes, such as the [roadmap](../roadmap.md), the [architecture](../architecture.md) and the [contribution guide](../../CONTRIBUTING.md), live in the repository and are for people who build or run FloweySales.
+
+
+For a hands-on introduction to quarterly evidence and AI research, follow the optional **source-backed research exercise** in [Tutorial: from ranking to backtest](tutorial-research-a-company.md#7-reproduce-a-source-backed-ai-answer). It explicitly separates source snippets, reports, and social sentiment.
