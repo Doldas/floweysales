@@ -211,7 +211,7 @@ test('mobile and desktop financial Markdown evidence stays inside the Workspace 
 });
 
 test('math source remains protected from Rich text on desktop and phone', async ({ page }, testInfo) => {
-  const original = '# Financial formula\\n\\nRevenue $3.07 bn.\\n\\n$$\\n\\\\frac{3.07}{0.12-0.02}\\n$$\\n';
+  const original = ['# Financial formula', '', 'Revenue $3.07 bn.', '', '$$', '\\frac{3.07}{0.12-0.02}', '$$', ''].join('\n');
   await mockWorkspace(page, { '/docs/finance.md': original });
   await open(page, 'workspace');
   await page.getByRole('button', { name: 'docs', exact: true }).first().click();
