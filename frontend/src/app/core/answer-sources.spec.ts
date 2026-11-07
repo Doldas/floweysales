@@ -2,7 +2,7 @@
 //   node --test src/app/core/answer-sources.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EVIDENCE_MODES, auditSummary, claimFacts, claimsSummary, sortClaims, spanOrigin, spanParts, verdictLabel, whyLabel, type AnswerClaim, delegationProgress, parseEvidenceMode, findingLabel, patchNodeEvidence, policyFromSettings, removedSummary, safeUrl, sourceOrigin, settingsFromPolicy, settingsProblem, settingsSummary, splitSources, parseRankingProfile, sourceCard, sourceDates, sortSources, evidenceStateLabel, type AnswerSource } from './answer-sources.ts';
+import { EVIDENCE_MODES, auditSummary, claimFacts, claimsSummary, sortClaims, spanOrigin, spanParts, verdictLabel, whyLabel, type AnswerClaim, delegationProgress, parseEvidenceMode, findingLabel, patchNodeEvidence, policyFromSettings, removedSummary, safeUrl, sourceOrigin, settingsFromPolicy, settingsProblem, settingsSummary, splitSources, parseRankingProfile, sourceCard, sourceDates, sortSources, evidenceStateLabel, type AnswerSource, evidenceForOutputMode, jsonCitationLine, type EvidencePolicy } from './answer-sources.ts';
 
 test('sources split by whether the agent opened them', () => {
   const { read, listed } = splitSources([
@@ -210,4 +210,16 @@ test('sources sort by rank or by date with undated last', () => {
 
 test('the sentiment-as-fact finding has a label', () => {
   assert.equal(findingLabel('sentiment_as_fact'), 'Financial figure rests on discussion or opinion');
+});
+
+test('switching a node to JSON output drops the removal option and nothing else', () => {
+  const policy = { mode: 'evidence_only', on_failure: 'block', max_age_days: 30 } as EvidencePolicy;
+  assert.deepEqual(evidenceForOutputMode(policy, 'json'), { mode: 'evidence_only', max_age_days: 30 });
+  assert.equal(evidenceForOutputMode(policy, 'markdown'), policy);
+  assert.equal(evidenceForOutputMode(undefined, 'json'), undefined);
+});
+
+test('a JSON citation names the path and the sources it cites', () => {
+  assert.equal(jsonCitationLine({ path: '/summary', sources: ['S1', 'S2'], text: 'Revenue grew' }), '/summary cites S1, S2: Revenue grew');
+  assert.equal(jsonCitationLine({ path: '', sources: ['S3'] }), '/ cites S3');
 });

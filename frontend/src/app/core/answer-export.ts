@@ -1,6 +1,7 @@
 // Pure helpers that turn an agent answer, with the evidence policy it ran under and what it retrieved,
 // into a Markdown or JSON export. Only type imports, so `node --test` can run the spec.
 import type { AnswerFinding, AnswerSource, EvidencePolicy } from './answer-sources';
+import type { MemberState } from '../components/team-view';
 
 /** Version of the JSON shape below. A change that removes or renames a field raises it. */
 export const ANSWER_EXPORT_SCHEMA = 'floweysales.answer-export/v1';
@@ -170,5 +171,97 @@ export function answerToMarkdown(exp: AnswerExport): string {
     if (s.excerpt) lines.push('', quote(s.excerpt));
     lines.push('');
   }
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
+}
+
+// ---- Team runs ----
+
+/** Version of the JSON shape below. A change that removes or renames a field raises it. */
+export const TEAM_EXPORT_SCHEMA = 'floweysales.team-export/v1';
+
+export interface TeamExportMember {
+  id: string;
+  name: string;
+  stance?: string;
+  model?: string;
+  error?: string;
+  /** The member's answer with its sources and what the citation check found. */
+  export: AnswerExport;
+}
+
+export interface TeamExport {
+  schema: typeof TEAM_EXPORT_SCHEMA;
+  /** UTC, RFC 3339. */
+  exported_at: string;
+  question: string;
+  members: TeamExportMember[];
+  /** The chair summary, when the run had one. It has no sources of its own. */
+  chair?: TeamExportMember;
+  statement: string;
+}
+
+export interface TeamExportInput {
+  question: string;
+  members: readonly MemberState[];
+  chair?: MemberState | null;
+  /** The policy the run was sent with; null when the saved default applied (it is not known here). */
+  policy?: EvidencePolicy | null;
+  now?: Date;
+}
+
+function stripStance(text: string): string {
+  return text.replace(/\n?\s*\**\s*STANCE\s*:[^\n]*\s*$/i, '').trimEnd();
+}
+
+function member(m: MemberState, question: string, policy: EvidencePolicy | null | undefined, now: Date): TeamExportMember {
+  const out: TeamExportMember = {
+    id: m.id, name: m.name,
+    export: buildAnswerExport({
+      answer: stripStance(m.final || m.streamed), question, policy, sources: m.sources, findings: m.audit, removed: m.removed, now,
+    }),
+  };
+  if (m.stance) out.stance = m.stance;
+  if (m.model) out.model = m.model;
+  if (m.error) out.error = m.error;
+  return out;
+}
+
+/** The export object. The JSON and the Markdown are both made from it, so they cannot disagree. */
+export function buildTeamExport(input: TeamExportInput): TeamExport {
+  const now = input.now ?? new Date();
+  const out: TeamExport = {
+    schema: TEAM_EXPORT_SCHEMA,
+    exported_at: now.toISOString(),
+    question: input.question,
+    members: input.members.map(m => member(m, input.question, input.policy, now)),
+    statement: 'Each member answers alone, as a fictional character, from its own tool results. Member answers are model output. The chair only compares them. This is research decision support, not advice and not authorization to trade.',
+  };
+  if (input.chair) out.chair = member(input.chair, input.question, input.policy, now);
+  return out;
+}
+
+export function teamToJson(exp: TeamExport): string {
+  return JSON.stringify(exp, null, 2) + '\n';
+}
+
+/** A member's Markdown without its document title, its headings pushed one level down. */
+function section(m: TeamExportMember, heading: string): string[] {
+  const body = answerToMarkdown(m.export)
+    .replace(/^# Research answer\n+/, '')
+    .replace(/^## Question\n+(?:> .*\n?)+\n*/m, '')
+    .replace(/^(#{2,4}) /gm, '$1# ');
+  const head = [`## ${heading}`];
+  if (m.stance) head.push('', `- **Stance:** ${m.stance}`);
+  if (m.model) head.push(`- **Model:** ${m.model}`);
+  if (m.error) head.push(`- **Error:** ${m.error}`);
+  return [...head, '', body.trimEnd(), ''];
+}
+
+/** Markdown with the question first, then the chair, then each member. Times are UTC. */
+export function teamToMarkdown(exp: TeamExport): string {
+  const lines: string[] = ['# Agent team answer', '', `- **Exported:** ${exp.exported_at.replace(/\.\d+Z$/, 'Z').replace('T', ' ').replace(/Z$/, ' UTC')}`, `- **Use:** ${exp.statement}`, '', '## Question', ''];
+  lines.push(...exp.question.split('\n').map(l => '> ' + l), '');
+  if (exp.chair) lines.push(...section(exp.chair, 'Chair summary'));
+  for (const m of exp.members) lines.push(...section(m, m.name));
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
 }

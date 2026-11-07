@@ -111,6 +111,14 @@ test('rich output has plain code blocks and no copy buttons', () => {
   assert.doesNotMatch(html, /button/);
 });
 
+test('a flow report links its citation markers and autolinks its source list', () => {
+  const html = renderMarkdown('Revenue rose [[S1]](https://example.com/a).\n\n**Sources**\n- [S1] Acme; <https://example.com/a>; read by the agent');
+  assert.match(html, /<a href="https:\/\/example\.com\/a"[^>]*>\[S1\]<\/a>/);
+  assert.match(html, /<li>\[S1\] Acme; <a href="https:\/\/example\.com\/a"[^>]*>https:\/\/example\.com\/a<\/a>; read by the agent<\/li>/);
+  // A script address is never made a link.
+  assert.doesNotMatch(renderMarkdown('<javascript:alert(1)> and [[S1]](javascript:alert(1))'), /href="javascript/);
+});
+
 test('DCF display math renders a readable fraction without changing numbers', () => {
   const tex = '\\[\n\\text{TV} = \\frac{3.07\\times(1+0.02)}{0.12-0.02}\n\\]';
   const html = renderMarkdown(tex);

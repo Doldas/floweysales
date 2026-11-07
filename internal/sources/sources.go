@@ -161,6 +161,10 @@ func (r *Registry) Register(tool, callID, argsJSON, result string) (string, []So
 		return r.registerRead(argsJSON, result)
 	case "delegate_to_team":
 		return r.registerDelegation(callID, result)
+	case "get_sec_filings":
+		return r.registerFilings(callID, result)
+	case "get_sec_facts":
+		return r.registerFacts(callID, result)
 	}
 	return result, nil
 }

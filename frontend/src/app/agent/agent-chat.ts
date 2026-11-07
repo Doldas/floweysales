@@ -9,7 +9,7 @@ import { toolLabel } from '../components/agent-tools';
 import { defaultOptionLabel, profileOption, profileSummary } from '../components/profile-view';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import { ToolCallComponent } from '../components/tool-call';
-import { canResume, checklistLine, taskStatusLabel } from '../core/task-view';
+import { canResume, checklistLine, taskStatusLabel, type SavedTask } from '../core/task-view';
 import { formatUtcDateTime } from '../ui/datetime';
 import type { ToolCall } from '../components/tool-call-view';
 
@@ -56,6 +56,23 @@ export class AgentChatComponent implements OnInit {
   readonly card = sourceCard;
   sorted(list: AnswerSource[]): AnswerSource[] { return sortSources(list, this.sortBy()); }
   link(url: string | undefined): string { return safeUrl(url); }
+
+  /** Downloads a saved task's last answer with the sources and findings it rests on. */
+  async exportTask(task: SavedTask, format: 'md' | 'json'): Promise<void> {
+    const t = await this.session.taskForExport(task.id);
+    if (!t) return;
+    const exp = buildAnswerExport({ answer: t.answer, question: t.title, policy: t.policy, sources: t.sources, findings: t.audit, removed: t.removed });
+    this.download(format === 'json' ? answerToJson(exp) : answerToMarkdown(exp), format, `research-task-${task.id}-${exp.exported_at.slice(0, 19).replace(/[:T]/g, '-')}Z`);
+  }
+
+  private download(body: string, format: 'md' | 'json', name: string): void {
+    const blob = new Blob([body], { type: format === 'json' ? 'application/json' : 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${name}.${format}`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
 
   /** Downloads the latest answer with its policy and sources as Markdown or JSON. */
   exportAnswer(format: 'md' | 'json'): void {

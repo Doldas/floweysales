@@ -115,8 +115,23 @@ The prompt in these modes asks the model to say "insufficient verifiable evidenc
 ## Teams, flows and tasks
 
 - **Agent teams.** `POST /api/ai/team` takes `evidence_mode` or `evidence` (else the saved default). Every member answers under the same policy; each member's `sources` event carries its agent id. The chair has no tools and no sources of its own, so it runs without an evidence mode: its summary is not citation checked, and it is told to use only what the members wrote.
-- **Flow agent nodes.** An agent node can carry an `evidence` object (same shape). Its answer is held until checked, with two extra model rounds for corrections. A node whose answer still fails the check **fails the attempt** (so the node's retries apply), unless the policy blocks the unsupported sentences. A node with an evidence mode cannot use JSON output. Flows are saved with the flow, so a flow's evidence settings belong to whoever owns the flow, not to the running user's default.
+- **Flow agent nodes.** An agent node can carry an `evidence` object (same shape). Its answer is held until checked, with two extra model rounds for corrections. A node whose answer still fails the check **fails the attempt** (so the node's retries apply), unless the policy blocks the unsupported sentences. A JSON node can have an evidence mode (see Flow output below), but not the option to remove statements. Flows are saved with the flow, so a flow's evidence settings belong to whoever owns the flow, not to the running user's default.
 - **Sources with runs.** A task run's checkpoint keeps the sources, the audit, the removed sentences and the policy; `GET /api/ai/tasks/{id}` returns them (excerpts cut to 600 bytes). A resumed task restores the registry, so `[S3]` from the first round still means the same source, and keeps the policy it started with. Each flow agent step stores its sources (at most 40, excerpts cut to 400 bytes and redacted), the findings, the removed sentences and the policy in the step record (`sources` in the run history API). They are not part of the node's output, so downstream nodes and JSON contracts do not see them. The sources of a failed step are kept for the last attempt.
+
+## Flow output: Markdown and JSON
+
+Issue #197. The step record keeps the sources, so the node's output renders them:
+
+- **Markdown.** After the node's answer passes its checks, each `[Sn]` marker becomes a link (`[[S1]](url)`) to the source's address and a **Sources** list ends the report. The list has only the sources the report cites: title, address, accession, publication date (or "publication date unknown"), retrieval time in UTC, whether the agent read it or saw a search result only, and the team member that found it. A marker with no source in the run stays as written and is listed as unresolved. Addresses lose credentials and fragments; credential-like query values become `REDACTED`. The whole output stays within the 6,000 byte node limit (the report is shortened, not the list). Downstream nodes, notifications and the run history get this text.
+- **JSON.** The check reads the string values of the document as sentences (`AgentOptions.JSONAnswer`). Markers at the end of a string are removed from the data and stored in the step's `sources` record as `citations`: JSON Pointer `path`, the `sources` cited and the `text` (redacted, 300 characters). Then the JSON contract is checked on the data without markers, so the declared structure never changes and no source field is added. Object keys of a re-encoded document are sorted; a document without markers is passed on unchanged. `on_failure: block` is refused for JSON, since removing a sentence would break the structure: a failing node fails and its retries apply.
+
+## Sources of more tools
+
+`get_sec_filings` registers each filing (up to 10) as a read, primary source with its accession, filing date and official URL; `get_sec_facts` registers one source per filing accession whose excerpt lists the facts the model received from it (metric, value, unit, period, up to 2,000 characters), and gives every fact the `source_id` of its filing. Search hits now keep the `published_at` the search provider returned (parsed from ISO, RFC 1123 and common day-month-year formats), so a recency limit accepts a dated hit and still flags an undated one. Provider records (prices, quarterly financials, calculators) are still not sources: their figures need no marker.
+
+## Exporting team and task runs
+
+The team page offers **Export Markdown** and **Export JSON** after a run (`floweysales.team-export/v1`): the question, the chair summary and each member's answer, stance, model, sources and findings, built from the same answer export as the chat. `GET /api/ai/tasks/{id}` returns the task's last `answer`, and the Saved tasks list exports a task with its sources, findings and policy. Times are UTC and addresses are redacted as in the chat export.
 
 ## Team chair summary check
 
@@ -141,7 +156,7 @@ The Sources panel offers **Export Markdown** and **Export JSON** for the latest 
 
 ## Not built yet
 
-Cross-checks against data-provider records and calculation tool inputs, an independent AI or NLI review recorded as an auditable secondary signal (never as proof), claim labels checked by the server (the model is asked to keep fact, calculation and opinion apart, nothing verifies it), an export of team and task runs (only the chat exports today), a per-claim view in team and flow-run screens (the data is stored with each flow step), an evidence mode saved per team. Sources of tools other than `search_web`, `read_source` and `get_sec_section` are not registered.
+Cross-checks against data-provider records and calculation tool inputs, an independent AI or NLI review recorded as an auditable secondary signal (never as proof), claim labels checked by the server (the model is asked to keep fact, calculation and opinion apart, nothing verifies it), a per-claim view in team and flow-run screens (the data is stored with each flow step), and an evidence mode saved per team. Provider records (prices, quarterly financials) are not registered as sources.
 
 ## Where to set it
 

@@ -272,6 +272,8 @@
               @if (checklistLine(t.deliverables); as line) { <small>{{ line }}</small> }
               <div class="task-actions">
                 <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="session.streaming() || !canResume(t) || !session.canSend()" (click)="session.resumeTask(t)">Resume</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" (click)="exportTask(t, 'md')" [attr.aria-label]="'Export task ' + t.title + ' as Markdown'">Export Markdown</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" (click)="exportTask(t, 'json')" [attr.aria-label]="'Export task ' + t.title + ' as JSON'">Export JSON</button>
                 <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="session.streaming()" (click)="session.deleteTask(t.id)" [attr.aria-label]="'Delete task ' + t.title">Delete</button>
               </div>
             </li>
