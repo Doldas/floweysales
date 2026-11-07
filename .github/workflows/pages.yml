@@ -52,3 +52,21 @@ jobs:
     steps:
       - id: deploy
         uses: actions/deploy-pages@v5
+      - name: Verify publicly available documentation after deployment
+        env:
+          PAGES_URL: ${{ steps.deploy.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          test -n "$PAGES_URL"
+          # GitHub Pages distribution may take time; this is a post-deploy
+          # check and never contacts a private or authenticated endpoint.
+          # Verify the published pages themselves, not merely a successful
+          # deploy job. These pages are the core documented user workflows.
+          for page in index getting-started leaderboard agents strategies tutorial-research-a-company; do
+            curl --fail --silent --show-error --location --retry 5 --retry-delay 5 \
+              "${PAGES_URL%/}/guide/${page}.html" -o /tmp/floweysales-docs-page.html
+            grep -q 'FloweySales' /tmp/floweysales-docs-page.html || {
+              echo "::error::Published guide page ${page} is missing FloweySales branding"
+              exit 1
+            }
+          done
