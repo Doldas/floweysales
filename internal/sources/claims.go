@@ -1682,15 +1682,11 @@ func ClaimFindings(rep ClaimReport, existing []Finding, strict bool) []Finding {
 			out = append(out, Finding{Kind: ClaimContradicted, Sentence: c.Sentence, Source: src, Detail: c.Explanation})
 		case c.Verdict == Insufficient && (strict || flaggedAlways[c.Code]):
 			out = append(out, Finding{Kind: ClaimInsufficient, Sentence: c.Sentence, Source: src, Detail: c.Explanation})
-		case strict && c.Verdict == NotChecked:
-			// Evidence-only mode must abstain for unverified consequential
-			// statements, not merely for unlabeled opinions. A citation
-			// appearing beside an interpretation is not proof of it.
-			detail := c.Explanation
-			if c.Code == CodeUnlabeled {
-				detail += " Label it as opinion, inference or forecast, or support it with a source."
-			}
-			out = append(out, Finding{Kind: ClaimUnsupported, Sentence: c.Sentence, Source: src, Detail: detail})
+		case strict && c.Code == CodeUnlabeled:
+			// An unlabeled forecast or recommendation needs to be qualified
+			// or supported. A transparent refusal and ordinary qualitative
+			// description, however, must not trigger an endless correction loop.
+			out = append(out, Finding{Kind: ClaimUnsupported, Sentence: c.Sentence, Source: src, Detail: c.Explanation + " Label it as opinion, inference or forecast, or support it with a source."})
 		}
 	}
 	return out
