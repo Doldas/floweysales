@@ -45,3 +45,10 @@ test('source links refuse credentials, control characters and unsafe protocols',
   }
   assert.equal(safeSourceUrl({ url: 'https://example.org/report' } as Provenance), 'https://example.org/report');
 });
+
+test('source URLs with hidden whitespace are not offered as evidence links', () => {
+  for (const url of ['https://example.org/a b', 'https://example.org/a\tb', 'https://example.org/a\nb']) {
+    assert.equal(safeSourceUrl({ kind: 'observed', status: 'known', url }), '');
+  }
+  assert.equal(safeSourceUrl({ kind: 'observed', status: 'known', url: 'https://example.org/a%20b' }), 'https://example.org/a%20b');
+});
