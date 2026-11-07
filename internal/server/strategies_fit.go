@@ -62,7 +62,7 @@ func (e *Engine) runStrategyFit(ctx context.Context, u identity.User, req strate
 		return zero, providerErrorStatus(err), err
 	}
 	cfg := strategy.FitConfig{Params: req.Params, Folds: req.Folds, Mode: req.Mode, Objective: req.Objective,
-		Run: strategy.Config{CostBps: cost, SlippageBps: slippage, From: from, To: to}}
+		Run: strategy.Config{CostBps: cost, SlippageBps: slippage, SpreadBps: strategySpread(req.strategyBacktestRequest), From: from, To: to}}
 	fit, err := strategy.WalkForwardFit(def, series.Points, cfg)
 	if err != nil {
 		return zero, http.StatusUnprocessableEntity, err

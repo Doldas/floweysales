@@ -8,6 +8,7 @@ import { StrategyMonteCarloComponent } from '../components/strategy-montecarlo';
 import {
   blankStrategy, chartSummary, cloneForEditing, describeStrategy, geometry, groupPresets, ownerLine, levelLines, linePath, nowText, problems, resultTiles, strategyPrompt, tradeMarkers,
 } from '../components/strategy-view';
+import { regimeRows, stressRows } from '../components/backtest-view';
 import { AgentSession } from '../core/agent-session';
 import { MarketState } from '../core/market-state';
 import { PERIOD_PRESETS, parseSavedPeriods, periodError, periodRequest, withSavedPeriod, type PeriodChoice, type SavedPeriod } from '../core/strategy-period';
@@ -126,6 +127,9 @@ const H_EQUITY = 160;
             <label class="cost">Slippage per side
               <input type="number" class="form-control form-control-sm" min="0" max="200" step="1" [value]="slippage()" (change)="slippage.set(+$any($event.target).value || 0)" /> bps
             </label>
+            <label class="cost">Spread (whole)
+              <input type="number" class="form-control form-control-sm" min="0" max="200" step="1" [value]="spread()" (change)="spread.set(+$any($event.target).value || 0)" /> bps
+            </label>
             <button type="button" class="btn btn-primary" [disabled]="loading() || !market.trackedSymbol() || blocked().length > 0 || !!periodProblem()" (click)="run()">
               <i class="bi bi-play-fill"></i> Run test
             </button>
@@ -144,7 +148,7 @@ const H_EQUITY = 160;
         @if (result(); as r) {
           <section class="card panel" aria-label="Result">
             <div class="panel-head">
-              <div><h2>Result · {{ r.symbol }}</h2><p class="muted">{{ r.from }} to {{ r.to }}, daily bars from {{ r.provider }}, costs {{ r.config.cost_bps }} bps and slippage {{ r.config.slippage_bps ?? 0 }} bps per side. <fs-source [fact]="r.provenance" /></p></div>
+              <div><h2>Result · {{ r.symbol }}</h2><p class="muted">{{ r.from }} to {{ r.to }}, daily bars from {{ r.provider }}, costs {{ r.config.cost_bps }} bps and slippage {{ r.config.slippage_bps ?? 0 }} bps per side, bid-ask spread {{ r.config.spread_bps ?? 0 }} bps (half paid per side). <fs-source [fact]="r.provenance" /></p></div>
               <button type="button" class="btn btn-sm btn-outline-secondary" (click)="agent.ask(prompt(r))"><i class="bi bi-stars"></i> Assess</button>
             </div>
             <p class="now" [class.hit]="r.latest.entry_signal && !r.latest.in_position">{{ now(r) }}</p>
@@ -186,6 +190,43 @@ const H_EQUITY = 160;
                 <li>Past results do not predict future ones.</li>
               </ul>
             </div>
+
+            @if (stress().length || r.stress_not_covered?.length) {
+              <h3 class="h6 mt-3">Named stress windows</h3>
+              @if (stress().length) {
+                <div class="fs-scroll-x">
+                  <table class="table table-sm align-middle">
+                    <caption class="visually-hidden">Rules and buy and hold inside named past market falls</caption>
+                    <thead><tr><th scope="col">Window (UTC)</th><th scope="col" class="text-end">Rules</th><th scope="col" class="text-end">Buy and hold</th><th scope="col" class="text-end">Difference</th><th scope="col" class="text-end">Worst drop</th></tr></thead>
+                    <tbody>
+                      @for (s of stress(); track s.name) {
+                        <tr><td>{{ s.name }}<br /><span class="text-muted small">{{ s.period }}, {{ s.days }} days</span></td><td class="text-end">{{ s.ret }}</td><td class="text-end">{{ s.benchmark }}</td>
+                          <td class="text-end" [class.text-success]="s.excessTone === 'up'" [class.text-danger]="s.excessTone === 'down'">{{ s.excess }}</td><td class="text-end">{{ s.drawdown }}</td></tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+              @if (r.stress_not_covered?.length) { <p class="text-muted small mb-1">Not tested, the data does not cover: {{ r.stress_not_covered!.join(', ') }}.</p> }
+              <p class="text-muted small">{{ r.stress_note }} Returns are totals over the window, not per year.</p>
+            }
+
+            @if (regimes().length) {
+              <h3 class="h6 mt-3">Results by market regime</h3>
+              <div class="fs-scroll-x">
+                <table class="table table-sm align-middle">
+                  <caption class="visually-hidden">Rules and buy and hold per year by the instrument's own trend and volatility</caption>
+                  <thead><tr><th scope="col">Regime</th><th scope="col" class="text-end">Days</th><th scope="col" class="text-end">Rules / year</th><th scope="col" class="text-end">Buy and hold</th><th scope="col" class="text-end">Difference</th></tr></thead>
+                  <tbody>
+                    @for (g of regimes(); track g.name) {
+                      <tr><td>{{ g.name }} ({{ g.share }})</td><td class="text-end">{{ g.days }}</td><td class="text-end">{{ g.cagr }}</td><td class="text-end">{{ g.benchmark }}</td>
+                        <td class="text-end" [class.text-success]="g.excessTone === 'up'" [class.text-danger]="g.excessTone === 'down'">{{ g.excess }}</td></tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+              <p class="text-muted small">{{ r.regime_note }}@if (r.regime_unlabeled_days) { {{ r.regime_unlabeled_days }} early days could not be labeled and are not in the table.}</p>
+            }
 
             @if (r.walk_forward?.length) {
               <h3 class="h6 mt-3">Consistency across the period</h3>
@@ -383,6 +424,9 @@ export class StrategiesPage {
   readonly periodProblem = computed(() => this.range() === 'CUSTOM' ? periodError(this.from(), this.to(), this.today) : '');
   readonly cost = signal(10);
   readonly slippage = signal(0);
+  readonly spread = signal(0);
+  readonly stress = computed(() => stressRows(this.result()?.stress));
+  readonly regimes = computed(() => regimeRows(this.result()?.regimes));
   // Walk-forward fit: the numbers chosen, how it is cut and scored, and the last answer.
   readonly maxFit = FIT_MAX_PARAMS;
   readonly foldChoices = FIT_FOLD_CHOICES;
@@ -516,7 +560,7 @@ export class StrategiesPage {
     this.request?.unsubscribe();
     this.loading.set(true);
     this.error.set('');
-    const common = { symbol, provider: this.market.provider(), ...periodRequest(this.range(), this.from(), this.to()), cost_bps: this.cost(), slippage_bps: this.slippage() };
+    const common = { symbol, provider: this.market.provider(), ...periodRequest(this.range(), this.from(), this.to()), cost_bps: this.cost(), slippage_bps: this.slippage(), spread_bps: this.spread() };
     const req = this.isPreset() ? { ...common, strategy_id: this.draftId()! } : { ...common, definition: d };
     this.fitSub?.unsubscribe();
     this.fit.set(null);

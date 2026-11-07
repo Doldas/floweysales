@@ -190,3 +190,37 @@ func TestBacktestRefusesAnAbsurdFillDelay(t *testing.T) {
 		}
 	}
 }
+
+func TestBacktestModelsSpreadLiquidityAndImpactWhenAsked(t *testing.T) {
+	e := backtestEngine(t)
+	code, body := getBacktest(e, "symbols=UP,FLAT&strategy=momentum&top=1&benchmark=SPY&spread_bps=20&notional=100000&max_participation_pct=5&impact_bps=50")
+	if code != http.StatusOK {
+		t.Fatalf("status %d: %v", code, body)
+	}
+	cfg, _ := body["config"].(map[string]any)
+	if cfg["SpreadBps"].(float64) != 20 || cfg["Notional"].(float64) != 100000 || cfg["MaxParticipationPct"].(float64) != 5 || cfg["ImpactBps"].(float64) != 50 {
+		t.Fatalf("config %v", cfg)
+	}
+	modeled := map[string]bool{}
+	for _, a := range body["execution_assumptions"].([]any) {
+		m := a.(map[string]any)
+		modeled[m["name"].(string)], _ = m["modeled"].(bool)
+	}
+	for _, name := range []string{"Bid-ask spread", "Liquidity and order size", "Partial fills", "Market impact"} {
+		if !modeled[name] {
+			t.Errorf("%s must be stated as modeled: %v", name, body["execution_assumptions"])
+		}
+	}
+	if _, ok := body["liquidity"].(map[string]any); !ok {
+		t.Fatalf("a liquidity summary is expected: %v", body["liquidity"])
+	}
+}
+
+func TestBacktestRefusesAbsurdExecutionSettings(t *testing.T) {
+	e := backtestEngine(t)
+	for _, q := range []string{"spread_bps=-1", "spread_bps=201", "spread_bps=x", "notional=-5", "notional=1e13", "max_participation_pct=101", "impact_bps=501", "impact_bps=NaN"} {
+		if code, _ := getBacktest(e, "symbols=UP,FLAT&top=1&"+q); code != http.StatusBadRequest {
+			t.Errorf("%s: status %d", q, code)
+		}
+	}
+}

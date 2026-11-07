@@ -2,7 +2,7 @@
 //   node --test src/app/components/backtest-view.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assumptionRows, benchmarkLines, MONTE_CARLO_DEFAULTS, monteCarloError, monteCarloHeadline, monteCarloParams, monteCarloRows, batchParams, exportUrl, savedLabel, sensitivityParams, singleParams, sensitivityHeadline, sensitivityRows, settingLabel, batchHeadline, batchRows, chartSummary, curvePath, metricTiles, periodLabel, regimeRows, segmentRows, stressRows, warningText } from './backtest-view.ts';
+import { assumptionRows, benchmarkLines, executionParams, liquidityLines, MONTE_CARLO_DEFAULTS, monteCarloError, monteCarloHeadline, monteCarloParams, monteCarloRows, batchParams, exportUrl, savedLabel, sensitivityParams, singleParams, sensitivityHeadline, sensitivityRows, settingLabel, batchHeadline, batchRows, chartSummary, curvePath, metricTiles, periodLabel, regimeRows, segmentRows, stressRows, warningText } from './backtest-view.ts';
 import type { BacktestMetrics } from '../models';
 
 const metrics: BacktestMetrics = { cagr_pct: 12.4, volatility_pct: 18, sharpe: 0.9, sortino: 1.2, max_drawdown_pct: -22.5, calmar: 0.5,
@@ -248,7 +248,26 @@ test('benchmarkLines define the benchmark and never guess a currency', () => {
 });
 
 test('the new execution warnings have readable text', () => {
-  for (const id of ['same_close_fill', 'mixed_currencies', 'benchmark_currency_differs', 'execution_not_modeled']) {
+  for (const id of ['same_close_fill', 'mixed_currencies', 'benchmark_currency_differs', 'execution_not_modeled', 'partial_fills', 'volume_unknown']) {
     assert.ok(!warningText(id).includes('_'), id);
   }
+});
+
+test('executionParams sends only what is set, and impact only with a portfolio size', () => {
+  assert.deepEqual(executionParams({}), {});
+  assert.deepEqual(executionParams({ spread: 0, notional: 0, impact: 50 }), {});
+  assert.deepEqual(executionParams({ spread: 10, notional: 1_000_000, impact: 50, slippage: 5, delay: 1 }),
+    { slippage_bps: '5', delay_days: '1', spread_bps: '10', notional: '1000000', impact_bps: '50' });
+  assert.equal(singleParams({ universe: 'u', strategy: 's', top: 5, rebalance: 'monthly', years: 5, spread: 30 })['spread_bps'], '30');
+  assert.equal(batchParams({ universes: ['u'], periods: ['5'], strategy: 's', top: 5, rebalance: 'monthly', notional: 100000 })['notional'], '100000');
+});
+
+test('liquidityLines say what was left unfilled and what was unknown', () => {
+  assert.deepEqual(liquidityLines(undefined), []);
+  const full = liquidityLines({ orders: 40, partial_orders: 0, unknown_volume_orders: 0, max_participation_pct: 3.21, unfilled_pct: 0, impact_drag_bps: 4, spread_drag_bps: 12 });
+  assert.match(full[0], /40 orders .* 3\.2%/);
+  assert.equal(full[1], 'Every order with a volume estimate filled in full.');
+  const partial = liquidityLines({ orders: 40, partial_orders: 6, unknown_volume_orders: 2, max_participation_pct: 10, unfilled_pct: 18.46, impact_drag_bps: 0, spread_drag_bps: 0 });
+  assert.match(partial[1], /6 orders filled only in part: 18\.5%/);
+  assert.match(partial[2], /2 orders had no volume/);
 });

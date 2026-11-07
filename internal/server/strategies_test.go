@@ -201,6 +201,23 @@ func TestBacktestAPresetAndASavedStrategy(t *testing.T) {
 	}
 }
 
+func TestBacktestReportsSpreadStressAndRegimes(t *testing.T) {
+	e := strategyEngine()
+	body := `{"strategy_id":"fib_golden_pocket","symbol":"TEST","range":"5Y","spread_bps":12}`
+	code, res := callStrategies(e, http.MethodPost, "/api/strategies/backtest", body)
+	if code != http.StatusOK {
+		t.Fatalf("status %d: %v", code, res)
+	}
+	if cfg, _ := res["config"].(map[string]any); cfg["spread_bps"] != float64(12) {
+		t.Fatalf("the spread used must be reported: %v", cfg)
+	}
+	for _, key := range []string{"stress_note", "regime_note"} {
+		if s, _ := res[key].(string); s == "" {
+			t.Errorf("%s must always accompany the result", key)
+		}
+	}
+}
+
 func TestBacktestRejectsBadRequests(t *testing.T) {
 	e := strategyEngine()
 	for name, body := range map[string]string{
@@ -209,6 +226,8 @@ func TestBacktestRejectsBadRequests(t *testing.T) {
 		"bad range":        `{"strategy_id":"fib_golden_pocket","symbol":"TEST","range":"1D"}`,
 		"huge cost":        `{"strategy_id":"fib_golden_pocket","symbol":"TEST","cost_bps":5000}`,
 		"foreign saved":    `{"strategy_id":"custom:42","symbol":"TEST"}`,
+		"huge spread":      `{"strategy_id":"fib_golden_pocket","symbol":"TEST","spread_bps":5000}`,
+		"negative spread":  `{"strategy_id":"fib_golden_pocket","symbol":"TEST","spread_bps":-3}`,
 	} {
 		code, _ := callStrategies(e, http.MethodPost, "/api/strategies/backtest", body)
 		if code < 400 || code >= 500 {
