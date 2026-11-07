@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { progressFraction, STALL_AFTER_MS, asyncPhase, elapsedSince, progressText, showSkeleton, stallHint, type AsyncInput } from './async-state.ts';
+import { progressAriaValue, progressFraction, STALL_AFTER_MS, asyncPhase, elapsedSince, progressText, showSkeleton, stallHint, type AsyncInput } from './async-state.ts';
 
 const base: AsyncInput = { loading: false, error: '', hasData: false, empty: false, elapsedMs: 0 };
 const at = (over: Partial<AsyncInput>): AsyncInput => ({ ...base, ...over });
@@ -60,4 +60,15 @@ test('progress fraction refuses missing and invalid totals and clamps overshoot'
   assert.equal(progressFraction(3, 4), 0.75);
   assert.equal(progressFraction(8, 4), 1);
   assert.equal(progressText('Fetching', 0, 0, 0), 'Fetching');
+});
+
+test('progress accessibility keeps true integer counts without fictional percentages', () => {
+  assert.equal(progressAriaValue(3, 8), '3 of 8 steps completed');
+  assert.equal(progressAriaValue(12, 8), '8 of 8 steps completed');
+  assert.equal(progressAriaValue(0.5, 8), '');
+  assert.equal(progressAriaValue(2, 0), '');
+  assert.equal(progressFraction(0.5, 8), null);
+  assert.equal(progressFraction(Number.MAX_SAFE_INTEGER + 1, 8), null);
+  assert.match(stallHint(STALL_AFTER_MS, false), /duplicate work/);
+  assert.doesNotMatch(stallHint(STALL_AFTER_MS, false), /reload the page/);
 });
