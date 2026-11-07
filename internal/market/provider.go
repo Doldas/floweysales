@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 	"time"
@@ -119,9 +120,24 @@ func SnapshotFromSeries(symbol string, p Provider, series HistorySeries, now tim
 	if len(series.Points) == 0 {
 		return QuoteSnapshot{}, errors.New("price history unavailable; no zero or synthetic quote returned")
 	}
-	last := series.Points[len(series.Points)-1]
-	if last.Close <= 0 || last.Timestamp <= 0 {
+	// Providers can return bars out of order or end with an unfinished bar
+	// (zero or missing close/timestamp). The quote is the newest complete bar,
+	// never merely the last array element.
+	var last HistoryPoint
+	found := false
+	for _, pt := range series.Points {
+		if pt.Close <= 0 || pt.Timestamp <= 0 || math.IsNaN(pt.Close) || math.IsInf(pt.Close, 0) {
+			continue
+		}
+		if !found || pt.Timestamp > last.Timestamp {
+			last, found = pt, true
+		}
+	}
+	if !found {
 		return QuoteSnapshot{}, errors.New("invalid OHLC close or timestamp")
+	}
+	if !sameInstrument(symbol, series.Symbol) {
+		return QuoteSnapshot{}, fmt.Errorf("provider answered for %s, not the requested %s; refusing to show another ticker's price", series.Symbol, symbol)
 	}
 	if series.Currency == "" {
 		return QuoteSnapshot{}, errors.New("currency unavailable; refuse ambiguous quote")
@@ -148,6 +164,19 @@ func SnapshotFromSeries(symbol string, p Provider, series HistorySeries, now tim
 		MarketSession:         session.State, MarketSessionBasis: session.Basis,
 		Note: "Last available provider OHLC bar CLOSE, not an executable bid/ask or verified live quote. Market holidays and closed sessions affect age.",
 	}, nil
+}
+
+// sameInstrument compares a requested and an answered ticker, ignoring case
+// and the '.'/'-' share-class separator (BRK.B vs BRK-B). An empty answer
+// (provider did not echo the symbol) is accepted.
+func sameInstrument(requested, answered string) bool {
+	if strings.TrimSpace(answered) == "" {
+		return true
+	}
+	norm := func(s string) string {
+		return strings.ReplaceAll(strings.ToUpper(strings.TrimSpace(s)), "-", ".")
+	}
+	return norm(requested) == norm(answered)
 }
 
 // LatestSnapshot derives a provenance-labelled quote from recent bars.
