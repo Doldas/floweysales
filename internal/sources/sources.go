@@ -166,7 +166,7 @@ func (r *Registry) Register(tool, callID, argsJSON, result string) (string, []So
 	case "get_sec_facts":
 		return r.registerFacts(callID, result)
 	}
-	return result, nil
+	return attachToolProvenance(tool, result, time.Now()), nil
 }
 
 // ReadTarget resolves the source_id of a read_source call to the URL of a

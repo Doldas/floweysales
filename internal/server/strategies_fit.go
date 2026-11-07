@@ -97,6 +97,6 @@ func (e *Engine) registerStrategyFitRoutes() {
 			writeJSON(w, status, map[string]any{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusOK, res)
+		writeJSON(w, http.StatusOK, withProvenance(res, strategyResultProvenance("walkforward", res)))
 	})
 }

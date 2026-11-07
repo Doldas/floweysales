@@ -14,6 +14,7 @@ import { PERIOD_PRESETS, parseSavedPeriods, periodError, periodRequest, withSave
 import { FIT_FOLD_CHOICES, FIT_MAX_PARAMS, FIT_MODES, FIT_OBJECTIVES, fitHeadline, fitProblem, fitRequest, fitRows, toggleParam } from '../core/strategy-fit';
 import { todayUtc } from '../ui/datetime';
 import { SkeletonComponent } from '../ui/skeleton';
+import { SourceComponent } from '../ui/source';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import type { FitMode, FitObjective, FitResult, Persona, SavedStrategy, StrategyCatalog, StrategyDef, StrategyRunRequest, StrategyRunResult } from '../models';
 import { MarketService, describeHttpError } from '../services';
@@ -32,7 +33,7 @@ const H_EQUITY = 160;
 @Component({
   selector: 'fs-strategies-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HelpButtonComponent, SymbolSearchComponent, StrategyBuilderComponent, StrategyMonteCarloComponent, SkeletonComponent, ProgressStatusComponent],
+  imports: [HelpButtonComponent, SymbolSearchComponent, StrategyBuilderComponent, StrategyMonteCarloComponent, SkeletonComponent, ProgressStatusComponent, SourceComponent],
   template: `
 <div class="fs-page research-container">
   <header class="fs-page-header">
@@ -143,7 +144,7 @@ const H_EQUITY = 160;
         @if (result(); as r) {
           <section class="card panel" aria-label="Result">
             <div class="panel-head">
-              <div><h2>Result · {{ r.symbol }}</h2><p class="muted">{{ r.from }} to {{ r.to }}, daily bars from {{ r.provider }}, costs {{ r.config.cost_bps }} bps and slippage {{ r.config.slippage_bps ?? 0 }} bps per side.</p></div>
+              <div><h2>Result · {{ r.symbol }}</h2><p class="muted">{{ r.from }} to {{ r.to }}, daily bars from {{ r.provider }}, costs {{ r.config.cost_bps }} bps and slippage {{ r.config.slippage_bps ?? 0 }} bps per side. <fs-source [fact]="r.provenance" /></p></div>
               <button type="button" class="btn btn-sm btn-outline-secondary" (click)="agent.ask(prompt(r))"><i class="bi bi-stars"></i> Assess</button>
             </div>
             <p class="now" [class.hit]="r.latest.entry_signal && !r.latest.in_position">{{ now(r) }}</p>

@@ -9,6 +9,8 @@ last-reviewed: 2026-11-07
 
 ## November 2026 release
 
+**Sources everywhere**
+- Prices, history, financial statements, SEC filings, valuations, backtests, strategy results, the wealth plan, portfolio risk and the Today briefing now show where they came from: provider, what was calculated and how, and the as-of and retrieval times in UTC. Open the **Source** button next to a figure. When no source was recorded it says "Source unknown" instead of guessing. Flow rows and agent tool results carry the same information. See [Where data comes from](provenance.md).
 **Phones and tablets**
 - Every page was checked on phone and tablet widths, in landscape and with text enlarged to 200%. Pages no longer scroll sideways, small buttons and links are at least 24 pixels, and content respects notches and the home indicator. See [Responsive UI](../responsive-ui.md).
 

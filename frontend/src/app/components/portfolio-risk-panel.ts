@@ -5,6 +5,7 @@ import type { PortfolioAnalyticsResponse } from '../models';
 import { MarketService, describeHttpError } from '../services';
 import { formatMoney } from '../ui/format';
 import { SkeletonComponent } from '../ui/skeleton';
+import { SourceComponent } from '../ui/source';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import { CLASS_LABELS, alertText, driftRows, driftText, heatStyle, riskBars, riskTiles, ticketFor, type TicketPrefill } from './portfolio-risk';
 
@@ -17,7 +18,7 @@ import { CLASS_LABELS, alertText, driftRows, driftText, heatStyle, riskBars, ris
 @Component({
   selector: 'fs-portfolio-risk',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SkeletonComponent, ProgressStatusComponent],
+  imports: [SkeletonComponent, ProgressStatusComponent, SourceComponent],
   template: `
 <div class="risk">
   @if (loading()) {
@@ -33,6 +34,7 @@ import { CLASS_LABELS, alertText, driftRows, driftText, heatStyle, riskBars, ris
     @if (d.analytics.total_value <= 0) {
       <div class="fs-empty"><i class="bi bi-wallet2"></i><h3>Nothing to measure yet</h3><p class="mb-0">Place a paper order and the portfolio's risk shows up here.</p></div>
     } @else {
+      <p class="small text-muted mb-1">Risk figures <fs-source [fact]="d.provenance" /></p>
       <section class="tiles" aria-label="Risk summary">
         @for (t of tiles(); track t.id) {
           <div class="card fs-kpi" [title]="t.hint"><span class="fs-kpi-label">{{ t.label }}</span><span class="fs-kpi-value">{{ t.value }}</span></div>

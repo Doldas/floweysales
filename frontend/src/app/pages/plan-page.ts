@@ -6,6 +6,8 @@ import { Access } from '../core/access';
 import { INVESTOR_PLAYBOOKS } from '../components/investor-nodes';
 import { EMPTY_FORM, allocationRows, fanPaths, fanSummary, formFromProfile, milestoneDots, phaseSteps, profileFromForm, type PlanForm } from '../components/plan-view';
 import type { PlanProfile, WealthPlan } from '../models';
+import type { Provenance } from '../core/provenance';
+import { SourceComponent } from '../ui/source';
 import { MarketService, describeHttpError } from '../services';
 import { formatMoney } from '../ui/format';
 
@@ -20,7 +22,7 @@ const CHART_H = 260;
 @Component({
   selector: 'fs-plan-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink],
+  imports: [RouterLink, SourceComponent],
   template: `
 <div class="fs-page">
   <header class="fs-page-header">
@@ -132,7 +134,7 @@ const CHART_H = 260;
 
         <section class="card" aria-labelledby="chart-title">
           <div class="card-header chart-head">
-            <h2 class="card-title me-auto" id="chart-title">Projection</h2>
+            <h2 class="card-title me-auto" id="chart-title">Projection <fs-source [fact]="planFact()" /></h2>
             <div class="fs-segmented" role="group" aria-label="Money">
               <button type="button" [attr.aria-pressed]="real()" (click)="real.set(true)">Today's money</button>
               <button type="button" [attr.aria-pressed]="!real()" (click)="real.set(false)">Nominal</button>
@@ -291,6 +293,7 @@ export class PlanPage {
 
   readonly form = signal<PlanForm>({ ...EMPTY_FORM });
   readonly plan = signal<WealthPlan | null>(null);
+  readonly planFact = signal<Provenance | null>(null);
   readonly loading = signal(true);
   readonly loadError = signal('');
   readonly saving = signal(false);
@@ -329,7 +332,7 @@ export class PlanPage {
 
   constructor() {
     const sub = this.changes.pipe(debounceTime(400), switchMap(p => this.api.previewPlan(p))).subscribe({
-      next: res => { if (res.plan) this.plan.set(res.plan); },
+      next: res => { if (res.plan) { this.plan.set(res.plan); this.planFact.set(res.provenance ?? null); } },
       error: err => this.saveError.set(describeHttpError(err)),
     });
     inject(DestroyRef).onDestroy(() => sub.unsubscribe());
@@ -337,6 +340,7 @@ export class PlanPage {
       next: res => {
         this.form.set(formFromProfile(res.profile));
         this.plan.set(res.plan);
+        this.planFact.set(res.provenance ?? null);
         this.loading.set(false);
       },
       error: err => { this.loadError.set(describeHttpError(err)); this.loading.set(false); },
@@ -360,7 +364,7 @@ export class PlanPage {
     this.saving.set(true);
     this.saveError.set('');
     this.api.savePlan(p).subscribe({
-      next: res => { this.plan.set(res.plan); this.saving.set(false); this.dirty.set(false); this.savedAt.set(true); },
+      next: res => { this.plan.set(res.plan); this.planFact.set(res.provenance ?? null); this.saving.set(false); this.dirty.set(false); this.savedAt.set(true); },
       error: err => { this.saveError.set(describeHttpError(err)); this.saving.set(false); },
     });
   }

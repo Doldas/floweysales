@@ -11,6 +11,7 @@ import (
 
 	"floweysales/internal/identity"
 	"floweysales/internal/planner"
+	"floweysales/internal/provenance"
 	"floweysales/internal/storage"
 )
 
@@ -42,6 +43,8 @@ func (e *Engine) profileStore() investorProfileStore {
 type planResponse struct {
 	Profile *planner.Profile `json:"profile"`
 	Plan    *planner.Plan    `json:"plan"`
+	// Provenance says the plan is calculated from the profile; absent when there is no plan.
+	Provenance *provenance.Fact `json:"provenance,omitempty"`
 }
 
 // planUser identifies the caller. Without authentication the single user is
@@ -126,7 +129,7 @@ func (e *Engine) registerPlanRoutes() {
 			return
 		}
 		plan := e.planFor(u, p, planSeed(r))
-		writeJSON(w, http.StatusOK, planResponse{Profile: &p, Plan: &plan})
+		writeJSON(w, http.StatusOK, planResponse{Profile: &p, Plan: &plan, Provenance: planProvenanceFor(time.Now().UTC())})
 	})
 	e.mux.HandleFunc("PUT /api/plan/profile", func(w http.ResponseWriter, r *http.Request) {
 		u, ok := e.planUser(w, r)
@@ -148,7 +151,7 @@ func (e *Engine) registerPlanRoutes() {
 			return
 		}
 		plan := e.planFor(u, p, planSeed(r))
-		writeJSON(w, http.StatusOK, planResponse{Profile: &p, Plan: &plan})
+		writeJSON(w, http.StatusOK, planResponse{Profile: &p, Plan: &plan, Provenance: planProvenanceFor(time.Now().UTC())})
 	})
 	// What-if sliders: a plan for an unsaved profile, nothing is stored.
 	e.mux.HandleFunc("POST /api/plan/preview", func(w http.ResponseWriter, r *http.Request) {
@@ -166,7 +169,7 @@ func (e *Engine) registerPlanRoutes() {
 			return
 		}
 		plan := e.planFor(u, p, planSeed(r))
-		writeJSON(w, http.StatusOK, planResponse{Profile: &p, Plan: &plan})
+		writeJSON(w, http.StatusOK, planResponse{Profile: &p, Plan: &plan, Provenance: planProvenanceFor(time.Now().UTC())})
 	})
 }
 

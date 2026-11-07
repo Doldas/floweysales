@@ -101,6 +101,7 @@ const CHART_H = 220;
       </figcaption>
     </figure>
 
+    <p class="bt-note" role="note">Where this result came from: <fs-source [fact]="r.provenance" /></p>
     @if (r.notice) { <p class="bt-note" role="note"><i class="bi bi-info-circle" aria-hidden="true"></i> {{ r.notice }}</p> }
 
     @if (segments().length) {

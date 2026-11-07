@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"floweysales/internal/ai"
 	"floweysales/internal/grounding"
@@ -339,6 +340,6 @@ func (e *Engine) registerBacktestSummaryRoute() {
 			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusOK, res)
+		writeJSON(w, http.StatusOK, withProvenance(res, summaryProvenance(run.ID, time.Now().UTC())))
 	})
 }
