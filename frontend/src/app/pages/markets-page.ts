@@ -14,6 +14,7 @@ import { formatUtcDateTime } from '../ui/datetime';
 import { LeaderboardComponent } from '../components/leaderboard';
 import { TradingChartComponent } from '../components/chart';
 import { SymbolSearchComponent } from '../shell/symbol-search';
+import { ProgressStatusComponent } from '../ui/progress-status';
 import { INDICATOR_KEYS, INDICATOR_LABELS } from '../indicators';
 import type { TrackedAsset } from '../services';
 
@@ -23,7 +24,7 @@ interface Kpi { label: string; value: string; sub?: string; tone?: 'pos' | 'neg'
 @Component({
   selector: 'fs-markets-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PaneComponent, HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, SymbolSearchComponent],
+  imports: [PaneComponent, HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, SymbolSearchComponent, ProgressStatusComponent],
   templateUrl: './markets-page.html',
   styleUrl: './markets-page.scss',
 })

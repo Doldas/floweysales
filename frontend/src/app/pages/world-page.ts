@@ -36,9 +36,10 @@ import { ProgressStatusComponent } from '../ui/progress-status';
           <fs-progress-status stage="Reading the news" />
           <fs-skeleton shape="rows" [rows]="4" aria-hidden="true" />
         </div>
-      } @else if (failed()) {
+      } @else if (failed() && !world()) {
         <div class="fs-empty"><i class="bi bi-globe2"></i><h3>The world view could not load</h3><p class="mb-0">Try again in a moment.</p></div>
       } @else if (world(); as w) {
+        @if (failed()) { <p class="note" role="alert">Refresh failed; showing the last successful World snapshot. Try again when the connection returns.</p> }
         <p class="meta">
           As of {{ w.generated_at }} · from {{ w.sources.join(' and ') || 'no source' }}
           @if (loading()) { · refreshing… }

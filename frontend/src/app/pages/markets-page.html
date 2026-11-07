@@ -88,7 +88,9 @@
           <div><dt>{{ f.label }}</dt><dd>{{ f.value }}</dd></div>
         }
       </dl>
-      @if (market.loadingHistory()) { <div class="progress rounded-0" style="height: 2px"><div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div></div> }
+      <div class="history-load-slot" [attr.aria-busy]="market.loadingHistory()">
+        @if (market.loadingHistory()) { <fs-progress-status stage="Loading price history" /> }
+      </div>
       <div class="studies" role="group" aria-label="Chart analysis studies">
         <i class="bi bi-sliders2 text-muted" aria-hidden="true"></i>
         @for (k of indicatorKeys; track k) {
