@@ -139,7 +139,7 @@ func TestDiscoveryKeepsProviderSpecificFactsAndDistinctExchangeListings(t *testi
 		{"symbol": "UNKNOWN", "as_of": "2025-01-01"},
 	}
 	annotateDiscovery(universe, "YAHOO", rows)
-	if rows[0]["identifier"] == rows[1]["identifier"] {
+	if rows[0]["identifier"].(map[string]any)["symbol"] == rows[1]["identifier"].(map[string]any)["symbol"] {
 		t.Fatalf("cross-exchange listings must not be collapsed: %v %v", rows[0]["identifier"], rows[1]["identifier"])
 	}
 	for i, provider := range []string{"YAHOO", "FINNHUB", "YAHOO"} {
