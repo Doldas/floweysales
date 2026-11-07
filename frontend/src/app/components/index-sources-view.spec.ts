@@ -37,3 +37,9 @@ test('history and choices are stated plainly', () => {
   assert.match(historyLine(fmp), /known from 2000-01-03 \(12 add\/remove records\)/);
   assert.match(historyLine({ ...fmp, source: { point_in_time: false } } as unknown as IndexInfo), /survivorship/);
 });
+
+test('index imports reject impossible calendar dates and future snapshots', () => {
+  const form = { csv: 'symbol\\nAAPL', asOf: '2026-02-30', sourceName: 'Licensed feed', terms: 'Our licensed feed allows this use', confirmed: true };
+  assert.match(importProblems(form, '2026-11-07').join(' '), /real as-of date/);
+  assert.deepEqual(importProblems({ ...form, asOf: '2026-02-28' }, '2026-11-07'), []);
+});

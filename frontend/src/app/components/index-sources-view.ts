@@ -7,7 +7,7 @@ export const LICENSE_STATEMENT = 'I am allowed to use this constituent data in F
 export function importProblems(f: { csv: string; asOf: string; sourceName: string; terms: string; confirmed: boolean }, todayUtc: string): string[] {
   const out: string[] = [];
   if (!f.csv.trim()) out.push('Choose a CSV file.');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(f.asOf)) out.push('Give the as-of date of the list (YYYY-MM-DD, UTC).');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f.asOf) || !Number.isFinite(Date.parse(`${f.asOf}T00:00:00Z`)) || new Date(`${f.asOf}T00:00:00Z`).toISOString().slice(0, 10) !== f.asOf) out.push('Give a real as-of date of the list (YYYY-MM-DD, UTC).');
   else if (f.asOf > todayUtc) out.push('The as-of date is in the future.');
   if (!f.sourceName.trim()) out.push('Name the source of the file.');
   if (f.terms.trim().length < 10) out.push('Write the licence or terms that let you use this data (at least 10 characters).');
