@@ -174,6 +174,9 @@ jobs:
       - name: Playwright visual evidence (desktop and phone)
         working-directory: frontend
         run: npx playwright test --config playwright.config.ts e2e/visual-evidence.spec.ts
+      - name: Playwright documentation guide visual checks (desktop and phone)
+        working-directory: frontend
+        run: npx playwright test --config playwright.docs.config.ts
       - name: Playwright Help/About branding and theme checks (desktop and phone)
         working-directory: frontend
         run: npx playwright test --config playwright.config.ts e2e/help-about-branding.spec.ts
@@ -188,6 +191,8 @@ jobs:
           path: |
             frontend/playwright-report/
             frontend/test-results/
+            frontend/playwright-docs-report/
+            frontend/docs-test-results/
           if-no-files-found: ignore
           retention-days: 2
       - name: Test Samsung S24, phones, tablets and desktop in Chromium

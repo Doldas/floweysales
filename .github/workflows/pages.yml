@@ -52,3 +52,13 @@ jobs:
     steps:
       - id: deploy
         uses: actions/deploy-pages@v5
+      - name: Verify publicly available documentation after deployment
+        env:
+          PAGES_URL: ${{ steps.deploy.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          test -n "$PAGES_URL"
+          # GitHub Pages distribution may take time; this is a post-deploy
+          # check and never contacts a private or authenticated endpoint.
+          curl --fail --silent --show-error --location --retry 5 --retry-delay 5 "${PAGES_URL%/}/guide/index.html" -o /tmp/floweysales-docs-index.html
+          grep -q 'FloweySales' /tmp/floweysales-docs-index.html
