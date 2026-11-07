@@ -151,3 +151,9 @@ test('mathematical markup blocks lossy rich edits but keeps USD and fenced code 
     '\x60\x60\x60tex\n\\[\\frac{1}{2}\\]\n\x60\x60\x60',
   ]) assert.ok(!richTextBlockers(md).includes('mathematical formulas'), md);
 });
+
+test('rich mode refuses escaped GFM table pipes rather than losing columns', () => {
+  const md = '| Name | Logic |\n| --- | --- |\n| Base | a \\| b |';
+  assert.ok(richTextBlockers(md).includes('escaped table pipes'));
+  assert.deepEqual(richTextBlockers('| Name | Logic |\n| --- | --- |\n| Base | 12 |'), []);
+});

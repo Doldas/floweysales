@@ -37,14 +37,14 @@ const KIND_HELP: Record<string, string> = {
 export function kindHelp(kind: string | undefined): string { return kind ? KIND_HELP[kind] ?? '' : ''; }
 
 export function formatUsd(value: number): string {
-  if (!isFinite(value)) return '$0.00';
+  if (!Number.isFinite(value) || value < 0) return 'unknown';
   const digits = value !== 0 && Math.abs(value) < 0.01 ? 4 : 2;
   return '$' + value.toFixed(digits);
 }
 
 /** "12 searches · 3,400 prompt tokens · 1,200 output tokens · est. $0.17": searches and model tokens stay apart. */
 export function usageLine(u: SearchUsage): string {
-  const n = (v: number) => v.toLocaleString('en-US');
+  const n = (v: number) => Number.isSafeInteger(v) && v >= 0 ? v.toLocaleString('en-US') : 'unknown';
   const parts = [`${n(u.searches)} ${u.searches === 1 ? 'search' : 'searches'}`];
   if (u.prompt_tokens || u.output_tokens) parts.push(`${n(u.prompt_tokens)} prompt tokens`, `${n(u.output_tokens)} output tokens`);
   parts.push(`est. ${formatUsd(u.est_cost_usd)}`);
@@ -61,7 +61,7 @@ export function searchUsageTotals(providers: readonly SearchProviderState[]): { 
     for (const [dest, src] of [[today, p.usage_today], [month, p.usage_month]] as const) {
       for (const key of ['searches', 'prompt_tokens', 'output_tokens', 'est_cost_usd', 'failures'] as const) {
         const n = src?.[key];
-        if (typeof n === 'number' && Number.isFinite(n) && n >= 0) dest[key] += n;
+        if (typeof n === 'number' && Number.isFinite(n) && n >= 0 && (key === 'est_cost_usd' || Number.isSafeInteger(n))) dest[key] += n;
       }
     }
   }

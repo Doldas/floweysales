@@ -365,6 +365,9 @@ const SYMBOLS: Record<string, string> = {
   neq: '≠', approx: '≈', sim: '∼', infty: '∞', alpha: 'α',
   beta: 'β', gamma: 'γ', delta: 'δ', Delta: 'Δ', pi: 'π',
   sum: '∑', prod: '∏', to: '→', rightarrow: '→', percent: '%',
+  le: '≤', ge: '≥', ne: '≠', partial: '∂',
+  theta: 'θ', sigma: 'σ', mu: 'μ', lambda: 'λ', forall: '∀', exists: '∃',
+  in: '∈', notin: '∉', infinity: '∞',
   ' ': ' ', ',': ' ', ';': ' ', '!': '', '&': '&',
 };
 const COMMAND = /^[A-Za-z]+/;

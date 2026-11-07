@@ -59,3 +59,8 @@ The shared Markdown editor now includes **Insert table** in Rich text mode. It c
 ### Mathematical Markdown and source fidelity
 
 When a Workspace Markdown file contains TeX formulas (`\(...\)`, `\[...\]`, `$x^2$`, or `$$...$$`), Rich text is disabled to protect the original LaTeX from a lossy HTML-to-Markdown conversion. **Preview** continues to use the shared math renderer; **Edit source** preserves every delimiter and equation. Ordinary prices such as `$3.07 bn` are not treated as TeX. Code fences and inline code remain editable.
+
+
+### Complex Markdown table source safety
+
+Tables containing escaped pipe characters (for example `a \\| b`) remain in **Edit source** mode instead of being passed through a lossy rich-text conversion. You can still use Preview; source remains unchanged. Simple Markdown tables can continue using Insert table.
