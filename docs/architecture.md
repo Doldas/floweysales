@@ -28,3 +28,8 @@ The built-in chat calls the Go AI agent directly; the standalone MCP server expo
 ## Known constraints
 
 A multi-step agent can exhaust its tool budget, and first-phase chat transcripts remain client-side until a durable store exists. Users must treat unsupported tool outcomes as incomplete rather than invented. See roadmap.
+
+
+### Shared evidence popovers
+
+Source details use the shared Angular `fs-source` component rather than page-specific tooltips. It exposes an explicit button (`aria-expanded`, `aria-controls`, `aria-haspopup`), supports Escape dismissal with focus restoration and lays its detail panel out inside narrow phone viewports. New pages should reuse this primitive and the common provenance formatter, not independently render source URLs or timestamps. The popover is informational and does not imply that the origin was verified. See issue #263.
