@@ -27,7 +27,7 @@ func NewBudget(l Limits) *Budget {
 func (b *Budget) Reserve(n int) int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.tokens >= b.maxToken {
+	if n <= 0 || b.unknownUsage || b.tokens >= b.maxToken {
 		return 0
 	}
 	room := b.maxImages - b.images
@@ -43,6 +43,7 @@ func (b *Budget) Reserve(n int) int {
 
 // Release gives back images that were reserved but not sent.
 func (b *Budget) Release(n int) {
+	if n <= 0 { return }
 	b.mu.Lock()
 	b.images -= n
 	if b.images < 0 {
@@ -62,6 +63,11 @@ func (b *Budget) Record(u *Usage, ok bool) {
 	}
 	if u == nil {
 		b.unknownUsage = true
+		return
+	}
+	if u.PromptTokens < 0 || u.CompletionTokens < 0 || u.PromptTokens > b.maxToken || u.CompletionTokens > b.maxToken-u.PromptTokens {
+		b.unknownUsage = true
+		b.tokens = b.maxToken
 		return
 	}
 	b.tokens += u.PromptTokens + u.CompletionTokens
