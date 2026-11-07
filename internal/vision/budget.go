@@ -43,7 +43,9 @@ func (b *Budget) Reserve(n int) int {
 
 // Release gives back images that were reserved but not sent.
 func (b *Budget) Release(n int) {
-	if n <= 0 { return }
+	if n <= 0 {
+		return
+	}
 	b.mu.Lock()
 	b.images -= n
 	if b.images < 0 {
