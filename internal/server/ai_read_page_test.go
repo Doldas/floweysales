@@ -94,11 +94,11 @@ func TestReadPageStatusErrorExplainsSEC403WithoutClaimingToRead(t *testing.T) {
 
 func TestDocumentFetchRefusesOversizeAndMislabeledPDF(t *testing.T) {
 	tests := []struct {
-		name string
-		kind string
-		body []byte
+		name  string
+		kind  string
+		body  []byte
 		limit int64
-		want string
+		want  string
 	}{
 		{"valid PDF", "application/pdf", minimalPDF("Quarterly report"), readPDFMaxBytes, ""},
 		{"mislabeled PDF", "application/pdf", []byte("<html>Access denied</html>"), readPDFMaxBytes, "no PDF signature"},
