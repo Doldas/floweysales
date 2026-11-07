@@ -168,3 +168,44 @@ test.describe('Workspace README overview', () => {
     await expect(overview.getByRole('heading', { name: 'New title' })).toBeVisible();
   });
 });
+
+test('mobile and desktop financial Markdown evidence stays inside the Workspace viewport', async ({ page }, testInfo) => {
+  const source = [
+    '# DCF evidence',
+    '',
+    'Forecast revenue $3.07 bn. Terminal value $31.3 bn.',
+    '',
+    '\\[',
+    '\\text{TV} = \\frac{3.07\\times(1+0.02)}{0.12-0.02}',
+    '\\]',
+    '',
+    '| Scenario | Revenue | Discount factor | Terminal value |',
+    '| --- | --- | --- | --- |',
+    '| Base | $3.07 bn | 1/1.12^5 | $31.3 bn |',
+    '| Downside | $2.78 bn | 1/1.15^5 | $22.5 bn |',
+    '',
+    'Code is literal: ' + '\x60' + '\\frac{x}{y}' + '\x60',
+    '',
+  ].join('\n');
+  await mockWorkspace(page, { '/docs/valuation.md': source });
+  await open(page, 'workspace');
+  await page.getByRole('button', { name: 'docs', exact: true }).first().click();
+  await page.getByRole('button', { name: /valuation\.md/ }).click();
+  const editor = page.locator('fse-markdown-editor');
+  await expect(editor.getByLabel('Markdown source')).toHaveValue(source);
+  await editor.getByRole('tab', { name: 'Preview' }).click();
+  const preview = editor.getByLabel('Rendered preview');
+  await expect(preview.locator('[role="math"]')).toHaveCount(1);
+  await expect(preview.locator('.md-frac')).toHaveCount(1);
+  await expect(preview).toContainText('$3.07 bn');
+  await expect(preview.locator('table th')).toHaveCount(4);
+  await expect(preview.locator('code').first()).toContainText('\\frac{x}{y}');
+  // The container may scroll horizontally for tables, but the entire page must not.
+  const width = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(width).toBeLessThanOrEqual(1);
+  await testInfo.attach('workspace-financial-markdown.png', {
+    body: await page.screenshot({ fullPage: true, animations: 'disabled' }), contentType: 'image/png',
+  });
+  await editor.getByRole('tab', { name: 'Edit source' }).click();
+  await expect(editor.getByLabel('Markdown source')).toHaveValue(source);
+});
