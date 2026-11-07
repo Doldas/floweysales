@@ -26,6 +26,7 @@ const (
 const (
 	ClassPrimaryFiling = "primary_filing"
 	ClassWebPage       = "web_page"
+	ClassSocial        = "social_discussion" // opinion / public reaction, not proof of financial metrics
 )
 
 const maxExcerpt = 2000
@@ -49,6 +50,7 @@ type Source struct {
 	// delegated team did; the parent run only saw what the member reported.
 	Member      string `json:"member,omitempty"`
 	PublishedAt string `json:"published_at,omitempty"`
+	ModifiedAt  string `json:"modified_at,omitempty"` // distinct from the reporting period
 	RetrievedAt string `json:"retrieved_at,omitempty"`
 	// Excerpt is what the model received, bounded.
 	Excerpt string `json:"excerpt,omitempty"`
@@ -118,6 +120,19 @@ func (r *Registry) add(s Source) Source {
 	r.byID[s.ID] = len(r.list)
 	r.list = append(r.list, s)
 	return s
+}
+
+// sourceClassForURL identifies a narrowly defined set of social/community
+// platforms. Unknown sites stay generic: a plausible-looking domain is not
+// sufficient evidence of a regulator or issuer publication.
+func sourceClassForURL(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") { return ClassWebPage }
+	host := strings.ToLower(strings.TrimSuffix(parsed.Hostname(), "."))
+	for _, domain := range []string{"reddit.com", "stocktwits.com", "twitter.com", "x.com", "threads.net", "bsky.app"} {
+		if host == domain || strings.HasSuffix(host, "."+domain) { return ClassSocial }
+	}
+	return ClassWebPage
 }
 
 // Register reads a tool result and records the sources in it. It returns the
@@ -226,8 +241,15 @@ func (r *Registry) registerSearch(callID, argsJSON, result string) (string, []So
 		title, _ := hit["title"].(string)
 		snippet, _ := hit["snippet"].(string)
 		resultType, _ := hit["type"].(string)
+		published, _ := hit["published_at"].(string)
+		modified, _ := hit["modified_at"].(string)
+		// Provider date metadata is untrusted. Never invent a publication date or
+		// treat the retrieval timestamp as the creation of the article.
+		if _, ok := parseDate(published); !ok { published = "" }
+		if _, ok := parseDate(modified); !ok { modified = "" }
 		s := r.add(Source{Tool: "search_web", CallID: callID, Query: args.Query, URL: link, Title: title,
-			Class: ClassWebPage, Access: AccessListed, RetrievedAt: retrieved, Excerpt: title + "\n" + snippet,
+			Class: sourceClassForURL(link), Access: AccessListed, RetrievedAt: retrieved,
+			PublishedAt: published, ModifiedAt: modified, Excerpt: title + "\n" + snippet,
 			SearchProvider: searchProvider, ResultType: resultType})
 		hit["source_id"] = s.ID
 		added = append(added, s)
@@ -355,7 +377,7 @@ const (
 
 // ValidClass reports whether class is a source type a setting may name.
 func ValidClass(class string) bool {
-	return class == ClassPrimaryFiling || class == ClassWebPage
+	return class == ClassPrimaryFiling || class == ClassWebPage || class == ClassSocial
 }
 
 // Options tunes an audit.
