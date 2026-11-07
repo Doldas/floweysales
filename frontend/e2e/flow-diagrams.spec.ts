@@ -64,7 +64,12 @@ test.describe('shared flow diagram system', () => {
     await expect(trigger).toContainText('EVENT');
     await expect(trigger).toContainText('PAYLOAD');
     await expect(trigger).toContainText('Read-only');
-    await trigger.locator('[data-node-id="event:filing.published"]').click();
+    // Trigger node ids intentionally use stable database ids (event:42), not
+    // event names: multiple triggers can share a key without SVG id collisions.
+    // Locate the visible event node by its readable label instead.
+    const eventNode = trigger.locator('[data-node-id^="event:"]').filter({ hasText: 'filing.published' });
+    await expect(eventNode).toHaveCount(1);
+    await eventNode.click();
     await expect(studio.locator('.trigger-detail')).toContainText('carries a text payload');
   });
 
