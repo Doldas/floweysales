@@ -65,6 +65,8 @@ export interface ChatEntry {
   status?: 'running' | 'ok' | 'error';
   startedAt?: number;
   durationMs?: number;
+  /** What the model reasoned before and while answering, when it sends that apart from the answer. Display only. */
+  thinking?: string;
   /** The character that wrote an assistant message, when one was chosen. */
   persona?: string;
   /** Latest progress line of work the step delegated, such as a team member answering. */
@@ -508,6 +510,9 @@ export class AgentSession {
         case 'delta':
           this.appendAssistant(ev.content || '');
           break;
+        case 'thinking':
+          this.appendThinking(ev.content || '');
+          break;
         case 'tool_start':
           this.push({ role: 'tool', name: ev.name, args: ev.arguments, content: '', status: 'running', startedAt: Date.now(),
             callId: ev.call_id, seq: ev.seq, truncated: ev.truncated, redacted: ev.redacted });
@@ -582,6 +587,17 @@ export class AgentSession {
       }
       return [...copy, { id: this.nextId++, role: 'tool', name: ev.name, callId: ev.call_id, seq: ev.seq, durationMs: ev.duration_ms, ...done }];
     });
+  }
+
+  /** Reasoning arrives before the answer of the same round, so it opens that round's message. */
+  private appendThinking(delta: string): void {
+    if (!delta) return;
+    if (this.assistantId < 0) {
+      this.assistantId = this.push({ role: 'assistant', content: '', thinking: delta, persona: this.personaName() || undefined });
+      return;
+    }
+    const id = this.assistantId;
+    this.entries.update(list => list.map(e => (e.id === id ? { ...e, thinking: (e.thinking ?? '') + delta } : e)));
   }
 
   private appendAssistant(delta: string): void {

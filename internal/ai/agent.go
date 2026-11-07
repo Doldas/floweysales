@@ -18,7 +18,7 @@ import (
 
 // Event is one step of an agent run, streamed to the UI or logged by tests.
 type Event struct {
-	Type      string   `json:"type"` // delta | tool_start | tool_result | transcript_message | notice | error | done | member_start | member_done
+	Type      string   `json:"type"` // delta | thinking | tool_start | tool_result | transcript_message | notice | error | done | member_start | member_done
 	Message   *Message `json:"message,omitempty"`
 	Content   string   `json:"content,omitempty"`
 	Name      string   `json:"name,omitempty"`
@@ -665,7 +665,7 @@ func modelUnavailable(err error) bool {
 func completeWithRetry(ctx context.Context, client *Client, messages *[]Message, tools []Tool, emit func(Event)) (Message, error) {
 	var last error
 	for attempt := 1; attempt <= maxModelAttempts; attempt++ {
-		msg, err := client.Complete(ctx, *messages, tools, func(d string) { emit(Event{Type: "delta", Content: d}) })
+		msg, err := client.CompleteThinking(ctx, *messages, tools, func(d string) { emit(Event{Type: "delta", Content: d}) }, func(d string) { emit(Event{Type: "thinking", Content: d}) })
 		if err == nil {
 			if attempt > 1 {
 				emit(Event{Type: "notice", Severity: "info", Code: "recovered", Attempt: attempt, MaxAttempts: maxModelAttempts,

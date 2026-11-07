@@ -70,6 +70,15 @@
 .thinking .bubble { color: var(--fs-muted); display: flex; align-items: center; gap: 0.5rem; }
 .dots { display: inline-flex; gap: 3px; i { width: 6px; height: 6px; border-radius: 50%; background: var(--fs-agent); animation: dot 1.2s infinite ease-in-out; } i:nth-child(2) { animation-delay: 0.15s; } i:nth-child(3) { animation-delay: 0.3s; } }
 @keyframes dot { 0%, 80%, 100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+.think {
+  margin-bottom: 0.5rem;
+  border-left: 2px solid var(--fs-border);
+  padding-left: 0.65rem;
+  color: var(--fs-muted);
+  font-size: 0.8rem;
+  summary { cursor: pointer; display: flex; align-items: center; gap: 0.4rem; user-select: none; }
+  .think-text { margin-top: 0.3rem; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 14rem; overflow-y: auto; }
+}
 .working { display: flex; align-items: center; gap: 0.5rem; color: var(--fs-muted); font-size: 0.8rem; padding-left: 2.3rem; }
 
 // ------------------------------------------------------------ agent steps

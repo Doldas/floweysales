@@ -136,3 +136,25 @@ func TestRunForwardsNoticesToTheUI(t *testing.T) {
 		t.Errorf("notice=%v done=%v events=%+v", notice, done, events)
 	}
 }
+
+func TestReasoningStreamsApartFromTheAnswer(t *testing.T) {
+	think := func(field, text string) string {
+		b, _ := json.Marshal(text)
+		return frame(`{"choices":[{"delta":{"` + field + `":` + string(b) + `}}]}`)
+	}
+	s := &scripted{replies: []string{think("reasoning_content", "Check ") + think("reasoning", "the margin.") + content("Margin is 12%.") + finish("stop")}}
+	srv := s.server(t)
+	defer srv.Close()
+	var thought, answer strings.Builder
+	msg, err := NewClient(srv.URL, "", "m").CompleteThinking(context.Background(), []Message{{Role: "user", Content: "x"}}, nil,
+		func(d string) { answer.WriteString(d) }, func(d string) { thought.WriteString(d) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if thought.String() != "Check the margin." {
+		t.Fatalf("thinking = %q", thought.String())
+	}
+	if answer.String() != "Margin is 12%." || msg.Content != "Margin is 12%." {
+		t.Fatalf("the reasoning must not leak into the answer: %q / %q", answer.String(), msg.Content)
+	}
+}

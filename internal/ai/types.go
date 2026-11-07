@@ -63,6 +63,14 @@ type Usage struct {
 	CompletionTokens int `json:"completion_tokens"`
 }
 
+// thinkingOf is the reasoning text of a streamed delta, whichever field the endpoint used.
+func thinkingOf(reasoningContent, reasoning string) string {
+	if reasoningContent != "" {
+		return reasoningContent
+	}
+	return reasoning
+}
+
 // ChatResponse is the non-streaming reply shape (used for error parsing and
 // as a fallback when a provider ignores stream:true).
 type ChatResponse struct {
@@ -95,8 +103,12 @@ func (e *APIError) Error() string {
 type streamChunk struct {
 	Choices []struct {
 		Delta struct {
-			Content   string `json:"content"`
-			ToolCalls []struct {
+			Content string `json:"content"`
+			// Reasoning models send their thinking apart from the answer, under
+			// reasoning_content (DeepSeek, vLLM, llama.cpp) or reasoning (OpenRouter, Ollama).
+			ReasoningContent string `json:"reasoning_content"`
+			Reasoning        string `json:"reasoning"`
+			ToolCalls        []struct {
 				Index    int    `json:"index"`
 				ID       string `json:"id"`
 				Type     string `json:"type"`

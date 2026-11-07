@@ -42,7 +42,13 @@
             <span class="fs-agent-orb sm" aria-hidden="true"><i class="bi bi-stars"></i></span>
             <div class="bubble chat-markdown">
               @if (block.entry.persona) { <div class="persona-tag"><i class="bi bi-person-badge" aria-hidden="true"></i> {{ block.entry.persona }} <span>fictional character</span></div> }
-              <div [innerHTML]="md(block.entry.content)"></div>
+              @if (block.entry.thinking; as thought) {
+                <details class="think" [open]="isThinkingNow(block.entry)">
+                  <summary><i class="bi bi-lightbulb" aria-hidden="true"></i> @if (isThinkingNow(block.entry)) { <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> Thinking… } @else { Thought process }</summary>
+                  <div class="think-text">{{ thought }}</div>
+                </details>
+              }
+              @if (block.entry.content) { <div [innerHTML]="md(block.entry.content)"></div> }
             </div>
           </div>
       }

@@ -138,6 +138,11 @@ export class AgentChatComponent implements OnInit {
     return out;
   });
 
+  /** Whether this message is still only reasoning: the run streams and no answer text has arrived. */
+  isThinkingNow(e: ChatEntry): boolean {
+    return this.session.streaming() && !e.content && e === this.session.entries().at(-1);
+  }
+
   readonly currentStep = computed(() => [...this.session.entries()].reverse().find(e => e.role === 'tool' && e.status === 'running'));
 
   readonly suggestions = computed(() => {

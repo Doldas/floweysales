@@ -45,6 +45,12 @@ test('streamed text shows until the final answer arrives, without the stance lin
   assert.equal(shownText(s.members[0]), 'Working');
 });
 
+test('thinking is kept apart from the answer', () => {
+  const s = run([{ type: 'member_start', agent: 'a' }, { type: 'thinking', agent: 'a', content: 'Weigh ' }, { type: 'thinking', agent: 'a', content: 'the price.' }]);
+  assert.equal(s.members[0].thinking, 'Weigh the price.');
+  assert.equal(shownText(s.members[0]), '');
+});
+
 test('a member that fails is marked and does not stop the others', () => {
   const s = run([
     { type: 'error', agent: 'a', error: 'model unavailable' }, { type: 'member_done', agent: 'a', content: '', error: 'model unavailable' },

@@ -218,6 +218,12 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
       <ul>@for (st of m.steps; track st.callId) { <li><fs-tool-call [call]="st" /></li> }</ul></details>
   }
   @if (m.note) { <p class="muted">{{ m.note }}</p> }
+  @if (m.thinking) {
+    <details class="think" [open]="m.status === 'running' && !text(m)">
+      <summary><i class="bi bi-lightbulb" aria-hidden="true"></i> {{ m.status === 'running' && !text(m) ? 'Thinking…' : 'Thought process' }}</summary>
+      <div class="think-text">{{ m.thinking }}</div>
+    </details>
+  }
   @if (evidence(m); as line) {
     <p class="muted evidence-line" [class.bad]="m.audit?.length || m.removed?.length" role="status">{{ line }}</p>
     @for (f of m.audit ?? []; track $index) { <p class="muted evidence-line"><strong>{{ findingLabel(f.kind) }}.</strong> {{ f.detail }}</p> }
@@ -234,6 +240,7 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
 </ng-template>
   `,
   styles: [`
+.think { border-left: 2px solid var(--fs-border); padding-left: 0.65rem; color: var(--fs-muted); font-size: 0.8rem; summary { cursor: pointer; user-select: none; } .think-text { margin-top: 0.3rem; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 12rem; overflow-y: auto; } }
 .page-search { flex: 0 1 380px; min-width: min(100%, 260px); }
 .panel { padding: 1rem 1.25rem; display: grid; gap: 0.8rem; min-width: 0; margin-bottom: 1rem; }
 h2 { font-size: 1rem; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; small { font-size: 0.75rem; font-weight: 400; color: var(--fs-muted); } }
