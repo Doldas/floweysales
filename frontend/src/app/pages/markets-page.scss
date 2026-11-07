@@ -59,3 +59,6 @@
 @media (max-width: 575.98px) {
   .quote-actions { width: 100%; .btn { flex: 1 1 auto; } }
 }
+
+/* Reserve the history status height so a refresh does not move the chart controls. */
+.history-load-slot { min-height: 1.75rem; }
