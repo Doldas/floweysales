@@ -26,7 +26,8 @@ import { elapsedSince, progressAriaValue, progressFraction, progressText, stallH
   `,
   styles: [`
     .ps { display: flex; align-items: center; gap: .5rem; color: var(--fs-muted); font-size: .85rem; margin-bottom: .35rem; min-height: 1.5rem; }
-    .ps-hint { color: var(--fs-muted); font-size: .8rem; margin-bottom: .35rem; }\n    @media (prefers-reduced-motion: reduce) { .ps .spinner-border { animation: none; border-top-color: var(--fs-accent); } .progress-bar { transition: none; } }
+    .ps-hint { color: var(--fs-muted); font-size: .8rem; margin-bottom: .35rem; }
+    @media (prefers-reduced-motion: reduce) { .ps .spinner-border { animation: none; border-top-color: var(--fs-accent); } .progress-bar { transition: none; } }
   `],
 })
 export class ProgressStatusComponent implements OnInit {
