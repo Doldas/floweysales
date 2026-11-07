@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -38,6 +39,10 @@ type backtestRequest struct {
 	costBps    float64
 	slippage   float64 // bps per side on top of costBps
 	delay      int     // trading days between the ranking and the fill
+	spread     float64 // quoted bid-ask spread in bps; half is paid per side
+	notional   float64 // portfolio value that sizes orders against traded volume; 0 means liquidity is not modeled
+	maxPart    float64 // percent of average daily traded value one order may take
+	impact     float64 // market impact coefficient in bps
 	years      int
 	from, to   time.Time // custom UTC window; zero when years is used
 	provider   market.Provider
@@ -152,6 +157,19 @@ func (e *Engine) parseBacktestQuery(ctx context.Context, q url.Values) (backtest
 			return req, badRequest{errors.New("slippage_bps must be a number from 0 to 100")}
 		}
 	}
+	for _, f := range []struct {
+		name string
+		dst  *float64
+		max  float64
+	}{{"spread_bps", &req.spread, backtest.MaxSpreadBps}, {"notional", &req.notional, backtest.MaxNotional}, {"max_participation_pct", &req.maxPart, 100}, {"impact_bps", &req.impact, backtest.MaxImpactBps}} {
+		if raw := q.Get(f.name); raw != "" {
+			v, perr := strconv.ParseFloat(raw, 64)
+			if perr != nil || math.IsNaN(v) || v < 0 || v > f.max {
+				return req, badRequest{fmt.Errorf("%s must be a number from 0 to %g", f.name, f.max)}
+			}
+			*f.dst = v
+		}
+	}
 	if raw := q.Get("delay_days"); raw != "" {
 		if req.delay, err = strconv.Atoi(raw); err != nil || req.delay < 0 || req.delay > backtest.MaxDelayDays {
 			return req, badRequest{fmt.Errorf("delay_days must be a whole number from 0 to %d", backtest.MaxDelayDays)}
@@ -200,7 +218,7 @@ func backtestKey(req backtestRequest) string {
 	if req.snap != nil {
 		idx = "idx:" + req.snap.IndexID + ":" + req.snap.Key() + "|"
 	}
-	return idx + fmt.Sprintf("%s|%s|%s|%s|%d|%s|%g|%g|%d|%d", req.provider, strings.Join(sorted, ","), req.strategy.ID, req.benchmark, req.top, req.rebalLabel, req.costBps, req.slippage, req.years, req.delay) + "|" + req.from.Format(strategyDateLayout) + "|" + req.to.Format(strategyDateLayout)
+	return idx + fmt.Sprintf("%s|%s|%s|%s|%d|%s|%g|%g|%d|%d|%g|%g|%g|%g", req.provider, strings.Join(sorted, ","), req.strategy.ID, req.benchmark, req.top, req.rebalLabel, req.costBps, req.slippage, req.years, req.delay, req.spread, req.notional, req.maxPart, req.impact) + "|" + req.from.Format(strategyDateLayout) + "|" + req.to.Format(strategyDateLayout)
 }
 
 // leaderboardScorer ranks the symbols exactly as the leaderboard does, from
@@ -321,7 +339,8 @@ func (e *Engine) runBacktest(ctx context.Context, req backtestRequest) (backtest
 		}
 	}
 	track := &membershipTrack{}
-	cfg := backtest.Config{Start: start, End: end, TopN: req.top, RebalanceDays: req.rebalance, CostBps: req.costBps, SlippageBps: req.slippage, DelayDays: req.delay}
+	cfg := backtest.Config{Start: start, End: end, TopN: req.top, RebalanceDays: req.rebalance, CostBps: req.costBps, SlippageBps: req.slippage, DelayDays: req.delay,
+		SpreadBps: req.spread, Notional: req.notional, MaxParticipationPct: req.maxPart, ImpactBps: req.impact}
 	result, err := backtest.Run(cfg, series, fin, bench, e.leaderboardScorer(req.strategy, req.snap, track))
 	if err != nil {
 		return backtestResponse{}, badRequest{err}

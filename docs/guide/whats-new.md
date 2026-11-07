@@ -25,6 +25,8 @@ last-reviewed: 2026-11-06
 - Longer history: a period that starts more than nine years back asks the provider for its longest daily history, and says so when only the 10-year window could be served.
 - Rule strategies get a slippage setting and a **walk-forward fit** that chooses up to two of their numbers on one window and tests them on the next. See [Strategies and backtests](strategies.md#walk-forward-fit).
 
+- Leaderboard backtests can charge a bid-ask spread and size orders against each symbol's traded volume: an order is held to a share of the average daily traded value, the rest stays unfilled and is reported, and market impact grows with order size. Rule strategies on the Strategies page get a spread setting, named stress windows and a table of results by market regime, with the days that could not be labeled counted instead of dropped.
+
 **Research Agent**
 - The agent can hand a question to a team and show each member's answer with attribution.
 - Research answers can be exported as Markdown or JSON with the evidence policy, sources and check result. See [Research Agent](agents.md).

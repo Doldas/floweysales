@@ -270,3 +270,17 @@ func countWarnings(trades int, c *Concentration) []string {
 	}
 	return w
 }
+
+// StressReport measures the named windows against an equity curve and a reference curve of the same length
+// (nil for none). dates are UTC day strings in order. Windows the curve does not fully cover come back by name.
+func StressReport(dates []string, equity, reference []float64) (out []StressResult, notCovered []string) {
+	return stressResults(dates, equity, reference)
+}
+
+// RegimeReport groups a replay's daily returns by the trend and volatility of a reference price series, known
+// at the previous close. px covers the whole calendar the replay ran on, first is the index of the replay's
+// first day in it and equity holds one value per day from there. It also returns how many replayed days could
+// not be labeled, so a regime table can show that no day was dropped without being counted.
+func RegimeReport(px []float64, first int, equity []float64) (out []Regime, unlabeled int) {
+	return regimeResults(px, regimeLabels(px), first, equity)
+}

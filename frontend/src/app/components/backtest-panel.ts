@@ -10,7 +10,7 @@ import { SkeletonComponent } from '../ui/skeleton';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import { PROGRESS_POLL_MS, newRunId, parseRunProgress, type RunProgress } from '../ui/run-progress';
 import { periodError } from '../core/strategy-period';
-import { assumptionRows, benchmarkLines, DELAY_OPTIONS, MONTE_CARLO_DEFAULTS, monteCarloError, monteCarloHeadline, monteCarloParams, monteCarloRows, type MonteCarloSettings, batchHeadline, batchParams, batchRows, exportUrl, savedLabel, sensitivityHeadline, sensitivityParams, sensitivityRows, singleParams, chartSummary, curvePath, metricTiles, regimeRows, segmentRows, stressRows, warningText } from './backtest-view';
+import { assumptionRows, benchmarkLines, DELAY_OPTIONS, IMPACT_OPTIONS, liquidityLines, MONTE_CARLO_DEFAULTS, NOTIONAL_OPTIONS, SPREAD_OPTIONS, monteCarloError, monteCarloHeadline, monteCarloParams, monteCarloRows, type MonteCarloSettings, batchHeadline, batchParams, batchRows, exportUrl, savedLabel, sensitivityHeadline, sensitivityParams, sensitivityRows, singleParams, chartSummary, curvePath, metricTiles, regimeRows, segmentRows, stressRows, warningText } from './backtest-view';
 
 const CHART_W = 640;
 const CHART_H = 220;
@@ -42,6 +42,17 @@ const CHART_H = 220;
       <div class="fs-segmented" role="group" aria-label="Fill delay">
         @for (n of delayOptions; track n) { <button type="button" [attr.aria-pressed]="delay() === n" (click)="set('delay', n)" [title]="n === 0 ? 'Fill at the same close the ranking is computed from' : 'Fill ' + n + ' trading day(s) after the ranking'">{{ n === 0 ? 'Same-day fill' : n + 'd delay' }}</button> }
       </div>
+      <div class="fs-segmented" role="group" aria-label="Bid-ask spread">
+        @for (n of spreadOptions; track n) { <button type="button" [attr.aria-pressed]="spread() === n" (click)="set('spread', n)" title="Quoted spread; half is paid on each side">{{ n === 0 ? 'No spread' : n + ' bps spread' }}</button> }
+      </div>
+      <div class="fs-segmented" role="group" aria-label="Portfolio size">
+        @for (n of notionalOptions; track n) { <button type="button" [attr.aria-pressed]="notional() === n" (click)="set('notional', n)" title="Orders are held to 10% of a symbol's average daily traded value; sizes are in the price currency">{{ n === 0 ? 'Any size fills' : sizeLabel(n) }}</button> }
+      </div>
+      @if (notional() > 0) {
+        <div class="fs-segmented" role="group" aria-label="Market impact">
+          @for (n of impactOptions; track n) { <button type="button" [attr.aria-pressed]="impact() === n" (click)="set('impact', n)" title="Impact grows with the square root of the order's share of daily traded value">{{ n === 0 ? 'No impact' : n + ' bps impact' }}</button> }
+        </div>
+      }
       <div class="fs-segmented" role="group" aria-label="Period">
         <button type="button" [attr.aria-pressed]="years() === 3" (click)="set('years', 3)">3Y</button>
         <button type="button" [attr.aria-pressed]="years() === 5" (click)="set('years', 5)">5Y</button>
@@ -170,6 +181,7 @@ const CHART_H = 220;
         <ul class="mb-1">
           @for (a of assumptions(r); track a.name) { <li><strong>{{ a.name }}:</strong> {{ a.value }} <span class="bt-tag" [class.off]="!a.modeled">{{ a.status }}</span></li> }
         </ul>
+        @for (line of liquidityText(r); track line) { <p class="bt-note">{{ line }}</p> }
         @for (line of benchmarkText(r); track line) { <p class="bt-note">{{ line }}</p> }
         @if (r.currencies?.length) { <p class="bt-note">Quote currencies of the symbols: {{ r.currencies!.join(', ') }}. Prices are not converted.</p> }
       </details>
@@ -439,6 +451,14 @@ export class BacktestPanelComponent {
   readonly slippage = signal(0);
   readonly delayOptions = DELAY_OPTIONS;
   readonly delay = signal(0);
+  readonly spreadOptions = SPREAD_OPTIONS;
+  readonly spread = signal(0);
+  readonly notionalOptions = NOTIONAL_OPTIONS;
+  readonly notional = signal(0);
+  readonly impactOptions = IMPACT_OPTIONS;
+  readonly impact = signal(0);
+  readonly sizeLabel = (n: number): string => (n >= 1_000_000 ? `${n / 1_000_000}M portfolio` : `${n / 1000}k portfolio`);
+  readonly liquidityText = (r: BacktestResult) => liquidityLines(r.liquidity);
   readonly years = signal<BacktestParams['years']>(5);
   readonly from = signal('');
   readonly to = signal('');
@@ -522,10 +542,13 @@ export class BacktestPanelComponent {
     });
   }
 
-  set(key: 'top' | 'rebalance' | 'years' | 'slippage' | 'delay', value: number | string): void {
+  set(key: 'top' | 'rebalance' | 'years' | 'slippage' | 'delay' | 'spread' | 'notional' | 'impact', value: number | string): void {
     if (key === 'top') this.top.set(value as number);
     else if (key === 'delay') this.delay.set(value as number);
     else if (key === 'slippage') this.slippage.set(value as number);
+    else if (key === 'spread') this.spread.set(value as number);
+    else if (key === 'notional') this.notional.set(value as number);
+    else if (key === 'impact') this.impact.set(value as number);
     else if (key === 'rebalance') this.rebalance.set(value as BacktestParams['rebalance']);
     else this.years.set(value as BacktestParams['years']);
     this.customError.set('');
@@ -607,7 +630,7 @@ export class BacktestPanelComponent {
     this.batchRequest?.unsubscribe();
     this.batchLoading.set(true);
     this.batchError.set('');
-    const params = batchParams({ universes: this.pickedMarkets(), periods: this.pickedPeriods(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), delay: this.delay() });
+    const params = batchParams({ universes: this.pickedMarkets(), periods: this.pickedPeriods(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), delay: this.delay(), spread: this.spread(), notional: this.notional(), impact: this.impact() });
     const runId = newRunId();
     this.startProgress(runId);
     this.batchRequest = this.api.backtestBatch(params, runId).subscribe({
@@ -645,7 +668,7 @@ export class BacktestPanelComponent {
     this.mcLoading.set(true);
     const params = monteCarloParams({
       universe: this.universe(), strategy: this.strategy(), symbols: this.symbols(),
-      top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), delay: this.delay(), years: this.years(),
+      top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), delay: this.delay(), spread: this.spread(), notional: this.notional(), impact: this.impact(), years: this.years(),
       ...(this.years() === 0 ? { from: this.from(), to: this.to() || undefined } : {}),
     }, this.mc());
     this.mcRequest = this.api.backtestMonteCarlo(params).subscribe({
@@ -659,7 +682,7 @@ export class BacktestPanelComponent {
     this.sensRequest?.unsubscribe();
     this.sensLoading.set(true);
     this.sensError.set('');
-    const params = sensitivityParams({ universe: this.universe(), symbols: this.symbols(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), delay: this.delay(), years: this.years() });
+    const params = sensitivityParams({ universe: this.universe(), symbols: this.symbols(), strategy: this.strategy(), top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), delay: this.delay(), spread: this.spread(), notional: this.notional(), impact: this.impact(), years: this.years() });
     this.sensRequest = this.api.backtestSensitivity(params).subscribe({
       next: res => { this.lastParams.sensitivity = params; this.openedRun.set(null); this.sens.set(res); this.sensLoading.set(false); },
       error: err => { this.sensError.set(describeHttpError(err)); this.sensLoading.set(false); },
@@ -678,7 +701,7 @@ export class BacktestPanelComponent {
     this.error.set('');
     const params = singleParams({
       universe: this.universe(), strategy: this.strategy(), symbols: this.symbols(),
-      top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), delay: this.delay(), years: this.years(),
+      top: this.top(), rebalance: this.rebalance(), slippage: this.slippage(), delay: this.delay(), spread: this.spread(), notional: this.notional(), impact: this.impact(), years: this.years(),
       ...(this.years() === 0 ? { from: this.from(), to: this.to() || undefined } : {}),
     });
     this.request = this.api.backtest(params).subscribe({

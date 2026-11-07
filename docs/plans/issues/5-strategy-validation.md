@@ -104,3 +104,9 @@ Delivered for the leaderboard backtest: `internal/montecarlo` (bootstrap, block 
 ## Follow-up: slippage in the leaderboard backtest (#252)
 
 `backtest.Config.SlippageBps` (request `slippage_bps`, 0–100) is charged per side next to `CostBps`, on every traded share. Zero keeps the old numbers and adds the warning `slippage_not_modeled`. Saved-run method version is now 2. Not yet: slippage in `internal/strategy` (the Strategies page still says it is not modeled), spread- or volume-based slippage, and a slippage grid in the settings check.
+
+## Follow-up: execution realism and Strategies robustness (#252)
+
+Leaderboard backtest: `backtest.Config.SpreadBps`, `Notional`, `MaxParticipationPct` and `ImpactBps` (`internal/backtest/liquidity.go`). Orders are capped at a share of the 20-bar average daily traded value ending the bar before the fill, sells fill before buys, buys use the freed cash, the unfilled part is not carried forward, and a symbol without volume fills in full and is counted. Impact is `ImpactBps * sqrt(order / ADV)` per side. Defaults reproduce the old numbers exactly. Strategies page: `strategy.Config.SpreadBps` (half added to the slippage per side) and `Result.Stress` / `Result.Regimes`, built from `backtest.StressReport` and `backtest.RegimeReport` on the instrument's own prices. Adversarial tests: regime flip under walk-forward fit, a high-turnover system under friction, regime label look-ahead, regime day accounting.
+
+Still open: point-in-time index membership beyond what the index sources already supply, dividends and total return, corporate actions, the real-provider check of how far MAX reaches, and a trade-level carry of unfilled orders.
