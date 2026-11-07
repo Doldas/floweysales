@@ -49,7 +49,7 @@ test('a stall hint appears only after a long wait and names the way out', () => 
   assert.equal(stallHint(STALL_AFTER_MS - 1, true), '');
   assert.match(stallHint(STALL_AFTER_MS, true), /cancel/i);
   assert.doesNotMatch(stallHint(STALL_AFTER_MS, false), /cancel/i);
-  assert.match(stallHint(STALL_AFTER_MS, false), /reload/i);
+  assert.match(stallHint(STALL_AFTER_MS, false), /connection/i);
 });
 
 test('progress fraction refuses missing and invalid totals and clamps overshoot', () => {
