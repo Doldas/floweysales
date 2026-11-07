@@ -223,3 +223,24 @@ test('a JSON citation names the path and the sources it cites', () => {
   assert.equal(jsonCitationLine({ path: '/summary', sources: ['S1', 'S2'], text: 'Revenue grew' }), '/summary cites S1, S2: Revenue grew');
   assert.equal(jsonCitationLine({ path: '', sources: ['S3'] }), '/ cites S3');
 });
+
+test('empty citation findings never pretend sources were opened', () => {
+  assert.doesNotMatch(auditSummary([]), /every cited source was retrieved|Citation check passed/);
+  assert.match(auditSummary([]), /does not establish/);
+});
+
+test('claim limit reached with zero returned claims is explicitly unverified', () => {
+  assert.match(claimsSummary([], { claims: 0, supported: 0, contradicted: 0, insufficient: 0, not_checked: 0, skipped: 2, elapsed_ms: 1, model_calls: 0, verifier_version: 'claims-v1' }), /Nothing is verified/);
+});
+
+
+test('verification costs report actual model calls and do not invent invalid timing', () => {
+  const stats = { claims: 1, supported: 1, contradicted: 0, insufficient: 0, not_checked: 0, skipped: 0, elapsed_ms: 12.4, model_calls: 2, verifier_version: 'claims-v1' };
+  const withCalls = claimsSummary([claim({})], stats);
+  assert.match(withCalls, /12 ms with 2 model calls/);
+  assert.doesNotMatch(withCalls, /no model call/);
+  const unknown = claimsSummary([claim({})], { ...stats, elapsed_ms: Infinity, model_calls: -1 });
+  assert.match(unknown, /unreported duration/);
+  assert.match(unknown, /model-call count unavailable/);
+  assert.doesNotMatch(unknown, /Infinity|NaN|with no model call/);
+});

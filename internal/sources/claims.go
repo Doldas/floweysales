@@ -1683,6 +1683,9 @@ func ClaimFindings(rep ClaimReport, existing []Finding, strict bool) []Finding {
 		case c.Verdict == Insufficient && (strict || flaggedAlways[c.Code]):
 			out = append(out, Finding{Kind: ClaimInsufficient, Sentence: c.Sentence, Source: src, Detail: c.Explanation})
 		case strict && c.Code == CodeUnlabeled:
+			// An unlabeled forecast or recommendation needs to be qualified
+			// or supported. A transparent refusal and ordinary qualitative
+			// description, however, must not trigger an endless correction loop.
 			out = append(out, Finding{Kind: ClaimUnsupported, Sentence: c.Sentence, Source: src, Detail: c.Explanation + " Label it as opinion, inference or forecast, or support it with a source."})
 		}
 	}
