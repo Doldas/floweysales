@@ -227,7 +227,10 @@ var _ market.Backend = (*Backend)(nil)
 // IsRateLimited reports whether err is (or wraps) a 429 and returns its hint.
 func IsRateLimited(err error) (time.Duration, bool) {
 	var rl *RateLimitError
-	if errors.As(err, &rl) {
+	if errors.As(err, &rl) && rl != nil {
+		if rl.RetryAfter < 0 {
+			return 0, true
+		}
 		return rl.RetryAfter, true
 	}
 	return 0, false
