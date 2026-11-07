@@ -92,3 +92,9 @@ test('untrusted negative and fractional usage never becomes a billing claim', ()
   assert.equal(searchUsageTotals([bad]).today.prompt_tokens, 0);
   assert.equal(searchUsageTotals([bad]).today.est_cost_usd, 0);
 });
+
+test('provider settings reject infinite costs and fractional free quotas', () => {
+  assert.match(formProblems({ ...blank, enabled: false, daily_budget_usd: Infinity }, google, true).join(' '), /finite and nonnegative/);
+  assert.match(formProblems({ ...blank, enabled: false, free_monthly_searches: 1.5 }, google, true).join(' '), /whole number/);
+  assert.deepEqual(formProblems({ ...blank, enabled: false, free_monthly_searches: 0 }, google, true), []);
+});
