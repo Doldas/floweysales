@@ -38,3 +38,10 @@ test('only http(s) links are offered', () => {
   assert.equal(safeSourceUrl({ kind: 'observed', status: 'known', url: 'javascript:alert(1)' }), '');
   assert.equal(safeSourceUrl(undefined), '');
 });
+
+test('source links refuse credentials, control characters and unsafe protocols', () => {
+  for (const url of ['javascript:alert(1)', 'data:text/html,x', 'https://user:secret@example.org/', 'https://', 'https://example.org/\\nnext']) {
+    assert.equal(safeSourceUrl({ url } as Provenance), '', url);
+  }
+  assert.equal(safeSourceUrl({ url: 'https://example.org/report' } as Provenance), 'https://example.org/report');
+});
