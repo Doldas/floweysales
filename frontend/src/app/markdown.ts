@@ -1,4 +1,4 @@
-import { isInlineDollarFormula, renderFormula } from './math';
+import { isInlineDollarFormula, renderFormula } from './math.ts';
 /**
  * A tiny, dependency-free Markdown renderer shared by chat bubbles, help pages, run output and the Workspace
  * (Markdown preview, rich-text editor and README overview).
