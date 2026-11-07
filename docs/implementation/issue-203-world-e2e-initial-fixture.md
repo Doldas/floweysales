@@ -20,3 +20,9 @@ The shared Playwright mock backend returned HTTP 404 for `/api/world`, because t
 Run `cd frontend && npx playwright test --config playwright.config.ts e2e/async-refresh.spec.ts --project=desktop --project=mobile` then full repository CI. This branch must not be merged until the latest Playwright and Go jobs pass.
 
 No production code/API behavior, network credentials, or external provider calls were changed. Broader issue #203 acceptance remains open.
+
+## Accessibility regression exposed by the restored fixture
+
+With World content correctly mocked, the existing responsive audit now sees the actual headline links instead of an error screen. It detected a 17px-tall news link (minimum touch target required: 24px) across seven narrow widths, phone landscape, and the reduced-motion case. The World page now renders headline anchors as inline blocks with a 24px minimum height and vertical padding. The existing responsive audit covers these same widths automatically in PR CI; no audit exclusions were added.
+
+A later focused CI run also identified an ambiguous `World` heading selector (it matched the page h1 and "World events and NVDA" h2). The refresh test now uses an exact match.
