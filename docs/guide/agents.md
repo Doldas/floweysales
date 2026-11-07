@@ -56,7 +56,7 @@ Under **Sources**, each claim opens to **Why is this claim supported?** It shows
 
 A passing check says that every cited source was retrieved and its figures appear in the text, and the claim check says what each source states. Neither says the claims are true, that the source is right, or that the prose supports the claim. Always read the passage a number comes from before you rely on it.
 
-The agent can open a search hit by its id. It cannot be made to fetch an address that no search returned, and it only reads public pages. Pages that need a login or JavaScript, and scanned PDFs, cannot be read; the source then stays "search result only". Reading a page does not make it a primary source.
+The agent can open a search hit by its id. It cannot be made to fetch an address that no search returned, and it only reads public pages. Pages that need a login or JavaScript cannot be read; the source then stays "search result only". A PDF is read page by page; a scanned page or a chart or table that is a picture is read only if an administrator has set up a vision model, and otherwise the result lists those pages as unread. The tool-call view shows a Document evidence panel with the pages, how each was read and which figures passed the automatic checks. See [Reading PDFs and scanned reports](../pdf-vision.md). Reading a page does not make it a primary source.
 
 ### Evidence mode
 

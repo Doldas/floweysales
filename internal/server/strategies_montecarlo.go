@@ -1,7 +1,9 @@
 package server
 
 import (
+	"math"
 	"net/http"
+	"sort"
 	"time"
 
 	"floweysales/internal/montecarlo"
@@ -22,6 +24,10 @@ type strategyMonteCarloRequest struct {
 	DrawdownLimit  float64 `json:"drawdown_limit"`
 	ExtraCostBps   float64 `json:"extra_cost_bps"`
 	DispersionMult float64 `json:"dispersion_scale"`
+	DelayBars      int     `json:"delay_bars"`
+	RegimeShare    float64 `json:"regime_share_pct"`
+	RegimeScale    float64 `json:"regime_scale"`
+	PositionScale  float64 `json:"position_scale"`
 }
 
 // strategyObserved are the deterministic figures of the replay. They are copied
@@ -71,7 +77,8 @@ func (e *Engine) registerStrategyMonteCarloRoutes() {
 			return
 		}
 		cfg := montecarlo.TradeConfig{Method: req.Method, Runs: req.Runs, Trades: req.Trades, Seed: montecarlo.DefaultSeed,
-			DrawdownLimitPct: req.DrawdownLimit, ExtraCostBps: req.ExtraCostBps, DispersionScale: req.DispersionMult}
+			DrawdownLimitPct: req.DrawdownLimit, ExtraCostBps: req.ExtraCostBps, DispersionScale: req.DispersionMult,
+			DelayBars: req.DelayBars, RegimeSharePct: req.RegimeShare, RegimeScale: req.RegimeScale, PositionScale: req.PositionScale}
 		if req.Seed != nil {
 			cfg.Seed = *req.Seed
 		}
@@ -79,6 +86,9 @@ func (e *Engine) registerStrategyMonteCarloRoutes() {
 		if err != nil {
 			writeJSON(w, status, map[string]any{"error": err.Error()})
 			return
+		}
+		if cfg.DelayBars > 0 {
+			cfg.InstrumentDailyVolPct, cfg.Exposure = replayDelayInputs(bt)
 		}
 		res, err := buildStrategyMonteCarlo(bt, req.strategyBacktestRequest.StrategyID, cfg)
 		if err != nil {
@@ -108,7 +118,7 @@ func buildStrategyMonteCarlo(bt strategyBacktestResponse, strategyID string, cfg
 	if openExcluded {
 		sim.Limitations = append(sim.Limitations, "A trade that was still open at the last bar is left out because it has not been realized.")
 	}
-	sim.Limitations = append(sim.Limitations, "Execution delay, partial fills and concentration are not modeled; the extra cost setting is the only way to stress them, and only as a flat amount per trade.")
+	sim.Limitations = append(sim.Limitations, "Partial fills, liquidity and the market impact of larger positions are not modeled. The delay, spread-regime and position-size settings are blunt stresses on the trade results, not a re-run of the rules on other prices.")
 	return strategyMonteCarloResponse{
 		Symbol: bt.Symbol, Provider: bt.Provider, Range: bt.Range, GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Strategy: bt.Result.Strategy.Name, StrategyID: strategyID, CostBps: bt.Config.CostBps,
@@ -122,4 +132,40 @@ func buildStrategyMonteCarlo(bt strategyBacktestResponse, strategyID string, cfg
 			"Research only. No order is placed or prepared.",
 		},
 	}, nil
+}
+
+// replayDelayInputs measures what a fill-delay stress needs from the replay: the
+// daily volatility of the instrument, in percent, from its close curve, and the
+// typical share of the account in a trade (the median of account change over
+// trade change). Either is 0 when the replay cannot give it.
+func replayDelayInputs(bt strategyBacktestResponse) (volPct, exposure float64) {
+	var rets []float64
+	for i := 1; i < len(bt.Curve); i++ {
+		if p, c := bt.Curve[i-1].Close, bt.Curve[i].Close; p > 0 && c > 0 {
+			rets = append(rets, c/p-1)
+		}
+	}
+	if len(rets) >= 2 {
+		mean := 0.0
+		for _, r := range rets {
+			mean += r
+		}
+		mean /= float64(len(rets))
+		ss := 0.0
+		for _, r := range rets {
+			ss += (r - mean) * (r - mean)
+		}
+		volPct = math.Sqrt(ss/float64(len(rets)-1)) * 100
+	}
+	var ratios []float64
+	for _, t := range bt.Trades {
+		if t.Reason != "open" && math.Abs(t.ReturnPct) > 0.01 {
+			ratios = append(ratios, math.Abs(t.EquityPct/t.ReturnPct))
+		}
+	}
+	if len(ratios) > 0 {
+		sort.Float64s(ratios)
+		exposure = ratios[len(ratios)/2]
+	}
+	return volPct, exposure
 }

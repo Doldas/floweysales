@@ -13,6 +13,11 @@ Relates to #
 - [ ] Tests added for changed behavior
 - [ ] Updated docs and/or release notes (checklist: `docs/documentation-ownership.md`)
 
+## SDK / protocol (delete if untouched)
+
+- [ ] `pluginsdk/` API, wire protocol or manifest changed: contract fixtures in `pluginsdk/testdata/contract/`, conformance/unit tests and a `pluginsdk/CHANGELOG.md` entry (Breaking/Additive/Fix with migration notes) added, and `pluginsdk/compat.json` updated if protocol support changed
+- [ ] Contract-neutral SDK edit instead? Add `SDK-Contract: none (reason)` to this description
+
 ## Financial-data & agent safety
 
 - [ ] Facts, assumptions, source timestamp and fiscal/calendar periods are distinguished

@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "note": "Supported combinations of wire protocol and SDK version. Edit together with pluginsdk/protocol.go and pluginsdk/CHANGELOG.md; checked by scripts/check-sdk-compat.mjs.",
+  "protocols": [
+    {
+      "protocol": 1,
+      "status": "supported",
+      "sdkMin": "0.1.0",
+      "sdkMaxExclusive": "2.0.0",
+      "deprecatedSince": null
+    }
+  ],
+  "sdkMinimumForOfficialPlugins": "0.1.0"
+}

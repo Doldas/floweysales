@@ -369,7 +369,9 @@ plugins do.
 The SDK is a Go module inside this repository, versioned with tags
 `pluginsdk/v<semver>`. Its protocol version only changes when the backend's
 does, so a plugin built against any SDK v0.x/v1.x speaking protocol 1 keeps
-working with backends that speak protocol 1.
+working with backends that speak protocol 1. The supported protocol/SDK
+ranges are recorded in `pluginsdk/compat.json`; release policy, API
+compatibility checks and rollback are in `docs/releasing.md`.
 
 ## The store
 
