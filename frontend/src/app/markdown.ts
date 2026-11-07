@@ -222,15 +222,27 @@ export function renderMarkdown(source: string, options: MarkdownOptions = {}): s
       continue;
     }
 
-    // Display TeX: \[...\] or $...$, plus the standalone
-    // [ ... ] shape sometimes returned by chat models for DCF equations.
+    // Display TeX: \[...\] or $$...$$ (single or multiple lines), and
+    // the legacy [ ... ] block produced by some text-only model prompts.
+    // Recognize these BEFORE inline dollar handling: financial currency such
+    // as "$2.78 bn" must never become a math block.
     const mathOpen = line.trim();
-    if (mathOpen === '\\[' || mathOpen === '$' || mathOpen === '[') {
-      const close = mathOpen === '$' ? '$' : mathOpen === '[' ? ']' : '\\]';
+    const compact = mathOpen.match(/^(?:\$\$(.+)\$\$|\\\[(.+)\\\])$/);
+    if (compact) {
+      const formula = compact[1] ?? compact[2];
+      if (formula.trim() && formula.length <= 2000) {
+        flushParagraph();
+        const idx = fences.push(renderFormula(unescapeHtml(formula.trim()), true)) - 1;
+        out.push('\u0000F' + idx + '\u0000');
+        continue;
+      }
+    }
+    if (mathOpen === '\\[' || mathOpen === '$$' || mathOpen === '[') {
+      const close = mathOpen === '$$' ? '$$' : mathOpen === '[' ? ']' : '\\]';
       let j = i + 1;
       while (j < lines.length && j - i <= 30 && lines[j].trim() !== close) j++;
       const formula = lines.slice(i + 1, j).join('\n').trim();
-      if (j < lines.length && lines[j].trim() === close && formula.length <= 2000 &&
+      if (j < lines.length && lines[j].trim() === close && formula.length > 0 && formula.length <= 2000 &&
         (mathOpen !== '[' || /\\(?:frac|text|times|sum|sqrt|mathrm)/.test(formula))) {
         flushParagraph();
         const idx = fences.push(renderFormula(unescapeHtml(formula), true)) - 1;
