@@ -19,7 +19,7 @@ test('World refresh failure preserves last successful data and warns accessibly'
   await expect(page.getByRole('alert')).toContainText('last successful World snapshot');
   await expect(firstTheme).toBeVisible();
   expect(await firstTheme.locator('h2').innerText()).toBe(original);
-  await expect(page.getByRole('heading', { name: 'World' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'World', exact: true })).toBeVisible();
 });
 
 
