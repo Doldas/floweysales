@@ -69,3 +69,8 @@ Prices and reports come from the provider plugins your administrator installed. 
 ## Investment-risk notice
 
 FloweySales is a research aid. Data and model output can be incomplete, delayed or wrong. Nothing here is personal investment advice, and nothing knows your goals, taxes or risk tolerance. Fully automatic live trading is not supported.
+
+
+### Community evidence vs. financial proof
+
+A retrieved Reddit or other social discussion is still usable for sentiment and direct quotations about what users said. But the deterministic claim verifier now marks a **financial number backed solely by social discussion** as insufficient evidence—even when the source contains the matching number. Official reports and primary datasets should be checked for accounting claims. This does not prove that every official statement is correct.
