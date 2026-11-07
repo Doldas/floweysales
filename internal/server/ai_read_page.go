@@ -207,22 +207,9 @@ func readPublicPage(ctx context.Context, raw string) (string, string, bool, erro
 		if err != nil {
 			return "", "", false, err
 		}
-		if int64(len(body)) > limit {
-			if isPDF || binary {
-				return "", "", false, errors.New("the PDF is larger than 8 MB")
-			}
-			return "", "", false, errors.New("the web page is larger than the 512 KB reading limit; its content was not read")
-		}
-		// Check the format when the response claims to be PDF. Otherwise a
-		// mislabeled HTML error page can be presented as extracted PDF evidence.
-		magic := hasPDFMagic(body)
-		if isPDF && !magic {
-			return "", "", false, errors.New("the server labeled this resource as PDF but the response has no PDF signature; it was not read")
-		}
-		if magic {
-			isPDF = true
-		} else if binary {
-			return "", "", false, fmt.Errorf("cannot read content type %q; only HTML, plain text and PDF are supported", kind)
+		isPDF, err = validateReadPageBody(kind, body, limit)
+		if err != nil {
+			return "", "", false, err
 		}
 		return string(body), u.String(), isPDF, nil
 	}
@@ -232,4 +219,26 @@ func readPublicPage(ctx context.Context, raw string) (string, string, bool, erro
 func hasPDFMagic(b []byte) bool {
 	head := b[:min(len(b), 1024)]
 	return bytes.Contains(head, []byte("%PDF-"))
+}
+
+
+// validateReadPageBody is also used by tests: a truncated response or a PDF
+// label without a PDF signature is never promoted to trusted source evidence.
+func validateReadPageBody(kind string, body []byte, limit int64) (bool, error) {
+	isPDF := strings.Contains(kind, "application/pdf") || strings.Contains(kind, "application/x-pdf")
+	binary := strings.Contains(kind, "octet-stream") || strings.Contains(kind, "binary")
+	if int64(len(body)) > limit {
+		if isPDF || binary {
+			return false, errors.New("the PDF is larger than 8 MB")
+		}
+		return false, errors.New("the web page is larger than the 512 KB reading limit; its content was not read")
+	}
+	magic := hasPDFMagic(body)
+	if isPDF && !magic {
+		return false, errors.New("the server labeled this resource as PDF but the response has no PDF signature; it was not read")
+	}
+	if binary && !magic {
+		return false, fmt.Errorf("cannot read content type %q; only HTML, plain text and PDF are supported", kind)
+	}
+	return isPDF || magic, nil
 }
