@@ -59,3 +59,19 @@ This walk-through takes about 20 minutes and uses only screens that exist today.
 
 - Try another list or strategy and compare, remembering that comparing many variants and picking the best fools you.
 - Read [Provenance and trust](provenance.md) to see how sources are labeled.
+
+
+## 7. Reproduce a source-backed AI answer
+
+This optional part uses the existing **Research Agent** page and does not require any paid search API. An administrator must already have configured an AI model; for web search, a search provider must also be enabled.
+
+1. Open **Research Agent** for the company you selected in step 3.
+2. Ask: **“List the latest quarter's revenue, currency and report period. Use only documents you successfully opened; cite each source URL and page if available. If anything is unavailable, say so.”**
+3. Expand the tool steps. A search hit is only a listing, not evidence that the article or PDF was read. A blocked filing (HTTP 403) is *not* read evidence.
+4. For each reported figure, compare the revenue value, unit, company, period and publication date with its **original quarterly report**. An updated page can still contain numbers for an older quarter.
+5. Ask the agent separately: **“Summarize recent investor sentiment, labeled as sentiment, not as financial facts.”** Reddit and forum discussions may help explain reactions but cannot independently establish company revenue.
+6. Save the report in Workspace as Markdown. Reopen Preview and make sure monetary values, equations and source links are legible. The renderer formats math; it does not verify calculations.
+
+**Expected outcome:** a source-backed research note with clear limitations, not a fabricated report. If your market provider lacks quarterly financials, the result may legitimately contain **unknown** or **unavailable** fields. Do not substitute an old annual value or an unverified blog number. This exercise has no live trade or order side effect.
+
+**When something fails:** check [Troubleshooting](troubleshooting.md), [Sources and provenance](provenance.md), and [Agents and evidence](agents.md). Provider access restrictions and missing model credentials are not problems to circumvent.
