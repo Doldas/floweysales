@@ -105,3 +105,10 @@ test('a team run exports every member and the chair with their own sources and f
   assert.doesNotMatch(md, /token=abc|#x/);
   assert.equal((md.match(/## Question/g) ?? []).length, 1);
 });
+
+test('a clean report never falsely claims all sources were opened', () => {
+  const exp = buildAnswerExport({ answer: 'Unverified opinion.', sources: [{ ...sources[1], access: 'listed' }], now });
+  assert.match(exp.check.statement, /does not confirm the claims are true/);
+  assert.doesNotMatch(exp.check.statement, /every cited source was retrieved/);
+  assert.match(answerToMarkdown(exp), /search result only/);
+});

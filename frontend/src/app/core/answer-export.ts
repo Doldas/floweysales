@@ -99,7 +99,7 @@ function exportSource(s: AnswerSource): ExportSource {
 
 function checkStatement(findings: number, removed: number): string {
   if (findings === 0 && removed === 0) {
-    return 'Citation check passed: every cited source was retrieved and its figures appear in the text. This does not confirm the claims are true.';
+    return 'Citation check reported no findings. This does not confirm the claims are true or that every source was opened; inspect source access and evidence.';
   }
   const parts: string[] = [];
   if (findings) parts.push(`${findings} unresolved ${findings === 1 ? 'problem' : 'problems'}`);
