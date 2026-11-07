@@ -304,14 +304,14 @@ func (r *Registry) registerDelegation(callID, result string) (string, []Source) 
 				continue
 			}
 			seen[key] = true
-			if src.Class != ClassPrimaryFiling {
-				src.Class = ClassWebPage
+			if !ValidClass(src.Class) {
+				src.Class = sourceClassForURL(src.URL)
 			}
 			if src.Access != AccessRead {
 				src.Access = AccessListed
 			}
 			s := r.add(Source{Tool: "delegate_to_team", CallID: callID, Member: name, Query: src.Query, URL: src.URL, Title: src.Title,
-				Class: src.Class, Access: src.Access, DocumentID: src.DocumentID, PublishedAt: src.PublishedAt, RetrievedAt: src.RetrievedAt, Excerpt: src.Excerpt})
+				Class: src.Class, Access: src.Access, DocumentID: src.DocumentID, PublishedAt: src.PublishedAt, ModifiedAt: src.ModifiedAt, RetrievedAt: src.RetrievedAt, Excerpt: src.Excerpt})
 			added = append(added, s)
 			shown = append(shown, map[string]string{"source_id": s.ID, "url": s.URL, "title": s.Title, "access": s.Access})
 		}
