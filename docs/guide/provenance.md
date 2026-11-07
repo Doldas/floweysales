@@ -74,3 +74,7 @@ FloweySales is a research aid. Data and model output can be incomplete, delayed 
 ### Evidence link integrity
 
 Source detail panels only offer navigable HTTP(S) URLs with a valid hostname and no embedded credentials or control characters. Links from agents and providers remain untrusted evidence, not proof that their contents have been read or verified.
+
+### Community evidence vs. financial proof
+
+A retrieved Reddit or other social discussion is still usable for sentiment and direct quotations about what users said. But the deterministic claim verifier now marks a **financial number backed solely by social discussion** as insufficient evidence—even when the source contains the matching number. Official reports and primary datasets should be checked for accounting claims. This does not prove that every official statement is correct.
