@@ -162,3 +162,55 @@ func TestDiscoveryKeepsProviderSpecificFactsAndDistinctExchangeListings(t *testi
 		t.Fatal("unknown listing must not invent an exchange")
 	}
 }
+
+// A complete two-provider replay must preserve the identity, source and date of
+// each security through fallback merging and leaderboard disclosure. Testing
+// these individually misses cross-layer provenance drift on mixed-provider runs.
+func TestMergedProviderRowsKeepIdentityAndAsOfThroughDiscovery(t *testing.T) {
+	primary := []map[string]any{
+		{"symbol": "AZN.ST", "error": "price unavailable"},
+		{"symbol": "AZN.L", "price": 80.0, "currency": "GBP", "as_of": "2026-11-06"},
+		{"symbol": "XYZ.ZZ", "price": 12.0, "currency": "USD", "as_of": "2025-01-01"},
+	}
+	fallback := []map[string]any{
+		{"symbol": "AZN.ST", "price": 100.0, "currency": "SEK", "as_of": "2026-11-05"},
+		{"symbol": "AZN.L", "price": 100.0, "currency": "GBP", "as_of": "2026-11-06"},
+	}
+	merged := mergeProviderRows("YAHOO", primary, "FINNHUB", fallback)
+	if len(merged) != 3 || primary[0]["error"] == nil {
+		t.Fatalf("fallback cannot mutate cached primary or collapse securities: %+v", merged)
+	}
+	annotateDiscovery(customUniverse([]string{"AZN.ST", "AZN.L", "XYZ.ZZ"}), "YAHOO", merged)
+	by := map[string]map[string]any{}
+	for _, row := range merged {
+		by[row["symbol"].(string)] = row
+	}
+	if len(by) != 3 || by["AZN.ST"] == nil || by["AZN.L"] == nil {
+		t.Fatalf("same company on two exchanges must keep separate rows: %+v", by)
+	}
+	for _, tc := range []struct{ symbol, provider, date, exchange string }{
+		{"AZN.ST", "FINNHUB", "2026-11-05", "XSTO"},
+		{"AZN.L", "YAHOO", "2026-11-06", "XLON"},
+		{"XYZ.ZZ", "YAHOO", "2025-01-01", ""},
+	} {
+		row := by[tc.symbol]
+		if row["data_provider"] != tc.provider {
+			t.Errorf("%s provider: %v", tc.symbol, row["data_provider"])
+		}
+		meta := row["metrics_source"].(map[string]any)
+		if meta["provider"] != tc.provider || meta["price_as_of"] != tc.date ||
+			!reflect.DeepEqual(meta["fact"], metricsFact(tc.provider, tc.symbol, tc.date)) {
+			t.Errorf("%s facts not tied to actual provider and age: %+v", tc.symbol, meta)
+		}
+		if l := row["listing"].(listing); l.MIC != tc.exchange || (tc.exchange == "" && l.Known) {
+			t.Errorf("%s listing is guessed or collapsed: %+v", tc.symbol, l)
+		}
+		disc := row["discovery"].(map[string]any)
+		if disc["kind"] != "custom" || disc["url"] != nil || disc["as_of"] != nil {
+			t.Errorf("%s discovery provenance was fabricated: %+v", tc.symbol, disc)
+		}
+	}
+	if used := providersUsed("YAHOO", merged); len(used) != 2 {
+		t.Errorf("mixed provider report must name both sources: %+v", used)
+	}
+}
