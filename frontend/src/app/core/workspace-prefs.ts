@@ -107,7 +107,8 @@ export interface RowWindow {
 
 /** Rows to draw for a scroll position, assuming `rowHeight` per row, with `overscan` extra rows on each side. */
 export function rowWindow(total: number, scrollTop: number, viewport: number, rowHeight: number, overscan = 8): RowWindow {
-  const count = Math.max(0, Math.floor(total));
+  const count = Number.isFinite(total) ? Math.max(0, Math.floor(total)) : 0;
+  overscan = Number.isFinite(overscan) ? Math.max(0, Math.floor(overscan)) : 0;
   const h = Number.isFinite(rowHeight) && rowHeight > 0 ? rowHeight : 40;
   if (count === 0) return { start: 0, end: 0, before: 0, after: 0 };
   const top = Math.max(0, Number.isFinite(scrollTop) ? scrollTop : 0);
