@@ -8,6 +8,16 @@ publishes the section for the tagged version as the release notes. See
 
 ## Unreleased
 
+## v0.2.0
+
+- Additive: package `feed` parses RSS 2.0 and Atom headline feeds (DTDs and
+  external entities are never loaded, 2 MiB cap) and converts them to
+  `NewsItem`s with the feed's publication date. An unreadable date stays 0 and
+  is never guessed. Plugins can use it where a source's JSON search omits dates.
+- Additive: capabilities `news` (method `news`, `NewsItem`) and `events`
+  (method `events`, `CorporateEvent`), the `tools` capability (plugin-contributed
+  UI tab, method `tool`) and domain providers with saved-transaction exports.
+  Existing plugins keep working; a plugin declares only what it implements.
 - Fix: `httpx` waits for a 429 `Retry-After` hint of up to 5 seconds before
   retrying; a longer hint fails fast with the value in `StatusError.RetryAfter`.
 - Fix: `httpx.ToFloat` is strict. It rejects trailing text such as `12abc`,

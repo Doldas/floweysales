@@ -10,5 +10,5 @@
       "deprecatedSince": null
     }
   ],
-  "sdkMinimumForOfficialPlugins": "0.1.0"
+  "sdkMinimumForOfficialPlugins": "0.2.0"
 }
