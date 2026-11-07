@@ -115,6 +115,10 @@ The prompt in these modes asks the model to say "insufficient verifiable evidenc
 - **Flow agent nodes.** An agent node can carry an `evidence` object (same shape). Its answer is held until checked, with two extra model rounds for corrections. A node whose answer still fails the check **fails the attempt** (so the node's retries apply), unless the policy blocks the unsupported sentences. A node with an evidence mode cannot use JSON output. Flows are saved with the flow, so a flow's evidence settings belong to whoever owns the flow, not to the running user's default.
 - **Sources with runs.** A task run's checkpoint keeps the sources, the audit, the removed sentences and the policy; `GET /api/ai/tasks/{id}` returns them (excerpts cut to 600 bytes). A resumed task restores the registry, so `[S3]` from the first round still means the same source, and keeps the policy it started with. Each flow agent step stores its sources (at most 40, excerpts cut to 400 bytes and redacted), the findings, the removed sentences and the policy in the step record (`sources` in the run history API). They are not part of the node's output, so downstream nodes and JSON contracts do not see them. The sources of a failed step are kept for the last attempt.
 
+## Team chair summary check
+
+The chair has no sources of its own: it may only restate what the members wrote. After the chair answers, `sources.CheckSummary` (`internal/sources/summary.go`) traces every notable figure in the summary (percentages, currency and scaled amounts, numbers of 100 or more; years and small counts are skipped) to the member answers. It adds a `summary_figure_not_in_members` finding when no member wrote the figure, and `summary_misattributed` when a sentence ties the figure to one member but only other members wrote it. Rounding to a scale word ("$4.2 billion" for 4,203,000,000) is accepted; a changed scale is not. It is deterministic, calls no model, and checks that a figure was said, not that it is true. The findings arrive as a `sources` event for the chair and show under the chair's answer.
+
 ## Reachability check
 
 In `evidence_only` and `primary_only`, a source the answer cites by marker and the agent never opened gets a request to see whether the link still resolves (an opened page was fetched, so it resolved). A dead link is flagged `unreachable` and the draft goes back to the model like any other finding.
@@ -134,7 +138,7 @@ The Sources panel offers **Export Markdown** and **Export JSON** for the latest 
 
 ## Not built yet
 
-Cross-checks against data-provider records and calculation tool inputs, an independent AI or NLI review recorded as an auditable secondary signal (never as proof), claim labels checked by the server (the model is asked to keep fact, calculation and opinion apart, nothing verifies it), an export of team and task runs (only the chat exports today), the claim check on a team chair's summary, a per-claim view in team and flow-run screens (the data is stored with each flow step), an evidence mode saved per team, and a publication date for web search hits (so a recency limit can accept them). Sources of tools other than `search_web`, `read_source` and `get_sec_section` are not registered.
+Cross-checks against data-provider records and calculation tool inputs, an independent AI or NLI review recorded as an auditable secondary signal (never as proof), claim labels checked by the server (the model is asked to keep fact, calculation and opinion apart, nothing verifies it), an export of team and task runs (only the chat exports today), a per-claim view in team and flow-run screens (the data is stored with each flow step), an evidence mode saved per team, and a publication date for web search hits (so a recency limit can accept them). Sources of tools other than `search_web`, `read_source` and `get_sec_section` are not registered.
 
 ## Where to set it
 

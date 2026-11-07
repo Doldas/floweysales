@@ -43,6 +43,8 @@ const FINDING_LABELS: Record<string, string> = {
   claim_contradicted: 'Claim contradicted by the cited text',
   claim_insufficient: 'Claim not proven by the cited text',
   unsupported_claim: 'Judgement not labeled as such',
+  summary_figure_not_in_members: 'Figure in no member answer',
+  summary_misattributed: 'Figure attributed to the wrong member',
 };
 
 export function findingLabel(kind: string): string {
