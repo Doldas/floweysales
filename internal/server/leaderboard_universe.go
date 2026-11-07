@@ -159,7 +159,7 @@ func annotateDiscovery(universe leaderboardUniverse, provider string, ranked []m
 		}
 		priceAsOf, _ := row["as_of"].(string)
 		row["metrics_source"] = map[string]any{"provider": rowProvider, "price_as_of": row["as_of"], "fundamentals_through": row["ttm_through"],
-			"record_url": providerRecordURL(rowProvider, symbol), "fact": metricsFact(provider, symbol, priceAsOf)}
+			"record_url": providerRecordURL(rowProvider, symbol), "fact": metricsFact(rowProvider, symbol, priceAsOf)}
 	}
 }
 

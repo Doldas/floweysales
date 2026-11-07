@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -127,5 +128,99 @@ func TestLeaderboardResponseSeparatesDiscoveryMetricsAndMethod(t *testing.T) {
 	_ = json.Unmarshal(body.Rows[0]["discovery"], &disc)
 	if disc["kind"] != "custom" || disc["url"] != nil {
 		t.Errorf("no URL is invented for a custom list: %v", disc)
+	}
+}
+
+func TestDiscoveryKeepsProviderSpecificFactsAndDistinctExchangeListings(t *testing.T) {
+	universe := leaderboardUniverse{ID: "cross", Label: "Cross market", Source: universeSource{Kind: "custom", Name: "Selected", Rule: "Selected symbols"}}
+	rows := []map[string]any{
+		{"symbol": "AZN.ST", "data_provider": "YAHOO", "as_of": "2026-10-01", "ttm_through": "2026-06-30"},
+		{"symbol": "AZN.L", "data_provider": "FINNHUB", "as_of": "2026-11-01", "ttm_through": "2026-09-30"},
+		{"symbol": "UNKNOWN", "as_of": "2025-01-01"},
+	}
+	annotateDiscovery(universe, "YAHOO", rows)
+	if rows[0]["identifier"].(map[string]any)["symbol"] == rows[1]["identifier"].(map[string]any)["symbol"] {
+		t.Fatalf("cross-exchange listings must not be collapsed: %v %v", rows[0]["identifier"], rows[1]["identifier"])
+	}
+	for i, provider := range []string{"YAHOO", "FINNHUB", "YAHOO"} {
+		meta, ok := rows[i]["metrics_source"].(map[string]any)
+		if !ok || meta["provider"] != provider {
+			t.Fatalf("row %d provider lineage: %+v", i, meta)
+		}
+		asOf := rows[i]["as_of"].(string)
+		if !reflect.DeepEqual(meta["fact"], metricsFact(provider, rows[i]["symbol"].(string), asOf)) {
+			t.Fatalf("row %d fact must identify its actual provider rather than a fallback: %+v", i, meta)
+		}
+		if meta["price_as_of"] != asOf {
+			t.Fatalf("row %d stale/as-of date was dropped: %+v", i, meta)
+		}
+		if rows[i]["discovery"].(map[string]any)["kind"] != "custom" {
+			t.Fatalf("custom source must be marked as such: %+v", rows[i])
+		}
+	}
+	if rows[2]["listing"].(listing).Known {
+		t.Fatal("unknown listing must not invent an exchange")
+	}
+}
+
+// A complete two-provider replay must preserve the identity, source and date of
+// each security through fallback merging and leaderboard disclosure. Testing
+// these individually misses cross-layer provenance drift on mixed-provider runs.
+func TestMergedProviderRowsKeepIdentityAndAsOfThroughDiscovery(t *testing.T) {
+	primary := []map[string]any{
+		{"symbol": "AZN.ST", "error": "price unavailable"},
+		{"symbol": "AZN.L", "price": 80.0, "currency": "GBP", "as_of": "2026-11-06"},
+		{"symbol": "XYZ.ZZ", "price": 12.0, "currency": "USD", "as_of": "2025-01-01"},
+	}
+	fallback := []map[string]any{
+		{"symbol": "AZN.ST", "price": 100.0, "currency": "SEK", "as_of": "2026-11-05"},
+		{"symbol": "AZN.L", "price": 100.0, "currency": "GBP", "as_of": "2026-11-06"},
+	}
+	merged := mergeProviderRows("YAHOO", primary, "FINNHUB", fallback)
+	if len(merged) != 3 || primary[0]["error"] == nil {
+		t.Fatalf("fallback cannot mutate cached primary or collapse securities: %+v", merged)
+	}
+	annotateDiscovery(customUniverse([]string{"AZN.ST", "AZN.L", "XYZ.ZZ"}), "YAHOO", merged)
+	by := map[string]map[string]any{}
+	for _, row := range merged {
+		by[row["symbol"].(string)] = row
+	}
+	if len(by) != 3 || by["AZN.ST"] == nil || by["AZN.L"] == nil {
+		t.Fatalf("same company on two exchanges must keep separate rows: %+v", by)
+	}
+	for _, tc := range []struct{ symbol, provider, date, exchange string }{
+		{"AZN.ST", "FINNHUB", "2026-11-05", "XSTO"},
+		{"AZN.L", "YAHOO", "2026-11-06", "XLON"},
+		{"XYZ.ZZ", "YAHOO", "2025-01-01", ""},
+	} {
+		row := by[tc.symbol]
+		if row["data_provider"] != tc.provider {
+			t.Errorf("%s provider: %v", tc.symbol, row["data_provider"])
+		}
+		meta := row["metrics_source"].(map[string]any)
+		if meta["provider"] != tc.provider || meta["price_as_of"] != tc.date ||
+			!reflect.DeepEqual(meta["fact"], metricsFact(tc.provider, tc.symbol, tc.date)) {
+			t.Errorf("%s facts not tied to actual provider and age: %+v", tc.symbol, meta)
+		}
+		if l := row["listing"].(listing); l.MIC != tc.exchange || (tc.exchange == "" && l.Known) {
+			t.Errorf("%s listing is guessed or collapsed: %+v", tc.symbol, l)
+		}
+		disc := row["discovery"].(map[string]any)
+		// The source fields are typed nil pointers internally. Assert the API
+		// JSON representation, where unavailable origin data must be null.
+		encoded, err := json.Marshal(disc)
+		if err != nil {
+			t.Fatalf("%s discovery JSON: %v", tc.symbol, err)
+		}
+		var wire map[string]any
+		if err := json.Unmarshal(encoded, &wire); err != nil {
+			t.Fatalf("%s discovery decode: %v", tc.symbol, err)
+		}
+		if wire["kind"] != "custom" || wire["url"] != nil || wire["as_of"] != nil {
+			t.Errorf("%s discovery provenance was fabricated: %+v", tc.symbol, wire)
+		}
+	}
+	if used := providersUsed("YAHOO", merged); len(used) != 2 {
+		t.Errorf("mixed provider report must name both sources: %+v", used)
 	}
 }
