@@ -64,8 +64,19 @@ test.describe('shared flow diagram system', () => {
     await expect(trigger).toContainText('EVENT');
     await expect(trigger).toContainText('PAYLOAD');
     await expect(trigger).toContainText('Read-only');
-    await trigger.locator('[data-node-id="event:filing.published"]').click();
-    await expect(studio.locator('.trigger-detail')).toContainText('carries a text payload');
+    // Diagram nodes are keyed by stable database ids, not by the event key.
+    // Locate the semantic label so the test works with arbitrary saved ids.
+    const event = trigger.locator('[data-node-id^="event:"]').filter({ hasText: 'filing.published' });
+    await expect(event).toHaveCount(1);
+    await event.click();
+    await expect(event).toHaveAttribute('aria-pressed', 'true');
+    await expect(studio.locator('.trigger-detail')).toContainText('filing.published carries a text payload');
+
+    // Selecting the typed payload node must keep the same trigger details.
+    const nodeId = await event.getAttribute('data-node-id');
+    const payload = trigger.locator(`[data-node-id="payload:${nodeId!.slice('event:'.length)}"]`);
+    await payload.click();
+    await expect(studio.locator('.trigger-detail')).toContainText('filing.published carries a text payload');
   });
 
   test('diagram nodes are keyboard operable and zoom is announced', async ({ page }) => {
