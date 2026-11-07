@@ -126,4 +126,7 @@ A flow agent node can use one of the model profiles an administrator prepared (i
 The shared Markdown renderer displays common financial expressions such as fractions, multiplication, powers, roots and labels. Use `\(...\)` for inline math and `\[...\]` or `$$...$$` for display math. Tables and long display equations stay scrollable inside their panel on small screens. The underlying numbers and formulas are **not evaluated** or verified by the renderer: use calculation and citation tools for correctness. Unsupported TeX commands display as escaped literal source instead of untrusted HTML. The same rendering pipeline is shared by Research Agent, Agent Teams, Flow reports and Workspace preview; email uses its own safe content adapter.
 
 
+The shared Markdown renderer accepts both standalone `$$...$$` equations and multiline `$$` blocks, in addition to `\[...\]` and inline `\(...\)`. Price strings such as `$3.07 bn` remain currency, not TeX. Unsupported commands remain visibly escaped; this is not full LaTeX syntax support.
+
+
 Long-running AI and Flow tasks use a shared progress indicator. A numeric progress bar appears only when the application has a finite, measured total number of steps; screen readers hear the actual completed/total counts. Motion is reduced when the system's Reduced Motion preference is enabled. For work that cannot be cancelled, the status avoids recommending a reload that might repeat an action or lose edits; check connection/state first.
