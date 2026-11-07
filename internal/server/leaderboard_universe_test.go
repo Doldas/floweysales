@@ -206,8 +206,18 @@ func TestMergedProviderRowsKeepIdentityAndAsOfThroughDiscovery(t *testing.T) {
 			t.Errorf("%s listing is guessed or collapsed: %+v", tc.symbol, l)
 		}
 		disc := row["discovery"].(map[string]any)
-		if disc["kind"] != "custom" || disc["url"] != nil || disc["as_of"] != nil {
-			t.Errorf("%s discovery provenance was fabricated: %+v", tc.symbol, disc)
+		// The source fields are typed nil pointers internally. Assert the API
+		// JSON representation, where unavailable origin data must be null.
+		encoded, err := json.Marshal(disc)
+		if err != nil {
+			t.Fatalf("%s discovery JSON: %v", tc.symbol, err)
+		}
+		var wire map[string]any
+		if err := json.Unmarshal(encoded, &wire); err != nil {
+			t.Fatalf("%s discovery decode: %v", tc.symbol, err)
+		}
+		if wire["kind"] != "custom" || wire["url"] != nil || wire["as_of"] != nil {
+			t.Errorf("%s discovery provenance was fabricated: %+v", tc.symbol, wire)
 		}
 	}
 	if used := providersUsed("YAHOO", merged); len(used) != 2 {
