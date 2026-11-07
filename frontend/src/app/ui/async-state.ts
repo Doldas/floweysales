@@ -45,8 +45,14 @@ export function progressText(stage: string, elapsedMs: number, done: number | nu
 /** Only measured, finite nonnegative progress is determinate.
  * Zero/unknown totals are an indeterminate status, not a misleading 0% bar. */
 export function progressFraction(done: number | null, total: number | null): number | null {
-  if (done === null || total === null || !Number.isFinite(done) || !Number.isFinite(total) || done < 0 || total <= 0) return null;
+  if (done === null || total === null || !Number.isSafeInteger(done) || !Number.isSafeInteger(total) || done < 0 || total <= 0) return null;
   return Math.min(1, done / total);
+}
+
+/** Accessible measurement in actual steps, not a guessed percentage. */
+export function progressAriaValue(done: number | null, total: number | null): string {
+  if (progressFraction(done, total) === null) return '';
+  return `${Math.min(done!, total!)} of ${total!} steps completed`;
 }
 
 /** Elapsed time since `since` (epoch ms), never negative; 0 when the start is unknown. */
@@ -57,5 +63,5 @@ export function elapsedSince(since: number | null | undefined, now: number): num
 /** After a long silent wait: say so and name the way out. Empty before that. */
 export function stallHint(elapsedMs: number, canCancel: boolean): string {
   if (elapsedMs < STALL_AFTER_MS) return '';
-  return canCancel ? 'This is taking longer than usual. You can cancel and try again.' : 'This is taking longer than usual. It may still finish; reload the page if nothing changes.';
+  return canCancel ? 'This is taking longer than usual. You can cancel and try again.' : 'This is taking longer than usual. It may still finish; check the connection before retrying to avoid duplicate work.';
 }

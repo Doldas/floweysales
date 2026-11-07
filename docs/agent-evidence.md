@@ -159,3 +159,8 @@ Cross-checks against data-provider records and calculation tool inputs, an indep
 - at most 512 KB of HTML is read and 12,000 characters of text reach the model; the result says when it was cut.
 
 The tool counts toward the per-minute tool budget of ordinary users. It is not exposed through the MCP server, which has no run to resolve a `source_id` against. Reading a page does not make it a primary source: in Primary sources only mode a web page still does not count.
+
+
+### Source dates and social discussion
+
+Search-hit evidence now retains a valid `published_at` and, when supplied, a separate `modified_at` timestamp. Invalid and absent dates remain unknown; neither should be substituted by the retrieval time. URL-based classification marks Reddit, Stocktwits, X/Twitter, Threads and Bluesky as `social_discussion` rather than generic `web_page` sources. Social discussion can support claims about **sentiment or opinions**, not independent proof of company revenue, cash flow or regulatory figures. The original hit remains `listed` (snippet-only) until a tool actually reads its content. Agent Team delegation keeps these source labels and dates. This is a groundwork improvement; issue #312 still needs query-specific ranking, report-period metadata and freshness-aware selection before analysis.

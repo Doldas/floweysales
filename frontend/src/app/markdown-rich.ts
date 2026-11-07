@@ -232,6 +232,11 @@ export function richTextBlockers(source: string): string[] {
     }
     if (inFence) continue;
     const bare = line.replace(/`[^`]*`/g, '');
+    // Math is deliberately not editable through the current rich-text DOM:
+    // it is a rendered span and serializing it would silently erase TeX
+    // delimiters, macro syntax and mathematical meaning.
+    if (/\\\(|\\\[|\$\$/.test(bare) || /(^|[^\\])\$([^$\n]+)\$/.test(bare) &&
+      /(?:\\[A-Za-z]+|[=^_{}+\-*/])/.test(bare)) add('mathematical formulas');
     if (/<!--/.test(bare)) add('HTML comments');
     else if (/<\/?[A-Za-z][A-Za-z0-9-]*(\s[^>]*)?\/?>/.test(bare)) add('raw HTML');
     if (/\[\^[^\]]+\]/.test(bare)) add('footnotes');

@@ -30,6 +30,7 @@ const (
 const (
 	ClassPrimaryFiling = "primary_filing"
 	ClassWebPage       = "web_page"
+	ClassSocial        = "social_discussion" // opinion / public reaction, not proof of financial metrics
 )
 
 const maxExcerpt = 2000
@@ -53,6 +54,7 @@ type Source struct {
 	// delegated team did; the parent run only saw what the member reported.
 	Member      string `json:"member,omitempty"`
 	PublishedAt string `json:"published_at,omitempty"`
+	ModifiedAt  string `json:"modified_at,omitempty"` // distinct from the reporting period
 	RetrievedAt string `json:"retrieved_at,omitempty"`
 	// Excerpt is what the model received, bounded.
 	Excerpt string `json:"excerpt,omitempty"`
@@ -126,6 +128,23 @@ func (r *Registry) add(s Source) Source {
 	r.byID[s.ID] = len(r.list)
 	r.list = append(r.list, s)
 	return s
+}
+
+// sourceClassForURL identifies a narrowly defined set of social/community
+// platforms. Unknown sites stay generic: a plausible-looking domain is not
+// sufficient evidence of a regulator or issuer publication.
+func sourceClassForURL(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") {
+		return ClassWebPage
+	}
+	host := strings.ToLower(strings.TrimSuffix(parsed.Hostname(), "."))
+	for _, domain := range []string{"reddit.com", "stocktwits.com", "twitter.com", "x.com", "threads.net", "bsky.app"} {
+		if host == domain || strings.HasSuffix(host, "."+domain) {
+			return ClassSocial
+		}
+	}
+	return ClassWebPage
 }
 
 // Register reads a tool result and records the sources in it. It returns the
@@ -279,6 +298,10 @@ func (r *Registry) registerSearch(callID, argsJSON, result string) (string, []So
 		published, _ := hit["published_at"].(string)
 		// The search renderer classifies, dates and ranks each hit; a hit
 		// without that (an older trace) is classified here with the same rules.
+		modified, _ := hit["modified_at"].(string)
+		if _, ok := parseDate(modified); !ok {
+			modified = ""
+		}
 		var trust *sourcetrust.Meta
 		if hit["trust"] != nil {
 			if raw, err := json.Marshal(hit["trust"]); err == nil {
@@ -292,7 +315,7 @@ func (r *Registry) registerSearch(callID, argsJSON, result string) (string, []So
 			trust = sourcetrust.ForSearchResult(link, title, snippet, published, retrieved, nowFunc())
 		}
 		s := r.add(Source{Tool: "search_web", CallID: callID, Query: args.Query, URL: link, Title: title,
-			Class: ClassWebPage, Access: AccessListed, PublishedAt: trust.PublishedAt, RetrievedAt: retrieved, Excerpt: title + "\n" + snippet,
+			Class: sourceClassForURL(link), Access: AccessListed, PublishedAt: trust.PublishedAt, ModifiedAt: modified, RetrievedAt: retrieved, Excerpt: title + "\n" + snippet,
 			SearchProvider: searchProvider, ResultType: resultType, Trust: trust})
 		hit["source_id"] = s.ID
 		added = append(added, s)
@@ -347,14 +370,14 @@ func (r *Registry) registerDelegation(callID, result string) (string, []Source) 
 				continue
 			}
 			seen[key] = true
-			if src.Class != ClassPrimaryFiling {
-				src.Class = ClassWebPage
+			if !ValidClass(src.Class) {
+				src.Class = sourceClassForURL(src.URL)
 			}
 			if src.Access != AccessRead {
 				src.Access = AccessListed
 			}
 			s := r.add(Source{Tool: "delegate_to_team", CallID: callID, Member: name, Query: src.Query, URL: src.URL, Title: src.Title,
-				Class: src.Class, Access: src.Access, DocumentID: src.DocumentID, PublishedAt: src.PublishedAt, RetrievedAt: src.RetrievedAt, Excerpt: src.Excerpt,
+				Class: src.Class, Access: src.Access, DocumentID: src.DocumentID, PublishedAt: src.PublishedAt, ModifiedAt: src.ModifiedAt, RetrievedAt: src.RetrievedAt, Excerpt: src.Excerpt,
 				SearchProvider: src.SearchProvider, ResultType: src.ResultType, Trust: src.Trust})
 			added = append(added, s)
 			shown = append(shown, map[string]string{"source_id": s.ID, "url": s.URL, "title": s.Title, "access": s.Access})
@@ -425,7 +448,7 @@ const (
 
 // ValidClass reports whether class is a source type a setting may name.
 func ValidClass(class string) bool {
-	return class == ClassPrimaryFiling || class == ClassWebPage
+	return class == ClassPrimaryFiling || class == ClassWebPage || class == ClassSocial
 }
 
 // Options tunes an audit.
