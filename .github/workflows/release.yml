@@ -140,6 +140,16 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
+          # Refuse partial or empty multi-platform releases even if all previous
+          # jobs reported success; every advertised target needs both binaries.
+          for target in linux-amd64 linux-arm64 windows-amd64; do
+            suffix=""
+            [[ "$target" == windows-* ]] && suffix=".exe"
+            for executable in backend mcp; do
+              file="floweysales_${executable}-${target}${suffix}"
+              test -s "$file" || { echo "::error::Missing or empty release asset: $file"; exit 1; }
+            done
+          done
           sha256sum floweysales_* > SHA256SUMS.txt
           sha256sum -c SHA256SUMS.txt
       - name: Publish durable GitHub Release
