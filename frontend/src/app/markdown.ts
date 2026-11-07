@@ -86,7 +86,16 @@ function renderTarget(label: string, escapedHref: string, state: InlineState, im
   const keep = ` data-md-href="${escapeHtml(href)}"${image ? ' data-md-image="1"' : ''}`;
   const prefix = image ? 'Image: ' : '';
   const stash = (tag: string) => `\u0000T${state.tags.push(tag) - 1}\u0000${prefix}${label}</a>`;
-  if (/^https?:\/\/[^\s]+$/i.test(href)) {
+  // External links from model text are untrusted, even when they begin
+  // with a permitted scheme. Reject embedded credentials and URL controls.
+  let externalSafe = false;
+  if (/^https?:\/\/[^\s\\]+$/i.test(href)) {
+    try {
+      const url = new URL(href);
+      externalSafe = !!url.hostname && !url.username && !url.password && !/[\u0000-\u001f\u007f]/.test(href);
+    } catch { externalSafe = false; }
+  }
+  if (externalSafe) {
     return stash(`<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer"${keep}>`);
   }
   if (base !== undefined) {

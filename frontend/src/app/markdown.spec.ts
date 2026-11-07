@@ -178,3 +178,9 @@ test('financial notation uses the shared escaped math parser across modes', () =
   assert.doesNotMatch(html, /<script|<iframe/);
   assert.match(renderMarkdown('$$\\sigma^2+\\mu$$'), /σ<sup>2<\/sup>\+μ/);
 });
+
+test('shared Markdown rejects external links with embedded credentials', () => {
+  const html = renderMarkdown('[secret](https://user:pass@example.org/path) and [normal](https://example.org/report)');
+  assert.doesNotMatch(html, /href="https:\/\/user:pass/);
+  assert.match(html, /href="https:\/\/example.org\/report"/);
+});
