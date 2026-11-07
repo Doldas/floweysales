@@ -111,9 +111,12 @@ function renderInline(text: string, state: InlineState): string {
   out = out.replace(/!\[([^\]]*)\]\(([^\s)]+)\)/g, (_m, alt: string, href: string) =>
     renderTarget(alt || 'image', href, state, true),
   );
-  out = out.replace(/\[([^\]]+)\]\(([^\s)]+)\)/g, (_m, label: string, href: string) =>
+  // The label may hold one level of brackets, as in a citation link: [[S1]](https://...).
+  out = out.replace(/\[((?:[^\[\]]|\[[^\[\]]*\])+)\]\(([^\s)]+)\)/g, (_m, label: string, href: string) =>
     renderTarget(label, href, state, false),
   );
+  // Autolinks: <https://example.com/page> (the text is already escaped here).
+  out = out.replace(/&lt;(https?:\/\/[^\s<>]+?)&gt;/g, (_m, href: string) => renderTarget(href, href, state, false));
   // Backslash escapes for inline punctuation (also written by the rich-text editor).
   out = out.replace(/\\([\\`*_{}[\]()#+\-.!|~])/g, (_m, ch: string) => `&#${ch.charCodeAt(0)};`);
 

@@ -134,6 +134,10 @@ func (r *Registry) Register(tool, callID, argsJSON, result string) (string, []So
 		return r.registerRead(argsJSON, result)
 	case "delegate_to_team":
 		return r.registerDelegation(callID, result)
+	case "get_sec_filings":
+		return r.registerFilings(callID, result)
+	case "get_sec_facts":
+		return r.registerFacts(callID, result)
 	}
 	return result, nil
 }
@@ -226,8 +230,9 @@ func (r *Registry) registerSearch(callID, argsJSON, result string) (string, []So
 		title, _ := hit["title"].(string)
 		snippet, _ := hit["snippet"].(string)
 		resultType, _ := hit["type"].(string)
+		published, _ := hit["published_at"].(string)
 		s := r.add(Source{Tool: "search_web", CallID: callID, Query: args.Query, URL: link, Title: title,
-			Class: ClassWebPage, Access: AccessListed, RetrievedAt: retrieved, Excerpt: title + "\n" + snippet,
+			Class: ClassWebPage, Access: AccessListed, RetrievedAt: retrieved, PublishedAt: strings.TrimSpace(published), Excerpt: title + "\n" + snippet,
 			SearchProvider: searchProvider, ResultType: resultType})
 		hit["source_id"] = s.ID
 		added = append(added, s)
@@ -418,7 +423,7 @@ func (o Options) ageProblem(src Source) string {
 
 func parseDate(raw string) (time.Time, bool) {
 	raw = strings.TrimSpace(raw)
-	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02"} {
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05", "2006-01-02", time.RFC1123, time.RFC1123Z, "Jan 2, 2006", "January 2, 2006", "2 Jan 2006", "2 January 2006"} {
 		if t, err := time.Parse(layout, raw); err == nil {
 			return t, true
 		}
