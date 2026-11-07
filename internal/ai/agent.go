@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"floweysales/internal/redact"
+	"floweysales/internal/websearch"
 )
 
 // Event is one step of an agent run, streamed to the UI or logged by tests.
@@ -149,6 +150,7 @@ Rules:
 // events are pushed through emit (may be nil).
 func Run(ctx context.Context, client *Client, src DataSource, transcript []Message, opts AgentOptions, emit func(Event)) error {
 	ctx = WithRunScope(ctx)
+	ctx = websearch.WithRunSpend(ctx) // one run, one per-run web search budget
 	if emit == nil {
 		emit = func(Event) {}
 	}

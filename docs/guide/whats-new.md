@@ -14,6 +14,9 @@ last-reviewed: 2026-11-06
 
 - PDFs are read page by page with page numbers. An administrator can set up an optional vision model that reads scanned pages and charts or tables that are pictures, with page-cited figures, automatic checks, run limits and a Document evidence panel. Report viewer pages are followed to the PDF on the same site; an access denial (HTTP 403) stays a denial. See [Reading PDFs and scanned reports](../pdf-vision.md).
 
+**Web search**
+- Several web search providers can be set up together: free self-hosted SearXNG, Tavily, Brave, and Google Search through Gemini grounding (paid, only after an explicit approval and with spending ceilings). Automatic mode falls back in a set order with a limited number of tries; every skip and failure is listed. See [Settings and roles](settings.md).
+
 **Backtests**
 - Choose a custom period in UTC, test several lists and periods at once, and check how trading cost, holdings and rebalance interval change a result. See [Strategies and backtests](strategies.md).
 - The Strategies page can resample a replay's closed trades with a seed to show percentile bands and the spread of the worst fall. See [Strategies and backtests](strategies.md).

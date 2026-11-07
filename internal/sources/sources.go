@@ -52,6 +52,11 @@ type Source struct {
 	RetrievedAt string `json:"retrieved_at,omitempty"`
 	// Excerpt is what the model received, bounded.
 	Excerpt string `json:"excerpt,omitempty"`
+	// SearchProvider names the web search provider that listed the source
+	// (searxng, brave, tavily, google_grounding, ...). ResultType is
+	// "grounded_source" for a page Gemini cited, which has no snippet of its own.
+	SearchProvider string `json:"search_provider,omitempty"`
+	ResultType     string `json:"result_type,omitempty"`
 }
 
 // Registry collects the sources of one run, in the order they were returned.
@@ -213,13 +218,17 @@ func (r *Registry) registerSearch(callID, argsJSON, result string) (string, []So
 	_ = json.Unmarshal([]byte(argsJSON), &args)
 	var retrieved string
 	_ = json.Unmarshal(doc["retrieved_at_utc"], &retrieved)
+	var searchProvider string
+	_ = json.Unmarshal(doc["provider"], &searchProvider)
 	var added []Source
 	for _, hit := range hits {
 		link, _ := hit["url"].(string)
 		title, _ := hit["title"].(string)
 		snippet, _ := hit["snippet"].(string)
+		resultType, _ := hit["type"].(string)
 		s := r.add(Source{Tool: "search_web", CallID: callID, Query: args.Query, URL: link, Title: title,
-			Class: ClassWebPage, Access: AccessListed, RetrievedAt: retrieved, Excerpt: title + "\n" + snippet})
+			Class: ClassWebPage, Access: AccessListed, RetrievedAt: retrieved, Excerpt: title + "\n" + snippet,
+			SearchProvider: searchProvider, ResultType: resultType})
 		hit["source_id"] = s.ID
 		added = append(added, s)
 	}

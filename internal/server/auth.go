@@ -121,7 +121,7 @@ func allowedAPI(role, method, path string) bool {
 	switch {
 	case isPlanRoute(method, path):
 		return true
-	case method == http.MethodGet && (path == "/api/search" || path == "/api/history" || path == "/api/financials" || path == "/api/providers" || path == "/api/provider/endpoints" || path == "/api/provider/research" || path == "/api/quote" || path == "/api/market/leaderboard" || isBacktestReadPath(path) || path == "/api/events" || path == "/api/world" || path == "/api/world/company" || path == "/api/sec/filings" || path == "/api/sec/section" || path == "/api/sec/facts" || path == "/api/ai/config" || path == "/api/ai/tools" || path == "/api/ai/personas"):
+	case method == http.MethodGet && (path == "/api/search" || path == "/api/history" || path == "/api/financials" || path == "/api/providers" || path == "/api/provider/endpoints" || path == "/api/provider/research" || path == "/api/quote" || path == "/api/market/leaderboard" || isBacktestReadPath(path) || path == "/api/events" || path == "/api/world" || path == "/api/world/company" || path == "/api/sec/filings" || path == "/api/sec/section" || path == "/api/sec/facts" || path == "/api/ai/config" || path == "/api/ai/tools" || path == "/api/ai/personas" || path == "/api/web-search/status"):
 		return true
 	case method == http.MethodPost && (path == "/api/ai/chat" || path == "/api/ai/team") || path == "/api/valuation/dcf":
 		return true
@@ -261,7 +261,7 @@ func (e *Engine) allowedUserAPI(r *http.Request, u identity.User) bool {
 		}
 		return e.authService.HasPermission(r.Context(), u.Role, permission)
 	}
-	if method == http.MethodGet && (path == "/api/search" || path == "/api/history" || path == "/api/financials" || path == "/api/providers" || path == "/api/provider/endpoints" || path == "/api/provider/research" || path == "/api/quote" || path == "/api/market/leaderboard" || isBacktestReadPath(path) || path == "/api/events" || path == "/api/sec/filings" || path == "/api/sec/section" || path == "/api/sec/facts" || path == "/api/ai/config" || path == "/api/ai/tools" || path == "/api/ai/personas" || path == "/api/world" || path == "/api/world/company") {
+	if method == http.MethodGet && (path == "/api/search" || path == "/api/history" || path == "/api/financials" || path == "/api/providers" || path == "/api/provider/endpoints" || path == "/api/provider/research" || path == "/api/quote" || path == "/api/market/leaderboard" || isBacktestReadPath(path) || path == "/api/events" || path == "/api/sec/filings" || path == "/api/sec/section" || path == "/api/sec/facts" || path == "/api/ai/config" || path == "/api/ai/tools" || path == "/api/ai/personas" || path == "/api/web-search/status" || path == "/api/world" || path == "/api/world/company") {
 		return e.authService.HasPermission(r.Context(), u.Role, "research.read")
 	}
 	if method == http.MethodPost && (path == "/api/ai/chat" || path == "/api/ai/team") {
