@@ -209,3 +209,23 @@ test('mobile and desktop financial Markdown evidence stays inside the Workspace 
   await editor.getByRole('tab', { name: 'Edit source' }).click();
   await expect(editor.getByLabel('Markdown source')).toHaveValue(source);
 });
+
+test('math source remains protected from Rich text on desktop and phone', async ({ page }, testInfo) => {
+  const original = ['# Financial formula', '', 'Revenue $3.07 bn.', '', '$$', '\\frac{3.07}{0.12-0.02}', '$$', ''].join('\n');
+  await mockWorkspace(page, { '/docs/finance.md': original });
+  await open(page, 'workspace');
+  await page.getByRole('button', { name: 'docs', exact: true }).first().click();
+  await page.getByRole('button', { name: /finance\.md/ }).click();
+  const editor = page.locator('fse-markdown-editor');
+  await expect(editor.getByLabel('Markdown source')).toHaveValue(original);
+  await expect(editor.getByRole('tab', { name: 'Rich text' })).toBeDisabled();
+  await expect(editor.getByRole('note')).toContainText('mathematical formulas');
+  await editor.getByRole('tab', { name: 'Preview' }).click();
+  await expect(editor.getByLabel('Rendered preview').locator('[role="math"]')).toHaveCount(1);
+  await testInfo.attach('protected-math-preview.png', {
+    body: await page.screenshot({ fullPage: true, animations: 'disabled' }), contentType: 'image/png',
+  });
+  await editor.getByRole('tab', { name: 'Edit source' }).click();
+  await expect(editor.getByLabel('Markdown source')).toHaveValue(original);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+});
