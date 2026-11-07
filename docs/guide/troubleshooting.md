@@ -36,3 +36,6 @@ last-reviewed: 2026-11-06
 **Why UTC?** All displayed times are in UTC so that dates mean the same thing everywhere.
 
 If a problem is not here, see [Help](help.md).
+
+
+Progress indicators use measured counts only. If the browser clock is unavailable or skewed, the interface does not present `NaN` seconds or incorrectly claim an operation stalled. Check task/run state before retrying actions with possible side effects.
