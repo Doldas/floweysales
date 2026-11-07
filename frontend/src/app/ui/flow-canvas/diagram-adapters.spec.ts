@@ -57,3 +57,9 @@ test('unknown node types fall back to the agent caption', () => {
   assert.equal(flowNodeTag('something_new'), '✦ AGENT');
   assert.equal(flowNodeTag('output'), '→ OUTPUT');
 });
+
+test('trigger diagrams use stable unique ids even when event labels repeat', () => {
+  const d = triggerDiagram([{ id: 10, event_key: 'same.key', payload_type: 'text' }, { id: 11, event_key: 'same.key', payload_type: 'number' }]);
+  assert.equal(new Set(d.nodes.map(n => n.id)).size, 4);
+  assert.deepEqual(d.edges.map(e => [e.from, e.to]), [['event:10', 'payload:10'], ['event:11', 'payload:11']]);
+});
