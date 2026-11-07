@@ -115,6 +115,7 @@ func (e *Engine) registerPortfolioAnalyticsRoutes() {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"analytics": a, "benchmark": portfolioBenchmark, "has_plan": a.Drift != nil,
 			"generated_at": time.Now().UTC().Format(time.RFC3339),
+			"provenance":   portfolioAnalyticsProvenance(e.parseProvider("").String(), time.Now().UTC()),
 		})
 	})
 }

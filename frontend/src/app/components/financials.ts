@@ -11,6 +11,7 @@ import {
 import { MarketService, describeHttpError } from '../services';
 import { AgentSession } from '../core/agent-session';
 import { SkeletonComponent } from '../ui/skeleton';
+import { SourceComponent } from '../ui/source';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import type { FinancialsResponse, ProviderId, QuarterlyFinancial } from '../models';
 
@@ -38,7 +39,7 @@ const DASH = '—';
 @Component({
   selector: 'fse-financials',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SkeletonComponent, ProgressStatusComponent],
+  imports: [SkeletonComponent, ProgressStatusComponent, SourceComponent],
   templateUrl: './financials.html',
   styleUrl: './financials.scss',
 })
