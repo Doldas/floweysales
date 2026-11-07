@@ -51,8 +51,10 @@ description, and updates [provenance-coverage.md](provenance-coverage.md). A reg
 "No supported market yet". Two tests guard this: no universe may sit in a region the check has not cleared, and every candidate
 suffix must be one the Leaderboard can read an exchange from.
 
-Not covered by the check, and still open for global ranking: comparing returns across currencies (no FX source), mixed
-accounting standards and fiscal calendars, and percentile comparison within versus across regions (Plan 4, WP3 steps 2 to 5).
+The Leaderboard now has a global scope that combines the reviewed lists, region/country/exchange/currency filters, and a choice between
+percentiles within each region and across all companies (Plan 4, WP3 steps 2 and 4). Still open for global ranking: converting returns
+across currencies (no FX source: returns stay in local currency and the page says so), per-company accounting standards, sector and
+liquidity filters, and an Asian and an African market, which need a maintainer to run this check with provider access.
 
 ## User-supplied index constituents (#258)
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { STALL_AFTER_MS, asyncPhase, elapsedSince, progressText, showSkeleton, stallHint, type AsyncInput } from './async-state.ts';
+import { progressFraction, STALL_AFTER_MS, asyncPhase, elapsedSince, progressText, showSkeleton, stallHint, type AsyncInput } from './async-state.ts';
 
 const base: AsyncInput = { loading: false, error: '', hasData: false, empty: false, elapsedMs: 0 };
 const at = (over: Partial<AsyncInput>): AsyncInput => ({ ...base, ...over });
@@ -50,4 +50,14 @@ test('a stall hint appears only after a long wait and names the way out', () => 
   assert.match(stallHint(STALL_AFTER_MS, true), /cancel/i);
   assert.doesNotMatch(stallHint(STALL_AFTER_MS, false), /cancel/i);
   assert.match(stallHint(STALL_AFTER_MS, false), /reload/i);
+});
+
+test('progress fraction refuses missing and invalid totals and clamps overshoot', () => {
+  assert.equal(progressFraction(null, 4), null);
+  assert.equal(progressFraction(1, 0), null);
+  assert.equal(progressFraction(-1, 10), null);
+  assert.equal(progressFraction(1, Number.NaN), null);
+  assert.equal(progressFraction(3, 4), 0.75);
+  assert.equal(progressFraction(8, 4), 1);
+  assert.equal(progressText('Fetching', 0, 0, 0), 'Fetching');
 });

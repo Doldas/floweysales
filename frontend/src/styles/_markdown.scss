@@ -63,6 +63,25 @@
   .md-code pre { margin: 0; padding: 9px 11px; overflow-x: auto; font-size: 0.8rem; line-height: 1.5; color: var(--fs-text-2); border: 0; background: none; }
   .md-code code { background: none; border: none; padding: 0; color: inherit; font-size: 1em; white-space: pre; }
 
+  // Shared accessible math rendering; stays inside chat, team, Workspace or flow panels.
+  .md-math { font-family: Georgia, 'Times New Roman', serif; font-variant-numeric: tabular-nums; color: var(--fs-text); }
+  .md-math-inline { display: inline; white-space: nowrap; }
+  .md-math-display { display: block; max-width: 100%; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; padding: 0.7em 0.5em; margin: 0.65em 0; border: 1px solid var(--fs-border); border-radius: 8px; background: var(--fs-surface-2); font-size: 1.05em; }
+  .md-math-display:focus-visible { outline: 2px solid var(--fs-accent); outline-offset: 2px; }
+  .md-frac { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; vertical-align: middle; line-height: 1.15; margin: 0 0.15em; }
+  .md-num { padding: 0.08em 0.18em 0.13em; border-bottom: 1px solid currentColor; }
+  .md-den { padding: 0.13em 0.18em 0.08em; }
+  .md-root { display: inline-flex; align-items: stretch; }
+  .md-root > span { border-top: 1px solid currentColor; padding: 0 0.1em; }
+  .md-math-text { font-family: var(--bs-body-font-family), sans-serif; }
+  .md-math-break { display: block; }
+  .md-math-error { color: var(--fs-neg); overflow-wrap: anywhere; white-space: pre-wrap; }
+  .md-table-wrap { width: 100%; min-width: 0; overscroll-behavior-inline: contain; scrollbar-width: thin; }
+  .md-code { min-width: 0; }
+  @media (max-width: 600px) {
+    .md-table-wrap::after { content: 'Swipe sideways to see more columns'; display: block; position: sticky; left: 0; width: fit-content; font-size: 0.72em; color: var(--fs-muted); padding: 2px 8px; }
+  }
+
   .md-table-wrap { overflow-x: auto; margin: 0.65em 0; border: 1px solid var(--fs-border); border-radius: 8px; max-width: 100%; -webkit-overflow-scrolling: touch; }
   table { border-collapse: collapse; width: 100%; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
   thead th { background: var(--fs-surface-3); color: var(--fs-text); font-weight: 600; text-align: left; padding: 6px 10px; white-space: nowrap; border-bottom: 1px solid var(--fs-border); }
