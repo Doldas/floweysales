@@ -237,7 +237,7 @@ import { SymbolSearchComponent } from '../shell/symbol-search';
 .page-search { flex: 0 1 380px; min-width: min(100%, 260px); }
 .panel { padding: 1rem 1.25rem; display: grid; gap: 0.8rem; min-width: 0; margin-bottom: 1rem; }
 h2 { font-size: 1rem; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; small { font-size: 0.75rem; font-weight: 400; color: var(--fs-muted); } }
-.cast { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.6rem; }
+.cast { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: 0.6rem; }
 .member { text-align: left; border: 1px solid var(--fs-border); background: var(--fs-surface); color: var(--fs-text); border-radius: 8px; padding: 0.6rem 0.75rem; display: grid; gap: 0.15rem; }
 .member small, .arch { color: var(--fs-muted); font-size: 0.78rem; }
 .member:hover:not(:disabled) { background: var(--fs-surface-3); }

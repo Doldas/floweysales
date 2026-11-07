@@ -9,6 +9,9 @@ last-reviewed: 2026-11-07
 
 ## November 2026 release
 
+**Phones and tablets**
+- Every page was checked on phone and tablet widths, in landscape and with text enlarged to 200%. Pages no longer scroll sideways, small buttons and links are at least 24 pixels, and content respects notches and the home indicator. See [Responsive UI](../responsive-ui.md).
+
 **Agents**
 - Flow agent nodes keep their sources with the report. A Markdown report links each `[S1]` marker to its source and ends with the list of the sources it cites (title, address, filing number, publication and retrieval time in UTC, and whether the agent read the page or only saw a search result). A JSON node can now run in an evidence mode: the citation markers are moved out of the data into a separate list of citations kept with the step, so the declared JSON contract is unchanged. See [Flows](flows.md).
 - SEC filing lists and SEC facts, and web search hits that carry a publication date, now count as sources; a recency limit can accept a dated search hit. Team runs and saved tasks can be exported as Markdown or JSON with their sources and findings.

@@ -88,7 +88,7 @@
 
 // ------------------------------------------------------------ composer
 
-.composer { flex: 0 0 auto; padding: 0.75rem 1rem 0.9rem; border-top: 1px solid var(--fs-border); background: var(--fs-surface); }
+.composer { flex: 0 0 auto; padding: 0.75rem max(1rem, env(safe-area-inset-right)) max(0.9rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)); border-top: 1px solid var(--fs-border); background: var(--fs-surface); }
 .is-page .composer { padding: 1rem clamp(1rem, 4vw, 3rem) 1.25rem; > * { max-width: 860px; margin-inline: auto; } }
 .context-row { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.5rem; }
 .ctx-chip { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.1rem 0.5rem; border-radius: 999px; background: var(--fs-surface-3); color: var(--fs-muted); font-size: 0.72rem; font-weight: 500; }

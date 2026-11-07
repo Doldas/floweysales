@@ -198,7 +198,7 @@ import { NotifyService } from '../core/notify.service';
 .result-title { font-size: 1.25rem; margin: 0.25rem 0 0; }
 .block-title { font-size: 1rem; margin: 0; }
 .block-text p { margin: 0 0 0.6rem; white-space: pre-line; max-width: 75ch; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.75rem; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: 0.75rem; }
 .tile { border: 1px solid var(--fs-border); border-radius: 0.6rem; padding: 0.7rem 0.85rem; display: grid; gap: 0.15rem; }
 .tile-label { font-size: 0.75rem; color: var(--fs-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .tile-value { font-size: 1.3rem; font-weight: 650; }
