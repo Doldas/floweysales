@@ -240,7 +240,12 @@ export function renderMarkdown(source: string, options: MarkdownOptions = {}): s
     if (mathOpen === '\\[' || mathOpen === '$$' || mathOpen === '[') {
       const close = mathOpen === '$$' ? '$$' : mathOpen === '[' ? ']' : '\\]';
       let j = i + 1;
-      while (j < lines.length && j - i <= 30 && lines[j].trim() !== close) j++;
+      while (j < lines.length && j - i <= 30 && lines[j].trim() !== close) {
+        // An unclosed math block must never swallow a following code fence
+        // or an unrelated paragraph (including a financial price).
+        if (FENCE.test(lines[j]) || (mathOpen === '$' && lines[j].trim() === '')) break;
+        j++;
+      }
       const formula = lines.slice(i + 1, j).join('\n').trim();
       if (j < lines.length && lines[j].trim() === close && formula.length > 0 && formula.length <= 2000 &&
         (mathOpen !== '[' || /\\(?:frac|text|times|sum|sqrt|mathrm)/.test(formula))) {
