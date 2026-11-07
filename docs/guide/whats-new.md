@@ -9,6 +9,9 @@ last-reviewed: 2026-11-06
 
 ## November 2026 release
 
+**Workspace**
+- The Markets chart, its insights and the leaderboard ranking are panes you can fold, resize (mouse or keyboard) and open full screen. Folding keeps the source, bar size, currency, newest-bar time and warnings in view, and your choices are saved in this browser. A compact density setting in the top bar fits more on a screen without dropping any column. Long rankings draw only the rows in view. See [Markets](markets.md) and [Workspace UX patterns](../workspace-ux.md).
+
 **Agents**
 - Agent answers get a claim check: each cited sentence is compared with the cited text for company, metric, period, unit and direction, and shown as supported, contradicted, not proven or not checked, with the source passage under **Why is this claim supported?** See [Agents, teams and evidence](agents.md).
 
