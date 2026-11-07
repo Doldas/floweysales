@@ -57,3 +57,8 @@ Under **API integrations → Web search** an administrator can set up several se
 Each provider has an on/off switch, a **Test connection** button and a position in the order (arrows). Choose **Automatic** to try providers in order, with a limited number of fallbacks, or **Manual** to always use one. A provider that is rate limited or rejects its key is paused for a while. **Recent decisions** shows which provider answered and which were skipped and why (never the query). Testing a paid provider asks first, because the test is billed. The page shows searches and Gemini tokens separately, with an estimated cost.
 
 A search result is only a title and a snippet. It is not a page the agent has read, and not a verified fact. In the sources list under an answer, such a result says which provider found it and that only a snippet was seen; a page Gemini cited says it was cited by Gemini and not opened. If no provider is set up, the agent says web search is unavailable and users are told to ask an administrator. Users never see keys or addresses.
+
+
+### Search usage integrity
+
+Web Search Settings shows provider-reported counters and **estimated** USD costs, not invoices. Invalid or negative values display as unknown rather than being represented as free usage. Search calls and LLM token usage are separate, and the actual provider invoice is authoritative.
