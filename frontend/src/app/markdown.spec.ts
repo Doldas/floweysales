@@ -110,3 +110,32 @@ test('rich output has plain code blocks and no copy buttons', () => {
   assert.match(html, /<pre data-lang="py"><code>print\(1\)<\/code><\/pre>/);
   assert.doesNotMatch(html, /button/);
 });
+
+test('DCF display math renders a readable bounded fraction without losing values', () => {
+  const tex = String.raw\`\\[ 
+\\text{TV} = \\frac{3.07\\times(1+0.02)}{0.12-0.02}
+\\]\`;
+  const html = renderMarkdown(tex);
+  assert.match(html, /md-math-display/);
+  assert.match(html, /md-frac/);
+  assert.match(html, /3\.07/);
+  assert.match(html, /0\.12-0\.02/);
+  assert.doesNotMatch(html, /<script|<iframe/i);
+});
+
+test('inline math does not consume money or code samples', () => {
+  const html = renderMarkdown(String.raw\`Price $2.78 bn and $17.8 bn; formula \\(x^2 + y_1\\). \` + '\`' + String.raw\`\\frac{x}{y}\` + '\`');
+  assert.match(html, /\$2\.78 bn/);
+  assert.match(html, /\$17\.8 bn/);
+  assert.match(html, /<sup>2<\/sup>/);
+  assert.match(html, /<sub>1<\/sub>/);
+  assert.match(html, /<code>\\frac\{x\}\{y\}<\/code>/);
+});
+
+test('fenced TeX and malformed commands remain safe literal source', () => {
+  const html = renderMarkdown(String.raw\`\`\`\` + 'tex\n' + String.raw\`\\frac{x}{y}\` + '\n' + '\`\`\`' + '\n\n' + String.raw\`\\(\\unknown{<img src=x onerror=alert(1)>}\\)\`);
+  assert.match(html, /<span class="md-lang">tex<\/span>/);
+  assert.match(html, /md-math-error/);
+  assert.doesNotMatch(html, /<img/);
+  assert.doesNotMatch(html, /onerror=/);
+});
