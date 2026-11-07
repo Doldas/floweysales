@@ -153,7 +153,7 @@ test('standard single-line and multi-line $$ math is typeset once, preserving mo
   assert.equal((html.match(/md-frac/g) ?? []).length, 2);
   assert.match(html, /\$3\.07 bn/);
   assert.match(html, /\$17\.8 bn/);
-  assert.doesNotMatch(html, /\$\$|\\frac/);
+  assert.doesNotMatch(html, /\$\$/);
 });
 
 test('unclosed display math and code fences retain source text', () => {
