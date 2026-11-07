@@ -476,7 +476,7 @@ export interface BacktestMetrics {
 /** One day of the replayed curves; both start at 100. */
 export interface BacktestPoint { date: string; equity: number; benchmark?: number }
 
-export interface BacktestRebalance { date: string; holdings: string[]; turnover_pct: number; fundamentals_coverage_pct: number }
+export interface BacktestRebalance { date: string; holdings: string[]; turnover_pct: number; fundamentals_coverage_pct: number; /** Share of the wanted order value the liquidity cap left unfilled. */ unfilled_pct?: number }
 
 /** The answer of GET /api/market/backtest. */
 export interface BacktestResult {
@@ -499,6 +499,8 @@ export interface BacktestResult {
   warnings: string[];
   /** How fills were assumed, from the settings the run used; entries with modeled=false are not simulated at all. */
   execution_assumptions?: BacktestAssumption[];
+  /** What the order-size cap and impact charge did; absent unless a portfolio size was given. */
+  liquidity?: BacktestLiquidity;
   /** What the benchmark is and whether its currency matches the symbols; absent without a benchmark. */
   benchmark_info?: BacktestBenchmarkInfo;
   /** Present when the universe is an index the user supplied. */
@@ -521,6 +523,10 @@ export interface BacktestResult {
   regime_unlabeled_days?: number;
   regime_note?: string;
   walk_forward_note?: string;
+}
+export interface BacktestLiquidity {
+  orders: number; partial_orders: number; unknown_volume_orders: number; max_participation_pct: number;
+  unfilled_pct: number; impact_drag_bps: number; spread_drag_bps: number;
 }
 export interface BacktestAssumption { name: string; value: string; modeled: boolean }
 export interface BacktestBenchmarkInfo {
@@ -598,6 +604,12 @@ export interface BacktestParams {
   slippage?: number;
   /** Trading days between the ranking and the fill (0 to 5); absent or 0 fills at the same close. */
   delay?: number;
+  /** Quoted bid-ask spread in basis points; half is paid per side. */
+  spread?: number;
+  /** Portfolio size in the price currency. When set, orders are sized against traded volume; absent or 0 means liquidity is not modeled. */
+  notional?: number;
+  /** Market impact coefficient in basis points; used only with a portfolio size. */
+  impact?: number;
   /** A preset length, or 0 when from/to are used. */
   years: 3 | 5 | 10 | 0;
   from?: string;
@@ -762,11 +774,15 @@ export interface StrategyTrade {
 export interface StrategyRunMetrics { cagr_pct: number; volatility_pct: number; sharpe: number; sortino: number; max_drawdown_pct: number; calmar: number }
 export interface StrategyRunResult {
   symbol: string; provider: string; range: string; generated_at: string; strategy: StrategyDef;
-  config: { cost_bps: number; slippage_bps?: number }; parameters?: FitParameter[]; base_price: number; from: string; to: string; data_start?: string; data_end?: string; notice?: string;
+  config: { cost_bps: number; slippage_bps?: number; spread_bps?: number }; parameters?: FitParameter[]; base_price: number; from: string; to: string; data_start?: string; data_end?: string; notice?: string;
   metrics: StrategyRunMetrics; buy_hold: StrategyRunMetrics; total_return_pct: number; buy_hold_return_pct: number;
   stats: { trades: number; win_rate_pct: number; avg_win_pct: number; avg_loss_pct: number; profit_factor?: number; expectancy_pct: number; avg_r?: number; avg_bars: number; exposure_pct: number };
   curve: { date: string; close: number; equity: number; in_position?: boolean }[];
   trades: StrategyTrade[]; warnings: string[];
+  /** Named market episodes the tested period fully covers, and the ones it does not reach. */
+  stress?: BacktestStress[]; stress_not_covered?: string[]; stress_note?: string;
+  /** Every tested day in one regime of the instrument's own trend and volatility; unlabeled days are counted. */
+  regimes?: BacktestRegime[]; regime_unlabeled_days?: number; regime_note?: string;
   walk_forward?: { from: string; to: string; trades: number; win_rate_pct: number; return_pct: number; buy_hold_return_pct: number; expectancy_pct: number }[];
   latest: { date: string; close: number; in_position: boolean; entry_signal: boolean; exit_signal: boolean; has_leg: boolean;
     leg_low?: number; leg_high?: number; leg_low_date?: string; leg_high_date?: string; levels?: { label: string; ratio: number; price: number }[] };
@@ -791,7 +807,7 @@ export interface StrategyMonteCarloResult {
   };
   notes: string[];
 }
-export interface StrategyRunRequest { strategy_id?: string; definition?: StrategyDef; symbol: string; provider?: string; range?: '1Y' | '3Y' | '5Y' | '10Y' | 'YTD' | 'MAX'; from?: string; to?: string; cost_bps: number; slippage_bps?: number }
+export interface StrategyRunRequest { strategy_id?: string; definition?: StrategyDef; symbol: string; provider?: string; range?: '1Y' | '3Y' | '5Y' | '10Y' | 'YTD' | 'MAX'; from?: string; to?: string; cost_bps: number; slippage_bps?: number; spread_bps?: number }
 
 /** A number of a strategy that a walk-forward fit can change. */
 export interface FitParameter { path: string; label: string; value: number; integer: boolean; min: number; max: number }

@@ -114,6 +114,8 @@ type strategyBacktestRequest struct {
 	CostBps    *float64           `json:"cost_bps"`
 	// SlippageBps is the per-side gap between the rule price and the fill, on top of the cost. Default 0.
 	SlippageBps *float64 `json:"slippage_bps"`
+	// SpreadBps is the quoted bid-ask spread as a whole; half is paid per side. Default 0.
+	SpreadBps *float64 `json:"spread_bps"`
 }
 
 type strategyBacktestResponse struct {
@@ -333,6 +335,14 @@ func strategyCosts(req strategyBacktestRequest) (cost, slippage float64) {
 	return cost, slippage
 }
 
+// strategySpread returns the bid-ask spread of a request, 0 when none was given.
+func strategySpread(req strategyBacktestRequest) float64 {
+	if req.SpreadBps != nil {
+		return *req.SpreadBps
+	}
+	return 0
+}
+
 // resolveStrategy finds the rules a request asks for: an unsaved definition, a saved strategy or a preset.
 func (e *Engine) resolveStrategy(ctx context.Context, u identity.User, req strategyBacktestRequest) (strategy.Strategy, int, error) {
 	var zero strategy.Strategy
@@ -397,7 +407,7 @@ func (e *Engine) runStrategyBacktest(ctx context.Context, u identity.User, req s
 	if err != nil {
 		return zero, providerErrorStatus(err), err
 	}
-	result, err := strategy.Run(def, series.Points, strategy.Config{CostBps: cost, SlippageBps: slippage, From: from, To: to})
+	result, err := strategy.Run(def, series.Points, strategy.Config{CostBps: cost, SlippageBps: slippage, SpreadBps: strategySpread(req), From: from, To: to})
 	if err != nil {
 		return zero, http.StatusUnprocessableEntity, err
 	}

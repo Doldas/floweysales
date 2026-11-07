@@ -47,6 +47,9 @@ const (
 	WarnBenchCurrency = "benchmark_currency_differs"
 	// Always: what the replay does not model about real execution.
 	WarnExecutionGaps = "execution_not_modeled"
+	// Added when the liquidity cap left part of an order unfilled, or a symbol had no volume to size against.
+	WarnPartialFills  = "partial_fills"
+	WarnUnknownVolume = "volume_unknown"
 )
 
 // WarningTexts explains each warning id in plain words.
@@ -63,7 +66,9 @@ var WarningTexts = map[string]string{
 	WarnSameCloseFill:  "The ranking is computed from a day's closing prices and the trades fill at that same close, which no one can do exactly. Set a fill delay to fill at a later close instead.",
 	WarnMixedCurrency:  "The symbols trade in different currencies. Returns are in each local currency and are not converted, so the portfolio return mixes currencies.",
 	WarnBenchCurrency:  "The benchmark is quoted in a different currency than the symbols. The comparison ignores exchange-rate moves, so the excess return is not like for like.",
-	WarnExecutionGaps:  "Not modeled: bid-ask spread, order size against traded volume, partial fills, market impact, taxes and dividends. Cost and slippage are flat per-side rates.",
+	WarnExecutionGaps:  "Not modeled: taxes and dividends, and, unless set in the run, bid-ask spread, order size against traded volume, partial fills and market impact. Cost and slippage are flat per-side rates.",
+	WarnPartialFills:   "Some orders were larger than the liquidity cap allows and filled only in part. The unfilled value stayed in cash (or in the old holding) until the next rebalance.",
+	WarnUnknownVolume:  "Some symbols had no traded volume in the data, so their orders could not be sized against liquidity and were filled in full.",
 }
 
 type Config struct {
@@ -77,6 +82,38 @@ type Config struct {
 	// DelayDays is the number of trading days between the day a ranking is computed and the close it
 	// fills at (0 to MaxDelayDays; default 0: the same close). A delay shows how much a result leans on instant fills.
 	DelayDays int
+	// SpreadBps is the quoted bid-ask spread as a whole; half of it is paid on each side of a trade, on top of
+	// CostBps and SlippageBps. Default 0: no spread.
+	SpreadBps float64
+	// Notional is the portfolio value (in the price currency) the 100 of the equity curve stands for. When it is
+	// set, every order is sized against the symbol's average daily traded value over the 20 bars before the fill,
+	// capped at MaxParticipationPct of it (default 10), and market impact is charged. 0 means liquidity is not modeled.
+	Notional            float64
+	MaxParticipationPct float64
+	// ImpactBps scales the market impact of an order: ImpactBps times the square root of the order's share of the
+	// average daily traded value, charged per side. 0 means no impact. Used only when Notional is set.
+	ImpactBps float64
+}
+
+// Limits of the execution settings.
+const (
+	MaxSpreadBps         = 200
+	MaxImpactBps         = 500
+	MaxNotional          = 1e12
+	DefaultParticipation = 10.0
+	advBars              = 20
+	minAdvBars           = 5
+)
+
+// Liquidity summarizes what the liquidity cap did over the run; nil unless Notional was set.
+type Liquidity struct {
+	Orders           int     `json:"orders"`
+	PartialOrders    int     `json:"partial_orders"`
+	UnknownVolume    int     `json:"unknown_volume_orders"`
+	MaxParticipation float64 `json:"max_participation_pct"` // the largest filled order against its average daily traded value
+	UnfilledPct      float64 `json:"unfilled_pct"`          // share of the wanted order value that did not fill
+	ImpactDragBps    float64 `json:"impact_drag_bps"`       // equity lost to impact over the run, in basis points of equity at the fills
+	SpreadDragBps    float64 `json:"spread_drag_bps"`       // equity lost to the spread over the run, in basis points of equity at the fills
 }
 
 // MaxDelayDays is the longest fill delay accepted.
@@ -103,11 +140,33 @@ func ExecutionAssumptions(cfg Config) []Assumption {
 		{"Slippage", fmt.Sprintf("%g bps per side on traded value", cfg.SlippageBps), cfg.SlippageBps > 0},
 		{"Weights", fmt.Sprintf("equal weight, top %d, rebalanced every %d trading days", cfg.TopN, cfg.RebalanceDays), true},
 		{"Report timing", fmt.Sprintf("a quarter counts %d days after its period end", cfg.ReportLagDays), true},
-		{"Bid-ask spread", "not modeled beyond the flat slippage", false},
-		{"Liquidity and order size", "not modeled: any size fills in full at the price", false},
-		{"Partial fills and market impact", "not modeled", false},
+		spreadAssumption(cfg),
+		liquidityAssumption(cfg),
+		partialAssumption(cfg),
+		impactAssumption(cfg),
 		{"Dividends and taxes", "not modeled: prices are used as given", false},
 	}
+}
+
+func spreadAssumption(cfg Config) Assumption {
+	if cfg.SpreadBps > 0 {
+		return Assumption{"Bid-ask spread", fmt.Sprintf("%g bps quoted, half (%g bps) paid per side", cfg.SpreadBps, cfg.SpreadBps/2), true}
+	}
+	return Assumption{"Bid-ask spread", "not modeled beyond the flat slippage", false}
+}
+
+func liquidityAssumption(cfg Config) Assumption {
+	if cfg.Notional > 0 {
+		return Assumption{"Liquidity and order size", fmt.Sprintf("a portfolio of %g; an order fills at most %g%% of the symbol's average traded value over the 20 bars before the fill, the rest stays unfilled", cfg.Notional, cfg.MaxParticipationPct), true}
+	}
+	return Assumption{"Liquidity and order size", "not modeled: any size fills in full at the price", false}
+}
+
+func impactAssumption(cfg Config) Assumption {
+	if cfg.Notional > 0 && cfg.ImpactBps > 0 {
+		return Assumption{"Market impact", fmt.Sprintf("%g bps times the square root of the order's share of average daily traded value, per side", cfg.ImpactBps), true}
+	}
+	return Assumption{"Market impact", "not modeled", false}
 }
 
 // Scorer ranks the symbols as of a date from point-in-time data and returns
@@ -122,6 +181,8 @@ type Rebalance struct {
 	Holdings   []string `json:"holdings"`
 	Turnover   float64  `json:"turnover_pct"`
 	FundCovPct float64  `json:"fundamentals_coverage_pct"`
+	// UnfilledPct is the share of the wanted order value the liquidity cap left unfilled; 0 unless liquidity is modeled.
+	UnfilledPct float64 `json:"unfilled_pct,omitempty"`
 }
 
 type Point struct {
@@ -151,6 +212,8 @@ type Result struct {
 	Warnings   []string    `json:"warnings"`
 	// Execution states how fills were assumed, from the configuration used.
 	Execution []Assumption `json:"execution_assumptions"`
+	// Liquidity reports what the order-size cap and the impact charge did; absent when liquidity is not modeled.
+	Liquidity *Liquidity `json:"liquidity,omitempty"`
 	// Segments are consecutive parts of the period measured on their own; empty when the period is too short.
 	Segments       []Segment `json:"segments,omitempty"`
 	SegmentSummary string    `json:"segment_summary,omitempty"`
@@ -251,6 +314,21 @@ func (c Config) withDefaults() Config {
 	if c.DelayDays < 0 {
 		c.DelayDays = 0
 	}
+	if c.SpreadBps < 0 {
+		c.SpreadBps = 0
+	}
+	if c.ImpactBps < 0 {
+		c.ImpactBps = 0
+	}
+	if c.Notional < 0 {
+		c.Notional = 0
+	}
+	if c.Notional > 0 && c.MaxParticipationPct <= 0 {
+		c.MaxParticipationPct = DefaultParticipation
+	}
+	if c.Notional == 0 {
+		c.MaxParticipationPct, c.ImpactBps = 0, 0
+	}
 	return c
 }
 
@@ -264,6 +342,9 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 	}
 	if score == nil {
 		return Result{}, errors.New("no scorer")
+	}
+	if cfg.SpreadBps > MaxSpreadBps || cfg.ImpactBps > MaxImpactBps || cfg.Notional > MaxNotional || cfg.MaxParticipationPct > 100 {
+		return Result{}, errors.New("execution settings out of range")
 	}
 	if cfg.DelayDays > MaxDelayDays {
 		return Result{}, fmt.Errorf("fill delay must be from 0 to %d trading days", MaxDelayDays)
@@ -348,6 +429,9 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 	rebalIdx := []int{} // curve index of each rebalance
 	curveEquity := make([]float64, 0, len(cal)-first)
 	turnoverSum, coverageSum := 0.0, 0.0
+	cash := 0.0 // share of equity not invested: sells that bought nothing and orders the liquidity cap left unfilled
+	liq := &Liquidity{}
+	var wantedSum, unfilledSum, impactSum, spreadSum float64
 	var pendingRank []string
 	pendingCoverage, pendingAt := 0.0, -1
 	for i := first; i < len(cal); i++ {
@@ -362,6 +446,7 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 				weights[sym] = w * (p[i] / p[i-1]) / (1 + portfolio)
 			}
 			equity *= 1 + portfolio
+			cash /= 1 + portfolio
 			if benchTable != nil {
 				benchEquity *= benchTable.px[i] / benchTable.px[i-1]
 			}
@@ -395,8 +480,26 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 			for _, sym := range held {
 				next[sym] = 1 / float64(len(held))
 			}
-			traded := 0.0
-			if len(equityAt) == 0 {
+			traded, unfilledPct := 0.0, 0.0
+			var impactCost, spreadCost float64 // fractions of equity
+			if cfg.Notional > 0 && len(held) > 0 {
+				var ex fillResult
+				next, cash, ex = fillWithLiquidity(cfg, weights, next, equity, func(sym string) float64 {
+					return advAt(bars[sym], tables[sym].bars[i])
+				})
+				traded, impactCost, spreadCost = ex.traded, ex.impactCost, ex.spreadCost
+				liq.Orders += ex.orders
+				liq.PartialOrders += ex.partial
+				liq.UnknownVolume += ex.unknown
+				liq.MaxParticipation = math.Max(liq.MaxParticipation, ex.maxPart)
+				wantedSum += ex.wanted
+				unfilledSum += ex.unfilled
+				if ex.wanted > 0 {
+					unfilledPct = round2(ex.unfilled / ex.wanted * 100)
+				}
+				impactSum += impactCost
+				spreadSum += spreadCost
+			} else if len(equityAt) == 0 {
 				traded = 1 // the first rebalance buys in from cash
 			} else {
 				for sym, w := range next {
@@ -411,7 +514,11 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 			if len(held) == 0 {
 				traded = 0
 			}
-			equity *= 1 - traded*(cfg.CostBps+cfg.SlippageBps)/10000
+			if cfg.Notional > 0 && len(held) > 0 {
+				equity *= 1 - traded*(cfg.CostBps+cfg.SlippageBps)/10000 - impactCost - spreadCost
+			} else {
+				equity *= 1 - traded*(cfg.CostBps+cfg.SlippageBps+cfg.SpreadBps/2)/10000
+			}
 			weights = next
 			turnover := round2(traded / 2 * 100)
 			if len(equityAt) == 0 {
@@ -422,7 +529,7 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 			coverageSum += coverage
 			sorted := append([]string(nil), held...)
 			sort.Strings(sorted)
-			rebalances = append(rebalances, Rebalance{Date: cal[i].Format(dateLayout), Holdings: sorted, Turnover: turnover, FundCovPct: round2(coverage)})
+			rebalances = append(rebalances, Rebalance{Date: cal[i].Format(dateLayout), Holdings: sorted, Turnover: turnover, FundCovPct: round2(coverage), UnfilledPct: unfilledPct})
 			equityAt = append(equityAt, equity)
 			rebalIdx = append(rebalIdx, i-first)
 			benchAt = append(benchAt, benchEquity)
@@ -488,9 +595,24 @@ func Run(cfg Config, series map[string]market.HistorySeries,
 		warnings = append(warnings, WarnSameCloseFill)
 	}
 	warnings = append(warnings, WarnExecutionGaps)
+	if cfg.Notional > 0 {
+		if liq.PartialOrders > 0 {
+			warnings = append(warnings, WarnPartialFills)
+		}
+		if liq.UnknownVolume > 0 {
+			warnings = append(warnings, WarnUnknownVolume)
+		}
+	}
 	warnings = append(warnings, countWarnings(trades, conc)...)
 	res := Result{Config: cfg, Metrics: metrics, Curve: thin(curve, maxCurvePoints), Rebalances: rebalances, Warnings: warnings, Execution: ExecutionAssumptions(cfg),
 		Trades: trades, Concentration: conc, StressNote: StressNote, RegimeNote: RegimeNote, WalkForwardNote: WalkForwardNote}
+	if cfg.Notional > 0 {
+		if wantedSum > 0 {
+			liq.UnfilledPct = round2(unfilledSum / wantedSum * 100)
+		}
+		liq.ImpactDragBps, liq.SpreadDragBps = round2(impactSum*10000), round2(spreadSum*10000)
+		res.Liquidity = liq
+	}
 	res.DailyReturns = dailyReturns(curveEquity)
 	dates := make([]string, len(curve))
 	for i, p := range curve {
@@ -585,3 +707,10 @@ func metricsFromCurve(eq []float64) Metrics {
 // MetricsFromCurve computes the return and risk figures of a daily equity
 // curve, for engines that build their own curve.
 func MetricsFromCurve(equity []float64) Metrics { return metricsFromCurve(equity) }
+
+func partialAssumption(cfg Config) Assumption {
+	if cfg.Notional > 0 {
+		return Assumption{"Partial fills", "an order above the cap fills in part; the rest is not carried to the next rebalance", true}
+	}
+	return Assumption{"Partial fills", "not modeled", false}
+}

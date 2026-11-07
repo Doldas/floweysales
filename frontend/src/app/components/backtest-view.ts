@@ -2,7 +2,7 @@
  * Display helpers for the strategy backtest panel. Pure functions so they run
  * under node --test; the replay itself lives in the server (internal/backtest).
  */
-import type { BacktestAssumption, BacktestBenchmarkInfo, BacktestParams, BacktestMetrics, BacktestPoint, BacktestRegime, BacktestResult, BacktestSegment, BacktestStress, BatchCell, BatchSpread, BatchSummary, MonteCarloResult, MonteCarloDist, SensitivityResult, SensitivityVariant } from '../models';
+import type { BacktestAssumption, BacktestBenchmarkInfo, BacktestLiquidity, BacktestParams, BacktestMetrics, BacktestPoint, BacktestRegime, BacktestResult, BacktestSegment, BacktestStress, BatchCell, BatchSpread, BatchSummary, MonteCarloResult, MonteCarloDist, SensitivityResult, SensitivityVariant } from '../models';
 
 export type Tone = 'pos' | 'neg' | 'mid';
 
@@ -18,7 +18,9 @@ export const WARNING_TEXTS: Record<string, string> = {
   same_close_fill: "The ranking is computed from a day's closing prices and the trades fill at that same close, which no one can do exactly. Set a fill delay to fill at a later close instead.",
   mixed_currencies: 'The symbols trade in different currencies. Returns are in each local currency and are not converted, so the portfolio return mixes currencies.',
   benchmark_currency_differs: 'The benchmark is quoted in a different currency than the symbols. The comparison ignores exchange-rate moves, so the excess return is not like for like.',
-  execution_not_modeled: 'Not modeled: bid-ask spread, order size against traded volume, partial fills, market impact, taxes and dividends. Cost and slippage are flat per-side rates.',
+  execution_not_modeled: 'Not modeled: taxes and dividends, and, unless set in the run, bid-ask spread, order size against traded volume, partial fills and market impact. Cost and slippage are flat per-side rates.',
+  partial_fills: 'Some orders were larger than the liquidity cap allows and filled only in part. The unfilled value stayed in cash (or in the old holding) until the next rebalance.',
+  volume_unknown: 'Some symbols had no traded volume in the data, so their orders could not be sized against liquidity and were filled in full.',
   few_periods_drive_result: 'The total return is zero or negative when the three best rebalance periods are left out, so the result leans on a few periods.',
 };
 
@@ -185,21 +187,32 @@ export function sensitivityHeadline(r: Pick<SensitivityResult, 'summary'>): stri
   return lines;
 }
 
+/** The execution settings that are set; a zero or absent one is left out so the server default (not modeled) applies. */
+export function executionParams(p: { slippage?: number; delay?: number; spread?: number; notional?: number; impact?: number }): Record<string, string> {
+  const params: Record<string, string> = {};
+  if (p.slippage) params['slippage_bps'] = String(p.slippage);
+  if (p.delay) params['delay_days'] = String(p.delay);
+  if (p.spread) params['spread_bps'] = String(p.spread);
+  if (p.notional) {
+    params['notional'] = String(p.notional);
+    if (p.impact) params['impact_bps'] = String(p.impact);
+  }
+  return params;
+}
+
 /** Query parameters of a single backtest; a custom range replaces the preset length. */
 export function singleParams(p: BacktestParams): Record<string, string> {
   const params: Record<string, string> = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance };
-  if (p.slippage) params['slippage_bps'] = String(p.slippage);
-  if (p.delay) params['delay_days'] = String(p.delay);
+  Object.assign(params, executionParams(p));
   if (p.from) { params['from'] = p.from; if (p.to) params['to'] = p.to; } else params['years'] = String(p.years || 5);
   if (p.symbols?.length) params['symbols'] = p.symbols.join(',');
   else params['universe'] = p.universe;
   return params;
 }
 
-export function batchParams(p: { universes: string[]; periods: string[]; strategy: string; top: number; rebalance: string; slippage?: number; delay?: number }): Record<string, string> {
+export function batchParams(p: { universes: string[]; periods: string[]; strategy: string; top: number; rebalance: string; slippage?: number; delay?: number; spread?: number; notional?: number; impact?: number }): Record<string, string> {
   const params: Record<string, string> = { strategy: p.strategy, top: String(p.top), rebalance: p.rebalance, universes: p.universes.join(','), periods: p.periods.join(',') };
-  if (p.slippage) params['slippage_bps'] = String(p.slippage);
-  if (p.delay) params['delay_days'] = String(p.delay);
+  Object.assign(params, executionParams(p));
   return params;
 }
 
@@ -294,6 +307,22 @@ export function benchmarkLines(info: BacktestBenchmarkInfo | undefined): string[
   else if (info.currency_comparable) lines.push('Same currency as the symbols.');
   return lines;
 }
+
+/** Sentences that say what the liquidity cap and the impact charge did; none when liquidity was not modeled. */
+export function liquidityLines(l: BacktestLiquidity | undefined): string[] {
+  if (!l) return [];
+  const lines = [`${l.orders} orders sized against traded volume; the largest took ${l.max_participation_pct.toFixed(1)}% of a symbol's average daily traded value.`];
+  if (l.partial_orders) lines.push(`${l.partial_orders} orders filled only in part: ${l.unfilled_pct.toFixed(1)}% of the wanted order value did not fill.`);
+  else lines.push('Every order with a volume estimate filled in full.');
+  if (l.unknown_volume_orders) lines.push(`${l.unknown_volume_orders} orders had no volume to size against and filled in full.`);
+  lines.push(`Spread cost ${l.spread_drag_bps.toFixed(1)} bps and market impact ${l.impact_drag_bps.toFixed(1)} bps of equity over the run.`);
+  return lines;
+}
+
+/** Portfolio sizes offered, in the price currency, and the spreads and impact coefficients in basis points. */
+export const SPREAD_OPTIONS = [0, 10, 30] as const;
+export const NOTIONAL_OPTIONS = [0, 100_000, 1_000_000, 10_000_000] as const;
+export const IMPACT_OPTIONS = [0, 50, 100] as const;
 
 /** Fill delay choices, in trading days. */
 export const DELAY_OPTIONS = [0, 1, 2] as const;

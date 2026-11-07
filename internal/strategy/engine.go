@@ -34,7 +34,7 @@ const (
 var WarningTexts = map[string]string{
 	WarnFewTrades:     "Fewer than 30 trades: the win rate and averages are too noisy to say whether the rules have an edge.",
 	WarnOneInstrument: "One instrument over one stretch of history. The same rules can behave very differently on other instruments or in other years.",
-	WarnFillRules:     "Signals are acted on at the next open. When a bar touches both stop and target the stop is assumed to hit first. Orders always fill in full, with no spread, queue or market impact beyond the slippage setting.",
+	WarnFillRules:     "Signals are acted on at the next open. When a bar touches both stop and target the stop is assumed to hit first. Orders always fill in full, with no spread, queue or market impact beyond the slippage and spread settings.",
 	WarnNoSlippage:    "Slippage is zero: every fill is assumed at the exact open, stop or target price. A stop in a fast market usually fills worse, so treat the result as an upper bound.",
 	WarnNoDividends:   "Prices are used as given, without dividends, and a short position pays no borrowing cost.",
 	WarnOpenTrade:     "A trade was still open at the last bar and is valued at that close.",
@@ -47,6 +47,9 @@ type Config struct {
 	// SlippageBps is the gap between the price the rules assume and the price of the fill, per side, always
 	// against the trade (a buy fills higher, a sell lower). It is charged on top of CostBps. Default 0.
 	SlippageBps float64 `json:"slippage_bps"`
+	// SpreadBps is the quoted bid-ask spread as a whole: half of it is added to the slippage on each side of a
+	// trade, always against the trade. Default 0.
+	SpreadBps float64 `json:"spread_bps"`
 	// From and To (UTC) bound the tested period. Bars before From still warm up the
 	// indicators, but no trade is opened before From; bars after To are ignored.
 	From, To time.Time `json:"-"`
@@ -128,7 +131,16 @@ type Result struct {
 	Trades     []Trade          `json:"trades"`
 	Walk       []Period         `json:"walk_forward,omitempty"`
 	Latest     Latest           `json:"latest"`
-	Warnings   []string         `json:"warnings"`
+	// Stress holds the named market episodes the tested period fully covers, measured on this instrument's own
+	// buy-and-hold curve; StressNotCovered names the ones it does not reach.
+	Stress           []backtest.StressResult `json:"stress,omitempty"`
+	StressNotCovered []string                `json:"stress_not_covered,omitempty"`
+	StressNote       string                  `json:"stress_note"`
+	// Regimes group every tested day by the instrument's own trend and volatility, labeled from earlier bars only.
+	Regimes         []backtest.Regime `json:"regimes,omitempty"`
+	RegimeUnlabeled int               `json:"regime_unlabeled_days,omitempty"`
+	RegimeNote      string            `json:"regime_note"`
+	Warnings        []string          `json:"warnings"`
 }
 
 func round2(v float64) float64 { return math.Round(v*100) / 100 }
@@ -361,6 +373,9 @@ func Run(def Strategy, points []market.HistoryPoint, cfg Config) (Result, error)
 	if math.IsNaN(cfg.SlippageBps) || cfg.SlippageBps < 0 || cfg.SlippageBps > 200 {
 		return Result{}, errors.New("slippage must be from 0 to 200 basis points per side")
 	}
+	if math.IsNaN(cfg.SpreadBps) || cfg.SpreadBps < 0 || cfg.SpreadBps > 200 {
+		return Result{}, errors.New("spread must be from 0 to 200 basis points")
+	}
 	if !cfg.To.IsZero() {
 		end := cfg.To.UTC().Truncate(24 * time.Hour).Add(24 * time.Hour).Unix()
 		kept := make([]market.HistoryPoint, 0, len(points))
@@ -383,7 +398,7 @@ func Run(def Strategy, points []market.HistoryPoint, cfg Config) (Result, error)
 		sign = -1
 	}
 	costRate := cfg.CostBps / 10000
-	slipRate := cfg.SlippageBps / 10000
+	slipRate := (cfg.SlippageBps + cfg.SpreadBps/2) / 10000
 
 	// Start where the slowest default indicators are warm.
 	first := 0
@@ -545,6 +560,14 @@ func Run(def Strategy, points []market.HistoryPoint, cfg Config) (Result, error)
 		Curve: thin(curve, maxCurvePoints), Trades: trades, Stats: tradeStats(trades, inBars, len(equities)),
 		Walk: walkForward(s.t, s.close, trades)}
 
+	dates := make([]string, len(equities))
+	for k := range dates {
+		dates[k] = s.t[first+k].Format(dateLayout)
+	}
+	res.Stress, res.StressNotCovered = backtest.StressReport(dates, equities, buyHold)
+	res.Regimes, res.RegimeUnlabeled = backtest.RegimeReport(s.close, first, equities)
+	res.StressNote, res.RegimeNote = StressNote, RegimeNote
+
 	last := n - 1
 	res.Latest = Latest{Date: s.t[last].Format(dateLayout), Close: round2(s.close[last]), InPosition: len(trades) > 0 && trades[len(trades)-1].Reason == "open",
 		EntrySignal: ev.all(def.Entry, last), ExitSignal: ev.any(def.Exit, last)}
@@ -671,3 +694,13 @@ func warmup(def Strategy) int {
 	}
 	return longest
 }
+
+// StressNote is the caveat that goes with every named window on the rule results.
+const StressNote = "The windows are S&P 500 peak-to-trough dates picked with hindsight, applied to this instrument's own history. " +
+	"Only windows the tested period fully covers are shown; the others are listed as not tested. The instrument's own buy-and-hold move in the window is the reference. " +
+	"They show how these rules behaved in those past episodes, not how they will behave in the next one."
+
+// RegimeNote says how the labels are made and what they leave out.
+const RegimeNote = "Each tested day is labeled from this instrument's own closes up to the previous day: uptrend when it is at or above its 200-day average, volatile when its 63-day volatility is 20% a year or more. " +
+	"Every labeled day falls in exactly one regime, all regimes are listed, and days without enough history to label are counted rather than dropped. A regime with fewer than 63 days shows no yearly figures. " +
+	"The labels describe the past and predict no future regime; the rules never see them."
