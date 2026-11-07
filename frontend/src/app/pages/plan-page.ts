@@ -175,7 +175,7 @@ const CHART_H = 260;
             <div class="stack" role="img" [attr.aria-label]="allocationLabel()">
               @for (r of allocation(); track r.id) { @if (r.pct > 0) { <span [attr.data-asset]="r.id" [style.width.%]="r.pct">{{ r.pct }}%</span> } }
             </div>
-            <table class="table table-sm mb-0 mt-2">
+            <div class="fs-scroll-x"><table class="table table-sm mb-0 mt-2">
               <caption class="visually-hidden">Target allocation by asset class</caption>
               <thead><tr><th scope="col">Asset class</th><th scope="col" class="num">Target</th></tr></thead>
               <tbody>
@@ -183,7 +183,7 @@ const CHART_H = 260;
                   <tr><th scope="row"><span class="swatch" [attr.data-asset]="r.id" aria-hidden="true"></span>{{ r.label }}@if (r.note && r.pct > 0) { <small class="d-block text-muted">{{ r.note }}</small> }</th><td class="num">{{ r.pct }}%</td></tr>
                 }
               </tbody>
-            </table>
+            </table></div>
           </div>
         </section>
 
@@ -209,13 +209,13 @@ const CHART_H = 260;
         <details class="card assumptions">
           <summary class="card-header">Assumptions</summary>
           <div class="card-body">
-            <table class="table table-sm">
+            <div class="fs-scroll-x"><table class="table table-sm">
               <caption class="visually-hidden">Capital-market assumptions behind the projection</caption>
               <thead><tr><th scope="col">Asset</th><th scope="col" class="num">Expected return</th><th scope="col" class="num">Volatility</th></tr></thead>
               <tbody>
                 @for (a of assumptionRows(); track a.label) { <tr><th scope="row">{{ a.label }}</th><td class="num">{{ a.ret }}%</td><td class="num">{{ a.vol }}%</td></tr> }
               </tbody>
-            </table>
+            </table></div>
             <p class="mb-1">Inflation {{ p.assumptions.inflation_pct }}%, {{ p.assumptions.paths }} simulated paths.</p>
             <p class="mb-0 text-muted">{{ p.assumptions.note }}</p>
           </div>
@@ -244,7 +244,7 @@ const CHART_H = 260;
 .form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
 .form-note { font-size: 0.8rem; color: var(--fs-muted); }
 .results { display: grid; gap: 1rem; min-width: 0; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.75rem; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: 0.75rem; }
 .chart-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
 .fan { width: 100%; height: 16rem; display: block; }
 .band { fill: color-mix(in srgb, var(--fs-accent) 22%, transparent); stroke: none; }

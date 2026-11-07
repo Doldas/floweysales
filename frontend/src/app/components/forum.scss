@@ -50,8 +50,8 @@ kbd { font-size: 0.7rem; }
   .search { flex: 1 1 100%; }
   .composer-hint { display: none; }
 }
-.search { position: relative; .bi { position: absolute; left: 0.65rem; top: 50%; transform: translateY(-50%); color: var(--fs-muted); pointer-events: none; } input { padding-left: 2rem; min-width: 12rem; width: 100%; } }
-.post-list { display: grid; gap: 0.75rem; }
+.search { position: relative; .bi { position: absolute; left: 0.65rem; top: 50%; transform: translateY(-50%); color: var(--fs-muted); pointer-events: none; } input { padding-left: 2rem; min-width: min(12rem, 100%); width: 100%; } }
+.post-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
 
 .post-head { display: flex; gap: 0.65rem; align-items: center; margin-bottom: 0.55rem; }
 .post-avatar { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%; background: var(--fs-accent-soft); color: var(--fs-accent-text); font-weight: 700; font-size: 0.75rem; flex: 0 0 auto; }

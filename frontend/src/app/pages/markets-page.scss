@@ -1,6 +1,6 @@
 :host { display: block; }
 
-.fs-page { display: grid; gap: 1.1rem; }
+.fs-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.1rem; }
 
 .quote-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem; }
 .quote-id { min-width: 0; }
@@ -15,7 +15,7 @@
 .quote-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 
 .control-row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
-.control-search { flex: 1 1 320px; max-width: 560px; }
+.control-search { flex: 1 1 min(320px, 100%); min-width: 0; max-width: 560px; }
 .trackers { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.85rem; }
 .trackers-label { font-size: 0.75rem; color: var(--fs-muted); font-weight: 500; margin-right: 0.25rem; }
 .tracker-chip {
