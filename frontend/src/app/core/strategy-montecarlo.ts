@@ -72,13 +72,13 @@ export function tradeMonteCarloHeadline(r: Pick<StrategyMonteCarloResult, 'simul
   const lines = [
     `${s.config.runs} simulated paths of ${s.config.trades} trades (${s.config.method.replace('_', ' ')}, seed ${s.config.seed}, model ${s.model_version}), drawn from ${s.observed_trades} closed trades. In ${s.prob_loss_pct.toFixed(1)}% of them the account ended below where it began.`,
   ];
-  lines.push(`Simulation sampling uncertainty for the loss share: 95% Wilson interval ${simulationSamplingInterval(s.prob_loss_pct, s.config.runs)} (only finite Monte Carlo sampling noise; not a probability forecast or a confidence interval for actual future returns).`);
   if (s.prob_breach_pct !== undefined && s.config.drawdown_limit_pct !== undefined) {
     lines.push(`In ${s.prob_breach_pct.toFixed(1)}% of them a fall of ${Math.abs(s.config.drawdown_limit_pct)}% or more happened at some point.`);
   }
   if (s.prob_ruin_pct > 0) lines.push(`In ${s.prob_ruin_pct.toFixed(1)}% of them everything was lost.`);
   const stresses = tradeMonteCarloStresses(s.config);
   if (stresses.length) lines.push(`Stresses you chose (not observed): ${stresses.join('; ')}.`);
+  lines.push(`Simulation sampling uncertainty for the loss share: 95% Wilson interval ${simulationSamplingInterval(s.prob_loss_pct, s.config.runs)} (only finite Monte Carlo sampling noise; not a probability forecast or a confidence interval for actual future returns).`);
   return lines;
 }
 
