@@ -1,7 +1,7 @@
 import { Component, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
-  SEARCH_NAMES, attemptLine, formFrom, formProblems, formatUsd, kindHelp, moveProvider, providerBody, stateLabel, usageLine, utcTime,
+  SEARCH_NAMES, attemptLine, formFrom, formProblems, formatUsd, kindHelp, moveProvider, providerBody, searchUsageTotals, stateLabel, usageLine, utcTime,
   type ProviderForm, type SearchAttempt, type SearchCatalogEntry, type SearchPolicy, type SearchProviderState,
 } from './web-search-view';
 
@@ -26,6 +26,14 @@ interface AdminView {
      <strong>No search provider is ready.</strong>
      Without one, the agent cannot search the web and says so. The quickest free choice is your own SearXNG instance; Tavily and Brave need an API key; Google Search through Gemini costs money and needs your explicit approval.
     </div>
+   }
+   @if(loaded() && providers().length){
+    <section class="provider" aria-label="Search usage overview">
+      <h4>Usage and estimated cost (all configured providers)</h4>
+      <p class="muted">Today: {{usage(totals().today)}}</p>
+      <p class="muted">This month: {{usage(totals().month)}}</p>
+      <p class="muted">USD values are estimates based on configured prices, not invoices. Quotas and provider billing may differ; model tokens are counted separately.</p>
+    </section>
    }
    @for(p of providers(); track p.id){
     <article class="provider" [attr.aria-label]="info(p.id).name">
@@ -183,6 +191,7 @@ export class WebSearchSettingsComponent {
   readonly tests = signal<Record<string, { ok: boolean; kind?: string; message: string; results: number; duration_ms: number; est_cost_usd?: number }>>({});
   readonly policy = signal<SearchPolicy | null>(null);
   readonly providers = computed(() => this.view()?.providers ?? []);
+  readonly totals = computed(() => searchUsageTotals(this.providers()));
   readonly recent = computed(() => (this.view()?.recent ?? []).slice(-12).reverse());
   private readonly names = computed(() => Object.fromEntries((this.view()?.catalog ?? []).map(c => [c.id, c.name])));
 

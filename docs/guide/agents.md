@@ -120,3 +120,7 @@ In the chat, list **Required parts** (one per line, up to 12) to turn a question
 ## Teams and profiles in flows
 
 A flow agent node can use one of the model profiles an administrator prepared (instead of a raw model) and can hand its question to one of your own saved teams. A node with a team can only delegate to that team. The team's members get the research tools flows may grant, never your personal data. A disabled or deleted profile fails the node instead of silently switching models. See [Flow Studio](flows.md).
+
+### Mathematical expressions in research answers
+
+The shared Markdown renderer displays common financial expressions such as fractions, multiplication, powers, roots and labels. Use `\(...\)` for inline math and `\[...\]` or `$$...$$` for display math. Tables and long display equations stay scrollable inside their panel on small screens. The underlying numbers and formulas are **not evaluated** or verified by the renderer: use calculation and citation tools for correctness. Unsupported TeX commands display as escaped literal source instead of untrusted HTML. The same rendering pipeline is shared by Research Agent, Agent Teams, Flow reports and Workspace preview; email uses its own safe content adapter.

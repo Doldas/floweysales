@@ -73,6 +73,7 @@ export function resolveWorkspacePath(base: string, href: string): string | null 
 
 interface InlineState {
   code: string[];
+  math: string[];
   /** Opening tags of generated links, kept out of the text so emphasis rules never touch attributes. */
   tags: string[];
   options: MarkdownOptions;
@@ -117,6 +118,16 @@ function renderInline(text: string, state: InlineState): string {
   );
   // Autolinks: <https://example.com/page> (the text is already escaped here).
   out = out.replace(/&lt;(https?:\/\/[^\s<>]+?)&gt;/g, (_m, href: string) => renderTarget(href, href, state, false));
+  // Math must be extracted before backslash-escape and emphasis rules.
+  // Link attributes are already stashed above; fenced and inline code are isolated.
+  out = out.replace(/(^|[^\\])(?:\\\((.+?)\\\)|\$([^$\n]+)\$)/g,
+    (original, prefix: string, parens: string | undefined, dollars: string | undefined) => {
+      const body = parens ?? dollars ?? '';
+      if (dollars !== undefined && !isInlineDollarFormula(unescapeHtml(body))) return original;
+      const idx = state.math.push(renderFormula(unescapeHtml(body))) - 1;
+      return prefix + '\u0000M' + idx + '\u0000';
+    });
+
   // Backslash escapes for inline punctuation (also written by the rich-text editor).
   out = out.replace(/\\([\\`*_{}[\]()#+\-.!|~])/g, (_m, ch: string) => `&#${ch.charCodeAt(0)};`);
 
@@ -133,6 +144,7 @@ function renderInline(text: string, state: InlineState): string {
     return `<code>${state.code[Number(i)] ?? ''}</code>`;
   });
 
+  out = out.replace(/\u0000M(\d+)\u0000/g, (_m, i: string) => state.math[Number(i)] ?? '');
   return out;
 }
 
@@ -179,7 +191,7 @@ export function renderMarkdown(source: string, options: MarkdownOptions = {}): s
 
   const lines = escaped.split('\n');
   const out: string[] = [];
-  const inline: InlineState = { code: [], tags: [], options };
+  const inline: InlineState = { code: [], math: [], tags: [], options };
   let paragraph: string[] = [];
 
   const flushParagraph = () => {
@@ -211,6 +223,24 @@ export function renderMarkdown(source: string, options: MarkdownOptions = {}): s
       ) - 1;
       out.push(`\u0000F${idx}\u0000`);
       continue;
+    }
+
+    // Display TeX: \[...\] or $...$, plus the standalone
+    // [ ... ] shape sometimes returned by chat models for DCF equations.
+    const mathOpen = line.trim();
+    if (mathOpen === '\\[' || mathOpen === '$' || mathOpen === '[') {
+      const close = mathOpen === '$' ? '$' : mathOpen === '[' ? ']' : '\\]';
+      let j = i + 1;
+      while (j < lines.length && j - i <= 30 && lines[j].trim() !== close) j++;
+      const formula = lines.slice(i + 1, j).join('\n').trim();
+      if (j < lines.length && lines[j].trim() === close && formula.length <= 2000 &&
+        (mathOpen !== '[' || /\\(?:frac|text|times|sum|sqrt|mathrm)/.test(formula))) {
+        flushParagraph();
+        const idx = fences.push(renderFormula(unescapeHtml(formula), true)) - 1;
+        out.push('\u0000F' + idx + '\u0000');
+        i = j;
+        continue;
+      }
     }
 
     // Horizontal rule
@@ -309,4 +339,97 @@ export function formatToolOutput(content?: string): string {
   } catch {
     return content;
   }
+}
+
+
+const esc = (text: string): string => text.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
+const SYMBOLS: Record<string, string> = {
+  times: '×', cdot: '·', div: '÷', pm: '±', leq: '≤', geq: '≥',
+  neq: '≠', approx: '≈', sim: '∼', infty: '∞', alpha: 'α',
+  beta: 'β', gamma: 'γ', delta: 'δ', Delta: 'Δ', pi: 'π',
+  sum: '∑', prod: '∏', to: '→', rightarrow: '→', percent: '%',
+  ' ': ' ', ',': ' ', ';': ' ', '!': '', '&': '&',
+};
+const COMMAND = /^[A-Za-z]+/;
+
+/** Render a deliberately bounded subset of TeX to semantic, escaped HTML. */
+export function renderFormula(tex: string, display = false): string {
+  if (!tex || tex.length > 2000) return '<span class="md-math-error" role="note">Formula is too long or empty: ' + esc(tex.slice(0, 200)) + '</span>';
+  let i = 0;
+  let depth = 0;
+  let unsupported = false;
+  const arg = (): string => {
+    while (tex[i] === ' ') i++;
+    if (tex[i] === '{') {
+      i++;
+      const value = parse('}');
+      if (tex[i] === '}') i++;
+      else unsupported = true;
+      return value;
+    }
+    return parse(undefined, true);
+  };
+  const parse = (end?: string, single = false): string => {
+    if (++depth > 24) { unsupported = true; depth--; return ''; }
+    let out = '';
+    let consumed = 0;
+    while (i < tex.length && tex[i] !== end && consumed++ < 2000) {
+      const ch = tex[i++];
+      if (ch === '\\') {
+        const word = tex.slice(i).match(COMMAND)?.[0];
+        if (word) {
+          i += word.length;
+          if (word === 'frac' || word === 'dfrac' || word === 'tfrac') {
+            const top = arg(), bottom = arg();
+            out += '<span class="md-frac"><span class="md-num">' + top + '</span><span class="md-den">' + bottom + '</span></span>';
+          } else if (word === 'text' || word === 'mathrm' || word === 'operatorname') {
+            out += '<span class="md-math-text">' + arg() + '</span>';
+          } else if (word === 'sqrt') {
+            out += '<span class="md-root">√<span>' + arg() + '</span></span>';
+          } else if (word === 'left' || word === 'right') {
+            // A sizing modifier; keep the following delimiter visible.
+          } else if (Object.prototype.hasOwnProperty.call(SYMBOLS, word)) {
+            out += esc(SYMBOLS[word]);
+          } else {
+            unsupported = true;
+            out += esc('\\' + word);
+          }
+        } else if (i < tex.length) {
+          const escaped = tex[i++];
+          if (escaped === '\\') out += '<span class="md-math-break"> </span>';
+          else out += esc(SYMBOLS[escaped] ?? escaped);
+        } else unsupported = true;
+      } else if (ch === '^' || ch === '_') {
+        out += ch === '^' ? '<sup>' + arg() + '</sup>' : '<sub>' + arg() + '</sub>';
+      } else if (ch === '{') {
+        out += parse('}');
+        if (tex[i] === '}') i++;
+        else unsupported = true;
+      } else if (ch === '}') {
+        unsupported = true;
+        out += '}';
+      } else if (ch === '\n') {
+        out += ' ';
+      } else {
+        out += esc(ch);
+      }
+      if (single) break;
+    }
+    depth--;
+    return out;
+  };
+  const html = parse();
+  if (unsupported || i < tex.length) {
+    return '<code class="md-math-error" role="note" aria-label="Unsupported mathematical expression">' + esc(tex) + '</code>';
+  }
+  const label = esc(tex).replace(/\s+/g, ' ');
+  return '<span class="' + (display ? 'md-math md-math-display' : 'md-math md-math-inline') +
+    '" role="math" aria-label="' + label + '" title="' + label + '" tabindex="' + (display ? '0' : '-1') + '">' + html + '</span>';
+}
+
+/** Detects formula-like content without interpreting prices such as "$2.78 bn" as TeX. */
+export function isInlineDollarFormula(value: string): boolean {
+  return value.length <= 2000 && !/^\s|\s$/.test(value) &&
+    /(?:\\[A-Za-z]+|[=^_{}+\-*/])/.test(value) &&
+    !/^\d+(?:[.,]\d+)?\s*(?:bn|m|usd|sek|eur)?$/i.test(value);
 }
