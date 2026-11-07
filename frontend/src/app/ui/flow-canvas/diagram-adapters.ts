@@ -119,9 +119,9 @@ export function triggerDiagram(triggers: readonly TriggerLike[]): { nodes: Diagr
   const edges: DiagramEdge[] = [];
   triggers.forEach((t, i) => {
     const y = 20 + i * 100;
-    nodes.push({ id: `event:${t.event_key}`, x: 30, y, kind: 'trigger', tag: '⏱ EVENT', label: t.event_key, sub: 'custom trigger', outputs: [{ name: 'payload', type: t.payload_type }] });
-    nodes.push({ id: `payload:${t.event_key}`, x: 260, y, kind: 'output', tag: '▤ PAYLOAD', label: t.payload_type, sub: 'typed value', inputs: [{ name: 'payload', type: t.payload_type }] });
-    edges.push({ from: `event:${t.event_key}`, to: `payload:${t.event_key}`, kind: 'event' });
+    nodes.push({ id: `event:${t.id}`, x: 30, y, kind: 'trigger', tag: '⏱ EVENT', label: t.event_key, sub: 'custom trigger', outputs: [{ name: 'payload', type: t.payload_type }] });
+    nodes.push({ id: `payload:${t.id}`, x: 260, y, kind: 'output', tag: '▤ PAYLOAD', label: t.payload_type, sub: 'typed value', inputs: [{ name: 'payload', type: t.payload_type }] });
+    edges.push({ from: `event:${t.id}`, to: `payload:${t.id}`, kind: 'event' });
   });
   return { nodes, edges };
 }
