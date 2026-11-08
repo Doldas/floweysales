@@ -108,11 +108,30 @@
       <div class="studies" role="group" aria-label="Chart analysis studies">
         <i class="bi bi-sliders2 text-muted" aria-hidden="true"></i>
         @for (k of indicatorKeys; track k) {
-          <button type="button" class="fs-chip" [attr.aria-pressed]="market.indicators()[k]" (click)="market.toggleIndicator(k)">{{ indicatorLabels[k] }}</button>
+          <button type="button" class="fs-chip" [attr.aria-pressed]="market.indicators()[k]" (click)="market.toggleIndicator(k)">{{ studyLabel(k) }}</button>
         }
+        <button type="button" class="fs-chip" [attr.aria-expanded]="settingsOpen()" aria-controls="study-settings" (click)="settingsOpen.set(!settingsOpen())"><i class="bi bi-gear" aria-hidden="true"></i> Periods</button>
       </div>
+      @if (settingsOpen()) {
+        <div id="study-settings" class="study-settings" role="group" aria-label="Study periods">
+          @for (g of settingGroups; track g.name) {
+            <fieldset>
+              <legend>{{ g.name }}</legend>
+              @for (f of g.fields; track f.key) {
+                <label [for]="'set-' + f.key">{{ f.label }}</label>
+                <input [id]="'set-' + f.key" type="number" inputmode="decimal" class="form-control form-control-sm" [min]="f.min" [max]="f.max" [step]="f.step" [value]="market.indicatorSettings()[f.key]" (change)="setSetting(f.key, $event)">
+              }
+            </fieldset>
+          }
+          <div class="study-settings-foot">
+            <button type="button" class="btn btn-sm btn-outline-secondary" (click)="market.resetIndicatorSettings()">Reset periods</button>
+            @if (market.settingsNote(); as note) { <span class="text-danger small" role="alert">{{ note }}</span> }
+            <span class="text-muted small">The Analysis insights below keep their fixed periods (RSI 14, EMA 9/21/50/200).</span>
+          </div>
+        </div>
+      }
       <div class="pt-2">
-        <fse-trading-chart [epoch]="market.chartEpoch()" [flags]="market.indicators()" [chartStyle]="chartStyle()" [drawings]="drawings()" (drawingsChange)="setDrawings($event)" />
+        <fse-trading-chart [epoch]="market.chartEpoch()" [flags]="market.indicators()" [settings]="market.indicatorSettings()" [chartStyle]="chartStyle()" [drawings]="drawings()" (drawingsChange)="setDrawings($event)" />
       </div>
     </fs-pane>
 

@@ -17,7 +17,8 @@ import { LedgerComponent } from '../components/ledger';
 import { WatchlistComponent } from '../components/watchlist';
 import { SymbolSearchComponent } from '../shell/symbol-search';
 import { ProgressStatusComponent } from '../ui/progress-status';
-import { INDICATOR_KEYS, INDICATOR_LABELS } from '../indicators';
+import { INDICATOR_KEYS } from '../indicators';
+import { SETTING_FIELDS, studyLabel } from '../indicator-settings';
 import { parseDrawings, type Drawing } from '../core/chart-drawings';
 import { INTERVALS, availableIntervals, emaSeed, intervalSeconds, parseIntervalChoice, resampleSeries, type IntervalChoice, type IntervalId } from '../core/resample';
 import { CHART_STYLES, DEFAULT_CHART_STYLE, parseChartStyle, type ChartStyleId } from '../core/chart-styles';
@@ -75,7 +76,22 @@ export class MarketsPage {
   /** The drawings of the instrument on screen; kept in this browser, one list per provider and symbol. */
   readonly drawings = signal<Drawing[]>([]);
   readonly indicatorKeys = INDICATOR_KEYS;
-  readonly indicatorLabels = INDICATOR_LABELS;
+  readonly settingFields = SETTING_FIELDS;
+  /** The setting groups in order, each with its fields, for the settings panel. */
+  readonly settingGroups = (() => {
+    const groups: { name: string; fields: typeof SETTING_FIELDS }[] = [];
+    for (const f of SETTING_FIELDS) {
+      const g = groups.find(x => x.name === f.group);
+      if (g) g.fields.push(f); else groups.push({ name: f.group, fields: [f] });
+    }
+    return groups;
+  })();
+  readonly settingsOpen = signal(false);
+  readonly studyLabel = (key: string) => studyLabel(key, this.market.indicatorSettings());
+  setSetting(key: (typeof SETTING_FIELDS)[number]['key'], event: Event): void {
+    const raw = (event.target as HTMLInputElement).value.trim();
+    this.market.setIndicatorSetting(key, raw === '' ? NaN : Number(raw));
+  }
   readonly confirmClear = signal(false);
 
   readonly change = computed(() => this.market.dayChange() ?? this.market.rangeChange());
@@ -92,7 +108,7 @@ export class MarketsPage {
       times: s?.points?.map(p => p.t),
       emaFast: s?.emaConfig?.fastPeriod,
       emaSlow: s?.emaConfig?.slowPeriod,
-      studies: this.market.enabledIndicatorKeys().map(k => INDICATOR_LABELS[k]),
+      studies: this.market.enabledIndicatorKeys().map(k => this.studyLabel(k)),
     };
   });
   readonly chartFacts = computed(() => chartMeta(this.chartInput(), formatUtcDateTime));
@@ -167,7 +183,7 @@ export class MarketsPage {
   askAgent(): void {
     const sym = this.market.trackedSymbol();
     if (!sym) return;
-    const studies = this.market.enabledIndicatorKeys().map(k => INDICATOR_LABELS[k]).join(', ');
+    const studies = this.market.enabledIndicatorKeys().map(k => this.studyLabel(k)).join(', ');
     this.agent.ask(`Analyze ${sym} on ${this.market.provider()} over the ${this.market.historyRange()} range${studies ? ` using ${studies}` : ''}: trend, momentum, key support and resistance, and what would change the picture.`);
   }
 
