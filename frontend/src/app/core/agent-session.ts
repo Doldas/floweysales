@@ -5,6 +5,7 @@ import { MarketState } from './market-state';
 import { defaultTypes, delegationProgress, parseEvidenceMode, policyFromSettings, settingsFromPolicy, settingsProblem, type AnswerClaim, type AnswerFinding, type AnswerSource, type EvidenceMode, type EvidencePolicy, type EvidenceSettings, type ClaimStats } from './answer-sources';
 import { MAX_DELIVERABLES, parseChecklist, parseDeliverables, type SavedTask, type TaskDeliverable } from './task-view';
 import { EMPTY_NOTICES, applyNotice, dismissNotice, finishNotices, recoveryLine, type NoticeState } from './agent-notices';
+import { takeSseFrames, sseSequence } from './agent-stream';
 
 export interface AiPreset {
   label: string;
@@ -466,15 +467,12 @@ export class AgentSession {
           for (;;) {
             const { value, done } = await reader.read();
             if (done) break;
-            buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
-            let sep: number;
-            while ((sep = buffer.indexOf('\n\n')) >= 0) {
-              const frame = buffer.slice(0, sep);
-              buffer = buffer.slice(sep + 2);
-              const cursor = /^id:\s*(\d+)\s*$/m.exec(frame);
-              if (cursor) {
-                const seq = Number(cursor[1]);
-                if (!Number.isSafeInteger(seq) || seq <= lastSequence) continue;
+            const parsed = takeSseFrames(buffer, decoder.decode(value, { stream: true }));
+            buffer = parsed.remainder;
+            for (const frame of parsed.frames) {
+              const seq = sseSequence(frame);
+              if (seq !== null) {
+                if (seq <= lastSequence) continue;
                 lastSequence = seq;
               }
               if (this.handleChunk(frame)) completed = true;
