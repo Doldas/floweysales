@@ -23,6 +23,7 @@ Large responses have bounded replay memory and run lifetime. Transient network d
 
 - `go test ./internal/server -run 'TestDetachedChat|TestChatRun' -count=1`
 - `node --test frontend/src/app/core/agent-stream.spec.ts`
+- `cd frontend && npx playwright test --config playwright.config.ts e2e/agent-reconnect.spec.ts` (desktop/mobile, a cut HTTP 200 stream, one POST and one replay GET, no duplicate text). This is now a mandatory PR CI step.
 - Full GitHub Actions frontend, Go race, policy and schema jobs.
 - Manual staging validation: allow a local reasoning model to pause for several minutes, sever the browser network during streaming, restore the network and confirm a single response and tool ledger without a second model request. Separately verify explicit Stop and a timed-out run.
 
