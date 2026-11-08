@@ -38,6 +38,7 @@ type chatRun struct {
 	id      string
 	owner   int64
 	started time.Time
+	finishedAt time.Time
 	cancel  context.CancelFunc
 	mu      sync.Mutex
 	events  []chatRunEvent
@@ -64,6 +65,7 @@ func (j *chatRun) finish() {
 	j.append(ai.Event{Type: "stream_end"})
 	j.mu.Lock()
 	j.closed = true
+	j.finishedAt = time.Now()
 	close(j.changed)
 	j.mu.Unlock()
 }
@@ -98,9 +100,9 @@ func (r *chatRunRegistry) create(owner int64, cancel context.CancelFunc) (*chatR
 	totalActive := 0
 	for id, j := range r.entries {
 		j.mu.Lock()
-		closed, started := j.closed, j.started
+		closed, finishedAt := j.closed, j.finishedAt
 		j.mu.Unlock()
-		if closed && now.Sub(started) > chatReplayRetention {
+		if closed && now.Sub(finishedAt) > chatReplayRetention {
 			delete(r.entries, id)
 			continue
 		}
@@ -136,7 +138,18 @@ func (r *chatRunRegistry) create(owner int64, cancel context.CancelFunc) (*chatR
 func (r *chatRunRegistry) get(id string) *chatRun {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.entries[id]
+	j := r.entries[id]
+	if j == nil {
+		return nil
+	}
+	j.mu.Lock()
+	expired := j.closed && time.Since(j.finishedAt) > chatReplayRetention
+	j.mu.Unlock()
+	if expired {
+		delete(r.entries, id)
+		return nil
+	}
+	return j
 }
 func (e *Engine) runRegistry() *chatRunRegistry {
 	e.chatRunsMu.Lock()
