@@ -269,10 +269,15 @@ type combinedIndexes struct {
 	Symbols     []string            `json:"symbols"`
 	Overlap     map[string][]string `json:"overlap"` // symbol -> indices containing it, only when more than one
 	Unavailable []string            `json:"unavailable"`
+	// Currencies are the quote currencies of the combined indices; Warnings
+	// says so when they differ, because their prices and returns do not add up.
+	Currencies []string `json:"currencies"`
+	Warnings   []string `json:"warnings"`
 }
 
 func combineIndexes(defs []indexDefinition, ids []string) (combinedIndexes, error) {
-	out := combinedIndexes{Symbols: []string{}, Overlap: map[string][]string{}, Unavailable: []string{}}
+	out := combinedIndexes{Symbols: []string{}, Overlap: map[string][]string{}, Unavailable: []string{}, Currencies: []string{}, Warnings: []string{}}
+	currencies := map[string]bool{}
 	owners, first, order, seenID := map[string][]string{}, map[string]string{}, []string{}, map[string]bool{}
 	for _, id := range ids {
 		if seenID[id] {
@@ -292,6 +297,10 @@ func combineIndexes(defs []indexDefinition, ids []string) (combinedIndexes, erro
 			out.Unavailable = append(out.Unavailable, id)
 			continue
 		}
+		if !currencies[d.Currency] {
+			currencies[d.Currency] = true
+			out.Currencies = append(out.Currencies, d.Currency)
+		}
 		for _, c := range d.Constituents {
 			k := c.canonicalKey()
 			if _, dup := first[k]; !dup {
@@ -308,6 +317,10 @@ func combineIndexes(defs []indexDefinition, ids []string) (combinedIndexes, erro
 		}
 	}
 	sort.Strings(out.Unavailable)
+	sort.Strings(out.Currencies)
+	if len(out.Currencies) > 1 {
+		out.Warnings = append(out.Warnings, fmt.Sprintf("These indices are quoted in different currencies (%s); prices, returns and market caps are not converted, so compare them with care.", strings.Join(out.Currencies, ", ")))
+	}
 	return out, nil
 }
 
