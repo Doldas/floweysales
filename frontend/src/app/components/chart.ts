@@ -31,6 +31,7 @@ import {
 import zoomPlugin from 'chartjs-plugin-zoom';
 
 import { ThemeService } from '../theme.service';
+import { DEFAULT_SETTINGS, studyLabel, type IndicatorSettings } from '../indicator-settings';
 import {
   DRAWING_TOOLS,
   MAX_DRAWINGS,
@@ -52,6 +53,9 @@ import {
   macd,
   rsi as rsiCalc,
   vwap,
+  atr as atrCalc,
+  ichimoku as ichimokuCalc,
+  stochastic as stochasticCalc,
   DEFAULT_INDICATORS,
   type IndicatorFlags,
   type IndicatorKey,
@@ -283,15 +287,13 @@ const DATASET_FLAG: (IndicatorKey | null)[] = [
   'bb',
   'vwap',
   'volume',
+  'ichimoku',
+  'ichimoku',
+  'ichimoku',
+  'ichimoku',
 ];
 
-const EMA_PARAMS: Record<string, number> = {
-  ema9: 9,
-  ema21: 21,
-  ema50: 50,
-  ema100: 100,
-  ema200: 200,
-};
+const EMA_KEYS = ['ema9', 'ema21', 'ema50', 'ema100', 'ema200'] as const;
 
 const EMA_COLORS: Record<string, string> = {
   ema9: '#eab308',
@@ -351,6 +353,16 @@ interface PointMeta {
         <canvas #macdCanvas></canvas>
       </div>
     }
+    @if (flags().stoch) {
+      <div class="subchart-container">
+        <canvas #stochCanvas></canvas>
+      </div>
+    }
+    @if (flags().atr) {
+      <div class="subchart-container">
+        <canvas #atrCanvas></canvas>
+      </div>
+    }
   `,
   styles: [
     `
@@ -376,11 +388,15 @@ export class TradingChartComponent implements AfterViewInit {
   readonly canvas = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
   readonly rsiCanvas = viewChild<ElementRef<HTMLCanvasElement>>('rsiCanvas');
   readonly macdCanvas = viewChild<ElementRef<HTMLCanvasElement>>('macdCanvas');
+  readonly stochCanvas = viewChild<ElementRef<HTMLCanvasElement>>('stochCanvas');
+  readonly atrCanvas = viewChild<ElementRef<HTMLCanvasElement>>('atrCanvas');
 
   /** Bumped by the parent to clear history on asset change. */
   readonly epoch = input(0);
   /** Enabled analysis studies (chips in the chart header). */
   readonly flags = input<IndicatorFlags>(DEFAULT_INDICATORS);
+  /** The periods the studies are worked out with. */
+  readonly settings = input<IndicatorSettings>(DEFAULT_SETTINGS);
   /** How the price series is drawn: candles, bars, line, area and so on. */
   readonly chartStyle = input<ChartStyleId>(DEFAULT_CHART_STYLE);
   /** The user's drawings for this instrument; changes are reported through drawingsChange. */
@@ -399,6 +415,8 @@ export class TradingChartComponent implements AfterViewInit {
   private chart: Chart | null = null;
   private rsiChart: Chart | null = null;
   private macdChart: Chart | null = null;
+  private stochChart: Chart | null = null;
+  private atrChart: Chart | null = null;
   private signals: (string | null)[] = [];
   private meta: PointMeta[] = [];
   private barsCache: { key: string; bars: Ohlc[] } | null = null;
@@ -416,7 +434,7 @@ export class TradingChartComponent implements AfterViewInit {
         (this.chart.data.datasets[3] ?? {}).borderColor = def.slowEmaColor;
         this.chart.update('none');
       }
-      for (const c of [this.chart, this.rsiChart, this.macdChart]) {
+      for (const c of [this.chart, this.rsiChart, this.macdChart, this.stochChart, this.atrChart]) {
         if (!c) continue;
         for (const scale of Object.values(c.options.scales ?? {})) {
           if (!scale) continue;
@@ -458,9 +476,16 @@ export class TradingChartComponent implements AfterViewInit {
     // Reading the viewChild signals here subscribes us to @if insert/remove.
     effect(() => {
       this.flags();
+      this.settings();
       this.rsiCanvas();
       this.macdCanvas();
-      if (this.chart) this.applyIndicators();
+      this.stochCanvas();
+      this.atrCanvas();
+      if (this.chart) {
+        this.applyIndicators();
+        // A study switched on or off, or a period changed, shows at once and not on the next hover.
+        this.chart.update('none');
+      }
     });
   }
 
@@ -852,16 +877,18 @@ export class TradingChartComponent implements AfterViewInit {
     };
 
     // --- analysis EMAs ------------------------------------------------------
-    for (const key of ['ema9', 'ema21', 'ema50', 'ema100', 'ema200'] as IndicatorKey[]) {
+    const cfg = this.settings();
+    for (const key of EMA_KEYS) {
       const idx = DATASET_FLAG.indexOf(key);
       const on = f[key] && n > 0;
-      setSeries(idx, on ? ema(closes, EMA_PARAMS[key]) : [], on);
+      setSeries(idx, on ? ema(closes, cfg[key]) : [], on);
+      if (ds[idx]) ds[idx].label = studyLabel(key, cfg);
     }
 
     // --- Bollinger Bands ----------------------------------------------------
     const bbOn = f.bb && n > 0;
     if (bbOn) {
-      const bb = bollinger(closes, 20, 2);
+      const bb = bollinger(closes, cfg.bbPeriod, cfg.bbMult);
       setSeries(11, bb.upper, true);
       setSeries(12, bb.mid, true);
       setSeries(13, bb.lower, true);
@@ -876,6 +903,20 @@ export class TradingChartComponent implements AfterViewInit {
       setSeries(14, vwap(closes, this.meta.map((m) => m.v ?? null)), true);
     } else {
       setSeries(14, [], false);
+    }
+
+    // --- Ichimoku cloud (datasets 16..19) -------------------------------------
+    const ichiOn = f.ichimoku && n > 0;
+    if (ichiOn) {
+      const highs = this.meta.map((m) => m.h ?? m.c);
+      const lows = this.meta.map((m) => m.l ?? m.c);
+      const ich = ichimokuCalc(highs, lows, cfg.tenkan, cfg.kijun, cfg.senkouB, cfg.kijun);
+      setSeries(16, ich.tenkan, true);
+      setSeries(17, ich.kijun, true);
+      setSeries(18, ich.senkouA, true);
+      setSeries(19, ich.senkouB, true);
+    } else {
+      for (const i of [16, 17, 18, 19]) setSeries(i, [], false);
     }
 
     // --- Volume bars (scaled to the bottom quarter of the price axis) ------
@@ -897,6 +938,9 @@ export class TradingChartComponent implements AfterViewInit {
     const f = this.flags();
     const labels = chart.data.labels as string[];
     const closes = this.meta.map((m) => m.c);
+    const highs = this.meta.map((m) => m.h ?? m.c);
+    const lows = this.meta.map((m) => m.l ?? m.c);
+    const cfg = this.settings();
 
     // --- RSI panel ----------------------------------------------------------
     const wantRsi = f.rsi && !!this.rsiCanvas()?.nativeElement;
@@ -904,7 +948,7 @@ export class TradingChartComponent implements AfterViewInit {
       this.rsiChart.destroy();
       this.rsiChart = null;
     } else if (wantRsi) {
-      const vals = rsiCalc(closes, 14);
+      const vals = rsiCalc(closes, cfg.rsiPeriod);
       if (!this.rsiChart) {
         const ctx = this.rsiCanvas()!.nativeElement.getContext('2d') as CanvasRenderingContext2D;
         this.rsiChart = new Chart(ctx, this.buildRsiConfig(labels, vals));
@@ -914,8 +958,9 @@ export class TradingChartComponent implements AfterViewInit {
         d.datasets[0].data = vals;
         d.datasets[1].data = labels.map(() => 70);
         d.datasets[2].data = labels.map(() => 30);
-        this.rsiChart.update('none');
       }
+      this.retitle(this.rsiChart, `RSI (${cfg.rsiPeriod})`, `RSI ${cfg.rsiPeriod}`);
+      this.rsiChart.update('none');
     }
 
     // --- MACD panel ---------------------------------------------------------
@@ -924,7 +969,7 @@ export class TradingChartComponent implements AfterViewInit {
       this.macdChart.destroy();
       this.macdChart = null;
     } else if (wantMacd) {
-      const m = macd(closes);
+      const m = macd(closes, cfg.macdFast, cfg.macdSlow, cfg.macdSignal);
       if (!this.macdChart) {
         const ctx = this.macdCanvas()!.nativeElement.getContext('2d') as CanvasRenderingContext2D;
         this.macdChart = new Chart(ctx, this.buildMacdConfig(labels, m));
@@ -934,9 +979,112 @@ export class TradingChartComponent implements AfterViewInit {
         d.datasets[0].data = m.line;
         d.datasets[1].data = m.signal;
         d.datasets[2].data = m.hist;
-        this.macdChart.update('none');
       }
+      this.retitle(this.macdChart, `MACD (${cfg.macdFast}, ${cfg.macdSlow}, ${cfg.macdSignal})`);
+      this.macdChart.update('none');
     }
+
+    // --- Stochastic panel -----------------------------------------------------
+    const wantStoch = f.stoch && !!this.stochCanvas()?.nativeElement;
+    if (!wantStoch && this.stochChart) {
+      this.stochChart.destroy();
+      this.stochChart = null;
+    } else if (wantStoch) {
+      const st = stochasticCalc(highs, lows, closes, cfg.stochK, cfg.stochD, cfg.stochSmooth);
+      const guides = (v: number) => labels.map(() => v);
+      if (!this.stochChart) {
+        const ctx = this.stochCanvas()!.nativeElement.getContext('2d') as CanvasRenderingContext2D;
+        this.stochChart = new Chart(ctx, this.buildStochConfig(labels, st.k, st.d, guides));
+      } else {
+        const d = this.stochChart.data;
+        d.labels = labels;
+        d.datasets[0].data = st.k;
+        d.datasets[1].data = st.d;
+        d.datasets[2].data = guides(80);
+        d.datasets[3].data = guides(20);
+      }
+      this.retitle(this.stochChart, `Stochastic (${cfg.stochK}, ${cfg.stochSmooth}, ${cfg.stochD})`);
+      this.stochChart.update('none');
+    }
+
+    // --- ATR panel ------------------------------------------------------------
+    const wantAtr = f.atr && !!this.atrCanvas()?.nativeElement;
+    if (!wantAtr && this.atrChart) {
+      this.atrChart.destroy();
+      this.atrChart = null;
+    } else if (wantAtr) {
+      const vals = atrCalc(highs, lows, closes, cfg.atrPeriod);
+      if (!this.atrChart) {
+        const ctx = this.atrCanvas()!.nativeElement.getContext('2d') as CanvasRenderingContext2D;
+        this.atrChart = new Chart(ctx, this.buildAtrConfig(labels, vals));
+      } else {
+        this.atrChart.data.labels = labels;
+        this.atrChart.data.datasets[0].data = vals;
+      }
+      this.retitle(this.atrChart, `ATR (${cfg.atrPeriod}), price units`);
+      this.atrChart.update('none');
+    }
+  }
+
+  /** Keeps a panel's title and first dataset name in step with the periods in use. */
+  private retitle(chart: Chart, title: string, label?: string): void {
+    const t = chart.options.plugins?.title;
+    if (t) t.text = title;
+    if (label && chart.data.datasets[0]) chart.data.datasets[0].label = label;
+  }
+
+  private buildStochConfig(labels: string[], k: (number | null)[], d: (number | null)[], guides: (v: number) => number[]): ChartConfiguration<'line'> {
+    const def = this.theme.def();
+    return {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: '%K', data: k, borderColor: '#0ea5e9', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+          { label: '%D', data: d, borderColor: '#f59e0b', borderWidth: 1.2, pointRadius: 0, tension: 0.2 },
+          { label: '80', data: guides(80), borderColor: 'rgba(239, 68, 68, 0.55)', borderWidth: 1, borderDash: [4, 4], pointRadius: 0 },
+          { label: '20', data: guides(20), borderColor: 'rgba(22, 163, 74, 0.55)', borderWidth: 1, borderDash: [4, 4], pointRadius: 0 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: true, labels: { color: def.textColor, font: { size: 9 }, boxWidth: 10, filter: (item) => item.datasetIndex! < 2 } },
+          title: { display: true, text: 'Stochastic', color: def.textColor, font: { size: 10, weight: 'bold' } },
+          tooltip: { callbacks: { label: (item) => `${item.dataset.label}: ${this.fmtPrice(item.parsed?.y)}` } },
+        },
+        scales: {
+          x: { display: false },
+          y: { min: 0, max: 100, ticks: { stepSize: 20, color: def.textColor, font: { size: 9 } }, grid: { color: def.gridColor } },
+        },
+      },
+    };
+  }
+
+  private buildAtrConfig(labels: string[], vals: (number | null)[]): ChartConfiguration<'line'> {
+    const def = this.theme.def();
+    return {
+      type: 'line',
+      data: { labels, datasets: [{ label: 'ATR', data: vals, borderColor: '#14b8a6', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          title: { display: true, text: 'ATR', color: def.textColor, font: { size: 10, weight: 'bold' } },
+          tooltip: { callbacks: { label: (item) => `${item.dataset.label}: ${this.fmtPrice(item.parsed?.y)}` } },
+        },
+        scales: {
+          x: { display: false },
+          y: { ticks: { color: def.textColor, font: { size: 9 } }, grid: { color: def.gridColor } },
+        },
+      },
+    };
   }
 
   private buildConfig(): ChartConfiguration<'line'> {
@@ -1065,6 +1213,20 @@ export class TradingChartComponent implements AfterViewInit {
             borderWidth: 0,
             hidden: true,
           } as unknown as ChartDataset<'line'>,
+          // --- Ichimoku (indices 16..19) ---------------------------------------
+          { label: 'Tenkan', data: [], borderColor: '#2563eb', borderWidth: 1.2, pointRadius: 0, tension: 0, hidden: true },
+          { label: 'Kijun', data: [], borderColor: '#dc2626', borderWidth: 1.2, pointRadius: 0, tension: 0, hidden: true },
+          {
+            label: 'Senkou A',
+            data: [],
+            borderColor: 'rgba(22, 163, 74, 0.55)',
+            borderWidth: 1,
+            pointRadius: 0,
+            tension: 0,
+            fill: { target: 19, above: 'rgba(22, 163, 74, 0.13)', below: 'rgba(220, 38, 38, 0.13)' },
+            hidden: true,
+          },
+          { label: 'Senkou B', data: [], borderColor: 'rgba(220, 38, 38, 0.55)', borderWidth: 1, pointRadius: 0, tension: 0, hidden: true },
         ],
       },
       options: {

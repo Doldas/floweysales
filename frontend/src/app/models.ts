@@ -242,6 +242,20 @@ export interface HistorySeries {
   stops?: number[];
 }
 
+/** The latest price of an instrument, as GET /api/quote serves it. */
+export interface QuoteSnapshot {
+  symbol: string;
+  currency: string;
+  price: number;
+  as_of_unix: number;
+  age_seconds: number;
+  is_realtime: boolean;
+  stale: boolean;
+  /** open, closed or unknown. */
+  market_session: string;
+  quote_type: string;
+}
+
 export const HISTORY_RANGES = ['1D', '5D', '1M', '3M', '1Y', '3Y', '5Y', '10Y', 'MAX'] as const;
 export type HistoryRange = (typeof HISTORY_RANGES)[number];
 

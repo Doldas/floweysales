@@ -150,3 +150,7 @@
   .desk-table td { display: flex; justify-content: space-between; gap: 1rem; padding: 0.2rem 0; border: 0; text-align: right; }
   .desk-table td::before { content: attr(data-label); color: var(--fs-muted); font-size: 0.75rem; text-align: left; }
 }
+
+.ticket-only .desk-grid { grid-template-columns: minmax(0, 1fr); }
+.ticket-only .field-row { grid-template-columns: minmax(0, 1fr); }
+.mini-strip { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 1rem; font-size: 0.78rem; color: var(--fs-muted); margin-bottom: 0.6rem; strong { color: var(--fs-text); font-variant-numeric: tabular-nums; } a { margin-left: auto; color: var(--fs-accent-text); text-decoration: underline; display: inline-flex; align-items: center; gap: 0.25rem; min-height: 28px; } }
