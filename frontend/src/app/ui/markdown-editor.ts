@@ -58,9 +58,9 @@ export const RICH_TEXT_LIMIT = 400_000;
             <button type="button" class="md-tool" (click)="command('undo')" aria-label="Undo" title="Undo (Ctrl+Z)"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i></button>
             <button type="button" class="md-tool" (click)="command('redo')" aria-label="Redo" title="Redo (Ctrl+Shift+Z)"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button>
             <span class="md-sep" aria-hidden="true"></span>
-            <button type="button" class="md-tool" (click)="block('h1')" aria-label="Heading 1" title="Heading 1"><b>H1</b></button>
-            <button type="button" class="md-tool" (click)="block('h2')" aria-label="Heading 2" title="Heading 2"><b>H2</b></button>
-            <button type="button" class="md-tool" (click)="block('h3')" aria-label="Heading 3" title="Heading 3"><b>H3</b></button>
+            <button type="button" class="md-tool" (click)="block('h1')" aria-label="H1 heading 1" title="Heading 1"><b>H1</b></button>
+            <button type="button" class="md-tool" (click)="block('h2')" aria-label="H2 heading 2" title="Heading 2"><b>H2</b></button>
+            <button type="button" class="md-tool" (click)="block('h3')" aria-label="H3 heading 3" title="Heading 3"><b>H3</b></button>
             <button type="button" class="md-tool" (click)="block('p')" aria-label="Paragraph" title="Paragraph"><i class="bi bi-paragraph" aria-hidden="true"></i></button>
             <span class="md-sep" aria-hidden="true"></span>
             <button type="button" class="md-tool" (click)="command('bold')" aria-label="Bold" title="Bold (Ctrl+B)"><i class="bi bi-type-bold" aria-hidden="true"></i></button>
