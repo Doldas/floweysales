@@ -44,7 +44,7 @@ jobs:
       # Publishing runs on a separate runner after CI. Restore/verify the same
       # pinned JDBC jar before Docker consumes it from the build context.
       - name: Restore pinned MySQL JDBC dependency cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: docker/vendor/mysql-connector-j-9.5.0.jar
           key: jdbc-linux-9.5.0-${{ hashFiles('docker/mysql-connector-j-9.5.0.sha256') }}
