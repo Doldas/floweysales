@@ -453,7 +453,15 @@ export class AgentSession {
               const payload = await res.json();
               if (payload?.error) detail = payload.error;
             } catch { /* preserve HTTP status */ }
+            // A reconnect GET is idempotent. Retry transient gateway failures
+            // without sending another POST and executing the agent again.
+            if (requestMethod === 'GET' && [429, 502, 503, 504].includes(res.status)) {
+              throw new TypeError(detail);
+            }
             throw new Error(detail);
+          }
+          if (requestMethod === 'GET') {
+            this.noticeState.update(s => ({ ...s, status: '', statusDetail: '' }));
           }
           const headerId = res.headers.get('X-Agent-Run-ID');
           if (headerId) {
@@ -473,6 +481,7 @@ export class AgentSession {
               const seq = sseSequence(frame);
               if (seq !== null) {
                 if (seq <= lastSequence) continue;
+                if (seq !== lastSequence + 1) throw new Error('A portion of the research stream could not be replayed; the answer may be incomplete.');
                 lastSequence = seq;
               }
               if (this.handleChunk(frame)) completed = true;
@@ -483,10 +492,21 @@ export class AgentSession {
           // been truncated by a proxy; replay from the last delivered id.
           throw new TypeError('The response ended before the research run completed');
         } catch (err) {
-          if (controller.signal.aborted || !runId || !(err instanceof TypeError) || attempts >= 8) throw err;
+          if (controller.signal.aborted || !runId || !(err instanceof TypeError) || attempts >= 450) throw err;
           attempts++;
-          // Bounded exponential backoff avoids flooding a struggling proxy.
-          await new Promise<void>(resolve => setTimeout(resolve, Math.min(1000 * 2 ** (attempts - 1), 12000)));
+          this.noticeState.update(s => ({
+            ...s,
+            status: 'Connection interrupted. Reconnecting to the same research run…',
+            statusDetail: `Attempt ${attempts}; tools and model work continue on the server.`,
+          }));
+          // Keep retrying across extended network outages. Stop is instant:
+          // the abort signal cancels this delay and the server run.
+          const delay = Math.min(1000 * 2 ** Math.min(attempts - 1, 4), 12000);
+          await new Promise<void>(resolve => {
+            const onAbort = () => { clearTimeout(timer); resolve(); };
+            const timer = setTimeout(() => { controller.signal.removeEventListener('abort', onAbort); resolve(); }, delay);
+            controller.signal.addEventListener('abort', onAbort, { once: true });
+          });
           if (controller.signal.aborted) return;
           requestUrl = `/api/ai/runs/${encodeURIComponent(runId)}/events?after=${lastSequence}`;
           requestMethod = 'GET';
