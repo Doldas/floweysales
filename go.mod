@@ -5,7 +5,7 @@ go 1.27.1
 require (
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/ledongthuc/pdf v0.0.0-20261020125853-5e46805f718e
-	modernc.org/sqlite v1.61.0
+	modernc.org/sqlite v1.61.1
 )
 
 require (
