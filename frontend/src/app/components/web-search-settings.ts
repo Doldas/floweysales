@@ -225,11 +225,13 @@ export class WebSearchSettingsComponent {
     return body;
   }
 
-  async refresh(): Promise<void> {
+  /** `keepPolicyEdits` keeps policy fields typed while the request was in flight; only the server's order wins. */
+  async refresh(keepPolicyEdits = false): Promise<void> {
     try {
       const view = await this.api('/api/admin/web-search') as AdminView;
       this.view.set(view);
-      this.policy.set(view.policy);
+      const edited = this.policy();
+      this.policy.set(keepPolicyEdits && edited ? { ...edited, order: view.policy.order } : view.policy);
       this.forms.set(Object.fromEntries(view.providers.map(p => [p.id, formFrom(p)])));
       this.loaded.set(true);
     } catch (e) { this.message.set('Unable to load web search settings: ' + String(e)); }
@@ -289,7 +291,7 @@ export class WebSearchSettingsComponent {
     const order = moveProvider(pol.order, id, delta);
     await this.perform(async () => {
       await this.api('/api/admin/web-search/policy', { method: 'PUT', body: JSON.stringify({ ...(this.policy() ?? pol), order }) });
-      await this.refresh();
+      await this.refresh(true);
       this.message.set('Order saved.');
     });
   }

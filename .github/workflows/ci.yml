@@ -41,6 +41,8 @@ jobs:
         run: node --test scripts/audit-repository-gates.test.mjs
       - name: Test documentation build and brand sync
         run: node --test scripts/build-docs.test.mjs
+      - name: Check the site and API catalog are US English
+        run: node --test scripts/site-english.test.mjs
       - name: Check brand copies, build the user guide and check its links
         run: |
           node scripts/sync-brand.mjs --check

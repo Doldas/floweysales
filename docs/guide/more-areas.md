@@ -34,7 +34,7 @@ Your private research space, for signed-in accounts. Flows read their inputs fro
 **Markdown files** open in an editor with these views:
 
 - **Edit source** is the plain text of the file.
-- **Preview** shows the rendered result: headings, emphasis, nested and task lists, quotes, tables and fenced code. Footnotes and syntax coloring in code blocks are not supported, and images are never loaded; an image appears as a labeled link.
+- **Preview** shows the rendered result: headings, emphasis, nested and task lists, quotes, tables, footnotes (numbered markers with the notes listed at the end) and fenced code. Syntax coloring in code blocks is not supported, and images are never loaded; an image appears as a labeled link.
 - **Rich text** edits visually with a toolbar (headings, bold, italic, strikethrough, inline code, links, lists, quotes, rules, undo and redo) and saves Markdown into the same `.md` file. Formatting is rewritten only when you change something in this view. A file with content rich text cannot represent, such as raw HTML, front matter, footnotes, reference-style links, table alignment or indented code, stays in source mode and the page says why, so nothing is dropped.
 - **Split** shows source and preview side by side. It appears only on wide screens.
 

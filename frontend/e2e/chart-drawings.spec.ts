@@ -57,15 +57,19 @@ test.describe('chart drawings', () => {
 
     await page.reload();
     await expect(page.getByRole('toolbar', { name: 'Drawing tools' }).getByRole('button', { name: /Clear drawings \(3\)/ })).toBeEnabled();
-    // Select the level by clicking where it was drawn (once the history has loaded and the
-    // level has its place again), then delete it with the keyboard.
+    // Select the level (once the history has loaded). A drawing is anchored to its price, and the
+    // price axis can differ a little after the reload (it follows the loaded history and the
+    // viewport), so the level is looked for along the middle of the chart, not at the drawn pixel.
     await expect(async () => {
       const canvas2 = page.locator('fse-trading-chart canvas').first();
       await canvas2.scrollIntoViewIfNeeded();
       const b2 = (await canvas2.boundingBox())!;
-      await page.mouse.click(b2.x + b2.width * 0.5, b2.y + b2.height * 0.4);
-      await expect(page.getByRole('button', { name: 'Delete selected' })).toBeEnabled({ timeout: 500 });
-    }).toPass({ timeout: 8000 });
+      for (let fy = 0.3; fy <= 0.6; fy += 0.01) {
+        await page.mouse.click(b2.x + b2.width * 0.5, b2.y + b2.height * fy);
+        if (await page.getByRole('button', { name: 'Delete selected' }).isEnabled()) return;
+      }
+      throw new Error('the level could not be selected');
+    }).toPass({ timeout: 15000 });
     await page.keyboard.press('Delete');
     await expect(page.getByRole('toolbar', { name: 'Drawing tools' }).getByRole('button', { name: /Clear drawings \(2\)/ })).toBeEnabled();
 

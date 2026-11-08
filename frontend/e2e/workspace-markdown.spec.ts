@@ -105,6 +105,23 @@ test.describe('Workspace Markdown', () => {
     expect(ws.puts.at(-1)).toMatchObject({ path: '/docs/note.md', content: '# Note\n\nSome *text* here. More words.\n\n- one\n- two\n' });
   });
 
+  test('footnotes render in the preview while the source and rich-text guard stay intact', async ({ page }) => {
+    const source = 'Revenue grew[^1] and margins held[^2].\n\n[^1]: Company filing, Q3.\n[^2]: Management call.\n';
+    await mockWorkspace(page, { '/docs/notes.md': source });
+    await open(page, 'workspace');
+    await page.getByRole('button', { name: 'docs', exact: true }).first().click();
+    await page.getByRole('button', { name: /notes\.md/ }).click();
+    const editor = page.locator('fse-markdown-editor');
+    await editor.getByRole('tab', { name: 'Preview' }).click();
+    const preview = editor.getByLabel('Rendered preview');
+    await expect(preview.locator('sup.md-fnref')).toHaveText(['1', '2']);
+    await expect(preview.getByLabel('Footnotes').getByRole('listitem')).toHaveText(['Company filing, Q3.', 'Management call.']);
+    await expect(preview).not.toContainText('[^1]');
+    await expect(editor.getByRole('tab', { name: 'Rich text' })).toBeDisabled();
+    await editor.getByRole('tab', { name: 'Edit source' }).click();
+    await expect(editor.getByLabel('Markdown source')).toHaveValue(source);
+  });
+
   test('the mode tabs fit the screen and a long draft does not take over the viewport', async ({ page }) => {
     await mockWorkspace(page, { '/docs/long.md': Array.from({ length: 400 }, (_v, i) => `Line ${i}`).join('\n\n') });
     await open(page, 'workspace');

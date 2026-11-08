@@ -212,4 +212,30 @@ test('bold and italic TeX wrappers render', () => {
 
 test('backtick TeX stays literal in rich-text output', () => {
   assert.match(renderMarkdown('`\\frac{a}{b}`', { rich: true }), /<code>/);
+
+test('footnotes become numbered markers with a list at the end', () => {
+  const html = renderMarkdown('Revenue grew[^a] and margins held[^b], again[^a].\n\n[^b]: Second note.\n[^a]: First **bold** note.');
+  assert.match(html, /grew<sup class="md-fnref" aria-label="Footnote 1">1<\/sup>/);
+  assert.match(html, /held<sup class="md-fnref" aria-label="Footnote 2">2<\/sup>/);
+  assert.match(html, /again<sup class="md-fnref" aria-label="Footnote 1">1<\/sup>/);
+  assert.match(html, /<section class="md-footnotes" aria-label="Footnotes">.*<ol><li>First <strong>bold<\/strong> note\.<\/li><li>Second note\.<\/li><\/ol>/);
+  assert.doesNotMatch(html, /\[\^|<p>\[/);
+});
+
+test('a reference without a definition stays as written and no list is added', () => {
+  const html = renderMarkdown('A claim[^missing] here.');
+  assert.match(html, /claim\[\^missing\] here/);
+  assert.doesNotMatch(html, /md-footnotes|md-fnref/);
+});
+
+test('footnote text is escaped and code blocks keep footnote-looking lines', () => {
+  const html = renderMarkdown('Note[^1]\n\n[^1]: <img src=x onerror=alert(1)>\n\n```\n[^1]: not a definition\n```');
+  assert.doesNotMatch(html, /<img/);
+  assert.match(html, /&lt;img/);
+  assert.match(html, /\[\^1\]: not a definition/);
+});
+
+test('rich-text output keeps footnote syntax untouched for the editor', () => {
+  const html = renderMarkdown('Claim[^1]\n\n[^1]: source', { rich: true });
+  assert.doesNotMatch(html, /md-fnref|md-footnotes/);
 });

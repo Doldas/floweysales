@@ -3,15 +3,15 @@
   "updated_at": "2026-11-01",
   "scope": "Read-only research inventory: implemented FloweySales HTTP/MCP surfaces plus known external provider endpoints (not an exhaustive list of vendor-specific, private or trading APIs).",
   "status_legend": {
-    "implemented": "Implementerad i FloweySales och exponerad via angiven yta (kräver normalt inloggning).",
-    "upstream": "Dokumenterad/känd hos leverantören men INTE tillgänglig via FloweySales REST eller MCP.",
-    "experimental": "Inofficiell/experimentell leverantör; kan ändras och kräver opt-in eller ytterligare granskning."
+    "implemented": "Implemented in FloweySales and exposed through the stated surface (normally requires sign-in).",
+    "upstream": "Documented or known at the provider but NOT available through the FloweySales REST API or MCP.",
+    "experimental": "Unofficial or experimental provider; may change and requires opt-in or further review."
   },
   "rest": [
     {
       "method": "GET",
       "path": "/api/admin/plugins",
-      "description": "Installerade provider-plugin, butikskatalog, tillgängliga uppdateringar och trackers per plugin",
+      "description": "Installed provider plugins, store catalog, available updates and trackers per plugin",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -19,7 +19,7 @@
     {
       "method": "POST",
       "path": "/api/admin/plugins/check",
-      "description": "Hämta plugin-butikens katalog nu (sök efter uppdateringar)",
+      "description": "Fetch the plugin store catalog now (check for updates)",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -27,7 +27,7 @@
     {
       "method": "POST",
       "path": "/api/admin/plugins/install",
-      "description": "Installera eller uppdatera ett provider-plugin (SHA-256-verifierat; villkor måste godkännas)",
+      "description": "Install or update a provider plugin (SHA-256 verified; terms must be accepted)",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -35,7 +35,7 @@
     {
       "method": "DELETE",
       "path": "/api/admin/plugins/{id}",
-      "description": "Avinstallera ett provider-plugin (bekräftelse krävs om trackers använder det)",
+      "description": "Uninstall a provider plugin (confirmation required if trackers use it)",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -107,7 +107,7 @@
     {
       "method": "GET",
       "path": "/api/auth/me",
-      "description": "Session och användarroll",
+      "description": "Session and user role",
       "access": "USER / SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -115,7 +115,7 @@
     {
       "method": "GET",
       "path": "/api/config",
-      "description": "Primärt dashboardval samt MySQL-sparad lista över parallella trackers",
+      "description": "Primary dashboard selection and the MySQL-stored list of parallel trackers",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -123,7 +123,7 @@
     {
       "method": "POST",
       "path": "/api/config",
-      "description": "Välj primärt instrument och lägg till tracker utan att stoppa andra",
+      "description": "Choose the primary instrument and add a tracker without stopping others",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -139,7 +139,7 @@
     {
       "method": "GET",
       "path": "/api/forum",
-      "description": "Läs lokala foruminlägg",
+      "description": "Read local forum posts",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -147,7 +147,7 @@
     {
       "method": "POST",
       "path": "/api/forum",
-      "description": "Skapa foruminlägg",
+      "description": "Create a forum post",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -155,7 +155,7 @@
     {
       "method": "POST",
       "path": "/api/forum/vote",
-      "description": "Rösta i lokalt forum",
+      "description": "Vote in the local forum",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -179,7 +179,7 @@
     {
       "method": "GET",
       "path": "/api/orders",
-      "description": "Paginerad ordersökning: limit=500 standard (max 2000), offset; fullständig portföljbokföring bibehålls",
+      "description": "Paginated order search: limit=500 default (max 2000), offset; full portfolio bookkeeping is preserved",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -195,7 +195,7 @@
     {
       "method": "POST",
       "path": "/api/orders",
-      "description": "Placera simulering/lokal order enligt motorläge",
+      "description": "Place a simulated or local order according to the engine mode",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -203,7 +203,7 @@
     {
       "method": "POST",
       "path": "/api/paper-approvals",
-      "description": "Föreslå en pappersorder för mänskligt godkännande; kräver rationale, valfri decision_source",
+      "description": "Propose a paper order for human approval; requires rationale, optional decision_source",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -211,7 +211,7 @@
     {
       "method": "GET",
       "path": "/api/paper-approvals",
-      "description": "Granskningskö: status=pending|approved|rejected|consumed|expired|all, limit 1–100",
+      "description": "Review queue: status=pending|approved|rejected|consumed|expired|all, limit 1–100",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -219,7 +219,7 @@
     {
       "method": "GET",
       "path": "/api/paper-approvals/{client_order_id}",
-      "description": "Revisionskedja: beslut, godkännande/avslag och resulterande order med händelser",
+      "description": "Audit trail: decision, approval or rejection, and the resulting order with events",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -227,7 +227,7 @@
     {
       "method": "POST",
       "path": "/api/paper-approvals/{client_order_id}/approve",
-      "description": "Godkänn förslag; godkännaren måste vara en annan SYS_ADMIN än förslagsställaren",
+      "description": "Approve a proposal; the approver must be a different SYS_ADMIN than the proposer",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -235,7 +235,7 @@
     {
       "method": "POST",
       "path": "/api/paper-approvals/{client_order_id}/reject",
-      "description": "Avslå förslag eller återkalla oanvänt godkännande med reason",
+      "description": "Reject a proposal or revoke an unused approval with a reason",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -259,7 +259,7 @@
     {
       "method": "GET",
       "path": "/api/prices/stream",
-      "description": "SSE för serverns marknadsticks",
+      "description": "SSE stream of the server's market ticks",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -275,7 +275,7 @@
     {
       "method": "GET",
       "path": "/api/provider/research",
-      "description": "Läs källmärkt Finnhub/Binance-resultat (NY)",
+      "description": "Read source-labeled Finnhub/Binance results (NEW)",
       "access": "USER / SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -291,7 +291,7 @@
     {
       "method": "GET",
       "path": "/api/quote",
-      "description": "Källmärkt senast kända OHLC-stängning",
+      "description": "Source-labeled last known OHLC close",
       "access": "USER / SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -299,7 +299,7 @@
     {
       "method": "GET",
       "path": "/api/search",
-      "description": "Sök symboler i vald provider",
+      "description": "Search symbols in the selected provider",
       "access": "USER / SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -307,7 +307,7 @@
     {
       "method": "GET",
       "path": "/api/sec/facts",
-      "description": "SEC XBRL-fakta med period/källa",
+      "description": "SEC XBRL facts with period and source",
       "access": "USER / SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -315,7 +315,7 @@
     {
       "method": "GET",
       "path": "/api/sec/filings",
-      "description": "SEC-rapportindex med källa",
+      "description": "SEC filing index with source",
       "access": "USER / SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -347,7 +347,7 @@
     {
       "method": "DELETE",
       "path": "/api/trackers",
-      "description": "Stoppa en tracker utan att påverka övriga",
+      "description": "Stop a tracker without affecting the others",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -371,7 +371,7 @@
     {
       "method": "POST",
       "path": "/api/valuation/dcf",
-      "description": "Deterministisk DCF-värdering",
+      "description": "Deterministic DCF valuation",
       "access": "USER / SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -380,14 +380,14 @@
       "method": "GET",
       "path": "/healthz",
       "description": "MySQL-liveness/readiness utan inloggning",
-      "access": "Publik, begränsad status",
+      "access": "Public, limited status",
       "status": "implemented",
       "surface": "APP REST"
     },
     {
       "method": "GET",
       "path": "/api/market/leaderboard",
-      "description": "Rankning av bolag på sex faktorer och en strategi",
+      "description": "Ranking of companies on six factors and a strategy",
       "access": "research.read",
       "status": "implemented",
       "surface": "APP REST"
@@ -395,7 +395,7 @@
     {
       "method": "GET",
       "path": "/api/market/backtest",
-      "description": "Backtest av en rankningsstrategi mot ett index, utan framåtblickande data",
+      "description": "Backtest of a ranking strategy against an index, without look-ahead data",
       "access": "research.read",
       "status": "implemented",
       "surface": "APP REST"
@@ -403,7 +403,7 @@
     {
       "method": "GET",
       "path": "/api/events",
-      "description": "Utdelningar, splittar och rapportdatum från provider-plugin med events",
+      "description": "Dividends, splits and report dates from provider plugins with events",
       "access": "research.read",
       "status": "implemented",
       "surface": "APP REST"
@@ -411,31 +411,31 @@
     {
       "method": "GET",
       "path": "/api/plan",
-      "description": "Användarens förmögenhetsplan: fas, målallokering och simulering",
-      "access": "Inloggad användare",
+      "description": "The user's wealth plan: phase, target allocation and simulation",
+      "access": "Signed-in user",
       "status": "implemented",
       "surface": "APP REST"
     },
     {
       "method": "PUT",
       "path": "/api/plan/profile",
-      "description": "Sparar förmögenhetsplanens indata och returnerar planen",
-      "access": "Inloggad användare",
+      "description": "Saves the wealth plan inputs and returns the plan",
+      "access": "Signed-in user",
       "status": "implemented",
       "surface": "APP REST"
     },
     {
       "method": "POST",
       "path": "/api/plan/preview",
-      "description": "Plan för osparad indata (what-if), 30 per minut",
-      "access": "Inloggad användare",
+      "description": "Plan for unsaved inputs (what-if), 30 per minute",
+      "access": "Signed-in user",
       "status": "implemented",
       "surface": "APP REST"
     },
     {
       "method": "GET",
       "path": "/api/portfolio/analytics",
-      "description": "Pappersportföljens risk, korrelation och ombalanseringsförslag",
+      "description": "Paper portfolio risk, correlation and rebalancing suggestions",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -443,7 +443,7 @@
     {
       "method": "POST",
       "path": "/api/trading/size",
-      "description": "Storlek på en order utifrån vald risk och stopp; lägger ingen order",
+      "description": "Size of an order from the chosen risk and stop; places no order",
       "access": "SYS_ADMIN",
       "status": "implemented",
       "surface": "APP REST"
@@ -460,7 +460,7 @@
       "name": "get_provider_research",
       "status": "implemented",
       "surface": "MCP tools/list",
-      "note": "NYT – strikt whitelist för Binance, Finnhub, inofficiell Yahoo-nyhetssökning och opt-in Avanza"
+      "note": "NEW – strict allowlist for Binance, Finnhub, unofficial Yahoo news search and opt-in Avanza"
     },
     {
       "name": "get_sec_section",
@@ -514,7 +514,7 @@
       "name": "search_web",
       "status": "implemented",
       "surface": "MCP tools/list",
-      "note": "Brave Search API-nyckel krävs"
+      "note": "Brave Search API key required"
     },
     {
       "name": "search_symbols",
@@ -580,67 +580,67 @@
       "name": "get_leaderboard",
       "status": "implemented",
       "surface": "MCP tools/list",
-      "note": "Rankar bolag på sex faktorer (research.read-data)"
+      "note": "Ranks companies on six factors (research.read-data)"
     },
     {
       "name": "run_strategy_backtest",
       "status": "implemented",
       "surface": "MCP tools/list",
-      "note": "Backtest av en rankningsstrategi med månatlig ombalansering och varningar"
+      "note": "Backtest of a ranking strategy with monthly rebalancing and warnings"
     },
     {
       "name": "get_reference_portfolio",
       "status": "implemented",
       "surface": "MCP tools/list",
-      "note": "Det offentligt redovisade innehavet (SEC 13F eller fondens dagliga innehav) som en investerarkaraktär följer, med datum, koncentration och uppslag av en ticker"
+      "note": "The publicly reported holdings (SEC 13F or the fund's daily holdings) that an investor character follows, with date, concentration and lookup of a ticker"
     },
     {
       "name": "run_rule_strategy",
       "status": "implemented",
       "surface": "MCP tools/list",
-      "note": "Återspelar en regelbaserad strategi (Fibonacci och investerarkaraktärernas) över ett instrument, med nyckeltal, signal på sista stapeln och varningar"
+      "note": "Replays a rule-based strategy (Fibonacci and the investor characters') over an instrument, with key figures, the signal on the last bar and warnings"
     },
     {
       "name": "get_wealth_plan",
       "status": "implemented",
       "surface": "MCP tools/list",
-      "note": "Den inloggade användarens sparade förmögenhetsplan"
+      "note": "The signed-in user's saved wealth plan"
     },
     {
       "name": "get_portfolio_analytics",
       "status": "implemented",
       "surface": "MCP tools/list",
-      "note": "Pappersportföljens risk och avvikelse från planen (endast SYS_ADMIN). Otillgängligt via den fristående MCP-servern"
+      "note": "Paper portfolio risk and deviation from the plan (SYS_ADMIN only). Unavailable through the standalone MCP server"
     },
     {
       "name": "get_insider_activity",
       "status": "implemented",
       "surface": "MCP tools/list",
-      "note": "Insynshandel ur SEC Form 4. Otillgängligt via den fristående MCP-servern"
+      "note": "Insider trades from SEC Form 4. Unavailable through the standalone MCP server"
     },
     {
       "name": "get_macro_regime",
       "status": "implemented",
       "surface": "MCP tools/list",
-      "note": "Makroregim ur FRED-serier. Otillgängligt via den fristående MCP-servern"
+      "note": "Macro regime from FRED series. Unavailable through the standalone MCP server"
     },
     {
       "name": "get_corporate_events",
       "status": "implemented",
       "surface": "MCP tools/list",
-      "note": "Utdelningar, splittar och rapportdatum från provider-plugin"
+      "note": "Dividends, splits and report dates from provider plugins"
     },
     {
       "name": "list_domain_providers",
       "status": "implemented",
       "surface": "MCP tools/list",
-      "note": "Domänproviders (t.ex. skatt) från plugins, med operationer och indata. Otillgängligt via den fristående MCP-servern"
+      "note": "Domain providers (e.g. tax) from plugins, with operations and inputs. Unavailable through the standalone MCP server"
     },
     {
       "name": "call_domain_provider",
       "status": "implemented",
       "surface": "MCP tools/list",
-      "note": "Kör en operation hos en domänprovider, t.ex. tax_report. Indata kontrolleras mot deklarerade fält. Otillgängligt via den fristående MCP-servern"
+      "note": "Runs an operation on a domain provider, e.g. tax_report. Inputs are checked against the declared fields. Unavailable through the standalone MCP server"
     }
   ],
   "providers": [
@@ -649,8 +649,8 @@
       "official": true,
       "documentation": "https://github.com/binance/binance-spot-api-docs/blob/master/faqs/market_data_only.md",
       "base": "https://data-api.binance.vision",
-      "auth": "Publik läsdata; utan API-nyckel",
-      "note": "Spot-marknadsdata är inte aktieägar-/resultatrapporter. Rate limits; 429 ska respekteras.",
+      "auth": "Public read-only data; no API key",
+      "note": "Spot market data is not shareholder or earnings reporting. Rate limits apply; 429 must be respected.",
       "endpoints": [
         {
           "operation": "server_time",
@@ -710,7 +710,7 @@
           "operation": "",
           "path": "GET /api/v3/ping",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
@@ -722,13 +722,13 @@
           "operation": "",
           "path": "GET /api/v3/uiKlines",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /api/v3/ticker",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         }
       ]
     },
@@ -737,8 +737,8 @@
       "official": true,
       "documentation": "https://finnhub.io/docs/api",
       "base": "https://finnhub.io/api/v1",
-      "auth": "FINNHUB_API_KEY på servern (skickas bara till Finnhub-pluginet); plan och dataåtkomst kan begränsa",
-      "note": "Analytikermått och nyheter är inte verifierade revisionsdata. Stäm av mot SEC och originalrapporter.",
+      "auth": "FINNHUB_API_KEY on the server (sent only to the Finnhub plugin); plan and data access may limit it",
+      "note": "Analyst measures and news are not verified audit data. Reconcile against the SEC and the original reports.",
       "endpoints": [
         {
           "operation": "company_profile",
@@ -798,133 +798,133 @@
           "operation": "",
           "path": "GET /quote",
           "status": "implemented",
-          "via": "Befintlig sökning/historik/finansiella rapporter"
+          "via": "Existing search, history and financial reports"
         },
         {
           "operation": "",
           "path": "GET /search",
           "status": "implemented",
-          "via": "Befintlig sökning/historik/finansiella rapporter"
+          "via": "Existing search, history and financial reports"
         },
         {
           "operation": "",
           "path": "GET /stock/candle",
           "status": "implemented",
-          "via": "Befintlig sökning/historik/finansiella rapporter"
+          "via": "Existing search, history and financial reports"
         },
         {
           "operation": "",
           "path": "GET /stock/financials-reported",
           "status": "implemented",
-          "via": "Befintlig sökning/historik/finansiella rapporter"
+          "via": "Existing search, history and financial reports"
         },
         {
           "operation": "",
           "path": "GET /stock/symbol",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /news",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /calendar/earnings",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /calendar/economic",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /calendar/ipo",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /stock/dividend",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /stock/executive",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /stock/upgrade-downgrade",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /stock/ownership",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /etf/profile",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /etf/holdings",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /stock/filings",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /stock/option-chain",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /stock/financials",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /stock/revenue-estimate",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /stock/eps-estimate",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /crypto/exchange",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         },
         {
           "operation": "",
           "path": "GET /forex/exchange",
           "status": "upstream",
-          "via": "Endast leverantör"
+          "via": "Provider only"
         }
       ]
     },
@@ -933,8 +933,8 @@
       "official": false,
       "documentation": "https://github.com/gadicc/yahoo-finance2",
       "base": "https://query1.finance.yahoo.com / query2.finance.yahoo.com",
-      "auth": "Ingen stabil offentlig utvecklar-API; vissa moduler kräver cookie/crumb",
-      "note": "Inofficiella gränssnitt, inga garantier om kontrakt eller kommersiella rättigheter.",
+      "auth": "No stable public developer API; some modules require a cookie/crumb",
+      "note": "Unofficial interfaces, with no guarantee of a contract or commercial rights.",
       "endpoints": [
         {
           "operation": "market_news",
@@ -946,73 +946,73 @@
           "operation": "",
           "path": "GET /v1/finance/search",
           "status": "implemented",
-          "via": "FloweySales sökning/historik/kvartalsrapporter"
+          "via": "FloweySales search, history and quarterly reports"
         },
         {
           "operation": "",
           "path": "GET /v8/finance/chart/{symbol}",
           "status": "implemented",
-          "via": "FloweySales sökning/historik/kvartalsrapporter"
+          "via": "FloweySales search, history and quarterly reports"
         },
         {
           "operation": "",
           "path": "GET /ws/fundamentals-timeseries/v1/finance/timeseries/{symbol}",
           "status": "implemented",
-          "via": "FloweySales sökning/historik/kvartalsrapporter"
+          "via": "FloweySales search, history and quarterly reports"
         },
         {
           "operation": "",
           "path": "GET /v10/finance/quoteSummary/{symbol}",
           "status": "upstream",
-          "via": "Endast leverantör/inofficiell"
+          "via": "Provider only / unofficial"
         },
         {
           "operation": "",
           "path": "GET /v7/finance/quote",
           "status": "upstream",
-          "via": "Endast leverantör/inofficiell"
+          "via": "Provider only / unofficial"
         },
         {
           "operation": "",
           "path": "GET /v1/test/getcrumb",
           "status": "upstream",
-          "via": "Endast leverantör/inofficiell"
+          "via": "Provider only / unofficial"
         },
         {
           "operation": "",
           "path": "GET /v7/finance/spark",
           "status": "upstream",
-          "via": "Endast leverantör/inofficiell"
+          "via": "Provider only / unofficial"
         },
         {
           "operation": "",
           "path": "Options chains /v7/finance/options/{symbol}",
           "status": "upstream",
-          "via": "Endast leverantör/inofficiell"
+          "via": "Provider only / unofficial"
         },
         {
           "operation": "",
           "path": "Screener /v1/finance/screener/predefined",
           "status": "upstream",
-          "via": "Endast leverantör/inofficiell"
+          "via": "Provider only / unofficial"
         },
         {
           "operation": "",
           "path": "Trending /v1/finance/trending/{region}",
           "status": "upstream",
-          "via": "Endast leverantör/inofficiell"
+          "via": "Provider only / unofficial"
         },
         {
           "operation": "",
           "path": "Quote summary assetProfile / financialData / recommendationTrend modules",
           "status": "upstream",
-          "via": "Endast leverantör/inofficiell"
+          "via": "Provider only / unofficial"
         },
         {
           "operation": "",
           "path": "Dividend/split events via chart queries",
           "status": "upstream",
-          "via": "Endast leverantör/inofficiell"
+          "via": "Provider only / unofficial"
         }
       ]
     },
@@ -1021,14 +1021,14 @@
       "official": false,
       "documentation": "https://github.com/vmorsell/avanza-sdk-go",
       "base": "https://www.avanza.se (inofficiell)",
-      "auth": "Avanza-pluginet måste installeras och dess villkor godkännas; inga privata sessionsflöden",
-      "note": "Avanza har inget stabilt publikt dokumenterat API. Endpoints från tredjeparts-SDK är vägledande, inte officiellt kontrakt; inga BankID- eller order-API:er exponerade.",
+      "auth": "The Avanza plugin must be installed and its terms accepted; no private session flows",
+      "note": "Avanza has no stable, publicly documented API. Endpoints from third-party SDKs are indicative, not an official contract; no BankID or order APIs are exposed.",
       "endpoints": [
         {
           "operation": "instrument_snapshot",
           "path": "FetchAvanza public instrument adapter",
           "status": "implemented",
-          "via": "MCP get_provider_research / REST /api/provider/research (kräver opt-in)"
+          "via": "MCP get_provider_research / REST /api/provider/research (requires opt-in)"
         },
         {
           "operation": "",
@@ -1058,67 +1058,67 @@
           "operation": "",
           "path": "GetStockQuote (public unofficial)",
           "status": "upstream",
-          "via": "Ej ansluten – inofficiell, privat orderhantering särskilt exkluderad"
+          "via": "Not connected – unofficial; private order handling is explicitly excluded"
         },
         {
           "operation": "",
           "path": "GetStockOrderDepth (public unofficial)",
           "status": "upstream",
-          "via": "Ej ansluten – inofficiell, privat orderhantering särskilt exkluderad"
+          "via": "Not connected – unofficial; private order handling is explicitly excluded"
         },
         {
           "operation": "",
           "path": "GetStockDetails (public unofficial)",
           "status": "upstream",
-          "via": "Ej ansluten – inofficiell, privat orderhantering särskilt exkluderad"
+          "via": "Not connected – unofficial; private order handling is explicitly excluded"
         },
         {
           "operation": "",
           "path": "GetStockMarketPlace (public unofficial)",
           "status": "upstream",
-          "via": "Ej ansluten – inofficiell, privat orderhantering särskilt exkluderad"
+          "via": "Not connected – unofficial; private order handling is explicitly excluded"
         },
         {
           "operation": "",
           "path": "GetCertificateDetails (public unofficial)",
           "status": "upstream",
-          "via": "Ej ansluten – inofficiell, privat orderhantering särskilt exkluderad"
+          "via": "Not connected – unofficial; private order handling is explicitly excluded"
         },
         {
           "operation": "",
           "path": "GetWarrantDetails (public unofficial)",
           "status": "upstream",
-          "via": "Ej ansluten – inofficiell, privat orderhantering särskilt exkluderad"
+          "via": "Not connected – unofficial; private order handling is explicitly excluded"
         },
         {
           "operation": "",
           "path": "GetOffHoursPrice (public unofficial)",
           "status": "upstream",
-          "via": "Ej ansluten – inofficiell, privat orderhantering särskilt exkluderad"
+          "via": "Not connected – unofficial; private order handling is explicitly excluded"
         },
         {
           "operation": "",
           "path": "GetStockPriceChartComparison (public unofficial)",
           "status": "upstream",
-          "via": "Ej ansluten – inofficiell, privat orderhantering särskilt exkluderad"
+          "via": "Not connected – unofficial; private order handling is explicitly excluded"
         },
         {
           "operation": "",
           "path": "GetMarketMakerPriceChart (public unofficial)",
           "status": "upstream",
-          "via": "Ej ansluten – inofficiell, privat orderhantering särskilt exkluderad"
+          "via": "Not connected – unofficial; private order handling is explicitly excluded"
         },
         {
           "operation": "",
           "path": "GetNews (public unofficial)",
           "status": "upstream",
-          "via": "Ej ansluten – inofficiell, privat orderhantering särskilt exkluderad"
+          "via": "Not connected – unofficial; private order handling is explicitly excluded"
         },
         {
           "operation": "",
           "path": "BankID, account, order placement, streaming private account",
           "status": "upstream",
-          "via": "Ej ansluten – inofficiell, privat orderhantering särskilt exkluderad"
+          "via": "Not connected – unofficial; private order handling is explicitly excluded"
         }
       ]
     }
