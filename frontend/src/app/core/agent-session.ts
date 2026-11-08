@@ -220,6 +220,7 @@ export class AgentSession {
   });
 
   private abort: AbortController | null = null;
+  private activeRunId: string | null = null;
   private assistantId = -1;
   private nextId = 1;
   /** Full wire transcript; tool calls and results must survive follow-up prompts. */
@@ -314,7 +315,14 @@ export class AgentSession {
   dismissNotice(id: number): void { this.noticeState.update(s => dismissNotice(s, id)); }
 
   stop(): void {
+    // Stopping is different from losing a connection: explicitly cancel the
+    // server-owned run, rather than silently leaving it using model resources.
+    const id = this.activeRunId;
     this.abort?.abort();
+    if (id) void fetch(`/api/ai/runs/${encodeURIComponent(id)}`, {
+      method: 'DELETE', credentials: 'same-origin',
+    }).catch(() => { /* the visible request has already been stopped */ });
+    this.activeRunId = null;
     this.abort = null;
   }
 
@@ -417,50 +425,88 @@ export class AgentSession {
     } catch { this.error.set('The task could not be deleted.'); }
   }
 
-  /** Posts a run request and folds the event stream into the conversation. */
+  /** A streaming POST creates one server-owned run. A reconnect only GETs
+   * events from the last acknowledged cursor: it never restarts tool calls. */
   private async stream(url: string, body: unknown): Promise<void> {
     const controller = new AbortController();
     this.abort = controller;
+    let runId: string | null = null;
+    let lastSequence = 0;
+    let completed = false;
+    let attempts = 0;
+    let requestUrl = url;
+    let requestMethod = 'POST';
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify(body),
-      });
-      if (!res.ok || !res.body) {
-        let detail = `HTTP ${res.status}`;
-        try {
-          const body = await res.json();
-          if (body?.error) detail = body.error;
-        } catch {}
-        throw new Error(detail);
-      }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
       for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let sep: number;
-        while ((sep = buffer.indexOf('\n\n')) >= 0) {
-          this.handleChunk(buffer.slice(0, sep));
-          buffer = buffer.slice(sep + 2);
+        try {
+          const res = await fetch(requestUrl, {
+            method: requestMethod,
+            credentials: 'same-origin',
+            headers: requestMethod === 'POST' ? { 'Content-Type': 'application/json' } : {},
+            signal: controller.signal,
+            body: requestMethod === 'POST' ? JSON.stringify(body) : undefined,
+          });
+          if (!res.ok || !res.body) {
+            let detail = `HTTP ${res.status}`;
+            try {
+              const payload = await res.json();
+              if (payload?.error) detail = payload.error;
+            } catch { /* preserve HTTP status */ }
+            throw new Error(detail);
+          }
+          const headerId = res.headers.get('X-Agent-Run-ID');
+          if (headerId) {
+            if (runId && runId !== headerId) throw new Error('The server returned a different research run.');
+            runId = headerId;
+            this.activeRunId = headerId;
+          }
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          for (;;) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+            let sep: number;
+            while ((sep = buffer.indexOf('\n\n')) >= 0) {
+              const frame = buffer.slice(0, sep);
+              buffer = buffer.slice(sep + 2);
+              const cursor = /^id:\s*(\d+)\s*$/m.exec(frame);
+              if (cursor) {
+                const seq = Number(cursor[1]);
+                if (!Number.isSafeInteger(seq) || seq <= lastSequence) continue;
+                lastSequence = seq;
+              }
+              if (this.handleChunk(frame)) completed = true;
+            }
+          }
+          if (completed || !runId) return;
+          // An HTTP 200 stream that ends without a terminal event may have
+          // been truncated by a proxy; replay from the last delivered id.
+          throw new TypeError('The response ended before the research run completed');
+        } catch (err) {
+          if (controller.signal.aborted || !runId || !(err instanceof TypeError) || attempts >= 8) throw err;
+          attempts++;
+          // Bounded exponential backoff avoids flooding a struggling proxy.
+          await new Promise<void>(resolve => setTimeout(resolve, Math.min(1000 * 2 ** (attempts - 1), 12000)));
+          if (controller.signal.aborted) return;
+          requestUrl = `/api/ai/runs/${encodeURIComponent(runId)}/events?after=${lastSequence}`;
+          requestMethod = 'GET';
         }
       }
     } catch (err) {
-      if ((err as Error)?.name !== 'AbortError') {
+      if ((err as Error)?.name !== 'AbortError' && !controller.signal.aborted) {
         const msg = (err as Error)?.message || 'Request failed';
-        // A body that dies mid-stream raises a bare network error such as "Error in input stream".
-        this.error.set(err instanceof TypeError ? `The connection to the server was cut while the answer streamed (${msg}). A proxy or network timeout is the usual cause; ask again.` : msg);
+        this.error.set(err instanceof TypeError
+          ? `The research run lost its connection after repeated reconnection attempts (${msg}). The answer may be incomplete.`
+          : msg);
       }
     } finally {
-      // Any step still marked running was interrupted.
+      // Only mark genuinely unfinished tool steps as interrupted.
       this.entries.update(list => list.map(e => (e.status === 'running' ? { ...e, status: 'error', content: e.content || 'Interrupted' } : e)));
       this.noticeState.update(finishNotices);
       this.streaming.set(false);
+      this.activeRunId = null;
       this.abort = null;
     }
   }
@@ -481,7 +527,8 @@ export class AgentSession {
     this.configured.set(true);
   }
 
-  private handleChunk(chunk: string): void {
+  private handleChunk(chunk: string): boolean {
+    let finished = false;
     for (const rawLine of chunk.split('\n')) {
       const line = rawLine.trim();
       if (!line.startsWith('data:')) continue;
@@ -494,6 +541,9 @@ export class AgentSession {
         continue;
       }
       switch (ev.type) {
+        case 'stream_end':
+          finished = true;
+          break;
         case 'run_start':
           this.activeModel.set(ev.model || '');
           break;
@@ -545,6 +595,7 @@ export class AgentSession {
           break;
       }
     }
+    return finished;
   }
 
   private setProgress(callId: string, progress: string): void {
