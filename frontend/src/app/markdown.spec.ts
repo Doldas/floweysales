@@ -184,3 +184,32 @@ test('shared Markdown rejects external links with embedded credentials', () => {
   assert.doesNotMatch(html, /href="https:\/\/user:pass/);
   assert.match(html, /href="https:\/\/example.org\/report"/);
 });
+
+test('TeX wrapped in backticks renders as a formula, not as code', () => {
+  const html = renderMarkdown('`\\text{PV} = \\frac{\\text{Net CF}}{r} = \\frac{32.4\\ \\text{B}}{0.15} = \\mathbf{213\\ \\text{B USD}}`');
+  assert.match(html, /class="md-math md-math-inline"/);
+  assert.doesNotMatch(html, /<code>|md-math-error/);
+  assert.equal((html.match(/md-frac/g) ?? []).length, 2);
+  assert.match(html, /<strong>213 /);
+});
+
+test('ordinary code spans and identifiers keep their code formatting', () => {
+  const html = renderMarkdown('Call `get_sec_facts` or `a\\b` or `path\\textures.png`.');
+  assert.equal((html.match(/<code>/g) ?? []).length, 3);
+  assert.doesNotMatch(html, /md-math/);
+});
+
+test('a lone TeX command in backticks stays literal, with or without a sentence around it', () => {
+  assert.match(renderMarkdown('Write `\\frac{a}{b}` for a fraction.'), /<code>\\frac\{a\}\{b\}<\/code>/);
+});
+
+test('bold and italic TeX wrappers render', () => {
+  const html = renderMarkdown('\\(\\mathbf{213\\ \\text{B USD}} \\mathit{x}\\)');
+  assert.match(html, /<strong>213 <span class="md-math-text">B USD<\/span><\/strong>/);
+  assert.match(html, /<em>x<\/em>/);
+  assert.doesNotMatch(html, /md-math-error/);
+});
+
+test('backtick TeX stays literal in rich-text output', () => {
+  assert.match(renderMarkdown('`\\frac{a}{b}`', { rich: true }), /<code>/);
+});
