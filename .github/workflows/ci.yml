@@ -104,7 +104,7 @@ jobs:
           go vet ./...
           go test -race -count=1 ./...
       - name: Restore pinned MySQL JDBC dependency cache for Go storage tests
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: docker/vendor/mysql-connector-j-9.5.0.jar
           key: jdbc-linux-9.5.0-${{ hashFiles('docker/mysql-connector-j-9.5.0.sha256') }}
@@ -250,7 +250,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Restore pinned MySQL JDBC dependency cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: docker/vendor/mysql-connector-j-9.5.0.jar
           key: jdbc-linux-9.5.0-${{ hashFiles('docker/mysql-connector-j-9.5.0.sha256') }}
@@ -318,7 +318,7 @@ jobs:
       - name: Build production application image
         run: docker build -t floweysales:ci .
       - name: Restore pinned MySQL JDBC dependency cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: docker/vendor/mysql-connector-j-9.5.0.jar
           key: jdbc-linux-9.5.0-${{ hashFiles('docker/mysql-connector-j-9.5.0.sha256') }}
