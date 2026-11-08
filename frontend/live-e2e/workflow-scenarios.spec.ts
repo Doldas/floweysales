@@ -59,12 +59,17 @@ test('step invariants accept a complete trace', () => {
   assert.deepEqual(stepProblems(chain.graph, steps), []);
 });
 
+test('step invariants do not expect a step for the trigger node', () => {
+  assert.deepEqual(stepProblems(chain.graph, [{ node: 'b', status: 'SUCCESS' }, { node: 'c', status: 'SUCCESS' }]), []);
+  assert.match(stepProblems(chain.graph, [{ node: 'b', status: 'SUCCESS' }]).join('|'), /1 of 2 nodes/);
+});
+
 test('step invariants flag gaps and failures', () => {
   assert.deepEqual(stepProblems(chain.graph, []), ['run recorded no node steps']);
   const partial = stepProblems(chain.graph, [{ node: 'a', status: 'SUCCESS' }, { node: 'b', status: 'FAILED' }]).join('|');
   assert.match(partial, /failed/);
   assert.match(partial, /no output node executed/);
-  assert.match(partial, /2 of 3/);
+  assert.match(partial, /1 of 2/);
   assert.match(stepProblems(chain.graph, [{ node: 'zzz', status: 'SUCCESS' }]).join('|'), /not in the graph/);
 });
 

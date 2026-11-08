@@ -717,6 +717,8 @@ export class TradingChartComponent implements AfterViewInit {
     d.datasets[5].data = lowLine;
     this.applyIndicators();
     this.applyStyle(false);
+    // A new series has other bar positions: the old zoom window would show it squashed or empty.
+    this.chart.resetZoom('none');
     this.chart.update('none');
 
     const last = points[points.length - 1];

@@ -228,9 +228,12 @@ pre { color: var(--fs-text-2); }
   padding: 0.3rem 0.75rem;
   font-size: 0.8125rem;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-  &:hover { border-color: var(--fs-accent); color: var(--fs-text); }
-  &.active, &[aria-pressed='true'] { background: var(--fs-accent-soft); border-color: var(--fs-accent); color: var(--fs-accent-text); }
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.08s;
+  &:hover:not(:disabled) { border-color: var(--fs-accent); color: var(--fs-text); }
+  &:active:not(:disabled) { transform: scale(0.95); }
+  &:disabled { opacity: 0.45; cursor: not-allowed; }
+  // A radio chip (bar length, chart style) marks the chosen one the way a toggle chip marks an enabled one.
+  &.active, &[aria-pressed='true'], &[aria-checked='true'] { background: var(--fs-accent-soft); border-color: var(--fs-accent); color: var(--fs-accent-text); font-weight: 600; }
 }
 .fs-segmented {
   display: inline-flex;
