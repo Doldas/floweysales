@@ -194,3 +194,29 @@ func TestIndicesEndpointAndUnavailableLeaderboard(t *testing.T) {
 		t.Fatalf("an unavailable index must be refused explicitly, not substituted: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+// A combined universe of indices quoted in different currencies says so; it
+// never converts or hides the mix.
+func TestCombinedUniverseDisclosesCurrencyMix(t *testing.T) {
+	us := availableFixture("US", indexConstituent{Symbol: "AAA"})
+	us.ID, us.Currency = "index_us", "USD"
+	se := availableFixture("SE", indexConstituent{Symbol: "VOLV-B.ST"})
+	se.ID, se.Currency = "index_se", "SEK"
+	usToo := availableFixture("US", indexConstituent{Symbol: "BBB"})
+	usToo.ID, usToo.Currency = "index_us2", "USD"
+
+	mixed, err := combineIndexes([]indexDefinition{us, se}, []string{"index_us", "index_se"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(mixed.Currencies, ",") != "SEK,USD" || len(mixed.Warnings) != 1 || !strings.Contains(mixed.Warnings[0], "SEK, USD") {
+		t.Fatalf("a currency mix must be disclosed: %+v", mixed)
+	}
+	same, err := combineIndexes([]indexDefinition{us, usToo}, []string{"index_us", "index_us2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(same.Currencies) != 1 || len(same.Warnings) != 0 {
+		t.Fatalf("one currency needs no warning: %+v", same)
+	}
+}
