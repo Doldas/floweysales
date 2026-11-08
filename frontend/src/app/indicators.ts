@@ -1,6 +1,8 @@
 import type { HistoryPoint } from './models';
 import { formatNumber } from './ui/datetime';
 
+export { atr, ichimoku, stochastic, type IchimokuResult, type StochasticResult } from './indicators-extra';
+
 /** Which analysis studies are rendered on the chart. */
 export interface IndicatorFlags {
   ema9: boolean;
@@ -13,6 +15,9 @@ export interface IndicatorFlags {
   volume: boolean;
   rsi: boolean;
   macd: boolean;
+  stoch: boolean;
+  atr: boolean;
+  ichimoku: boolean;
 }
 
 export const INDICATOR_KEYS = [
@@ -26,6 +31,9 @@ export const INDICATOR_KEYS = [
   'volume',
   'rsi',
   'macd',
+  'stoch',
+  'atr',
+  'ichimoku',
 ] as const;
 export type IndicatorKey = (typeof INDICATOR_KEYS)[number];
 
@@ -40,6 +48,9 @@ export const INDICATOR_LABELS: Record<IndicatorKey, string> = {
   volume: 'Volume',
   rsi: 'RSI 14',
   macd: 'MACD',
+  stoch: 'Stochastic',
+  atr: 'ATR',
+  ichimoku: 'Ichimoku',
 };
 
 export const DEFAULT_INDICATORS: IndicatorFlags = {
@@ -53,6 +64,9 @@ export const DEFAULT_INDICATORS: IndicatorFlags = {
   volume: false,
   rsi: false,
   macd: false,
+  stoch: false,
+  atr: false,
+  ichimoku: false,
 };
 
 const STORAGE_KEY = 'fse.indicators';

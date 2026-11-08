@@ -8,6 +8,7 @@ import { instrumentFromQuery, instrumentKey, isStaleResponse, pickInitialInstrum
 import { FavoriteInstrument, RecentInstrument, addRecent, isFavorite, parseFavorites, parseRecent, toggleFavorite } from './recent-instruments';
 import { OrdersState } from '../orders-state';
 import { NotifyService } from './notify.service';
+import { DEFAULT_SETTINGS, parseSettings, settingsProblem, type IndicatorSettings, type SettingKey } from '../indicator-settings';
 import {
   HISTORY_RANGES,
   isProviderId,
@@ -82,6 +83,10 @@ export class MarketState {
   readonly historySeed = signal<{ price: number; fastEMA: number; slowEMA: number } | null>(null);
 
   readonly indicators = signal<IndicatorFlags>(loadIndicatorFlags());
+  /** The periods the studies are worked out with; kept in this browser. */
+  readonly indicatorSettings = signal<IndicatorSettings>(this.loadSettings());
+  /** Why the last change to a period was not applied, or ''. */
+  readonly settingsNote = signal('');
   readonly enabledIndicatorKeys = computed(() => INDICATOR_KEYS.filter(k => this.indicators()[k]));
   readonly insights = computed(() => {
     const s = this.marketSeries();
@@ -173,6 +178,9 @@ export class MarketState {
 
   constructor() {
     effect(() => saveIndicatorFlags(this.indicators()));
+    effect(() => {
+      try { localStorage.setItem('fse.indicatorSettings', JSON.stringify(this.indicatorSettings())); } catch { /* the periods last for this visit */ }
+    });
     effect(() => {
       const tick = this.stream.latestTick();
       if (tick) this.handleTick(tick);
@@ -356,6 +364,23 @@ export class MarketState {
     this.historyRange.set(range);
     const symbol = this.trackedSymbol();
     if (symbol) this.loadHistory(symbol, this.provider());
+  }
+
+  private loadSettings(): IndicatorSettings {
+    try { return parseSettings(JSON.parse(localStorage.getItem('fse.indicatorSettings') ?? 'null')); } catch { return { ...DEFAULT_SETTINGS }; }
+  }
+
+  /** Changes one period. A value the studies cannot use is explained and not applied. */
+  setIndicatorSetting(key: SettingKey, value: number): void {
+    const next = { ...this.indicatorSettings(), [key]: value };
+    const problem = settingsProblem(next);
+    this.settingsNote.set(problem);
+    if (!problem) this.indicatorSettings.set(next);
+  }
+
+  resetIndicatorSettings(): void {
+    this.settingsNote.set('');
+    this.indicatorSettings.set({ ...DEFAULT_SETTINGS });
   }
 
   toggleIndicator(key: IndicatorKey): void {
