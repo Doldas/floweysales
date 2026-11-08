@@ -16,9 +16,11 @@ import { TradingChartComponent } from '../components/chart';
 import { SymbolSearchComponent } from '../shell/symbol-search';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import { INDICATOR_KEYS, INDICATOR_LABELS } from '../indicators';
+import { parseDrawings, type Drawing } from '../core/chart-drawings';
 import { CHART_STYLES, DEFAULT_CHART_STYLE, parseChartStyle, type ChartStyleId } from '../core/chart-styles';
 
 const CHART_STYLE_KEY = 'fs.chartStyle';
+const drawingsKey = (provider: string, symbol: string) => `fs.drawings.${provider}:${symbol}`;
 
 function readChartStyle(): ChartStyleId {
   try { return parseChartStyle(localStorage.getItem(CHART_STYLE_KEY)); } catch { return DEFAULT_CHART_STYLE; }
@@ -45,6 +47,8 @@ export class MarketsPage {
   readonly chartStyles = CHART_STYLES;
   /** How the price is drawn; kept in this browser. */
   readonly chartStyle = signal<ChartStyleId>(readChartStyle());
+  /** The drawings of the instrument on screen; kept in this browser, one list per provider and symbol. */
+  readonly drawings = signal<Drawing[]>([]);
   readonly indicatorKeys = INDICATOR_KEYS;
   readonly indicatorLabels = INDICATOR_LABELS;
   readonly confirmClear = signal(false);
@@ -100,6 +104,15 @@ export class MarketsPage {
   });
 
   constructor() {
+    // Load the drawings of whichever instrument is on screen.
+    effect(() => {
+      const symbol = this.market.trackedSymbol();
+      const provider = this.market.provider();
+      if (!symbol) { this.drawings.set([]); return; }
+      let stored: Drawing[] = [];
+      try { stored = parseDrawings(JSON.parse(localStorage.getItem(drawingsKey(provider, symbol)) ?? '[]')); } catch { /* none saved */ }
+      this.drawings.set(stored);
+    });
     // Seed the chart whenever history for the active instrument arrives.
     effect(() => {
       const series = this.market.marketSeries();
@@ -134,6 +147,14 @@ export class MarketsPage {
     }
     this.confirmClear.set(false);
     this.market.clearHistory();
+  }
+
+  setDrawings(list: Drawing[]): void {
+    this.drawings.set(list);
+    const symbol = this.market.trackedSymbol();
+    if (!symbol) return;
+    const key = drawingsKey(this.market.provider(), symbol);
+    try { list.length ? localStorage.setItem(key, JSON.stringify(list)) : localStorage.removeItem(key); } catch { /* the drawings last for this visit */ }
   }
 
   setChartStyle(id: ChartStyleId): void {

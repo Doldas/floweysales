@@ -28,12 +28,12 @@ test.describe('chart styles', () => {
     for (const id of STYLES) {
       await group.locator(`[data-style="${id}"]`).click();
       await expect(group.locator(`[data-style="${id}"]`)).toHaveAttribute('aria-checked', 'true');
-      await page.waitForTimeout(150);
-      const px = await barPixels(page);
       if (['candles', 'hollow', 'ohlc', 'heikin', 'baseline'].includes(id)) {
-        expect(px.up, `${id}: green bars or fill`).toBeGreaterThan(20);
-        expect(px.down, `${id}: red bars or fill`).toBeGreaterThan(20);
+        await expect.poll(async () => (await barPixels(page)).up, { message: `${id}: green bars or fill` }).toBeGreaterThan(20);
+        await expect.poll(async () => (await barPixels(page)).down, { message: `${id}: red bars or fill` }).toBeGreaterThan(20);
       } else {
+        await page.waitForTimeout(150);
+        const px = await barPixels(page);
         expect(px.up + px.down, `${id}: draws no bar colors`).toBeLessThan(20);
       }
       await page.locator('fse-trading-chart .chart-container').screenshot({ path: `test-results/chart-style-${id}.png` });
