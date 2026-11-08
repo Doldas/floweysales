@@ -31,9 +31,14 @@ test.describe('trade rail beside the chart', () => {
     await expect(page).toHaveURL(/#\/markets$/);
   });
 
-  test('the full desk is still the place for positions and the blotter', async ({ page }) => {
+  test('the rail ticket has no positions or blotter', async ({ page }) => {
     await open(page, 'markets');
     await expect(page.getByRole('region', { name: 'Paper order ticket' }).getByRole('tab', { name: /Positions/ })).toHaveCount(0);
+  });
+});
+
+test.describe('paper portfolio page', () => {
+  test('keeps the account summary, positions and the blotter', async ({ page }) => {
     await open(page, 'portfolio');
     await expect(page.getByRole('tab', { name: /Positions/ })).toBeVisible();
     await expect(page.getByLabel('Account summary')).toBeVisible();
