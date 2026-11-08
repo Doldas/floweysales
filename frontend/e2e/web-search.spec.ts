@@ -124,6 +124,24 @@ test.describe('web search settings', () => {
     await policy.getByLabel('Provider choice').selectOption('manual');
     await expect(policy.locator('select')).toHaveCount(2);
   });
+
+  test('policy fields typed while a reorder is being refreshed are kept', async ({ page }) => {
+    const mock = await mockWebSearch(page, ['searxng', 'tavily']);
+    await openWebSearch(page);
+    // Slow down the reload that follows a reorder so the edit lands in that window.
+    let slow = false;
+    await page.route('**/api/admin/web-search', async route => {
+      if (slow && route.request().method() === 'GET') await new Promise(r => setTimeout(r, 600));
+      await route.fallback();
+    });
+    slow = true;
+    const policy = page.getByRole('article', { name: 'Search policy' });
+    await page.getByRole('button', { name: 'Move Tavily Search API up' }).click();
+    await policy.getByLabel('Providers tried per search (1 to 5)').fill('2');
+    await expect(page.getByRole('status').filter({ hasText: 'Order saved.' })).toBeVisible();
+    await expect(policy.getByLabel('Providers tried per search (1 to 5)')).toHaveValue('2');
+    await expect.poll(() => (mock.state.policy.order as string[]).slice(0, 2)).toEqual(['tavily', 'searxng']);
+  });
 });
 
 test.describe('search source attribution', () => {
