@@ -20,7 +20,7 @@ import (
 // Bounded, in-process retention deliberately does not promise survival of
 // application restarts (persisted research tasks have separate checkpoints).
 const (
- chatRunLifetime = 30 * time.Minute
+ chatRunLifetime = 90 * time.Minute
  chatReplayRetention = time.Hour
  chatRunEventLimit = 16384
  chatRunGlobalLimit = 80
