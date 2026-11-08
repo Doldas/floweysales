@@ -35,16 +35,16 @@ type chatRunEvent struct {
 	value    ai.Event
 }
 type chatRun struct {
-	id      string
-	owner   int64
-	started time.Time
+	id         string
+	owner      int64
+	started    time.Time
 	finishedAt time.Time
-	cancel  context.CancelFunc
-	mu      sync.Mutex
-	events  []chatRunEvent
-	next    uint64
-	closed  bool
-	changed chan struct{}
+	cancel     context.CancelFunc
+	mu         sync.Mutex
+	events     []chatRunEvent
+	next       uint64
+	closed     bool
+	changed    chan struct{}
 }
 
 func (j *chatRun) append(ev ai.Event) {
