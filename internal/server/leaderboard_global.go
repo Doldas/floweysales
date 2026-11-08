@@ -309,7 +309,7 @@ func addFilterStep(sel *leaderboardSelection, f scopeFilter, removed []excludedC
 func compareMode(raw, universe string) (string, error) {
 	switch raw {
 	case "":
-		if universe == globalUniverseID {
+		if universe == globalUniverseID || universe == combinedUniverseID {
 			return compareRegion, nil
 		}
 		return compareAll, nil

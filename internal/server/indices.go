@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"floweysales/internal/indexsource"
 	"floweysales/internal/market"
 )
 
@@ -235,6 +236,9 @@ type indexView struct {
 	// Sources lists how the caller can supply data; Source is what they supplied.
 	Sources []string        `json:"sources"`
 	Source  *userSourceView `json:"source"`
+	// Verification is set when the caller supplied a list: the automated
+	// checks and the resulting level (verified or approximate).
+	Verification *indexsource.Verification `json:"verification,omitempty"`
 }
 
 func viewIndex(d indexDefinition, now time.Time) indexView {
@@ -346,7 +350,7 @@ func (e *Engine) registerIndexRoutes() {
 			snap, _ := e.userSnapshot(r.Context(), u.ID, d.ID)
 			views = append(views, userIndexView(d, snap, now))
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"indices": views, "generated_at": now.Format(time.RFC3339), "fmp_key_saved": e.hasFMPKey(r.Context(), u.ID), "provenance": indexRegistryProvenance(now),
+		writeJSON(w, http.StatusOK, map[string]any{"indices": views, "generated_at": now.Format(time.RFC3339), "fmp_key_saved": e.hasFMPKey(r.Context(), u.ID), "adapters": indexsource.Adapters(""), "provenance": indexRegistryProvenance(now),
 			"notice": "An index is a published list of companies chosen by its provider's rules. Membership is not a ranking or a recommendation; the Leaderboard strategies rank whichever list you choose. FloweySales ships no constituent list. An index is available to you once you import your own CSV file or fetch the list with your own Financial Modeling Prep key; until then it is shown as unavailable."})
 	})
 }

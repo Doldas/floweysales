@@ -26,16 +26,26 @@ import { LICENSE_STATEMENT, fetchProblems, historyLine, importProblems, refusalL
           {{ history() }} You confirmed: &ldquo;{{ s.license_terms }}&rdquo;
           @if (s.unverified) { <span class="ix-warn"> This fetch has not been checked against a live response.</span> }
         </p>
+        @if (index().verification; as v) {
+          <div class="ix-verify" role="status">
+            <strong [attr.data-level]="v.level">{{ v.level === 'verified' ? 'Verified' : 'Approximate' }}.</strong> {{ v.summary }}
+            <ul>@for (c of v.checks; track c.id) { <li [class.ix-fail]="!c.ok">{{ c.ok ? 'Passed' : 'Not passed' }}: {{ c.detail }}</li> }</ul>
+          </div>
+        }
         <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="busy()" (click)="remove()">Remove my list</button>
       }
 
       <fieldset class="ix-form" [disabled]="busy()">
         <legend class="h6">Import a CSV file</legend>
-        <p class="text-muted ix-hint">Columns: <code>symbol</code> (required), <code>name</code>, <code>weight</code> (percent) and <code>exchange</code> (for example <code>ST</code>). Leave a weight blank when you do not know it; it is never treated as 0.@if (index().country !== 'US') { Write Swedish tickers as <code>VOLV-B.ST</code> or fill the exchange column. }</p>
+        <p class="text-muted ix-hint">Columns: <code>symbol</code> (required), <code>name</code>, <code>weight</code> (percent), <code>exchange</code> (for example <code>ST</code>) and <code>isin</code> (recommended: it keeps share classes and look-alike tickers apart when you compare or combine indices). Leave a weight blank when you do not know it; it is never treated as 0.@if (index().country !== 'US') { Write Swedish tickers as <code>VOLV-B.ST</code> or fill the exchange column. }</p>
         <label>CSV file
           <input type="file" accept=".csv,text/csv" (change)="pick($event)" />
         </label>
         @if (fileName()) { <span class="ix-hint">{{ fileName() }}</span> }
+        <label>History file (optional): <code>date</code>, <code>added</code>, <code>removed</code> rows
+          <input type="file" accept=".csv,text/csv" (change)="pickHistory($event)" />
+        </label>
+        @if (historyName()) { <span class="ix-hint">{{ historyName() }}</span> }
         <label>As-of date of the list (UTC)
           <input type="date" [(ngModel)]="asOf" name="asOf" [max]="today" />
         </label>
@@ -88,10 +98,13 @@ import { LICENSE_STATEMENT, fetchProblems, historyLine, importProblems, refusalL
     .ix-check { display: flex !important; gap: 0.5rem; align-items: flex-start; }
     .ix-hint { font-size: 0.75rem; color: var(--fs-muted); margin: 0; }
     .ix-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-    .ix-errors { border-left: 3px solid var(--fs-danger, #c53030); padding-left: 0.6rem; font-size: 0.8rem; ul { margin: 0; padding-left: 1rem; } }
-    .ix-done { color: var(--fs-success, #2f855a); font-size: 0.8rem; margin: 0; }
+    .ix-errors { border-left: 3px solid var(--fs-neg); padding-left: 0.6rem; font-size: 0.8rem; ul { margin: 0; padding-left: 1rem; } }
+    .ix-done { color: var(--fs-pos); font-size: 0.8rem; margin: 0; }
     .ix-have { font-size: 0.8rem; margin: 0; }
-    .ix-warn { color: var(--fs-warn, #b7791f); }
+    .ix-verify { font-size: 0.8rem; ul { margin: 0.25rem 0 0; padding-left: 1rem; } }
+    .ix-verify [data-level='verified'] { color: var(--fs-pos); }
+    .ix-verify [data-level='approximate'], .ix-fail { color: var(--fs-warn); }
+    .ix-warn { color: var(--fs-warn); }
   `],
 })
 export class IndexSourcesComponent {
@@ -112,7 +125,9 @@ export class IndexSourcesComponent {
   readonly lines = signal<string[]>([]);
   readonly done = signal('');
   readonly fileName = signal('');
+  readonly historyName = signal('');
   private csv = '';
+  private historyCsv = '';
 
   asOf = '';
   sourceName = '';
@@ -134,10 +149,22 @@ export class IndexSourcesComponent {
     reader.readAsText(file);
   }
 
+  pickHistory(ev: Event): void {
+    const file = (ev.target as HTMLInputElement).files?.[0];
+    this.historyCsv = '';
+    this.historyName.set('');
+    if (!file) return;
+    if (file.size > 512 * 1024) { this.lines.set(['The history file is larger than 512 KiB.']); return; }
+    const reader = new FileReader();
+    reader.onload = () => { this.historyCsv = String(reader.result ?? ''); this.historyName.set(`${file.name} (${file.size} bytes)`); };
+    reader.onerror = () => this.lines.set(['The history file could not be read.']);
+    reader.readAsText(file);
+  }
+
   importCsv(): void {
     const problems = importProblems({ csv: this.csv, asOf: this.asOf, sourceName: this.sourceName, terms: this.terms, confirmed: this.confirmed }, this.today);
     if (problems.length) { this.lines.set(problems); this.done.set(''); return; }
-    this.run(this.api.importIndexCsv(this.index().id, { csv: this.csv, as_of: this.asOf, source_name: this.sourceName.trim(), license_terms: this.terms.trim(), license_confirmed: this.confirmed }), 'List imported.');
+    this.run(this.api.importIndexCsv(this.index().id, { csv: this.csv, as_of: this.asOf, source_name: this.sourceName.trim(), license_terms: this.terms.trim(), license_confirmed: this.confirmed, ...(this.historyCsv.trim() ? { history_csv: this.historyCsv } : {}) }), 'List imported.');
   }
 
   fetchFmp(): void {
