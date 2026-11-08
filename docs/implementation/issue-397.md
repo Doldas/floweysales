@@ -11,7 +11,7 @@ The old `POST /api/ai/chat` ran `ai.Run` directly on `r.Context()`. A mobile-net
 3. Append model, thinking, tool and provenance events to a mutex-protected server-side journal, with monotonically increasing SSE `id` and a final `stream_end`. No browser write is part of the model execution.
 4. The initial POST streams journal entries and includes `X-Agent-Run-ID`. If the connection breaks, the browser retries a **GET** to `/api/ai/runs/{id}/events?after={lastId}`, not another POST. Older frames cannot be duplicated and model/tools remain single-execution.
 5. Explicit Stop calls `DELETE /api/ai/runs/{id}` to cancel the server run. A disconnected browser only closes its own subscriber. The GET and DELETE routes both verify the authenticated owner's ID.
-6. The journal is bounded to 16,384 events, with 1-hour retention after completion. A stale cursor receives HTTP 410 rather than a silently truncated answer; an unknown/unauthorized run receives 404. A browser makes up to 8 backoff reconnect attempts.
+6. The journal is bounded to 16,384 events, with 1-hour retention after completion (or less under global memory pressure). A stale cursor receives HTTP 410 rather than a silently truncated answer; an unknown/unauthorized run receives 404. A browser makes up to 450 bounded-backoff reconnect attempts (roughly a 90-minute outage window) and shows a clear reconnection status; explicit Stop interrupts the backoff immediately. Transient 429/502/503/504 on idempotent reconnect GETs can be retried, but the initial POST is never resent automatically.
 
 ## Tradeoffs and operational limitations
 
