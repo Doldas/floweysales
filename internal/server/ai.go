@@ -374,6 +374,11 @@ func (e *Engine) registerAIRoutes() {
 			return
 		}
 		client := ai.NewClient(baseURL, apiKey, model)
+		// Deep reasoning may pause for minutes before emitting a token. Keep
+		// this bounded research client alive independently of the shorter
+		// default timeout used by ordinary one-shot model calls.
+		client.IdleTimeout = 15 * time.Minute
+		client.HTTP.Timeout = 45 * time.Minute
 		opts := e.chatAgentOptions(r, req.SystemPrompt, req.Persona, req.Tools)
 		evidence.Apply(&opts)
 		if profile != nil {
