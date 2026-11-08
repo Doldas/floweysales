@@ -50,7 +50,7 @@ func TestDetachedChatReplaysEventsWithoutStartingAnotherRun(t *testing.T) {
 }
 
 func TestChatRunJournalRejectsLostEventsAndCapsConcurrency(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	registry := &chatRunRegistry{entries: make(map[string]*chatRun)}
 	one, err := registry.create(99, cancel)
