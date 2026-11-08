@@ -394,7 +394,7 @@ func (e *Engine) registerAIRoutes() {
 			defer journal.finish()
 			runErr := ai.Run(ctx, client, engineSource{e: e}, req.Messages, opts, send)
 			if runErr != nil {
-				journal.append(ai.Event{Type: "error", Error: userFacingError(runErr)})
+				journal.append(ai.Event{Type: "error", Error: "The research run stopped before completion. Check server logs or retry."})
 			}
 			rec.finish(ctx, runErr)
 		}()
