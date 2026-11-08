@@ -212,6 +212,7 @@ test('bold and italic TeX wrappers render', () => {
 
 test('backtick TeX stays literal in rich-text output', () => {
   assert.match(renderMarkdown('`\\frac{a}{b}`', { rich: true }), /<code>/);
+});
 
 test('footnotes become numbered markers with a list at the end', () => {
   const html = renderMarkdown('Revenue grew[^a] and margins held[^b], again[^a].\n\n[^b]: Second note.\n[^a]: First **bold** note.');
