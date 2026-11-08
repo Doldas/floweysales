@@ -171,6 +171,9 @@ jobs:
       - name: Playwright Workspace Markdown and README overview (desktop and phone)
         working-directory: frontend
         run: npx playwright test --config playwright.config.ts e2e/workspace-markdown.spec.ts
+      - name: Playwright Research Agent stream reconnect (desktop and phone)
+        working-directory: frontend
+        run: npx playwright test --config playwright.config.ts e2e/agent-reconnect.spec.ts
       - name: Playwright World initial load and failed refresh (desktop and phone)
         working-directory: frontend
         run: npx playwright test --config playwright.config.ts e2e/async-refresh.spec.ts
