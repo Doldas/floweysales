@@ -120,3 +120,20 @@ func TestChatRunReplayAndCancellationAreOwnerScoped(t *testing.T) {
 		t.Fatal("explicit cancellation must reach the model-run context")
 	}
 }
+
+func TestCompletedChatRunExpiresFromReplayRegistry(t *testing.T) {
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	registry := &chatRunRegistry{entries: make(map[string]*chatRun)}
+	j, err := registry.create(42, cancel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j.finish()
+	j.mu.Lock()
+	j.finishedAt = time.Now().Add(-2 * time.Hour)
+	j.mu.Unlock()
+	if registry.get(j.id) != nil {
+		t.Fatal("expired chat events must not be replayable past retention")
+	}
+}
