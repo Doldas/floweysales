@@ -62,3 +62,12 @@
 
 /* Reserve the history status height so a refresh does not move the chart controls. */
 .history-load-slot { min-height: 1.75rem; }
+
+// The chart with a rail beside it on wide screens; below that the rail follows the chart.
+.chart-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.1rem; align-items: start; min-width: 0; }
+.trade-rail { display: grid; gap: 0.85rem; min-width: 0; align-content: start; }
+.rail-card .card-body { padding: 0.85rem; }
+.rail-ticket { min-width: 0; }
+@media (min-width: 1280px) {
+  .chart-row { grid-template-columns: minmax(0, 1fr) 340px; }
+}

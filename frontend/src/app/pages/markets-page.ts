@@ -13,6 +13,8 @@ import { chartMeta, chartSummary, type ChartMetaInput } from '../core/chart-meta
 import { formatUtcDateTime } from '../ui/datetime';
 import { LeaderboardComponent } from '../components/leaderboard';
 import { TradingChartComponent } from '../components/chart';
+import { LedgerComponent } from '../components/ledger';
+import { WatchlistComponent } from '../components/watchlist';
 import { SymbolSearchComponent } from '../shell/symbol-search';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import { INDICATOR_KEYS, INDICATOR_LABELS } from '../indicators';
@@ -39,7 +41,7 @@ interface Kpi { label: string; value: string; sub?: string; tone?: 'pos' | 'neg'
 @Component({
   selector: 'fs-markets-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PaneComponent, HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, SymbolSearchComponent, ProgressStatusComponent],
+  imports: [PaneComponent, HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, LedgerComponent, WatchlistComponent, SymbolSearchComponent, ProgressStatusComponent],
   templateUrl: './markets-page.html',
   styleUrl: './markets-page.scss',
 })
@@ -50,6 +52,11 @@ export class MarketsPage {
   private readonly notify = inject(NotifyService);
   private readonly chart = viewChild(TradingChartComponent);
 
+  /** The tracked instrument on screen, as the watchlist marks it. */
+  readonly selectedAsset = computed<TrackedAsset | null>(() => {
+    const symbol = this.market.trackedSymbol();
+    return symbol ? { symbol, provider: this.market.trackedProvider() } : null;
+  });
   readonly chartStyles = CHART_STYLES;
   /** How the price is drawn; kept in this browser. */
   readonly chartStyle = signal<ChartStyleId>(readChartStyle());

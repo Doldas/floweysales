@@ -24,6 +24,9 @@ const SKY = [56, 189, 248];
 const VIOLET = [167, 139, 250];
 
 test.describe('chart drawings', () => {
+  // Several browsers share the machine in CI; these steps wait on layout and a redraw.
+  test.use({ actionTimeout: 10_000 });
+  test.slow();
   test('a level, a trend line and a Fibonacci retracement can be drawn, selected, deleted and survive a reload', async ({ page }) => {
     await open(page, 'markets');
     const canvas = page.locator('fse-trading-chart canvas').first();

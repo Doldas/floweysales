@@ -129,6 +129,11 @@ export class MarketState {
   readonly canTrackSelected = computed(() =>
     this.mode() === 'live' && !!this.trackedSymbol() && !this.selectedTracked() && this.trackedAssets().length < MAX_TRACKERS);
 
+  /** Live mode: an instrument without a tracker gets no ticks, so the server has no price to fill an order against. */
+  readonly needsTracker = computed(() => this.mode() === 'live' && !!this.trackedSymbol() && !this.selectedTracked());
+  /** The price an order ticket fills against; the history close of an untracked instrument is not one the engine can use. */
+  readonly orderPrice = computed(() => (this.needsTracker() ? 0 : this.livePrice()));
+
   /** Ticks every 30 s so a silent feed turns stale without any new event. */
   private readonly clock = signal(Date.now());
   /** Feed health as four separate facts; see feed-status.ts. */

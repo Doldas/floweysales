@@ -7,6 +7,7 @@ import {
   ForumPost,
   FinancialsResponse,
   HistorySeries,
+  QuoteSnapshot,
   BacktestParams,
   BacktestResult, StrategyMonteCarloRequest, StrategyMonteCarloResult, BatchResult, SensitivityResult, MonteCarloResult, SavedBacktest, BacktestSummary,
   LeaderboardResponse,
@@ -89,6 +90,11 @@ export class MarketService {
   /** Provider OHLC series used to seed the chart when tracking starts. */
   getMarketHistory(symbol: string, provider: string, range: string): Observable<HistorySeries> {
     return this.http.get<HistorySeries>('/api/history', { params: { symbol, provider, range } });
+  }
+
+  /** The latest price of one instrument, with its age and market session. */
+  getQuote(symbol: string, provider: string): Observable<QuoteSnapshot> {
+    return this.http.get<QuoteSnapshot>('/api/quote', { params: { symbol, provider } });
   }
 
   /** Quarterly income-statement reports for the tracked ticker. */

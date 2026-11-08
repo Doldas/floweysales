@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 
 import { MarketService, describeHttpError } from '../services';
 import { OrdersState } from '../orders-state';
@@ -34,7 +35,7 @@ const EPSILON = 1e-9;
 @Component({
   selector: 'fse-ledger',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './ledger.html',
   styleUrl: './ledger.scss',
 })
@@ -48,6 +49,8 @@ export class LedgerComponent {
   /** Latest live price for the tracked symbol. */
   readonly livePrice = input<number>(0);
   readonly currency = input<string>('USD');
+  /** The whole desk, or just the order ticket with a one-line account summary (beside the chart). */
+  readonly variant = input<'desk' | 'ticket'>('desk');
 
   readonly ordersChanged = output<void>();
 

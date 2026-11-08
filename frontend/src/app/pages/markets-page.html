@@ -72,6 +72,7 @@
       }
     </section>
 
+    <div class="chart-row">
     <!-- Chart: a pane the user can fold, resize and open full screen; source, bars, units and newest bar stay visible when folded -->
     <fs-pane class="chart-card" paneId="markets.chart" heading="Price chart" [resizable]="true" [focusable]="true" mode="var" [defaultHeight]="chartHeight" [min]="200" [max]="900">
       <span paneSummary>{{ chartSummary() }}</span>
@@ -114,6 +115,29 @@
         <fse-trading-chart [epoch]="market.chartEpoch()" [flags]="market.indicators()" [chartStyle]="chartStyle()" [drawings]="drawings()" (drawingsChange)="setDrawings($event)" />
       </div>
     </fs-pane>
+
+    <!-- Trade rail: prices of the tracked instruments and a paper order ticket, beside the chart on wide screens -->
+    <aside class="trade-rail" aria-label="Watchlist and order ticket">
+      <section class="card rail-card" aria-label="Watchlist">
+        <div class="card-body">
+          <fse-watchlist [assets]="market.trackedAssets()" [selected]="selectedAsset()" [livePrice]="market.selectedTracked() ? market.livePrice() : 0" (view)="market.view($event)" />
+        </div>
+      </section>
+      @if (access.liveMarkets()) {
+        <section class="rail-ticket" aria-label="Paper order ticket">
+          <div>
+            @if (market.needsTracker()) {
+              <p class="small text-muted mb-2" role="status">
+                {{ market.trackedSymbol() }} is not tracked live, so there is no server price to fill an order against.
+                <button type="button" class="btn btn-sm btn-outline-primary ms-1" (click)="market.trackLive()" [disabled]="!market.canTrackSelected()">Track live</button>
+              </p>
+            }
+            <fse-ledger variant="ticket" [trackedSymbol]="market.trackedSymbol()" [livePrice]="market.orderPrice()" [currency]="market.currency()" />
+          </div>
+        </section>
+      }
+    </aside>
+    </div>
 
     <!-- Insights -->
     @if (market.insights().length) {
