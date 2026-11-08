@@ -137,6 +137,7 @@ type chatRequestBody struct {
 
 // registerAIRoutes wires the OpenAI-compatible chat proxy and its config probe.
 func (e *Engine) registerAIRoutes() {
+	e.registerChatRunRoutes()
 	e.mux.HandleFunc("GET /api/ai/models/available", func(w http.ResponseWriter, r *http.Request) {
 		if e.authService == nil {
 			writeJSON(w, 403, map[string]string{"error": "Authentication required"})
@@ -357,13 +358,27 @@ func (e *Engine) registerAIRoutes() {
 				return
 			}
 		}
-		send, stopSSE, ok := startSSE(w)
-		if !ok {
+		// The run is intentionally detached from the browser's TCP connection.
+		// A dropped stream can reconnect to the *same* run with its last event id,
+		// without repeating the model request, tool calls or checkpoints.
+		owner, ownerOK := e.chatRunOwner(r)
+		if !ownerOK {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Authentication required"})
 			return
 		}
-		defer stopSSE()
-
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(e.chatRunContext(r)), chatRunLifetime)
+		journal, createErr := e.runRegistry().create(owner, cancel)
+		if createErr != nil {
+			cancel()
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "Too many active research runs. Finish or cancel an existing run first."})
+			return
+		}
 		client := ai.NewClient(baseURL, apiKey, model)
+		// Deep reasoning may pause for minutes before emitting a token. Keep
+		// this bounded research client alive independently of the shorter
+		// default timeout used by ordinary one-shot model calls.
+		client.IdleTimeout = 15 * time.Minute
+		client.HTTP.Timeout = 45 * time.Minute
 		opts := e.chatAgentOptions(r, req.SystemPrompt, req.Persona, req.Tools)
 		evidence.Apply(&opts)
 		if profile != nil {
@@ -371,6 +386,7 @@ func (e *Engine) registerAIRoutes() {
 			applyProfile(&opts, profile)
 		}
 		deliverables := ai.NewDeliverables(req.Deliverables)
+		send := journal.append
 		var rec *taskRecorder
 		if len(deliverables) > 0 {
 			opts.Deliverables = deliverables
@@ -378,11 +394,16 @@ func (e *Engine) registerAIRoutes() {
 				send = rec.wrap(send)
 			}
 		}
-
-		// Run synchronously against the request context; every event is flushed
-		// as it happens so the client sees token-by-token streaming.
-		err = ai.Run(e.chatRunContext(r), client, engineSource{e: e}, req.Messages, opts, send)
-		rec.finish(r.Context(), err)
+		go func() {
+			defer cancel()
+			defer journal.finish()
+			runErr := ai.Run(ctx, client, engineSource{e: e}, req.Messages, opts, send)
+			if runErr != nil {
+				journal.append(ai.Event{Type: "error", Error: "The research run stopped before completion. Check server logs or retry."})
+			}
+			rec.finish(ctx, runErr)
+		}()
+		streamChatRun(w, r, journal, 0)
 	})
 }
 

@@ -175,6 +175,8 @@ type Engine struct {
 	searchOnce     sync.Once
 	searchRouter   *websearch.Router // web search providers and policy (see web_search.go)
 	aiMu           sync.Mutex
+	chatRunsMu     sync.Mutex // guards lazy journal registry initialization
+	chatRuns       *chatRunRegistry
 	aiBaseURL      string
 	aiAPIKey       string
 	aiModel        string
