@@ -99,16 +99,18 @@ export function stepProblems(graph: FlowGraph | undefined, steps: RunStep[], sce
     if (s.status === 'FAILED' || s.status === 'DEAD') problems.push('a step of a SUCCESS run is failed');
     executed.add(s.node);
   }
-  const trigger = nodes.find(n => n.type === 'trigger');
-  if (trigger?.id && !executed.has(trigger.id)) problems.push('trigger node never executed');
+  // The engine starts a run at the trigger without recording a step for it, so
+  // only the nodes after it are expected in the trace (a recorded one is fine).
+  const traced = nodes.filter(n => n.type !== 'trigger' && n.id);
   const outputs = nodes.filter(n => n.type === 'output' && n.id);
   const branching = scenarios.includes('branch');
   // With a branch, an output may legitimately sit on the untaken side.
   if (outputs.length > 0 && !branching && !outputs.some(o => executed.has(o.id as string))) {
     problems.push('no output node executed');
   }
-  if (!branching && ids.size > 0 && executed.size < ids.size) {
-    problems.push(`only ${executed.size} of ${ids.size} nodes executed in a non-branching graph`);
+  const ran = traced.filter(n => executed.has(n.id as string)).length;
+  if (!branching && traced.length > 0 && ran < traced.length) {
+    problems.push(`only ${ran} of ${traced.length} nodes executed in a non-branching graph`);
   }
   return problems;
 }
