@@ -74,3 +74,49 @@ func TestChatRunJournalRejectsLostEventsAndCapsConcurrency(t *testing.T) {
 	one.finish()
 	two.finish()
 }
+
+func TestChatRunReplayAndCancellationAreOwnerScoped(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	registry := &chatRunRegistry{entries: make(map[string]*chatRun)}
+	j, err := registry.create(73, cancel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := &Engine{mux: http.NewServeMux(), chatRuns: registry}
+	e.registerChatRunRoutes()
+	for _, method := range []string{http.MethodGet, http.MethodDelete} {
+		path := "/api/ai/runs/" + j.id
+		if method == http.MethodGet {
+			path += "/events?after=0"
+		}
+		res := httptest.NewRecorder()
+		e.mux.ServeHTTP(res, httptest.NewRequest(method, path, nil))
+		if res.Code != http.StatusNotFound {
+			t.Fatalf("%s cannot access another owner's run; HTTP %d", method, res.Code)
+		}
+	}
+	select {
+	case <-ctx.Done():
+		t.Fatal("unauthorized cancel must not stop an agent")
+	default:
+	}
+	// An unauthenticated local-development run (owner 0) may be stopped by
+	// its local caller, but no other owner's nonzero id is ever accepted.
+	localCtx, localCancel := context.WithCancel(context.Background())
+	defer localCancel()
+	local, err := registry.create(0, localCancel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := httptest.NewRecorder()
+	e.mux.ServeHTTP(res, httptest.NewRequest(http.MethodDelete, "/api/ai/runs/"+local.id, nil))
+	if res.Code != http.StatusOK {
+		t.Fatalf("explicit cancel returned %d", res.Code)
+	}
+	select {
+	case <-localCtx.Done():
+	default:
+		t.Fatal("explicit cancellation must reach the model-run context")
+	}
+}
