@@ -238,3 +238,9 @@ func normalizeDate(s string) string {
 	}
 	return ""
 }
+
+// Info makes FMP a registered Fetcher.
+func (f FMP) Info() AdapterInfo {
+	i, _ := adapterInfo(ProviderFMP)
+	return i
+}

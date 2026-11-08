@@ -33,6 +33,7 @@ type Spec struct {
 type Member struct {
 	Symbol   string   `json:"symbol"`
 	Name     string   `json:"name,omitempty"`
+	ISIN     string   `json:"isin,omitempty"`   // optional; the identity that keeps share classes and look-alike tickers apart
 	Weight   *float64 `json:"weight,omitempty"` // percent as supplied; nil when not supplied
 	Exchange string   `json:"exchange,omitempty"`
 }

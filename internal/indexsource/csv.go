@@ -75,7 +75,7 @@ func ParseCSV(data []byte, spec Spec, meta Meta, now time.Time) (Snapshot, []str
 	}
 	symCol, ok := col["symbol"]
 	if !ok {
-		return Snapshot{}, append(problems, "the header needs a symbol column (optional: name, weight, exchange)"), errors.New("no symbol column")
+		return Snapshot{}, append(problems, "the header needs a symbol column (optional: name, weight, exchange, isin)"), errors.New("no symbol column")
 	}
 	get := func(rec []string, name string) string {
 		if i, ok := col[name]; ok && i < len(rec) {
@@ -86,6 +86,7 @@ func ParseCSV(data []byte, spec Spec, meta Meta, now time.Time) (Snapshot, []str
 	snap := Snapshot{IndexID: spec.ID, Provider: ProviderCSV, SourceName: strings.TrimSpace(meta.SourceName), AsOf: strings.TrimSpace(meta.AsOf),
 		ImportedAt: now.UTC().Format(time.RFC3339), LicenseTerms: strings.TrimSpace(meta.LicenseTerms), LicenseConfirm: meta.LicenseConfirm, Warnings: []string{}}
 	seen := map[string]int{}
+	seenISIN := map[string]string{}
 	row := 1
 	for {
 		rec, err := r.Read()
@@ -110,6 +111,13 @@ func ParseCSV(data []byte, spec Spec, meta Meta, now time.Time) (Snapshot, []str
 			continue
 		}
 		m.Name = get(rec, "name")
+		if isin := strings.ToUpper(get(rec, "isin")); isin != "" {
+			if !ValidISIN(isin) {
+				fail("row %d: %q is not a valid ISIN (12 characters with a correct check digit; leave it blank when unknown)", row, isin)
+				continue
+			}
+			m.ISIN = isin
+		}
 		if w := get(rec, "weight"); w != "" {
 			v, perr := strconv.ParseFloat(strings.TrimSuffix(w, "%"), 64)
 			if perr != nil || math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > 100 {
@@ -121,6 +129,13 @@ func ParseCSV(data []byte, spec Spec, meta Meta, now time.Time) (Snapshot, []str
 		if first, dup := seen[m.Symbol]; dup {
 			fail("row %d: %s appears twice (first on row %d)", row, m.Symbol, first)
 			continue
+		}
+		if m.ISIN != "" {
+			if other, dup := seenISIN[m.ISIN]; dup {
+				fail("row %d: ISIN %s is already used by %s", row, m.ISIN, other)
+				continue
+			}
+			seenISIN[m.ISIN] = m.Symbol
 		}
 		seen[m.Symbol] = row
 		snap.Members = append(snap.Members, m)

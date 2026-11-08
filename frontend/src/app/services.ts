@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, catchError, map, of } from 'rxjs';
 import {
-  IndicesResponse,
+  IndexComparison, IndicesResponse,
   AboutInfo,
   ForumPost,
   FinancialsResponse,
@@ -113,8 +113,13 @@ export class MarketService {
   }
 
   /** Imports the user's own CSV file of constituents for an index. */
-  importIndexCsv(id: string, body: { csv: string; as_of: string; source_name: string; license_terms: string; license_confirmed: boolean }): Observable<{ saved: boolean }> {
+  importIndexCsv(id: string, body: { csv: string; as_of: string; source_name: string; license_terms: string; license_confirmed: boolean; history_csv?: string }): Observable<{ saved: boolean }> {
     return this.http.put<{ saved: boolean }>(`/api/market/indices/${encodeURIComponent(id)}/csv`, body);
+  }
+
+  /** Compares two to six of the user's own index lists. */
+  compareIndices(ids: string[]): Observable<{ comparison: IndexComparison }> {
+    return this.http.get<{ comparison: IndexComparison }>('/api/market/indices/compare', { params: { ids: ids.join(',') } });
   }
 
   /** Fetches constituents with the user's own saved Financial Modeling Prep key. */
@@ -136,8 +141,9 @@ export class MarketService {
   }
 
   /** Ranks a preset universe, or up to 25 symbols, for a strategy. */
-  getLeaderboard(universe: string, strategy: string, symbols: string[] = [], ignorePreferences = false, scope: ScopeRequest = {}): Observable<LeaderboardResponse> {
+  getLeaderboard(universe: string, strategy: string, symbols: string[] = [], ignorePreferences = false, scope: ScopeRequest = {}, combinedIndices: string[] = []): Observable<LeaderboardResponse> {
     const params: Record<string, string> = { strategy, explain: '1', ...scopeParams(scope) };
+    if (universe === 'index_combined') params['indices'] = combinedIndices.join(',');
     if (ignorePreferences) params['preferences'] = 'off';
     if (symbols.length) params['symbols'] = symbols.join(',');
     else params['universe'] = universe;

@@ -101,6 +101,9 @@ func (e *Engine) parseBacktestQuery(ctx context.Context, q url.Values) (backtest
 	}
 	var symbols []string
 	var err error
+	if universe == combinedUniverseID {
+		return req, badRequest{errors.New("a backtest takes one index at a time: membership history differs between lists, so a combined universe cannot be replayed. Rank it on the Leaderboard instead, or backtest each index")}
+	}
 	if idx, isIndex := findIndex(universe); isIndex {
 		snap, serr := e.snapshotFor(ctx, idx)
 		if serr != nil {

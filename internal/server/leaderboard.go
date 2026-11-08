@@ -791,6 +791,17 @@ func (e *Engine) registerLeaderboardRoutes() {
 			}
 			uu := definitionWith(idx, snap).universe()
 			userUniverse, symbols = &uu, uu.Symbols
+		} else if universe == combinedUniverseID {
+			u, ok := e.planUser(w, r)
+			if !ok {
+				return
+			}
+			cu, status, msg := e.combinedUniverse(r.Context(), u.ID, strings.Split(q.Get("indices"), ","))
+			if status != 0 {
+				writeJSON(w, status, map[string]any{"error": msg})
+				return
+			}
+			userUniverse, symbols = &cu, cu.Symbols
 		} else if universe == globalUniverseID {
 			g := globalUniverse()
 			userUniverse, symbols = &g, g.Symbols

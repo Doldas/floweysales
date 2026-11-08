@@ -18,6 +18,7 @@ import { SkeletonComponent } from '../ui/skeleton';
 import { WINDOW_THRESHOLD, rowWindow } from '../core/workspace-prefs';
 import { SourceComponent } from '../ui/source';
 import { BacktestPanelComponent } from './backtest-panel';
+import { IndexCompareComponent } from './index-compare';
 import { IndexSourcesComponent } from './index-sources';
 import { indexBadge, indexFacts, FACTOR_LABELS, OBJECTIVE_OPTIONS, dataAgeIsWarning, formToPreferences, preferencesToForm, recordLink, regionCoverage, STRATEGY_PLAYBOOK, alternativeList, coverageBreakdown, coverageSummary, flagList, leaderboardPrompt, methodFactors, metricValue, num, pct, reasonList, scoreSum, scoreTone, selectionLines, sourceKindLabel, universeCsv } from './leaderboard-view';
 
@@ -32,7 +33,7 @@ const STORE_KEY = 'fs.leaderboard';
 @Component({
   selector: 'fs-leaderboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PaneComponent, HelpButtonComponent, DecimalPipe, FormsModule, RouterLink, BacktestPanelComponent, IndexSourcesComponent, ProgressStatusComponent, SkeletonComponent, SourceComponent],
+  imports: [PaneComponent, HelpButtonComponent, DecimalPipe, FormsModule, RouterLink, BacktestPanelComponent, IndexCompareComponent, IndexSourcesComponent, ProgressStatusComponent, SkeletonComponent, SourceComponent],
   template: `
 <section class="card board" aria-labelledby="board-title">
   <div class="card-header board-head">
@@ -81,6 +82,10 @@ const STORE_KEY = 'fs.leaderboard';
         <p class="text-muted mb-0">An <strong>index</strong> is a published list of companies chosen by its provider's rules; each member is an <strong>index constituent</strong>. Members are usually weighted by <strong>market capitalization</strong> (share price times shares outstanding). Membership is not a ranking or a recommendation: the strategies below rank whichever list you choose.</p>
       </section>
     }
+    <details class="regions" data-testid="index-compare">
+      <summary>Compare or combine indices</summary>
+      <fs-index-compare [indices]="indices()" (combine)="combineIndices($event)" />
+    </details>
     <details class="regions">
       <summary>Coverage by region</summary>
       <ul>
@@ -422,7 +427,7 @@ const STORE_KEY = 'fs.leaderboard';
           </button>
         }
         <button type="button" class="btn btn-sm btn-agent" (click)="askAgent()"><i class="bi bi-stars" aria-hidden="true"></i>Research the top 5</button>
-        @if (universe() !== 'global') {
+        @if (universe() !== 'global' && universe() !== 'index_combined') {
           <button type="button" class="btn btn-sm btn-outline-secondary" (click)="showBacktest.set(!showBacktest())" [attr.aria-expanded]="showBacktest()" aria-controls="board-backtest">
             <i class="bi bi-clock-history" aria-hidden="true"></i>Backtest this strategy
           </button>
@@ -436,7 +441,7 @@ const STORE_KEY = 'fs.leaderboard';
         </span>
       </div>
     }
-    @if (showBacktest() && universe() !== 'global') {
+    @if (showBacktest() && universe() !== 'global' && universe() !== 'index_combined') {
       <div id="board-backtest">
         <fs-backtest-panel [universe]="universe() === watchlist ? 'custom' : universe()" [strategy]="strategy()" [strategyLabel]="strategyInfo()?.label ?? strategy()"
           [symbols]="universe() === watchlist ? watchlistSymbols() : []" [markets]="universes()" />
@@ -545,6 +550,8 @@ export class LeaderboardComponent {
   readonly indices = signal<IndexInfo[]>([]);
   readonly indicesError = signal('');
   readonly fmpKeySaved = signal(false);
+  /** The indices of the combined universe, when one is ranked. */
+  readonly combinedIds = signal<string[]>([]);
   /** The unavailable index being inspected; an available one is the ranked universe. */
   readonly indexView = signal('');
   readonly shownIndex = computed(() => this.indices().find(i => i.id === (this.indexView() || this.universe())) ?? null);
@@ -576,7 +583,7 @@ export class LeaderboardComponent {
   readonly universes = computed<LeaderboardOption[]>(() => this.data()?.universes ?? LEADERBOARD_UNIVERSES.map(u => ({ ...u, description: '' })));
   readonly strategies = computed<LeaderboardOption[]>(() => this.data()?.strategies ?? LEADERBOARD_STRATEGIES.map(s => ({ ...s, description: '' })));
   readonly strategyInfo = computed(() => this.strategies().find(s => s.id === this.strategy()));
-  readonly universeLabel = computed(() => this.universe() === WATCHLIST ? 'your watchlist' : this.universes().find(u => u.id === this.universe())?.label ?? this.universe());
+  readonly universeLabel = computed(() => this.universe() === WATCHLIST ? 'your watchlist' : this.universe() === 'index_combined' ? 'the combined indices' : this.universes().find(u => u.id === this.universe())?.label ?? this.universe());
   readonly watchlistSymbols = computed(() => [...new Set(this.market.trackedAssets().map(a => a.symbol.toUpperCase()))].slice(0, 25));
   readonly visibleRows = computed(() => (this.showAll() ? this.data()?.rows ?? [] : (this.data()?.rows ?? []).slice(0, 10)));
   // Long lists draw only the rows in view (every row stays in the data and the exports).
@@ -618,7 +625,7 @@ export class LeaderboardComponent {
     });
     try {
       const saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
-      if (typeof saved.universe === 'string' && saved.universe !== WATCHLIST) this.universe.set(saved.universe);
+      if (typeof saved.universe === 'string' && saved.universe !== WATCHLIST && saved.universe !== 'index_combined') this.universe.set(saved.universe);
       if (typeof saved.strategy === 'string') this.strategy.set(saved.strategy);
       if (saved.methodOpen === false) this.methodOpen.set(false);
       if (saved.originOpen === false) this.originOpen.set(false);
@@ -655,6 +662,15 @@ export class LeaderboardComponent {
     if (!i.available) { this.indexView.set(i.id); return; }
     this.indexView.set('');
     this.setUniverse(i.id);
+  }
+
+  /** Ranks the union of the chosen indices (each needs the user's own list). */
+  combineIndices(ids: string[]): void {
+    this.combinedIds.set(ids);
+    this.indexView.set('');
+    this.universe.set('index_combined');
+    this.showAll.set(false);
+    this.load();
   }
 
   setUniverse(id: string): void {
@@ -698,7 +714,7 @@ export class LeaderboardComponent {
     this.loading.set(true);
     this.error.set('');
     const symbols = this.universe() === WATCHLIST ? this.watchlistSymbols() : [];
-    this.request = this.api.getLeaderboard(this.universe(), this.strategy(), symbols, this.ignorePrefs(), formToScope(this.appliedScope())).subscribe({
+    this.request = this.api.getLeaderboard(this.universe(), this.strategy(), symbols, this.ignorePrefs(), formToScope(this.appliedScope()), this.combinedIds()).subscribe({
       next: res => { this.data.set(res); this.loading.set(false); },
       error: err => { this.error.set(describeHttpError(err)); this.loading.set(false); },
     });

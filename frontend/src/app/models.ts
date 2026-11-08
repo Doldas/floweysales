@@ -463,6 +463,29 @@ export interface IndexInfo {
   sources?: ('csv' | 'fmp')[];
   /** What the user supplied; null until they import or fetch a list. */
   source?: IndexUserSource | null;
+  /** The automated checks of the supplied list; absent until a list exists. */
+  verification?: IndexVerification;
+}
+
+/** Outcome of the automated checks of a list. "verified" is not an endorsement by the index provider. */
+export interface IndexVerification {
+  level: 'verified' | 'approximate'; summary: string; identity_share: number;
+  checks: { id: string; ok: boolean; detail: string }[];
+}
+
+/** A way to supply a list, with the licence restriction that applies to it. */
+export interface IndexAdapter { id: string; name: string; kind: 'file' | 'api'; needs_key: boolean; documented: boolean; restrictions: string; indexes?: string[] }
+
+export interface IndexBrief {
+  id: string; name: string; currency: string; count: number; as_of: string; age_days: number | null; point_in_time: boolean;
+  history_from?: string; benchmark_symbol: string; benchmark_total_return: boolean; verification?: IndexVerification; with_isin: number;
+}
+
+export interface IndexPair { a: string; b: string; shared: number; jaccard: number; symbols: string[] }
+
+/** GET /api/market/indices/compare */
+export interface IndexComparison {
+  indices: IndexBrief[]; pairs: IndexPair[]; union_count: number; unavailable: string[]; currencies: string[]; warnings: string[]; matching: string;
 }
 
 /** Provenance of a list the user supplied (nothing ships with the app). */
@@ -472,7 +495,7 @@ export interface IndexUserSource {
   unverified?: boolean; warnings: string[];
 }
 
-export interface IndicesResponse { indices: IndexInfo[]; generated_at: string; notice: string; fmp_key_saved?: boolean }
+export interface IndicesResponse { indices: IndexInfo[]; generated_at: string; notice: string; fmp_key_saved?: boolean; adapters?: IndexAdapter[] }
 
 /** A refused import or fetch: the reason and one line per problem. */
 export interface IndexSourceRefusal { error: string; problems?: string[] }

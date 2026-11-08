@@ -144,7 +144,7 @@ func definitionWith(d indexDefinition, s *indexsource.Snapshot) indexDefinition 
 	}
 	d.Constituents = make([]indexConstituent, len(s.Members))
 	for i, m := range s.Members {
-		d.Constituents[i] = indexConstituent{Symbol: m.Symbol, Name: m.Name}
+		d.Constituents[i] = indexConstituent{Symbol: m.Symbol, Name: m.Name, ISIN: m.ISIN}
 	}
 	return d
 }
@@ -177,9 +177,9 @@ type userSourceView struct {
 func userIndexView(d indexDefinition, s *indexsource.Snapshot, now time.Time) indexView {
 	v := viewIndex(definitionWith(d, s), now)
 	v.Constituents = []indexConstituent{} // the list stays out of the payload; count says how many
-	v.Sources = []string{indexsource.ProviderCSV}
-	if _, ok := indexsource.FMPIndexes[d.ID]; ok {
-		v.Sources = append(v.Sources, indexsource.ProviderFMP)
+	v.Sources = []string{}
+	for _, a := range indexsource.Adapters(d.ID) {
+		v.Sources = append(v.Sources, a.ID)
 	}
 	if s == nil {
 		v.Warnings = []string{"Unavailable: " + unavailableForUser(d)}
@@ -194,6 +194,8 @@ func userIndexView(d indexDefinition, s *indexsource.Snapshot, now time.Time) in
 	v.Source = &userSourceView{Provider: s.Provider, SourceName: s.SourceName, AsOf: s.AsOf, ImportedAt: s.ImportedAt, Count: len(s.Members),
 		LicenseTerms: s.LicenseTerms, LicenseConfirm: s.LicenseConfirm, PointInTime: s.PointInTime, HistoryFrom: s.HistoryFrom,
 		Changes: len(s.Changes), Unverified: s.Unverified, Warnings: s.Warnings}
+	check := indexsource.Assess(*s, indexSpec(d), now)
+	v.Verification = &check
 	return v
 }
 
@@ -211,6 +213,8 @@ type indexCSVBody struct {
 	SourceName     string `json:"source_name"`
 	LicenseTerms   string `json:"license_terms"`
 	LicenseConfirm bool   `json:"license_confirmed"`
+	// HistoryCSV is optional dated membership changes (date, added, removed).
+	HistoryCSV string `json:"history_csv,omitempty"`
 }
 
 type indexFetchBody struct {
@@ -275,6 +279,12 @@ func (e *Engine) registerIndexSourceRoutes() {
 		if err != nil {
 			refusal(w, http.StatusUnprocessableEntity, "The file was not imported", problems)
 			return
+		}
+		if strings.TrimSpace(body.HistoryCSV) != "" {
+			if problems := indexsource.ApplyHistoryCSV(&snap, []byte(body.HistoryCSV), indexSpec(d)); problems != nil {
+				refusal(w, http.StatusUnprocessableEntity, "The history file was not imported", problems)
+				return
+			}
 		}
 		e.saveSnapshot(w, r, u.ID, d, snap)
 	})
