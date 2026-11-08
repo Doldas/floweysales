@@ -115,6 +115,10 @@ function renderTarget(label: string, escapedHref: string, state: InlineState, im
 function renderInline(text: string, state: InlineState): string {
   // Pull `code` spans out first so emphasis rules never touch them.
   let out = text.replace(/`([^`]+)`/g, (_m, code: string) => {
+    // Models often wrap TeX in backticks. A span made of TeX commands is a formula, not code to quote.
+    if (!state.options.rich && isTexInCode(unescapeHtml(code))) {
+      return `\u0000M${state.math.push(renderFormula(unescapeHtml(code))) - 1}\u0000`;
+    }
     const idx = state.code.push(code) - 1;
     return `\u0000C${idx}\u0000`;
   });
@@ -446,6 +450,10 @@ export function renderFormula(tex: string, display = false): string {
             out += '<span class="md-frac"><span class="md-num">' + top + '</span><span class="md-den">' + bottom + '</span></span>';
           } else if (word === 'text' || word === 'mathrm' || word === 'operatorname') {
             out += '<span class="md-math-text">' + arg() + '</span>';
+          } else if (word === 'mathbf' || word === 'textbf' || word === 'boldsymbol') {
+            out += '<strong>' + arg() + '</strong>';
+          } else if (word === 'mathit' || word === 'textit') {
+            out += '<em>' + arg() + '</em>';
           } else if (word === 'sqrt') {
             out += '<span class="md-root">√<span>' + arg() + '</span></span>';
           } else if (word === 'left' || word === 'right') {
@@ -494,4 +502,14 @@ export function isInlineDollarFormula(value: string): boolean {
   return value.length <= 2000 && !/^\s|\s$/.test(value) &&
     /(?:\\[A-Za-z]+|[=^_{}+\-*/])/.test(value) &&
     !/^\d+(?:[.,]\d+)?\s*(?:bn|m|usd|sek|eur)?$/i.test(value);
+}
+
+/**
+ * True when a backtick span holds an equation rather than code: at least two TeX commands, or one command together
+ * with "=". A lone `\frac{x}{y}` stays literal, which is how TeX is quoted in prose.
+ */
+export function isTexInCode(value: string): boolean {
+  if (value.length > 2000) return false;
+  const commands = value.match(/\\(?:frac|dfrac|text|mathbf|mathrm|mathit|textbf|times|cdot|sqrt|sum|prod|left|right|approx|div|leq?|geq?|Delta|sigma|mu|pm|infty)(?![A-Za-z])/g) ?? [];
+  return commands.length >= 2 || (commands.length === 1 && value.includes('='));
 }
