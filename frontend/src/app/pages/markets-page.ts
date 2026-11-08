@@ -13,13 +13,22 @@ import { chartMeta, chartSummary, type ChartMetaInput } from '../core/chart-meta
 import { formatUtcDateTime } from '../ui/datetime';
 import { LeaderboardComponent } from '../components/leaderboard';
 import { TradingChartComponent } from '../components/chart';
+import { LedgerComponent } from '../components/ledger';
+import { WatchlistComponent } from '../components/watchlist';
 import { SymbolSearchComponent } from '../shell/symbol-search';
 import { ProgressStatusComponent } from '../ui/progress-status';
-import { INDICATOR_KEYS, INDICATOR_LABELS } from '../indicators';
+import { INDICATOR_KEYS } from '../indicators';
+import { SETTING_FIELDS, studyLabel } from '../indicator-settings';
 import { parseDrawings, type Drawing } from '../core/chart-drawings';
+import { INTERVALS, availableIntervals, emaSeed, intervalSeconds, parseIntervalChoice, resampleSeries, type IntervalChoice, type IntervalId } from '../core/resample';
 import { CHART_STYLES, DEFAULT_CHART_STYLE, parseChartStyle, type ChartStyleId } from '../core/chart-styles';
 
 const CHART_STYLE_KEY = 'fs.chartStyle';
+const INTERVAL_KEY = 'fs.chartInterval';
+
+function readInterval(): IntervalChoice {
+  try { return parseIntervalChoice(localStorage.getItem(INTERVAL_KEY)); } catch { return 'auto'; }
+}
 const drawingsKey = (provider: string, symbol: string) => `fs.drawings.${provider}:${symbol}`;
 
 function readChartStyle(): ChartStyleId {
@@ -33,7 +42,7 @@ interface Kpi { label: string; value: string; sub?: string; tone?: 'pos' | 'neg'
 @Component({
   selector: 'fs-markets-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PaneComponent, HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, SymbolSearchComponent, ProgressStatusComponent],
+  imports: [PaneComponent, HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, LedgerComponent, WatchlistComponent, SymbolSearchComponent, ProgressStatusComponent],
   templateUrl: './markets-page.html',
   styleUrl: './markets-page.scss',
 })
@@ -44,29 +53,62 @@ export class MarketsPage {
   private readonly notify = inject(NotifyService);
   private readonly chart = viewChild(TradingChartComponent);
 
+  /** The tracked instrument on screen, as the watchlist marks it. */
+  readonly selectedAsset = computed<TrackedAsset | null>(() => {
+    const symbol = this.market.trackedSymbol();
+    return symbol ? { symbol, provider: this.market.trackedProvider() } : null;
+  });
   readonly chartStyles = CHART_STYLES;
   /** How the price is drawn; kept in this browser. */
   readonly chartStyle = signal<ChartStyleId>(readChartStyle());
+  readonly intervals = INTERVALS;
+  /** The bar length the user asked for; kept in this browser. */
+  readonly interval = signal<IntervalChoice>(readInterval());
+  /** Lengths the provider's bars for this range can be merged into. */
+  readonly mergeable = computed<IntervalId[]>(() => availableIntervals(intervalSeconds(this.market.marketSeries()?.interval)));
+  /** What is drawn: the choice when the loaded bars allow it, else the provider's own bars. */
+  readonly shownInterval = computed<IntervalChoice>(() => (this.interval() !== 'auto' && this.mergeable().includes(this.interval() as IntervalId) ? this.interval() : 'auto'));
+  readonly shownSeries = computed(() => {
+    const s = this.market.marketSeries();
+    return s ? resampleSeries(s, this.shownInterval()) : null;
+  });
+  readonly nativeInterval = computed(() => this.market.marketSeries()?.interval ?? '');
   /** The drawings of the instrument on screen; kept in this browser, one list per provider and symbol. */
   readonly drawings = signal<Drawing[]>([]);
   readonly indicatorKeys = INDICATOR_KEYS;
-  readonly indicatorLabels = INDICATOR_LABELS;
+  readonly settingFields = SETTING_FIELDS;
+  /** The setting groups in order, each with its fields, for the settings panel. */
+  readonly settingGroups = (() => {
+    const groups: { name: string; fields: typeof SETTING_FIELDS }[] = [];
+    for (const f of SETTING_FIELDS) {
+      const g = groups.find(x => x.name === f.group);
+      if (g) g.fields.push(f); else groups.push({ name: f.group, fields: [f] });
+    }
+    return groups;
+  })();
+  readonly settingsOpen = signal(false);
+  readonly studyLabel = (key: string) => studyLabel(key, this.market.indicatorSettings());
+  setSetting(key: (typeof SETTING_FIELDS)[number]['key'], event: Event): void {
+    const raw = (event.target as HTMLInputElement).value.trim();
+    this.market.setIndicatorSetting(key, raw === '' ? NaN : Number(raw));
+  }
   readonly confirmClear = signal(false);
 
   readonly change = computed(() => this.market.dayChange() ?? this.market.rangeChange());
   readonly changeLabel = computed(() => (this.market.dayChange() !== null ? 'today' : this.market.historyRange()));
 
   private readonly chartInput = computed<ChartMetaInput>(() => {
-    const s = this.market.marketSeries();
+    const s = this.shownSeries();
     return {
       provider: s?.provider || this.market.provider(),
       interval: s?.interval,
+      mergedFrom: this.shownInterval() === 'auto' ? undefined : this.nativeInterval(),
       currency: s?.currency || this.market.currency(),
       range: this.market.historyRange(),
       times: s?.points?.map(p => p.t),
       emaFast: s?.emaConfig?.fastPeriod,
       emaSlow: s?.emaConfig?.slowPeriod,
-      studies: this.market.enabledIndicatorKeys().map(k => INDICATOR_LABELS[k]),
+      studies: this.market.enabledIndicatorKeys().map(k => this.studyLabel(k)),
     };
   });
   readonly chartFacts = computed(() => chartMeta(this.chartInput(), formatUtcDateTime));
@@ -115,16 +157,22 @@ export class MarketsPage {
     });
     // Seed the chart whenever history for the active instrument arrives.
     effect(() => {
-      const series = this.market.marketSeries();
+      const native = this.market.marketSeries();
+      const series = this.shownSeries();
       const chart = this.chart();
-      if (!chart || !series) return;
-      untracked(() => this.market.historySeed.set(chart.seedSeries(series)));
+      if (!chart || !native || !series) return;
+      untracked(() => {
+        const seed = chart.seedSeries(series);
+        // The KPI cards describe the provider's bars, not the merged ones drawn.
+        this.market.historySeed.set(series === native ? seed : emaSeed(native));
+      });
     });
     // Stream live ticks into the chart.
     effect(() => {
       const tick = this.market.latestTick();
       const chart = this.chart();
-      if (chart && tick && tick.symbol === untracked(this.market.trackedSymbol)) untracked(() => chart.addTick(tick));
+      // Live ticks are single prices, not bars of the length on screen, so they wait while bars are merged.
+      if (chart && tick && tick.symbol === untracked(this.market.trackedSymbol) && untracked(this.shownInterval) === 'auto') untracked(() => chart.addTick(tick));
     });
   }
 
@@ -135,7 +183,7 @@ export class MarketsPage {
   askAgent(): void {
     const sym = this.market.trackedSymbol();
     if (!sym) return;
-    const studies = this.market.enabledIndicatorKeys().map(k => INDICATOR_LABELS[k]).join(', ');
+    const studies = this.market.enabledIndicatorKeys().map(k => this.studyLabel(k)).join(', ');
     this.agent.ask(`Analyze ${sym} on ${this.market.provider()} over the ${this.market.historyRange()} range${studies ? ` using ${studies}` : ''}: trend, momentum, key support and resistance, and what would change the picture.`);
   }
 
@@ -155,6 +203,18 @@ export class MarketsPage {
     if (!symbol) return;
     const key = drawingsKey(this.market.provider(), symbol);
     try { list.length ? localStorage.setItem(key, JSON.stringify(list)) : localStorage.removeItem(key); } catch { /* the drawings last for this visit */ }
+  }
+
+  chooseInterval(choice: IntervalChoice): void {
+    this.interval.set(choice);
+    try { localStorage.setItem(INTERVAL_KEY, choice); } catch { /* the choice lasts for this visit */ }
+  }
+
+  /** Why a length is off: it is finer than the bars the provider sent for this range. */
+  intervalHint(id: IntervalId): string {
+    const native = this.nativeInterval();
+    if (this.mergeable().includes(id)) return `Merge the provider's ${native} bars into ${id} bars`;
+    return native ? `The provider sends ${native} bars for ${this.market.historyRange()}; a finer length is not available, and a shorter range may offer it.` : 'Load a price history first.';
   }
 
   setChartStyle(id: ChartStyleId): void {

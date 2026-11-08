@@ -38,3 +38,9 @@ test('interval labels and the one-line summary', () => {
   assert.equal(chartSummary({ range: '1Y', provider: 'FMP', currency: 'USD' }), '1Y · FMP · USD');
   assert.equal(chartSummary({}), 'No data loaded');
 });
+
+test('merged bars say which provider bars they were made from', () => {
+  const facts = chartMeta({ provider: 'YAHOO', interval: '4h', mergedFrom: '30m', range: '5D' }, () => '');
+  assert.equal(facts.find(f => f.label === 'Bars')!.value, "4-hour bars merged from the provider's 30-minute bars, 5D");
+  assert.equal(chartMeta({ provider: 'YAHOO', interval: '1d', range: '1M' }, () => '').find(f => f.label === 'Bars')!.value, 'daily bars, 1M');
+});

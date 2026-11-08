@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal, viewChild } from '@angular/core';
 
 import { LedgerComponent } from '../components/ledger';
 import { PortfolioRiskComponent } from '../components/portfolio-risk-panel';
@@ -40,10 +40,8 @@ import { MarketState } from '../core/market-state';
 export class PortfolioPage {
   readonly market = inject(MarketState);
   readonly view = signal<'desk' | 'risk'>('desk');
-  /** Live mode: an instrument without a tracker gets no ticks, so the server has no price for it. */
-  readonly needsTracker = computed(() => this.market.mode() === 'live' && !!this.market.trackedSymbol() && !this.market.selectedTracked());
-  /** The history close of an untracked instrument is not a price the engine can fill against. */
-  readonly orderPrice = computed(() => (this.needsTracker() ? 0 : this.market.livePrice()));
+  readonly needsTracker = this.market.needsTracker;
+  readonly orderPrice = this.market.orderPrice;
   private readonly ledger = viewChild(LedgerComponent);
 
   /** Aims the order ticket at a suggestion; the user still reviews and confirms. */

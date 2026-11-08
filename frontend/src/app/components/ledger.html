@@ -1,4 +1,5 @@
-<div class="ledger-card">
+<div class="ledger-card" [class.ticket-only]="variant() === 'ticket'">
+    @if (variant() === 'desk') {
     <!-- ACCOUNT SUMMARY -->
     <div class="account-strip" aria-label="Account summary">
       @for (tile of tiles(); track tile.label) {
@@ -9,6 +10,13 @@
         </div>
       }
     </div>
+    } @else if (summary(); as acct) {
+      <div class="mini-strip" aria-label="Account summary">
+        <span>Buying power <strong>{{ money(acct.cash) }}</strong></span>
+        <span>Held <strong>{{ held() | number: '1.0-8' }} {{ symbolLabel }}</strong></span>
+        <a routerLink="/portfolio">Full paper desk <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+      </div>
+    }
 
     <div class="desk-grid">
       <!-- ORDER TICKET -->
@@ -191,6 +199,7 @@
       </section>
 
       <!-- BLOTTER -->
+      @if (variant() === 'desk') {
       <section class="blotter" aria-label="Positions and orders">
         <div class="blotter-head">
           <div class="fs-segmented tabs" role="tablist" aria-label="Blotter views">
@@ -362,5 +371,6 @@
           }
         }
       </section>
+      }
     </div>
 </div>

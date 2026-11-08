@@ -61,6 +61,18 @@ export const paperApprovals = [
     rationale: 'Filing summary flagged accelerating data-center revenue; limit order below 20-day average.', decision_source: 'flow-run:41', requested_by: 2, created_at: iso(1700), expires_at: iso(-3600 * 20), approved_by: null, rejected_by: null, consumed_order_id: null, status: 'pending' },
 ];
 
+const QUOTES = { NVDA: [118.16, 'USD', 'open', false, 20], BTCUSDT: [67234.5, 'USDT', 'open', true, 5], 'VOLV-B': [285.4, 'SEK', 'closed', false, 7200] };
+
+/** The latest quote of a symbol, as GET /api/quote serves it. */
+export function quote(symbol, provider = 'YAHOO') {
+  const [price, currency, session, realtime, age] = QUOTES[symbol] ?? [100, 'USD', 'unknown', false, 60];
+  return {
+    symbol, requested_provider: provider, source: provider.toLowerCase(), currency, price, as_of_unix: NOW - age, fetched_at_unix: NOW, age_seconds: age,
+    interval: '1m', quote_type: realtime ? 'realtime' : 'delayed', is_realtime: realtime, stale: age > 3600, stale_threshold_seconds: 3600, note: '',
+    market_session: session, market_session_basis: 'regular_hours',
+  };
+}
+
 export function history(symbol = 'NVDA', range = '1M') {
   const step = range === '1D' ? 300 : range === '5D' ? 1800 : DAY;
   const count = range === '1D' ? 78 : range === '5D' ? 65 : range === '3M' ? 63 : range === '1Y' ? 250 : 22;
@@ -288,6 +300,7 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
       { symbol: 'VOLV-B', provider: 'AVANZA', has_tick: false, last_tick_timestamp: null, age_seconds: null },
     ], checked_at: NOW },
     '/api/history': history(q.get('symbol') ?? 'NVDA', q.get('range') ?? '1M'),
+    '/api/quote': quote(q.get('symbol') ?? 'NVDA', q.get('provider') ?? 'YAHOO'),
     '/api/financials': financials(q.get('symbol') ?? 'NVDA'),
     '/api/market/indices': indices(),
     '/api/strategies': { presets: [mockStrategy], custom: [], warnings: {} },

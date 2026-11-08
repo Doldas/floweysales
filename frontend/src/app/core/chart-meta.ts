@@ -7,6 +7,8 @@
 export interface ChartMetaInput {
   provider?: string;
   interval?: string;
+  /** The provider's own bar length, when the bars shown were merged from them. */
+  mergedFrom?: string;
   currency?: string;
   range?: string;
   /** Unix seconds of the bars, oldest first. */
@@ -19,7 +21,7 @@ export interface ChartMetaInput {
 
 export interface MetaFact { label: string; value: string }
 
-const INTERVALS: Record<string, string> = { '1m': '1-minute', '5m': '5-minute', '15m': '15-minute', '30m': '30-minute', '60m': 'hourly', '1h': 'hourly', '1d': 'daily', '1wk': 'weekly', '1mo': 'monthly' };
+const INTERVALS: Record<string, string> = { '1m': '1-minute', '5m': '5-minute', '15m': '15-minute', '30m': '30-minute', '60m': 'hourly', '1h': 'hourly', '4h': '4-hour', '1d': 'daily', '1wk': 'weekly', '1mo': 'monthly' };
 
 export function intervalLabel(interval: string | undefined): string {
   if (!interval) return 'unknown bar size';
@@ -30,7 +32,8 @@ export function intervalLabel(interval: string | undefined): string {
 export function chartMeta(input: ChartMetaInput, formatUtc: (ms: number) => string): MetaFact[] {
   const facts: MetaFact[] = [];
   facts.push({ label: 'Source', value: input.provider || 'unknown provider' });
-  facts.push({ label: 'Bars', value: `${input.interval ? intervalLabel(input.interval) + ' bars' : 'bars of unknown size'}, ${input.range || 'range unknown'}` });
+  const merged = input.mergedFrom ? ` merged from the provider's ${intervalLabel(input.mergedFrom)} bars` : '';
+  facts.push({ label: 'Bars', value: `${input.interval ? intervalLabel(input.interval) + ' bars' : 'bars of unknown size'}${merged}, ${input.range || 'range unknown'}` });
   facts.push({ label: 'Units', value: input.currency ? `prices in ${input.currency}` : 'currency not reported' });
   const last = input.times?.length ? input.times[input.times.length - 1] : NaN;
   facts.push({ label: 'Newest bar', value: Number.isFinite(last) && last > 0 ? formatUtc(last * 1000) : 'no bars loaded' });
