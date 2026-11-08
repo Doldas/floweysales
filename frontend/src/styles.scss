@@ -104,6 +104,8 @@ pre { color: var(--fs-text-2); }
   --bs-btn-disabled-border-color: var(--fs-accent);
 }
 [data-bs-theme='dark'] .btn-primary { --bs-btn-color: #0b0e1a; --bs-btn-hover-color: #0b0e1a; --bs-btn-active-color: #0b0e1a; --bs-btn-disabled-color: #0b0e1a; }
+// The default outline text (#5b5ff0) is only 3.7:1 on the dark surface (WCAG AA needs 4.5:1).
+[data-bs-theme='dark'] .btn-outline-primary { --bs-btn-color: #a9acfb; --bs-btn-border-color: #7c7ff7; --bs-btn-hover-bg: #7c7ff7; --bs-btn-hover-border-color: #7c7ff7; --bs-btn-active-bg: #8f92f9; --bs-btn-active-border-color: #8f92f9; --bs-btn-hover-color: #0b0e1a; --bs-btn-active-color: #0b0e1a; }
 .btn-outline-secondary {
   --bs-btn-color: var(--fs-text-2);
   --bs-btn-border-color: var(--fs-border-strong);

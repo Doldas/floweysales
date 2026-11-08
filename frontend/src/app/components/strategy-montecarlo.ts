@@ -68,7 +68,7 @@ import {
     <div class="mt-2" aria-live="polite">
       @for (line of headline(); track line) { <p class="mb-1 small">{{ line }}</p> }
       <p id="smc-evidence-notice" class="smc-note mb-1">Simulated, not observed. The “Happened” column is the replay; the other columns are percentiles of simulated sequences. Data {{ m.data_start }} to {{ m.data_end }} (UTC) from {{ m.provider }}, generated {{ m.generated_at }}.</p>
-      <div class="fs-scroll-x">
+      <div class="fs-scroll-x" tabindex="0" role="region" aria-label="Simulated outcomes table, scrollable">
         <table class="table table-sm align-middle mb-2" aria-describedby="smc-evidence-notice">
           <caption class="visually-hidden">Simulated outcomes with the replay result for comparison</caption>
           <thead><tr><th scope="col">Figure</th><th scope="col" class="num">Happened</th><th scope="col" class="num">5th</th><th scope="col" class="num">25th</th><th scope="col" class="num">Median</th><th scope="col" class="num">75th</th><th scope="col" class="num">95th</th></tr></thead>
