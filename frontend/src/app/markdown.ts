@@ -77,6 +77,8 @@ interface InlineState {
   /** Opening tags of generated links, kept out of the text so emphasis rules never touch attributes. */
   tags: string[];
   options: MarkdownOptions;
+  /** Footnote definitions and the order their references first appear in; absent while a footnote itself is rendered. */
+  footnotes?: { defs: Map<string, string>; order: string[] };
 }
 
 /** Renders a link or image target; unsafe or out-of-Workspace targets fall back to plain text. */
@@ -116,6 +118,17 @@ function renderInline(text: string, state: InlineState): string {
     const idx = state.code.push(code) - 1;
     return `\u0000C${idx}\u0000`;
   });
+
+  // Footnote references: [^id] with a definition becomes a numbered marker (no link, the app routes on the URL hash).
+  if (state.footnotes) {
+    const notes = state.footnotes;
+    out = out.replace(/\[\^([^\]\s]+)\]/g, (original, id: string) => {
+      if (!notes.defs.has(id)) return original;
+      let n = notes.order.indexOf(id) + 1;
+      if (!n) n = notes.order.push(id);
+      return `<sup class="md-fnref" aria-label="Footnote ${n}">${n}</sup>`;
+    });
+  }
 
   // Images are never loaded (no remote content, no Workspace file fetches): they render as a labeled link.
   out = out.replace(/!\[([^\]]*)\]\(([^\s)]+)\)/g, (_m, alt: string, href: string) =>
@@ -198,9 +211,22 @@ export function renderMarkdown(source: string, options: MarkdownOptions = {}): s
   const escaped = escapeHtml(source.replace(/\r\n?/g, '\n'));
   const fences: string[] = [];
 
-  const lines = escaped.split('\n');
+  let lines = escaped.split('\n');
   const out: string[] = [];
   const inline: InlineState = { code: [], math: [], tags: [], options };
+  // Footnote definitions ("[^1]: text") are taken out of the body and listed at the end. Rich-text output keeps
+  // them as written because the editor serializes it back to Markdown (such files open in source mode).
+  if (!options.rich) {
+    const defs = new Map<string, string>();
+    let inFence = false;
+    lines = lines.filter((line) => {
+      if (FENCE.test(line)) inFence = !inFence;
+      const def = inFence ? null : line.match(/^\[\^([^\]\s]+)\]:\s+(.+)$/);
+      if (def && !defs.has(def[1])) { defs.set(def[1], def[2]); return false; }
+      return true;
+    });
+    if (defs.size) inline.footnotes = { defs, order: [] };
+  }
   let paragraph: string[] = [];
 
   const flushParagraph = () => {
@@ -349,6 +375,13 @@ export function renderMarkdown(source: string, options: MarkdownOptions = {}): s
     paragraph.push(line);
   }
   flushParagraph();
+
+  const notes = inline.footnotes;
+  if (notes?.order.length) {
+    inline.footnotes = undefined;
+    const items = notes.order.map((id) => `<li>${renderInline(notes.defs.get(id) ?? '', inline)}</li>`).join('');
+    out.push(`<section class="md-footnotes" aria-label="Footnotes"><hr /><ol>${items}</ol></section>`);
+  }
 
   let html = out.join('');
   html = restoreCodePlaceholders(html, inline);
