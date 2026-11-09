@@ -48,6 +48,25 @@ Gmail clips messages near 102 KB, so the renderer bounds the HTML to 95 KB. It s
 
 Build a `mailer.Message` and call `mailer.Send(ctx, cfg, recipient, msg)`. Pick the `Kind` that matches the message (use `KindSecurity` or `KindTransactional` for anything with a token) and declare the `ContentType`. Add a golden test if the message has a new layout (`go test ./internal/mailer -args -update` rewrites `internal/mailer/testdata/`).
 
+## Every sender, audited
+
+All four places that send email build a `mailer.Message` and call `mailer.Send`; none formats HTML or opens an SMTP connection itself (the contract test enforces that for new code).
+
+| Producer | Code | Kind | Content type |
+| --- | --- | --- | --- |
+| Account invitation (token link) | `internal/server/user_management.go` | `transactional` | `text`, with a button |
+| Tracker alerts | `internal/server/tracker_email_routes.go` | `alert` | `text`, with instrument, source and event facts |
+| Flow Studio Notify (email channel) | `internal/server/flow_notify.go` | `flow` | the node's declared type, else detected JSON/XML, else Markdown |
+| Price and event notifier | `internal/notify/notifier.go` | `alert` | `text` |
+
+Webhook notifications (Slack, Discord, Teams) are not email and have their own formatting. A message that cannot be rendered (for example an unsafe button URL) is refused before any network use, and the error names neither the token nor the content (`TestUnrenderableSecurityMessageIsNeverSent`).
+
+## Headings
+
+The message title is the only `h1`. Headings in the content start at `h2` (a Markdown `#` becomes `h2`, `##` becomes `h3`, up to `h5`), and the structured JSON and XML views nest the same way, so screen readers get one outline.
+
 ## Testing
 
-`go test ./internal/mailer` covers Markdown, JSON and XML structure, golden HTML and text for the leaderboard example and for each message kind, value and order preservation, adversarial content, safe XML parsing, size limits, MIME structure and the bypass contract. Mail-client screenshots (Gmail Android, Gmail web, Outlook, Apple Mail, dark mode) are manual checks that need real accounts; they are not part of CI.
+`go test ./internal/mailer` covers Markdown, JSON and XML structure, golden HTML and text for the leaderboard example and for each message kind, value and order preservation, adversarial content, safe XML parsing, size limits, MIME structure (both alternatives, `text/plain` first) and the bypass contract. `samples_test.go` stores the HTML of one sample per producer and content type (invitation, alert, wide table, JSON, XML, a 200-row report, hostile input) and of every message kind as golden files; the samples are invented and the invitation token is a placeholder.
+
+`frontend/e2e/email-render.spec.ts` renders those exact golden files in Chromium at 360 px (the width of Gmail on Android), 390 px and 1000 px, in light and dark color schemes. It checks that nothing scrolls sideways, no Markdown, script or event-handler syntax is visible, every link is `http(s)` or `mailto`, there is no active content, one `h1` exists, every value of a wide table survives in order, a long report says what it omits, and axe finds no WCAG 2.1 A or AA violation. Screenshots at phone width are attached to the test report. This is browser rendering, not a mail client: Gmail, Outlook and Apple Mail apply their own CSS handling, so a screenshot check in those real clients (including dark mode) remains a manual step that needs real accounts and is not part of CI.

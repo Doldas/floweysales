@@ -232,7 +232,7 @@ func rawView(m Message, label, src string) []Block {
 	if !m.Raw {
 		return nil
 	}
-	out := []Block{Heading{Level: 3, Text: plain("Raw " + label)}}
+	out := []Block{Heading{Level: 1, Text: plain("Raw " + label)}}
 	if len(src) > maxRawBytes {
 		return append(out, Note{Text: fmt.Sprintf("The raw %s is %d characters and is not included in this message. %s", label, len(src), fullOutputSentence(m))})
 	}
