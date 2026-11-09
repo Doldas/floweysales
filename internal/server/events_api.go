@@ -36,15 +36,27 @@ func (e *Engine) registerEventRoutes() {
 		if raw := q.Get("provider"); raw != "" {
 			provider = e.parseProvider(raw)
 		}
-		events, err := market.EventsFor(r.Context(), e.providers, provider, symbol, from, to)
+		userID := int64(0)
+		if u, ok := e.currentUser(r); ok {
+			userID = u.ID
+		}
+		events, outcome, err := e.eventsFor(r.Context(), userID, provider, symbol, from, to)
 		if err != nil {
 			status := providerErrorStatus(err)
 			if errors.Is(err, market.ErrNoEventProvider) {
 				status = http.StatusNotFound
 			}
-			writeJSON(w, status, map[string]any{"error": err.Error()})
+			body := map[string]any{"error": err.Error()}
+			if outcome != nil {
+				body["routing"] = outcome
+			}
+			writeJSON(w, status, body)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"symbol": symbol, "from": from, "to": to, "events": events})
+		body := map[string]any{"symbol": symbol, "from": from, "to": to, "events": events}
+		if outcome != nil {
+			body["routing"] = outcome
+		}
+		writeJSON(w, http.StatusOK, body)
 	})
 }

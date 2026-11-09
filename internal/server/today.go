@@ -160,7 +160,7 @@ func (e *Engine) buildToday(ctx context.Context, u identity.User, canResearch bo
 			from, to := today.Format("2006-01-02"), today.AddDate(0, 0, 30).Format("2006-01-02")
 			var next *market.CorporateEvent
 			for _, symbol := range watch {
-				events, err := market.EventsFor(ctx, e.providers, "", symbol, from, to)
+				events, _, err := e.eventsFor(ctx, u.ID, "", symbol, from, to)
 				if err != nil {
 					continue
 				}

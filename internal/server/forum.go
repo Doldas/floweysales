@@ -4,10 +4,18 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"floweysales/internal/storage"
 )
+
+// includeProviderForums reads the include_providers switch; forums are on
+// unless it is false or 0.
+func includeProviderForums(q url.Values) bool {
+	v := q.Get("include_providers")
+	return v != "false" && v != "0"
+}
 
 // registerForumRoutes wires the community forum and provider plugin forums.
 func (e *Engine) registerForumRoutes() {
@@ -49,14 +57,8 @@ func (e *Engine) registerForumRoutes() {
 			}
 		}
 
-		// Provider forums (from plugins that offer one) come first. The legacy
-		// include_avanza=false switch turns all of them off.
-		includeProviders := true
-		for _, key := range []string{"include_providers", "include_avanza"} {
-			if v := r.URL.Query().Get(key); v == "false" || v == "0" {
-				includeProviders = false
-			}
-		}
+		// Provider forums (from plugins that offer one) come first.
+		includeProviders := includeProviderForums(r.URL.Query())
 
 		jList := []map[string]any{}
 

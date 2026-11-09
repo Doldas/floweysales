@@ -191,9 +191,13 @@ func (s engineSource) CorporateEvents(ctx context.Context, symbol string, daysAh
 		daysAhead = eventsDefaultAhead
 	}
 	now := time.Now().UTC()
-	events, err := market.EventsFor(ctx, s.e.providers, "", canonical, now.Format("2006-01-02"), now.AddDate(0, 0, daysAhead).Format("2006-01-02"))
+	events, outcome, err := s.e.eventsFor(ctx, 0, "", canonical, now.Format("2006-01-02"), now.AddDate(0, 0, daysAhead).Format("2006-01-02"))
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"symbol": canonical, "events": events}, nil
+	body := map[string]any{"symbol": canonical, "events": events}
+	if outcome != nil {
+		body["routing"] = outcome
+	}
+	return body, nil
 }
