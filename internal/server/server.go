@@ -268,6 +268,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerIndexRoutes()
 	e.registerIndexSourceRoutes()
 	e.registerIndexCompareRoutes()
+	e.registerProviderRoutingRoutes()
 	e.registerRankingPreferenceRoutes()
 	e.registerBacktestRoutes()
 	e.registerBacktestBatchRoutes()

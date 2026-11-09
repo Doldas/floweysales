@@ -103,7 +103,9 @@ mäter pappersportföljens risk och avvikelse från planen.
 
 | Metod | Sökväg | Beskrivning |
 |---|---|---|
-| GET | `/api/providers` | Installerade providers: kapaciteter, om de är konfigurerade, pollintervall |
+| GET | `/api/providers` | Installed market-data providers: capabilities, whether they are configured, poll interval |
+| GET | `/api/providers/routing` | Every data source (plugins, built-in adapters) by domain, with its state and where it is managed, plus the saved routing policy per domain. No credentials. Any signed-in user. |
+| PUT, DELETE | `/api/admin/providers/routing/{domain}` | SYS_ADMIN: set (`primary`, ordered `fallback`, `no_fallback`) or remove the routing policy of a domain. 422 when a source does not provide the domain, is managed elsewhere or does not exist. |
 | GET | `/api/admin/plugins` | Installerade plugin, senast hämtade butikskatalog och trackers per plugin |
 | POST | `/api/admin/plugins/check` | Hämtar butikskatalogen nu (sök efter uppdateringar) |
 | POST | `/api/admin/plugins/install` | `{"id":"yahoo","version":"","accept_terms":true}` installerar eller uppdaterar; tom version = senaste. 409 med `terms` om villkor måste godkännas |

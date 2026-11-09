@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, catchError, map, of } from 'rxjs';
 import {
-  IndexComparison, IndicesResponse,
+  IndexComparison, IndicesResponse, RoutingPolicy, RoutingView,
   AboutInfo,
   ForumPost,
   FinancialsResponse,
@@ -115,6 +115,19 @@ export class MarketService {
   /** Imports the user's own CSV file of constituents for an index. */
   importIndexCsv(id: string, body: { csv: string; as_of: string; source_name: string; license_terms: string; license_confirmed: boolean; history_csv?: string }): Observable<{ saved: boolean }> {
     return this.http.put<{ saved: boolean }>(`/api/market/indices/${encodeURIComponent(id)}/csv`, body);
+  }
+
+  /** Every data source and the administrator's routing policy per domain. */
+  getProviderRouting(): Observable<RoutingView> {
+    return this.http.get<RoutingView>('/api/providers/routing');
+  }
+
+  saveProviderPolicy(domain: string, body: { primary: string; fallback: string[]; no_fallback: boolean }): Observable<{ saved: boolean; policy: RoutingPolicy }> {
+    return this.http.put<{ saved: boolean; policy: RoutingPolicy }>(`/api/admin/providers/routing/${encodeURIComponent(domain)}`, body);
+  }
+
+  clearProviderPolicy(domain: string): Observable<{ deleted: boolean }> {
+    return this.http.delete<{ deleted: boolean }>(`/api/admin/providers/routing/${encodeURIComponent(domain)}`);
   }
 
   /** Compares two to six of the user's own index lists. */
