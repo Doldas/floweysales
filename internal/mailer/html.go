@@ -16,7 +16,7 @@ const (
 	colMuted   = "#94a3b8"
 	colAccent  = "#a5b4fc"
 	colLink    = "#67e8f9"
-	colButton  = "#6366f1"
+	colButton  = "#5d60ec" // white text on it is 4.8:1 (WCAG AA needs 4.5:1)
 	fontStack  = "Arial,Helvetica,sans-serif"
 	monoStack  = "Consolas,Menlo,monospace"
 	wrapSafe   = "overflow-wrap:anywhere;word-break:break-word;"
@@ -85,12 +85,13 @@ func blocksHTML(blocks []Block) string {
 	for _, b := range blocks {
 		switch v := b.(type) {
 		case Heading:
-			level := v.Level
-			if level < 1 {
-				level = 1
+			// The message title is the only h1; headings in the content start at h2.
+			level := v.Level + 1
+			if level < 2 {
+				level = 2
 			}
-			if level > 4 {
-				level = 4
+			if level > 5 {
+				level = 5
 			}
 			tag := fmt.Sprintf("h%d", level)
 			sb.WriteString(openTag(tag, "") + inlinesHTML(v.Text) + "</" + tag + ">")

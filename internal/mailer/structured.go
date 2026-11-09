@@ -172,7 +172,7 @@ func JSONBlocks(src string, lim limits) ([]Block, error) {
 		return nil, err
 	}
 	var out []Block
-	jsonRender(&out, "", root, 2, 0, lim)
+	jsonRender(&out, "", root, 0, 0, lim)
 	return out, nil
 }
 
@@ -368,7 +368,7 @@ func XMLBlocks(src string, lim limits) ([]Block, error) {
 		return nil, err
 	}
 	var out []Block
-	xmlRender(&out, root, 2, 0, lim)
+	xmlRender(&out, root, 1, 0, lim)
 	return out, nil
 }
 
