@@ -83,7 +83,7 @@ type worldFetcher struct {
 func (e *Engine) worldFetcher() worldFetcher {
 	return worldFetcher{
 		news: func(ctx context.Context, symbol string, limit int) ([]market.NewsItem, error) {
-			return market.NewsFor(ctx, e.providers, "", symbol, limit)
+			return e.newsFor(ctx, 0, "", symbol, limit) // the world view is shared between users
 		},
 		search: func(ctx context.Context, query string) ([]WorldHeadline, error) {
 			raw, err := engineSource{e: e}.WebSearch(ctx, query)

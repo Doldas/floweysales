@@ -59,6 +59,8 @@ const (
 	OpHistory    Op = "history"
 	OpSearch     Op = "search"
 	OpFinancials Op = "financials"
+	OpNews       Op = "news"
+	OpEvents     Op = "events"
 )
 
 // Fault is one scripted behavior. Exactly one effect applies per call; faults
@@ -86,6 +88,8 @@ type Backend struct {
 	caps     []market.ProviderCapability
 	fin      market.FinancialsResponse
 	searches map[string][]market.SearchResult
+	news     map[string][]market.NewsItem       // key: PROVIDER
+	events   map[string][]market.CorporateEvent // key: PROVIDER
 }
 
 // New returns a backend with one enabled provider per id and no fixtures.
@@ -93,6 +97,7 @@ func New(providers ...string) *Backend {
 	b := &Backend{
 		script: map[Op][]Fault{}, calls: map[Op]int{},
 		history: map[string]market.HistorySeries{}, searches: map[string][]market.SearchResult{},
+		news: map[string][]market.NewsItem{}, events: map[string][]market.CorporateEvent{},
 	}
 	for _, id := range providers {
 		b.caps = append(b.caps, market.ProviderCapability{ID: id, Label: id, Enabled: true, OHLC: true, Search: true, Fundamentals: true})
@@ -108,6 +113,33 @@ func (b *Backend) Serve(provider, symbol string, s market.HistorySeries) *Backen
 	// of the fixture must not change a supposedly deterministic replay.
 	s.Points = append([]market.HistoryPoint(nil), s.Points...)
 	b.history[provider+"|"+symbol] = s
+	return b
+}
+
+// declare adds a capability to a provider; the caller holds the lock.
+func (b *Backend) declare(provider, capability string) {
+	for i := range b.caps {
+		if b.caps[i].ID == provider {
+			b.caps[i].Capabilities = append(b.caps[i].Capabilities, capability)
+		}
+	}
+}
+
+// ServeNews makes a provider declare the news capability and answer with items.
+func (b *Backend) ServeNews(provider string, items ...market.NewsItem) *Backend {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.declare(provider, "news")
+	b.news[provider] = items
+	return b
+}
+
+// ServeEvents makes a provider declare the events capability and answer with items.
+func (b *Backend) ServeEvents(provider string, items ...market.CorporateEvent) *Backend {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.declare(provider, "events")
+	b.events[provider] = items
 	return b
 }
 
@@ -221,6 +253,42 @@ func (b *Backend) Research(context.Context, market.Provider, string, string, str
 	return market.ResearchResult{}, market.ErrUnsupported
 }
 func (b *Backend) ForumPosts(context.Context, string, int) []market.ForumPost { return nil }
+
+func (b *Backend) offering(capability string) []market.Provider {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := []market.Provider{}
+	for _, c := range b.caps {
+		for _, x := range c.Capabilities {
+			if x == capability {
+				out = append(out, market.Provider(c.ID))
+			}
+		}
+	}
+	return out
+}
+
+func (b *Backend) NewsProviders() []market.Provider { return b.offering("news") }
+
+func (b *Backend) News(ctx context.Context, p market.Provider, symbol string, limit int) ([]market.NewsItem, error) {
+	if _, err := b.next(ctx, OpNews); err != nil {
+		return nil, err
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return market.CleanNews(b.news[p.ID()], p, limit), nil
+}
+
+func (b *Backend) EventProviders() []market.Provider { return b.offering("events") }
+
+func (b *Backend) Events(ctx context.Context, p market.Provider, symbol, from, to string) ([]market.CorporateEvent, error) {
+	if _, err := b.next(ctx, OpEvents); err != nil {
+		return nil, err
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return market.CleanEvents(b.events[p.ID()], p, symbol), nil
+}
 
 var _ market.Backend = (*Backend)(nil)
 

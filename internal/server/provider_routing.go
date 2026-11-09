@@ -18,9 +18,9 @@ import (
 
 // Provider routing (#421). One registry lists every way FloweySales can get
 // data (installed plugins, built-in adapters, what a user supplied) and an
-// administrator's policy says which one serves a domain. Only the market
-// quote domain is routed through it so far; the rest are listed, with where
-// they are configured today. See docs/provider-coupling.md.
+// administrator's policy says which one serves a domain. Quotes, news and
+// corporate events are routed through it so far; the rest are listed, with
+// where they are configured today. See docs/provider-coupling.md.
 
 const routingPolicyKind = "provider_routing"
 
@@ -165,7 +165,7 @@ type routingDomainView struct {
 }
 
 // routedDomains are the domains a feature reads the policy of today.
-var routedDomains = map[routing.Domain]bool{routing.MarketQuote: true}
+var routedDomains = map[routing.Domain]bool{routing.MarketQuote: true, routing.News: true, routing.Events: true}
 
 func (e *Engine) routingView(ctx context.Context, userID int64, admin bool) map[string]any {
 	sources := e.routingSources(ctx, userID)
@@ -227,24 +227,65 @@ func (e *Engine) checkRoutingPolicy(w http.ResponseWriter, r *http.Request, p *r
 	return true
 }
 
-// routedQuote answers a quote request through the market-quote policy. ok is
-// false when no policy applies, so the caller keeps its existing behavior.
-func (e *Engine) routedQuote(ctx context.Context, userID int64, symbol string) (market.QuoteSnapshot, routing.Outcome, bool, error) {
-	policy, has := e.loadRoutingPolicies(ctx)[routing.MarketQuote]
+// routedCall answers through the saved policy of a domain. routed is false
+// when none is saved, so the caller keeps its existing behavior. userID 0 asks
+// for the system chain only, which is what shared or background work must use.
+func routedCall[T any](ctx context.Context, e *Engine, userID int64, domain routing.Domain, call func(ctx context.Context, p market.Provider) (T, error)) (T, routing.Outcome, bool, error) {
+	var zero T
+	policy, has := e.loadRoutingPolicies(ctx)[domain]
 	if !has {
-		return market.QuoteSnapshot{}, routing.Outcome{}, false, nil
+		return zero, routing.Outcome{}, false, nil
 	}
-	sources := e.routingSources(ctx, userID)
-	plan, err := routing.MakePlan(&policy, sources, routing.Request{Domain: routing.MarketQuote, UserID: userID}, providerHealth())
+	plan, err := routing.MakePlan(&policy, e.routingSources(ctx, userID), routing.Request{Domain: domain, UserID: userID}, providerHealth())
 	if err != nil {
-		return market.QuoteSnapshot{}, routing.Outcome{Domain: routing.MarketQuote, Skipped: plan.Skipped}, true, err
+		return zero, routing.Outcome{Domain: domain, Skipped: plan.Skipped}, true, err
 	}
-	snap, outcome, err := routing.Run(ctx, plan, providerHealth(), routing.Options{
+	v, outcome, err := routing.Run(ctx, plan, providerHealth(), routing.Options{
 		Benign: func(err error) bool {
 			return strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "symbol")
 		},
-	}, func(ctx context.Context, id string) (market.QuoteSnapshot, error) {
-		return market.LatestSnapshot(ctx, e.providers, symbol, market.ParseProvider(id))
+	}, func(ctx context.Context, id string) (T, error) {
+		return call(ctx, market.ParseProvider(id))
 	})
-	return snap, outcome, true, err
+	return v, outcome, true, err
+}
+
+// routedQuote answers a quote request through the market-quote policy.
+func (e *Engine) routedQuote(ctx context.Context, userID int64, symbol string) (market.QuoteSnapshot, routing.Outcome, bool, error) {
+	return routedCall(ctx, e, userID, routing.MarketQuote, func(ctx context.Context, p market.Provider) (market.QuoteSnapshot, error) {
+		return market.LatestSnapshot(ctx, e.providers, symbol, p)
+	})
+}
+
+// newsFor reads headlines from p; with no provider named, the news policy
+// decides when one is saved. Each item names the provider that answered.
+func (e *Engine) newsFor(ctx context.Context, userID int64, p market.Provider, symbol string, limit int) ([]market.NewsItem, error) {
+	if p == "" {
+		items, _, routed, err := routedCall(ctx, e, userID, routing.News, func(ctx context.Context, p market.Provider) ([]market.NewsItem, error) {
+			return market.NewsFor(ctx, e.providers, p, symbol, limit)
+		})
+		if routed {
+			return items, err
+		}
+	}
+	return market.NewsFor(ctx, e.providers, p, symbol, limit)
+}
+
+// eventsFor reads corporate events from p; with no provider named, the events
+// policy decides when one is saved, and the Outcome is then non-nil. A bad
+// window is the caller's error and never reaches a source.
+func (e *Engine) eventsFor(ctx context.Context, userID int64, p market.Provider, symbol, from, to string) ([]market.CorporateEvent, *routing.Outcome, error) {
+	if p == "" {
+		if _, _, err := market.EventWindow(from, to); err != nil {
+			return nil, nil, err
+		}
+		events, outcome, routed, err := routedCall(ctx, e, userID, routing.Events, func(ctx context.Context, p market.Provider) ([]market.CorporateEvent, error) {
+			return market.EventsFor(ctx, e.providers, p, symbol, from, to)
+		})
+		if routed {
+			return events, &outcome, err
+		}
+	}
+	events, err := market.EventsFor(ctx, e.providers, p, symbol, from, to)
+	return events, nil, err
 }

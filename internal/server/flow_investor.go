@@ -573,7 +573,7 @@ func (e *Engine) runNewsNode(ctx context.Context, n flowNode, symbols []string, 
 	var mu sync.Mutex
 	items := []map[string]any{}
 	_, err := flowEachSymbol(ctx, symbols, func(ctx context.Context, symbol string) (map[string]any, error) {
-		news, err := market.NewsFor(ctx, e.providers, provider, symbol, limit)
+		news, err := e.newsFor(ctx, 0, provider, symbol, limit)
 		if err != nil {
 			return nil, err
 		}

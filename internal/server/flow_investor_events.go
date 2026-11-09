@@ -65,7 +65,7 @@ func (e *Engine) runEventsNode(ctx context.Context, n flowNode, symbols []string
 	var mu sync.Mutex
 	rows := []map[string]any{}
 	_, err := flowEachSymbol(ctx, symbols, func(ctx context.Context, symbol string) (map[string]any, error) {
-		events, err := market.EventsFor(ctx, e.providers, provider, symbol, from, to)
+		events, _, err := e.eventsFor(ctx, 0, provider, symbol, from, to)
 		if err != nil {
 			return nil, err
 		}
