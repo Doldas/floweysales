@@ -18,9 +18,23 @@ async function barPixels(page: import('@playwright/test').Page): Promise<{ up: n
   });
 }
 
+/** The teal reference line is drawn in every style, so it shows that the series has been painted at all. */
+async function tealPixels(page: import('@playwright/test').Page): Promise<number> {
+  return page.locator('fse-trading-chart canvas').first().evaluate((el) => {
+    const c = el as HTMLCanvasElement;
+    const { data } = c.getContext('2d')!.getImageData(0, 0, c.width, c.height);
+    let n = 0;
+    for (let i = 0; i < data.length; i += 4) if (data[i + 3] > 100 && Math.abs(data[i] - 20) < 40 && Math.abs(data[i + 1] - 184) < 40 && Math.abs(data[i + 2] - 166) < 40) n++;
+    return n;
+  });
+}
+
 test.describe('chart styles', () => {
   test('the user can switch the market chart between all eight styles', async ({ page }) => {
     await open(page, 'markets');
+    // The chart sits below the fold on a normal window and is not painted until it is on screen and has data.
+    await page.locator('fse-trading-chart canvas').first().scrollIntoViewIfNeeded();
+    await expect.poll(async () => (await barPixels(page)).up + (await barPixels(page)).down + (await tealPixels(page)), { message: 'the chart has painted' }).toBeGreaterThan(30);
     const group = page.getByRole('radiogroup', { name: 'Chart style' });
     await expect(group.getByRole('radio')).toHaveCount(STYLES.length);
     await expect(group.getByRole('radio', { name: 'Area' })).toHaveAttribute('aria-checked', 'true');
