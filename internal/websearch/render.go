@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"floweysales/internal/routing"
 	"floweysales/internal/sourcetrust"
 )
 
@@ -79,6 +80,7 @@ type rendered struct {
 	Results     []renderedResult  `json:"results"`
 	Grounded    *renderedGrounded `json:"grounded_answer,omitempty"`
 	Fallback    []renderedAttempt `json:"fallback,omitempty"`
+	Routing     *routing.Outcome  `json:"routing,omitempty"` // the shape every routed domain reports
 	Usage       *renderedUsage    `json:"usage,omitempty"`
 	Ranking     *renderedRanking  `json:"ranking,omitempty"`
 	Note        string            `json:"note"`
@@ -227,6 +229,8 @@ func Render(out Outcome, accept func(string) (string, bool), opts ...RenderOptio
 		}
 		r.Fallback = append(r.Fallback, renderedAttempt{Provider: a.Provider, Outcome: a.Outcome, Detail: tidy(a.Detail, 200)})
 	}
+	shared := out.Routing()
+	r.Routing = &shared
 	if resp.Usage.Searches > 0 || resp.Usage.PromptTokens > 0 || out.CostUSD > 0 {
 		r.Usage = &renderedUsage{Searches: resp.Usage.Searches, PromptTokens: resp.Usage.PromptTokens,
 			OutputTokens: resp.Usage.OutputTokens, EstCostUSD: out.CostUSD}

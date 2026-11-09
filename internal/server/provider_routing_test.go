@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"floweysales/internal/market/markettest"
+	"floweysales/internal/websearch"
 )
 
 func routingEngine(t *testing.T, providers ...string) (*Engine, *markettest.Backend) {
@@ -224,5 +225,29 @@ func TestOnlyAdministratorsMayChangeTheRoutingPolicy(t *testing.T) {
 		if got := allowedAPI(tc.role, tc.method, tc.path); got != tc.want {
 			t.Errorf("%s %s %s: allowed=%v, want %v", tc.role, tc.method, tc.path, got, tc.want)
 		}
+	}
+}
+
+func TestRegistryShowsTheWebSearchRoutersLivePolicy(t *testing.T) {
+	e, _ := routingEngine(t, "AAA")
+	r := e.webSearchRouter()
+	r.SetConfig(websearch.ProviderConfig{ID: websearch.Tavily, Enabled: true, APIKey: "tvly-very-secret"})
+	r.SetConfig(websearch.ProviderConfig{ID: websearch.Brave, Enabled: true, APIKey: "brave-very-secret"})
+	code, out, raw := icall(e, "GET", "/api/providers/routing", nil)
+	if code != http.StatusOK || strings.Contains(raw, "very-secret") {
+		t.Fatalf("%d %s", code, raw)
+	}
+	policy, _ := out["policies"].(map[string]any)["web_search"].(map[string]any)
+	if policy == nil || policy["primary"] != "web_search:tavily" || fmt.Sprint(policy["fallback"]) != "[web_search:brave]" {
+		t.Errorf("the router's order must be shown: %v", policy)
+	}
+	for _, d := range out["domains"].([]any) {
+		if dm := d.(map[string]any); dm["id"] == "web_search" && dm["routed"] != true {
+			t.Errorf("web search is routed by its own router: %v", dm)
+		}
+	}
+	// The router's own settings stay the only place to change it.
+	if code, body := putPolicy(e, "web_search", map[string]any{"primary": "web_search:tavily"}); code != http.StatusUnprocessableEntity {
+		t.Errorf("%d %v", code, body)
 	}
 }
