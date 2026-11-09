@@ -67,6 +67,28 @@ func (e *Engine) registerMarketRoutes() {
 	})
 	e.mux.HandleFunc("GET /api/quote", func(w http.ResponseWriter, r *http.Request) {
 		symbol := r.URL.Query().Get("symbol")
+		// With no provider named, the administrator's market-quote policy decides (when one is saved).
+		if r.URL.Query().Get("provider") == "" {
+			userID := int64(0)
+			if u, ok := e.currentUser(r); ok {
+				userID = u.ID
+			}
+			if snap, outcome, routed, err := e.routedQuote(r.Context(), userID, symbol); routed {
+				if err != nil {
+					writeJSON(w, 502, map[string]any{"error": err.Error(), "routing": outcome})
+					return
+				}
+				body := withProvenance(snap, quoteProvenance(snap))
+				if m, ok := body.(map[string]json.RawMessage); ok {
+					if raw, err := json.Marshal(outcome); err == nil {
+						m["routing"] = raw
+					}
+					body = m
+				}
+				writeJSON(w, 200, body)
+				return
+			}
+		}
 		provider := e.parseProvider(r.URL.Query().Get("provider"))
 		out, err := market.LatestSnapshot(r.Context(), e.providers, symbol, provider)
 		if err != nil {

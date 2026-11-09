@@ -955,3 +955,16 @@ export interface AboutInfo {
   /** RFC 3339, UTC. */
   build_time?: string;
 }
+
+/** One way FloweySales can get data (GET /api/providers/routing). It never carries a credential. */
+export interface RoutingSource {
+  id: string; label: string; kind: 'plugin' | 'builtin' | 'user'; domains: string[]; scope: 'system' | 'user';
+  needs_key: boolean; configured: boolean; enabled: boolean; regions?: string[]; restrictions?: string; origin?: string;
+  experimental?: boolean; managed_by?: string;
+}
+
+export interface RoutingDomain { id: string; label: string; group: string; no_fallback: boolean; why?: string; sources: number; routed: boolean }
+
+export interface RoutingPolicy { domain: string; primary: string; fallback?: string[]; no_fallback?: boolean }
+
+export interface RoutingView { domains: RoutingDomain[]; sources: RoutingSource[]; policies: Record<string, RoutingPolicy>; can_edit: boolean; notice: string }
