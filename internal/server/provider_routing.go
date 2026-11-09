@@ -13,14 +13,14 @@ import (
 	"floweysales/internal/market"
 	"floweysales/internal/routing"
 	"floweysales/internal/storage"
-	"floweysales/internal/websearch"
 )
 
 // Provider routing (#421). One registry lists every way FloweySales can get
 // data (installed plugins, built-in adapters, what a user supplied) and an
 // administrator's policy says which one serves a domain. Quotes, news and
-// corporate events are routed through it so far; the rest are listed, with
-// where they are configured today. See docs/provider-coupling.md.
+// corporate events are routed through it, web search publishes its own router
+// to it, and the rest are listed, with where they are configured today. See
+// docs/provider-coupling.md.
 
 const routingPolicyKind = "provider_routing"
 
@@ -79,13 +79,7 @@ func (e *Engine) routingSources(ctx context.Context, userID int64) []routing.Sou
 			NeedsKey: c.RequiresKey, Configured: c.Enabled, Enabled: c.Enabled, Restrictions: c.Notes, Experimental: c.Experimental,
 			Origin: "plugin " + c.PluginID + " " + c.PluginVersion})
 	}
-	router := e.webSearchRouter()
-	for _, info := range websearch.Catalog() {
-		cfg, ok := router.Config(info.ID)
-		out = append(out, routing.Source{ID: "web_search:" + info.ID, Label: info.Name, Kind: routing.KindBuiltin, Domains: []routing.Domain{routing.WebSearch},
-			Scope: routing.ScopeSystem, NeedsKey: !info.Keyless, Configured: ok && cfg.Configured(), Enabled: ok && cfg.Enabled,
-			Restrictions: info.Pricing, ManagedBy: "Settings → Web search"})
-	}
+	out = append(out, e.webSearchRouter().Sources()...)
 	for _, a := range indexsource.Adapters("") {
 		out = append(out, routing.Source{ID: "index:" + a.ID, Label: a.Name, Kind: routing.KindBuiltin, Domains: []routing.Domain{routing.IndexMembership},
 			Scope: routing.ScopeSystem, NeedsKey: a.NeedsKey, Configured: !a.NeedsKey || e.hasFMPKey(ctx, userID), Enabled: true,
@@ -165,7 +159,7 @@ type routingDomainView struct {
 }
 
 // routedDomains are the domains a feature reads the policy of today.
-var routedDomains = map[routing.Domain]bool{routing.MarketQuote: true, routing.News: true, routing.Events: true}
+var routedDomains = map[routing.Domain]bool{routing.MarketQuote: true, routing.News: true, routing.Events: true, routing.WebSearch: true}
 
 func (e *Engine) routingView(ctx context.Context, userID int64, admin bool) map[string]any {
 	sources := e.routingSources(ctx, userID)
@@ -179,7 +173,12 @@ func (e *Engine) routingView(ctx context.Context, userID int64, admin bool) map[
 		}
 		domains = append(domains, routingDomainView{DomainInfo: d, Sources: n, Routed: routedDomains[d.ID]})
 	}
-	return map[string]any{"domains": domains, "sources": sources, "policies": e.loadRoutingPolicies(ctx), "can_edit": admin,
+	policies := e.loadRoutingPolicies(ctx)
+	// Web search keeps its own router; this shows what that router will do.
+	if p, ok := e.webSearchRouter().RoutingPolicy(); ok {
+		policies[routing.WebSearch] = p
+	}
+	return map[string]any{"domains": domains, "sources": sources, "policies": policies, "can_edit": admin,
 		"notice": "Installed plugins and configured providers are different things: a plugin must be installed under Settings → Plugins, and a policy here decides which installed source serves a domain. A fallback is always shown in the result, and domains where another source would change meaning or breach a licence cannot have one."}
 }
 

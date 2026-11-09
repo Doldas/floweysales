@@ -135,3 +135,27 @@ func TestLegacyWebSearchInfo(t *testing.T) {
 		t.Fatalf("%q %v", p, ok)
 	}
 }
+
+func TestRunWebSearchReportsTheSharedOutcome(t *testing.T) {
+	e := searchEngine(t, map[string]stubAdapter{
+		websearch.SearXNG: {id: websearch.SearXNG, err: &websearch.Error{Provider: websearch.SearXNG, Kind: websearch.KindRateLimited, Status: 429}},
+		websearch.Tavily:  {id: websearch.Tavily, resp: websearch.Response{Results: []websearch.Result{{Title: "T", URL: "https://example.com/a", Snippet: "S", Type: websearch.TypeWebResult}}}},
+	}, websearch.ProviderConfig{ID: websearch.SearXNG, Enabled: true, Endpoint: "http://searxng:8080"},
+		websearch.ProviderConfig{ID: websearch.Tavily, Enabled: true, APIKey: "k"})
+	raw, err := e.runWebSearch(t.Context(), "earnings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Routing struct {
+			Domain, Requested, Actual string
+			FellBack                  bool `json:"fell_back"`
+		} `json:"routing"`
+	}
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Routing.Domain != "web_search" || out.Routing.Requested != "web_search:searxng" || out.Routing.Actual != "web_search:tavily" || !out.Routing.FellBack {
+		t.Errorf("%s", raw)
+	}
+}

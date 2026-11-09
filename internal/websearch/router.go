@@ -158,6 +158,7 @@ type Attempt struct {
 	Kind       Kind      `json:"kind,omitempty"`
 	Detail     string    `json:"detail,omitempty"`
 	EstCostUSD float64   `json:"est_cost_usd,omitempty"`
+	DurationMS int64     `json:"duration_ms,omitempty"` // the call, its retries included
 }
 
 // Outcome is the result of one routed search.
@@ -529,6 +530,7 @@ func (r *Router) Search(ctx context.Context, query string) (Outcome, error) {
 		tried++
 		var resp Response
 		var serr error
+		started := r.now()
 		for try := 0; ; try++ {
 			resp, serr = adapter.Search(ctx, query)
 			var pe *Error
@@ -537,18 +539,20 @@ func (r *Router) Search(ctx context.Context, query string) (Outcome, error) {
 			}
 			r.sleep(time.Duration(try+1) * 300 * time.Millisecond)
 		}
+		took := r.now().Sub(started).Milliseconds()
 		if serr != nil {
 			var pe *Error
 			if errors.As(serr, &pe) && pe.Kind == KindEmpty {
 				cost := r.settle(ctx, cfg, resp, false, run)
 				out.CostUSD += float64(cost) / microsPerUSD
 				r.record(Attempt{Provider: id, Outcome: "empty", Kind: KindEmpty, Detail: pe.Detail, EstCostUSD: float64(cost) / microsPerUSD})
-				out.Attempts = append(out.Attempts, Attempt{At: r.now().UTC(), Provider: id, Outcome: "empty", Kind: KindEmpty, Detail: pe.Detail})
+				out.Attempts = append(out.Attempts, Attempt{At: r.now().UTC(), Provider: id, Outcome: "empty", Kind: KindEmpty, Detail: pe.Detail, DurationMS: took})
 				continue
 			}
 			cost := r.settle(ctx, cfg, resp, true, run)
 			out.CostUSD += float64(cost) / microsPerUSD
 			r.failed(&out, id, serr)
+			out.Attempts[len(out.Attempts)-1].DurationMS = took
 			continue
 		}
 		cost := r.settle(ctx, cfg, resp, false, run)
@@ -556,11 +560,11 @@ func (r *Router) Search(ctx context.Context, query string) (Outcome, error) {
 		if len(resp.Results) == 0 && resp.Answer == "" {
 			lastEmpty = &resp
 			r.record(Attempt{Provider: id, Outcome: "empty", Kind: KindEmpty, EstCostUSD: float64(cost) / microsPerUSD})
-			out.Attempts = append(out.Attempts, Attempt{At: r.now().UTC(), Provider: id, Outcome: "empty", Kind: KindEmpty})
+			out.Attempts = append(out.Attempts, Attempt{At: r.now().UTC(), Provider: id, Outcome: "empty", Kind: KindEmpty, DurationMS: took})
 			continue
 		}
 		r.clearBreaker(id)
-		a := Attempt{Provider: id, Outcome: "ok", EstCostUSD: float64(cost) / microsPerUSD}
+		a := Attempt{Provider: id, Outcome: "ok", EstCostUSD: float64(cost) / microsPerUSD, DurationMS: took}
 		r.record(a)
 		a.At = r.now().UTC()
 		out.Attempts = append(out.Attempts, a)
