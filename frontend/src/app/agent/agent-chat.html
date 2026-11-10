@@ -25,16 +25,26 @@
       </div>
     }
 
-    @for (block of blocks(); track block.kind === 'steps' ? 's' + block.key : block.entry.id) {
-      @if (block.kind === 'steps') {
-          <div class="steps" role="group" [attr.aria-label]="block.steps.length + ' agent tool steps'">
-            <div class="steps-head"><i class="bi bi-cpu" aria-hidden="true"></i> Agent steps <span class="count">{{ block.steps.length }}</span></div>
-            <ol>
-              @for (step of block.steps; track step.id) {
-                <li><fs-tool-call [call]="callOf(step)" /></li>
+    @for (block of blocks(); track block.kind === 'trace' ? 't' + block.key : block.entry.id) {
+      @if (block.kind === 'trace') {
+        <details class="trace">
+          <summary>
+            <span class="trace-handle" aria-hidden="true"><i class="bi bi-chevron-down"></i></span>
+            <span class="fs-agent-orb sm" aria-hidden="true"><i class="bi bi-stars"></i></span>
+            <i class="bi bi-lightbulb" aria-hidden="true"></i>
+            <span>Thought process</span>
+            @if (traceToolCount(block.entries); as count) { <span class="trace-count">{{ count }} agent step{{ count === 1 ? '' : 's' }}</span> }
+          </summary>
+          <div class="trace-content">
+            @for (entry of block.entries; track entry.id) {
+              @if (entry.role === 'tool') {
+                <div class="trace-tool"><fs-tool-call [call]="callOf(entry)" /></div>
+              } @else if (entry.thinking) {
+                <div class="trace-thought">{{ entry.thinking }}</div>
               }
-            </ol>
+            }
           </div>
+        </details>
       } @else if (block.kind === 'user') {
           <div class="msg msg-user"><div class="bubble">{{ block.entry.content }}</div></div>
       } @else {
@@ -179,17 +189,9 @@
   </div>
 
   <form class="composer" (submit)="$event.preventDefault(); send()">
-    @if (session.context().symbol) {
-      <div class="context-row" aria-label="Context sent with your question">
-        <span class="ctx-chip"><i class="bi bi-crosshair" aria-hidden="true"></i> {{ session.context().symbol }}</span>
-        <span class="ctx-chip">{{ session.context().provider }}</span>
-        <span class="ctx-chip">{{ session.context().range }}</span>
-        @if (session.context().price) { <span class="ctx-chip tabular">{{ session.context().price }}</span> }
-      </div>
-    }
     <div class="settings-bar">
       <button type="button" class="settings-toggle" (click)="toggleSettings()" [attr.aria-expanded]="settingsOpen()" aria-controls="agent-settings">
-        <i class="bi" [class.bi-chevron-right]="!settingsOpen()" [class.bi-chevron-down]="settingsOpen()" aria-hidden="true"></i>
+        <span class="settings-handle" aria-hidden="true"><i class="bi bi-chevron-down"></i></span>
         <i class="bi bi-sliders" aria-hidden="true"></i>
         <span class="settings-label">Agent settings</span>
         <span class="settings-summary">{{ modelLabel() }} · {{ personaLabel() }} · <strong [class.is-strict]="session.evidenceMode() !== 'standard'">{{ evidenceLabel() }}</strong></span>
@@ -287,6 +289,14 @@
         </ul>
       </details>
     </div>
+    }
+    @if (session.context().symbol) {
+      <div class="context-row" aria-label="Context sent with your question">
+        <span class="ctx-chip"><i class="bi bi-crosshair" aria-hidden="true"></i> {{ session.context().symbol }}</span>
+        <span class="ctx-chip">{{ session.context().provider }}</span>
+        <span class="ctx-chip">{{ session.context().range }}</span>
+        @if (session.context().price) { <span class="ctx-chip tabular">{{ session.context().price }}</span> }
+      </div>
     }
     <div class="composer-box">
       <textarea #composer rows="1" [value]="draft()" (input)="onInput($any($event.target).value)" (keydown)="onKeydown($event)"
