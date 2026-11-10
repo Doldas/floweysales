@@ -172,3 +172,72 @@
 
 .sources .source-list { list-style: none; padding-left: 0; .source-card { margin: 0 0 0.5rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--fs-border, #8883); } .badges { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0.2rem 0; } .why-source .facts { margin: 0.25rem 0; } }
 .sources .source-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0.4rem 0; select { max-width: 16rem; } }
+
+
+// Compact reasoning/activity disclosures: hide internal tool traces, not answers.
+.trace {
+  width: 100%;
+  max-width: 860px;
+  margin-inline: auto;
+  min-width: 0;
+  border: 1px solid var(--fs-border);
+  border-radius: var(--bs-border-radius-lg);
+  background: var(--fs-surface-2);
+  color: var(--fs-muted);
+  position: relative;
+  summary {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-height: 2.5rem;
+    padding: .5rem .7rem;
+    cursor: pointer;
+    list-style: none;
+    font-size: .82rem;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary:focus-visible { outline: 2px solid var(--fs-accent); outline-offset: 2px; }
+  .trace-handle {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    transform: translate(-50%, -50%);
+    display: grid;
+    place-items: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    background: var(--fs-surface);
+    color: var(--fs-text);
+    border: 1px solid var(--fs-border-strong);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  &[open] .trace-handle i { transform: rotate(180deg); }
+}
+.trace-count { margin-left: auto; font-size: .7rem; }
+.trace-content { border-top: 1px solid var(--fs-border); padding: .6rem .75rem; display: grid; gap: .6rem; }
+.trace-thought { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; }
+.trace-tool { min-width: 0; }
+
+// Centered handle marks the settings disclosure; composer input remains fixed.
+.settings-bar { position: relative; margin-top: .6rem; }
+.settings-toggle { position: relative; }
+.settings-handle {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  border: 1px solid var(--fs-border-strong);
+  background: var(--fs-surface);
+  pointer-events: none;
+}
+.settings-toggle[aria-expanded='true'] .settings-handle i { transform: rotate(180deg); }
+@media (max-width: 700px) {
+  .is-page .chat-scroll { padding-bottom: .75rem; }
+  .is-page .composer { padding-top: .6rem; padding-bottom: max(.65rem, env(safe-area-inset-bottom)); }
+}
