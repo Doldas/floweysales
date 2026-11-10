@@ -14,7 +14,7 @@ import { formatUtcDateTime } from '../ui/datetime';
 import type { ToolCall } from '../components/tool-call-view';
 
 /** Consecutive tool calls are rendered together as one block of agent steps. */
-type Block = { kind: 'user' | 'assistant'; entry: ChatEntry } | { kind: 'steps'; steps: ChatEntry[]; key: number };
+type Block = { kind: 'user' | 'assistant'; entry: ChatEntry } | { kind: 'trace'; entries: ChatEntry[]; key: number };
 
 /**
  * The research agent conversation: messages, the tool calls the agent made
@@ -124,19 +124,24 @@ export class AgentChatComponent implements OnInit {
   }
   private readonly mdCache = new Map<string, SafeHtml>();
 
+  /** Keep consecutive reasoning and tool calls together behind one disclosure.
+   * A completed answer is always a separate, visible block.
+   */
   readonly blocks = computed<Block[]>(() => {
     const out: Block[] = [];
     for (const e of this.session.entries()) {
-      if (e.role === 'tool') {
+      if (e.role === 'tool' || (e.role === 'assistant' && !!e.thinking && !e.content)) {
         const last = out.at(-1);
-        if (last?.kind === 'steps') last.steps.push(e);
-        else out.push({ kind: 'steps', steps: [e], key: e.id });
+        if (last?.kind === 'trace') last.entries.push(e);
+        else out.push({ kind: 'trace', entries: [e], key: e.id });
       } else {
         out.push({ kind: e.role, entry: e });
       }
     }
     return out;
   });
+
+  traceToolCount(entries: ChatEntry[]): number { return entries.filter(e => e.role === 'tool').length; }
 
   /** Whether this message is still only reasoning: the run streams and no answer text has arrived. */
   isThinkingNow(e: ChatEntry): boolean {
