@@ -8,6 +8,12 @@ publishes the section for the tagged version as the release notes. See
 
 ## Unreleased
 
+- Additive: capability `macro`. It has no method of its own: it says the
+  provider's `history` answers the macro series ids listed in `docs/plugins.md`,
+  and it requires `history`. Existing plugins keep working. A plugin that
+  declares it must set `min_app_version` to the first FloweySales release that
+  knows it, since an older backend refuses an unknown capability.
+
 ## v0.2.0
 
 - Additive: package `feed` parses RSS 2.0 and Atom headline feeds (DTDs and

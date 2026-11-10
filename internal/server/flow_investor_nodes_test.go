@@ -166,10 +166,10 @@ func TestMacroRegime(t *testing.T) {
 	}
 }
 
-func TestMacroNodeNeedsTheFREDPlugin(t *testing.T) {
+func TestMacroNodeNeedsAMacroProvider(t *testing.T) {
 	e := investorEngine(t) // only YAHOO is installed
 	_, err := e.runMacroNode(context.Background(), time.Now())
-	if err == nil || !strings.Contains(err.Error(), "Install the FRED plugin") {
+	if err == nil || !strings.Contains(err.Error(), "for example FRED") {
 		t.Fatalf("%v", err)
 	}
 }

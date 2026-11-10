@@ -63,6 +63,7 @@ func TestManifestValidation(t *testing.T) {
 		"reserved env":      func(m *Manifest) { m.Env = []EnvVar{{Name: "MYSQL_DSN"}} },
 		"backend env":       func(m *Manifest) { m.Env = []EnvVar{{Name: "FLOWEYSALES_ANYTHING"}} },
 		"app version":       func(m *Manifest) { m.MinAppVersion = "latest" },
+		"macro alone":       func(m *Manifest) { m.Provider.Capabilities = []string{CapMacro} },
 	}
 	for name, mutate := range cases {
 		m := base
@@ -336,5 +337,17 @@ func TestToolDispatchAndParams(t *testing.T) {
 	}
 	if r := got[2]; r.Error == nil || r.Error.Code != CodeInvalidArgument {
 		t.Errorf("undeclared tool: %+v", r)
+	}
+}
+
+func TestMacroCapabilityNeedsHistory(t *testing.T) {
+	m := Manifest{Protocol: ProtocolVersion, ID: "macro-example", Name: "Macro", Version: "1.0.0",
+		Provider: ProviderInfo{ID: "MACRO", Label: "Macro", Capabilities: []string{CapHistory, CapMacro}}}
+	if err := m.Validate(); err != nil {
+		t.Errorf("macro with history is valid: %v", err)
+	}
+	m.Provider.Capabilities = []string{CapMacro}
+	if err := m.Validate(); err == nil {
+		t.Error("macro series are read through history")
 	}
 }

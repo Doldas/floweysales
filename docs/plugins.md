@@ -169,6 +169,8 @@ Responses may arrive in any order. Lines are limited to 1 MiB (requests) and
 | `events` | `symbol`, `from`, `to` (ISO dates, window at most 400 days) | `[{symbol,kind,date,amount,currency,ratio,confirmed,provider}]` | `events` |
 | `tool` | `tool`, `input` | `{title?, blocks:[…]}` | manifest `tools` |
 
+The `macro` capability adds no method. It declares that `history` answers the macro series the regime reads, under the ids `T10Y2Y` (10-year minus 2-year Treasury spread), `UNRATE` (unemployment rate), `FEDFUNDS` (policy rate), `BAMLH0A0HYM2` (high-yield spread) and `VIXCLS` (volatility index), with the same meaning and units as FRED's series of those names. It requires the `history` capability. A series the provider cannot answer is reported as missing; one provider answers the whole regime.
+
 Error codes: `unsupported`, `invalid_argument` (HTTP 400), `not_configured`
 (503), `upstream` and `internal` (502). An uninstalled provider is HTTP 404.
 

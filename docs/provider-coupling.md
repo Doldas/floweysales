@@ -12,7 +12,7 @@ Where FloweySales still depends on a named provider, which capabilities already 
 | Web search | Built-in adapters Brave, Tavily, SearXNG, Google grounding (`internal/websearch`) | Own router and policy (auto order or manual pick, attempts, retries, budgets, circuit breaker) stored sealed as `ws_policy` (`internal/server/web_search.go`). It publishes itself to the shared registry (`internal/websearch/family.go`): its providers are listed as managed sources, the registry shows the order it will use, and every search reports the shared `Outcome` as `routing`. | Provider names appear in `internal/ai/websearch.go`, `internal/server/world.go`, `internal/sources/sources.go`, `api_integration_settings.go`. | done for the registry and `Outcome`; the names remain |
 | Index membership | User-supplied CSV or the user's own FMP key (`internal/indexsource`, #258) | The user chooses per index; adapter registry with licence notices. | `FMPIndexes` maps registry ids to FMP endpoints. | 3 (listed in the shared registry by this slice) |
 | SEC filings and XBRL | `internal/sec` calls EDGAR directly | Not pluggable. | A privileged internal integration, kept internal on purpose (public regulatory source, no credentials); it is shown in the registry so it is visible, not routable. | internal |
-| Macro series | The FRED plugin | Hard-coded provider id `FRED` (`internal/server/flow_investor_macro.go:153`), with an install hint for that plugin. | Provider name in business logic. | 3 |
+| Macro series | Plugins that declare the `macro` capability, whose `history` answers the regime's series | The saved `macro` policy; with none, the first enabled provider that declares it. One provider answers the whole regime, so series are never combined (`runMacroNode`, `internal/server/flow_investor_macro.go`). | The series ids are FRED's and are the contract (`docs/plugins.md`). `legacyMacroProviders` keeps the released FRED plugin working until it declares `macro`. Help texts in Flow Studio still name FRED. | done, except that shim and the texts |
 | FX | None integrated; mixed currencies are disclosed, never converted | n/a | n/a | 3 |
 | AI text and vision | One OpenAI-compatible endpoint per model profile (`internal/ai`, `internal/vision`) | Profiles chosen by users; no capability routing. | Endpoint-agnostic already. | 4 |
 | Notifications | SMTP (`internal/mailer`) and webhooks (`internal/server/flow_notify.go`) | Configured by SYS_ADMIN. | None. | 4 |
@@ -32,7 +32,7 @@ Yahoo, Finnhub, Avanza, Binance, Stooq, CoinGecko, FRED and ECB are plugins (ADR
 - **Consumers**: `GET /api/quote`, `GET /api/events`, the news and events nodes in Flow Studio, the agent's corporate events tool, the world view and Today use the policy of their domain when the caller names no provider. With no policy configured the behavior is unchanged. A saved policy fails closed: when its sources are gone or fail, no other installed provider answers. `GET /api/events` and the agent tool return the `Outcome`; flow rows and headlines name the provider that answered.
 - **Settings**: SYS_ADMIN edits the policy per domain in Settings → Providers; everyone signed in can read which sources exist without any secret.
 
-Not in this slice and not claimed: enrichment (merging several sources), per-region routing, per-source budgets, instances of one plugin with different credentials, and the migration of FRED and the AI prompt off provider names.
+Not in this slice and not claimed: enrichment (merging several sources), per-region routing, per-source budgets, instances of one plugin with different credentials, and the migration of the AI prompt off provider names.
 
 ## Implementation notes (this slice)
 
@@ -43,6 +43,6 @@ Not in this slice and not claimed: enrichment (merging several sources), per-reg
 
 ## Next steps, in order
 
-1. FRED and other macro series: replace the hard-coded provider id with a `macro` domain policy.
+1. Release the FRED plugin with the `macro` capability and remove `legacyMacroProviders`.
 2. Replace the provider names in the agent prompt with the routing policy's primary per domain.
 3. Per-user provider instances (own keys) with the precedence already encoded in `MakePlan` (a user's own usable source comes first), and an SDK capability for provider-side coverage so regions can be routed.
