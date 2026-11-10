@@ -139,7 +139,7 @@ try {
   const trace = page.locator('fs-agent-dock details.trace').first();
   await trace.waitFor({ state: 'visible', timeout: 5000 });
   await audit(page, 'Agent dock with collapsed thought process', 'fs-agent-dock');
-  await trace.locator('summary').click();
+  await trace.locator(':scope > summary').click();
   await page.locator('fs-agent-dock fs-tool-call').first().waitFor({ state: 'visible', timeout: 5000 });
   await audit(page, 'Agent dock with expanded tool steps', 'fs-agent-dock');
   await page.keyboard.press('Escape');
