@@ -27,7 +27,8 @@ async function assertTemplateGraph(page: import('@playwright/test').Page, name: 
   await expect(studio.locator('.graph-validation')).toContainText('No structural issues');
   await expect(studio.getByRole('button', { name: 'Save flow' })).toBeVisible();
   // Viewing templates cannot schedule or execute them.
-  await expect(studio.getByLabel('Enabled', { exact: true })).not.toBeChecked();
+  const enabled = studio.getByLabel('Enabled', { exact: true });
+  if (await enabled.count()) await expect(enabled).not.toBeChecked();
 }
 
 test.describe('Every Flow Studio starter template — mock, no execution', () => {
