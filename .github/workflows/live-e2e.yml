@@ -25,6 +25,11 @@ on:
         required: false
         type: string
         default: '2'
+      analyze_failures:
+        description: 'Optional paid AI triage of sanitized failure counts (no raw user data)'
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -71,6 +76,16 @@ jobs:
           test -n "$LIVE_E2E_EMAIL" || { echo "::error::Configure live-e2e environment secret LIVE_E2E_EMAIL"; exit 1; }
           test -n "$LIVE_E2E_PASSWORD" || { echo "::error::Configure live-e2e environment secret LIVE_E2E_PASSWORD"; exit 1; }
           npx playwright test --config playwright.live.config.ts
+      - name: Optional AI analysis of sanitized flow failures
+        if: ${{ always() && inputs.analyze_failures }}
+        continue-on-error: true
+        env:
+          LIVE_FLOW_AI_KEY: ${{ secrets.LIVE_FLOW_AI_KEY }}
+          LIVE_FLOW_AI_MODEL: ${{ vars.LIVE_FLOW_AI_MODEL }}
+        run: |
+          set -euo pipefail
+          test -f frontend/live-report/flow-failure-summary.json || { echo "No safe flow failure summary to analyze"; exit 0; }
+          node scripts/analyze-flow-failures.mjs
       - name: Upload test report and failure screenshots/video
         if: always()
         uses: actions/upload-artifact@v7

@@ -82,3 +82,42 @@ Only use the live test account, never a personal/admin account. The URL is hardc
 ## Follow-ups
 
 See #274. Extend coverage only with stable, idempotent and observable test fixtures, redaction guarantees, bounded costs, permission checks, optional daily/scheduled smoke, and clean test data lifecycle. Destructive E2E must use a **separate disposable staging instance**, never this deployed production-like endpoint.
+
+## Full template coverage and failure triage (#434)
+
+The PR CI suite `frontend/e2e/all-flow-templates.spec.ts` generates a Playwright case for
+**every** investor playbook in the same `INVESTOR_PLAYBOOKS` catalogue used by the UI,
+both SYS_ADMIN and eligible USER variants, plus the three starter templates. It
+loads the actual Angular editor, selects the template and checks its name,
+graph nodes, edges, structural preflight and safe initial state. A representative
+mobile case also checks overflow. All of these tests use mock APIs and do **not**
+invoke providers, real AI models, emails, trades or workflow workers. This is
+template construction and UI validation; it does not prove real execution succeeds.
+
+The deployed read-only suite additionally inventories recent histories for **every
+flow visible to the dedicated test account**, and writes:
+- `frontend/live-report/flow-failure-summary.json` — **aggregate counts only**
+- `frontend/live-report/flow-failure-summary.md` — corresponding summary
+
+The history API is bounded. The report states that this is recent history, not
+every historical run. Missing histories fail the test. The original error text,
+node inputs, prompts, names, outputs and secrets are never written to the report.
+Categories such as credentials, quota, timeout or output contract are heuristic
+**triage**, not confirmed root causes. For example, a 403 error does not prove
+a commercial redistribution license is missing.
+
+To request a one-time AI review of **sanitized aggregate counts**, enable the
+manual workflow's `analyze_failures` switch and configure protected environment
+secret `LIVE_FLOW_AI_KEY` and variable `LIVE_FLOW_AI_MODEL`. A single bounded
+request is made to OpenAI's chat completions endpoint; no flow records are sent.
+The optional report `flow-failure-ai-analysis.md` lists hypotheses and
+investigation steps, not conclusive fixes. API use can incur charges. AI triage
+failures do not affect the underlying Playwright result.
+
+**Still required for full behavioral coverage:** a separate *disposable staging*
+runner that provisions all templates against deterministic provider/model stubs
+and checks actual engine outputs, negative paths and retry logic. Do not execute
+all original templates in this shared deployed instance: some include emails,
+scheduled notifications, paper-portfolio access or third-party provider requests.
+Use per-provider license/permission gates and no side effects before enabling
+real execution. Keep that stage separate from read-only live testing.
