@@ -8,7 +8,7 @@ const ci = Boolean(process.env.CI);
 export default defineConfig({
   testDir: './live-e2e',
   // workflow-scenarios.spec.ts is a node:test unit test, not a browser test.
-  testMatch: ['deployed.spec.ts', 'workflows.spec.ts'],
+  testMatch: ['deployed.spec.ts', 'workflows.spec.ts', 'flow-failure-inventory.spec.ts'],
   fullyParallel: false,
   forbidOnly: ci,
   workers: 1,
