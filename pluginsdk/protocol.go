@@ -40,6 +40,9 @@ const (
 	CapForum      = "forum"
 	CapNews       = "news"
 	CapEvents     = "events"
+	// CapMacro has no method of its own: it says the provider's history
+	// answers the macro series ids listed in docs/plugins.md.
+	CapMacro = "macro"
 )
 
 // Manifest describes a plugin. Each plugin ships it as plugin.json (embedded
@@ -126,7 +129,7 @@ var (
 )
 
 var knownCapabilities = map[string]bool{
-	CapQuote: true, CapHistory: true, CapSearch: true, CapFinancials: true, CapResearch: true, CapForum: true, CapNews: true, CapEvents: true,
+	CapQuote: true, CapHistory: true, CapSearch: true, CapFinancials: true, CapResearch: true, CapForum: true, CapNews: true, CapEvents: true, CapMacro: true,
 }
 
 // reservedEnv can never be forwarded to a plugin: they belong to the backend.
@@ -200,6 +203,9 @@ func (m Manifest) validateProvider() error {
 	}
 	if p.HasCapability(CapResearch) != (len(p.Research) > 0) {
 		return errors.New("research capability and research operations must be declared together")
+	}
+	if p.HasCapability(CapMacro) && !p.HasCapability(CapHistory) {
+		return errors.New("macro series are read through history, so the macro capability needs the history capability")
 	}
 	seen := map[string]bool{}
 	for _, op := range p.Research {

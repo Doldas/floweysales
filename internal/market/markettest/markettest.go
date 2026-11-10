@@ -116,6 +116,14 @@ func (b *Backend) Serve(provider, symbol string, s market.HistorySeries) *Backen
 	return b
 }
 
+// Declare makes a provider list a capability.
+func (b *Backend) Declare(provider, capability string) *Backend {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.declare(provider, capability)
+	return b
+}
+
 // declare adds a capability to a provider; the caller holds the lock.
 func (b *Backend) declare(provider, capability string) {
 	for i := range b.caps {

@@ -960,3 +960,15 @@ func TestDockerfileDeclaresPluginProtocol(t *testing.T) {
 		t.Fatalf("Dockerfile must declare %s and label the image with it", want)
 	}
 }
+
+func TestMacroCapabilityNeedsHistory(t *testing.T) {
+	m := Manifest{Protocol: ProtocolVersion, ID: "macro-example", Name: "Macro", Version: "1.0.0",
+		Provider: ProviderInfo{ID: "MACRO", Label: "Macro", Capabilities: []string{CapHistory, CapMacro}}}
+	if err := m.Validate(); err != nil {
+		t.Errorf("macro with history is valid: %v", err)
+	}
+	m.Provider.Capabilities = []string{CapMacro}
+	if err := m.Validate(); err == nil {
+		t.Error("macro series are read through history")
+	}
+}

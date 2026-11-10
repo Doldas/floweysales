@@ -4,20 +4,27 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"floweysales/internal/market"
+	"floweysales/internal/routing"
 )
 
-// FRED series the macro regime reads, and the row field each becomes.
+// Series the macro regime reads, and the row field each becomes. The ids are
+// FRED's, and a provider that declares the macro capability answers them.
 var macroSeries = []struct{ id, field string }{
 	{"T10Y2Y", "curve_spread"}, {"UNRATE", "unemployment"}, {"FEDFUNDS", "fed_funds"}, {"BAMLH0A0HYM2", "hy_spread"}, {"VIXCLS", "vix"},
 }
 
-const macroNotInstalled = "Install the FRED plugin and enter FRED_API_KEY under Settings → Plugins."
+const macroNotInstalled = "Install a provider plugin that offers macro series (for example FRED) and enter its key under Settings → Plugins."
+
+// legacyMacroProviders serve macro series although their released plugin
+// predates the macro capability. Remove an entry when that plugin declares it.
+var legacyMacroProviders = map[string]bool{"FRED": true}
 
 type obs struct {
 	at time.Time
@@ -148,12 +155,33 @@ func macroRegime(series map[string]market.HistorySeries, now time.Time) map[stri
 	return row
 }
 
-// runMacroNode reads five FRED series through the FRED plugin.
-func (e *Engine) runMacroNode(ctx context.Context, now time.Time) (string, error) {
-	provider := market.Provider("FRED")
-	if _, installed := market.Capability(e.providers, provider); !installed {
-		return "", errors.New(macroNotInstalled)
+// servesMacro reports whether a provider's history answers the macro series.
+func servesMacro(c market.ProviderCapability) bool {
+	return slices.Contains(c.Capabilities, "macro") || legacyMacroProviders[c.ID]
+}
+
+// macroProvider is the provider used when no policy is saved: the first that
+// serves macro series and is enabled, or else the first, so that the caller
+// reports why it cannot be read (a missing key, for instance).
+func (e *Engine) macroProvider() (market.Provider, bool) {
+	var first market.Provider
+	for _, c := range e.providers.Providers() {
+		if !servesMacro(c) {
+			continue
+		}
+		if c.Enabled {
+			return market.Provider(c.ID), true
+		}
+		if first == "" {
+			first = market.Provider(c.ID)
+		}
 	}
+	return first, first != ""
+}
+
+// readMacroSeries reads every series from one provider. A series it cannot
+// answer stays missing; reading none is an error, so routing may try the next.
+func (e *Engine) readMacroSeries(ctx context.Context, provider market.Provider) (map[string]market.HistorySeries, error) {
 	var mu sync.Mutex
 	series := map[string]market.HistorySeries{}
 	var firstErr error
@@ -175,13 +203,39 @@ func (e *Engine) runMacroNode(ctx context.Context, now time.Time) (string, error
 		return map[string]any{"symbol": id}, nil
 	})
 	if err := ctx.Err(); err != nil {
-		return "", err
+		return nil, err
 	}
 	if len(series) == 0 {
-		if errors.Is(firstErr, market.ErrProviderNotInstalled) {
+		return nil, fmt.Errorf("no macro series could be read from %s: %w", provider, firstErr)
+	}
+	return series, nil
+}
+
+// runMacroNode reads the macro series through the macro policy when one is
+// saved. One provider answers the whole regime: series from different sources
+// are never combined, so a fallback replaces the set.
+func (e *Engine) runMacroNode(ctx context.Context, now time.Time) (string, error) {
+	series, outcome, routed, err := routedCall(ctx, e, 0, routing.Macro, e.readMacroSeries)
+	var answered market.Provider
+	if routed {
+		answered = market.ParseProvider(outcome.Actual)
+	} else {
+		var ok bool
+		if answered, ok = e.macroProvider(); !ok {
 			return "", errors.New(macroNotInstalled)
 		}
-		return "", fmt.Errorf("no FRED series could be read: %v", firstErr)
+		series, err = e.readMacroSeries(ctx, answered)
 	}
-	return flowRowsJSON([]map[string]any{macroRegime(series, now)})
+	if err != nil {
+		if errors.Is(err, market.ErrProviderNotInstalled) {
+			return "", errors.New(macroNotInstalled)
+		}
+		return "", err
+	}
+	row := macroRegime(series, now)
+	row["provider"] = answered.ID()
+	if routed {
+		row["routing"] = outcome
+	}
+	return flowRowsJSON([]map[string]any{row})
 }

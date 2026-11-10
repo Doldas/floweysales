@@ -17,8 +17,8 @@ import (
 
 // Provider routing (#421). One registry lists every way FloweySales can get
 // data (installed plugins, built-in adapters, what a user supplied) and an
-// administrator's policy says which one serves a domain. Quotes, news and
-// corporate events are routed through it, web search publishes its own router
+// administrator's policy says which one serves a domain. Quotes, news,
+// corporate events and macro series are routed through it, web search publishes its own router
 // to it, and the rest are listed, with where they are configured today. See
 // docs/provider-coupling.md.
 
@@ -71,6 +71,9 @@ func (e *Engine) routingSources(ctx context.Context, userID int64) []routing.Sou
 		}
 		if c.Fundamentals {
 			add(routing.MarketFinancials)
+		}
+		if servesMacro(c) {
+			add(routing.Macro)
 		}
 		if len(domains) == 0 {
 			continue
@@ -159,7 +162,7 @@ type routingDomainView struct {
 }
 
 // routedDomains are the domains a feature reads the policy of today.
-var routedDomains = map[routing.Domain]bool{routing.MarketQuote: true, routing.News: true, routing.Events: true, routing.WebSearch: true}
+var routedDomains = map[routing.Domain]bool{routing.MarketQuote: true, routing.News: true, routing.Events: true, routing.WebSearch: true, routing.Macro: true}
 
 func (e *Engine) routingView(ctx context.Context, userID int64, admin bool) map[string]any {
 	sources := e.routingSources(ctx, userID)
