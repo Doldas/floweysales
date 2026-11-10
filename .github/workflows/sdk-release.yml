@@ -105,6 +105,10 @@ jobs:
             exit 0
           fi
           echo "::error::Incompatible API change needs a new major version."; exit 1
+      # main.go embeds the built web UI (www/); the protocol tests need only
+      # the embed to resolve, so an empty placeholder stands in for the build.
+      - name: Provide the embedded web folder
+        run: mkdir -p www && touch www/.gitkeep
       - name: Validate backend protocol contract
         run: go test ./...
       - name: Checkout official plugin consumers
