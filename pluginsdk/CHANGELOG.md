@@ -8,11 +8,15 @@ publishes the section for the tagged version as the release notes. See
 
 ## Unreleased
 
+## v0.3.0
+
 - Additive: capability `macro`. It has no method of its own: it says the
   provider's `history` answers the macro series ids listed in `docs/plugins.md`,
-  and it requires `history`. Existing plugins keep working. A plugin that
-  declares it must set `min_app_version` to the first FloweySales release that
-  knows it, since an older backend refuses an unknown capability.
+  and it requires `history`. Existing plugins keep working. A backend from
+  before this capability rejects a plugin version that declares it: the store
+  index skips that version with a warning and keeps offering earlier ones. Once
+  a FloweySales release that knows `macro` exists, a plugin can name it in
+  `min_app_version`. FRED 1.1.0 is the first official plugin to declare it.
 
 ## v0.2.0
 
