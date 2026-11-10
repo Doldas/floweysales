@@ -134,8 +134,14 @@ try {
   await page.addScriptTag({ content: axeSource });
   await page.fill('#hero-prompt', 'Research brief on NVDA');
   await page.press('#hero-prompt', 'Enter');
+  // Tool calls are intentionally hidden in the compact Thought process accordion.
+  // Audit both the collapsed layout and the fully expanded tool trace.
+  const trace = page.locator('fs-agent-dock details.trace').first();
+  await trace.waitFor({ state: 'visible', timeout: 5000 });
+  await audit(page, 'Agent dock with collapsed thought process', 'fs-agent-dock');
+  await trace.locator(':scope > summary').click();
   await page.locator('fs-agent-dock fs-tool-call').first().waitFor({ state: 'visible', timeout: 5000 });
-  await audit(page, 'Agent dock with tool steps', 'fs-agent-dock');
+  await audit(page, 'Agent dock with expanded tool steps', 'fs-agent-dock');
   await page.keyboard.press('Escape');
   await page.keyboard.press('Control+k');
   await page.locator('.palette[open]').waitFor({ state: 'visible' });

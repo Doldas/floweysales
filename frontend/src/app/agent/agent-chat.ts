@@ -4,6 +4,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 import { EVIDENCE_MODES, auditSummary, claimFacts, claimsSummary, findingLabel, removedSummary, safeUrl, settingsSummary, sortClaims, sourceOrigin, spanOrigin, spanParts, splitSources, verdictLabel, whyLabel, RANKING_PROFILES, sortSources, sourceCard, type AnswerSource } from '../core/answer-sources';
 import { AgentSession, type ChatEntry } from '../core/agent-session';
+import { groupAgentBlocks } from './agent-chat-blocks';
 import { renderMarkdown } from '../markdown';
 import { toolLabel } from '../components/agent-tools';
 import { defaultOptionLabel, profileOption, profileSummary } from '../components/profile-view';
@@ -12,9 +13,6 @@ import { ToolCallComponent } from '../components/tool-call';
 import { canResume, checklistLine, taskStatusLabel, type SavedTask } from '../core/task-view';
 import { formatUtcDateTime } from '../ui/datetime';
 import type { ToolCall } from '../components/tool-call-view';
-
-/** Consecutive tool calls are rendered together as one block of agent steps. */
-type Block = { kind: 'user' | 'assistant'; entry: ChatEntry } | { kind: 'steps'; steps: ChatEntry[]; key: number };
 
 /**
  * The research agent conversation: messages, the tool calls the agent made
@@ -124,19 +122,9 @@ export class AgentChatComponent implements OnInit {
   }
   private readonly mdCache = new Map<string, SafeHtml>();
 
-  readonly blocks = computed<Block[]>(() => {
-    const out: Block[] = [];
-    for (const e of this.session.entries()) {
-      if (e.role === 'tool') {
-        const last = out.at(-1);
-        if (last?.kind === 'steps') last.steps.push(e);
-        else out.push({ kind: 'steps', steps: [e], key: e.id });
-      } else {
-        out.push({ kind: e.role, entry: e });
-      }
-    }
-    return out;
-  });
+  readonly blocks = computed(() => groupAgentBlocks(this.session.entries()));
+
+  traceToolCount(entries: ChatEntry[]): number { return entries.filter(e => e.role === 'tool').length; }
 
   /** Whether this message is still only reasoning: the run streams and no answer text has arrived. */
   isThinkingNow(e: ChatEntry): boolean {
