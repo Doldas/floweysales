@@ -291,3 +291,48 @@ func (e *Engine) eventsFor(ctx context.Context, userID int64, p market.Provider,
 	events, err := market.EventsFor(ctx, e.providers, p, symbol, from, to)
 	return events, nil, err
 }
+
+// guidedDomains are the domains whose tools take a provider argument.
+var guidedDomains = []routing.Domain{routing.MarketQuote, routing.MarketHistory, routing.MarketSearch, routing.MarketFinancials, routing.MarketResearch}
+
+// ProviderGuidance tells the agent the provider order an administrator saved
+// for the domains whose tools take a provider, in place of provider names in
+// the prompt. Only provider ids reach the prompt, never text a plugin wrote,
+// and only sources that can answer now, in the order routing would try them.
+func (s engineSource) ProviderGuidance(ctx context.Context) string {
+	policies := s.e.loadRoutingPolicies(ctx)
+	var sources []routing.Source
+	var parts []string
+	for _, d := range guidedDomains {
+		policy, ok := policies[d]
+		if !ok {
+			continue
+		}
+		if sources == nil {
+			sources = s.e.routingSources(ctx, 0)
+		}
+		plan, err := routing.MakePlan(&policy, sources, routing.Request{Domain: d}, providerHealth())
+		if err != nil {
+			continue
+		}
+		var ids []string
+		for _, c := range plan.Candidates {
+			if market.ParseProvider(c.ID).ID() == c.ID && market.Provider(c.ID).Valid() {
+				ids = append(ids, c.ID)
+			}
+			if plan.NoFallback {
+				break
+			}
+		}
+		if len(ids) == 0 {
+			continue
+		}
+		info, _ := routing.InfoFor(d)
+		parts = append(parts, info.Label+": "+strings.Join(ids, ", then "))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "- Provider order an administrator saved, for tools that take a provider: " + strings.Join(parts, "; ") +
+		". Pass the first provider that can answer the instrument, and name another only when the user asks for it or the first cannot answer; get_provider_capabilities lists what each one offers."
+}

@@ -137,7 +137,7 @@ You have tools that query the FloweySales backend for real market data:
 
 Rules:
 - Always call tools to ground numbers in real data; never invent prices or financials.
-- Providers are installed plugins; call get_provider_capabilities when unsure which exist. Prefer YAHOO for stocks and BINANCE for crypto when installed, unless the user asks otherwise.
+- Providers are installed plugins; call get_provider_capabilities when unsure which exist. When an administrator saved a provider order, it is listed at the end of these instructions; otherwise omit provider to use the server default, unless the user asks for a specific one.
 - Before comparing companies, verify ticker, exchange, legal company name and trading currency; never infer these from ticker letters. Use search_symbols and search_web when needed.
 - Treat gross profit equal to operating income as a possible provider mapping anomaly; do not label operating income as gross profit.
 - Only compute P/E using matching trailing-12-month or full-year EPS and share price, or market cap divided by the same-period net income. P/FCF requires market cap divided by the same-period total FCF, NOT stock price divided by total company cash flow.
@@ -177,6 +177,11 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	system := opts.SystemPrompt
 	if system == "" {
 		system = DefaultSystemPrompt
+	}
+	if g, ok := src.(ProviderGuide); ok {
+		if guide := g.ProviderGuidance(ctx); guide != "" {
+			system += "\n" + guide
+		}
 	}
 
 	ctx = withRunState(ctx, client)

@@ -19,6 +19,13 @@ import (
 // DataSource is the read-only market surface the AI tools operate on. It is
 // implemented twice: in-process (server.Engine) for the built-in chat, and
 // over HTTP (HTTPDataSource) for the standalone MCP server.
+// ProviderGuide is the optional part of a DataSource that states, as one
+// line for the system prompt, the provider order an administrator saved.
+// It is empty when none is saved.
+type ProviderGuide interface {
+	ProviderGuidance(ctx context.Context) string
+}
+
 type DataSource interface {
 	Search(query, provider string) ([]market.SearchResult, error)
 	History(symbol, provider, rng string) (market.HistorySeries, error)
@@ -90,7 +97,7 @@ func ToolDefs() []Tool {
 	str := func(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 	providerProp := map[string]any{
 		"type":        "string",
-		"description": "Market data provider ID of an installed provider plugin (list them with get_provider_capabilities), e.g. YAHOO for equities or BINANCE for crypto pairs when installed. Omit to use the server default.",
+		"description": "Market data provider ID of an installed provider plugin (list them with get_provider_capabilities). Follow the saved provider order when the instructions list one; otherwise omit it to use the server default.",
 	}
 	rangeProp := map[string]any{
 		"type":        "string",
@@ -163,7 +170,7 @@ func ToolDefs() []Tool {
 		}},
 		{Type: "function", Function: ToolFunction{
 			Name:        "get_macro_regime",
-			Description: "The macro regime (risk_on, caution or risk_off) read from FRED series: yield curve, unemployment, credit spreads and volatility, with the signals behind it. Needs the FRED plugin.",
+			Description: "The macro regime (risk_on, caution or risk_off) read from macro series: yield curve, unemployment, credit spreads and volatility, with the signals behind it and the provider that answered. Needs a provider plugin that offers macro series.",
 			Parameters:  obj(map[string]any{}),
 		}},
 		{Type: "function", Function: ToolFunction{
@@ -195,7 +202,7 @@ func ToolDefs() []Tool {
 			Parameters: obj(map[string]any{
 				"provider":  map[string]any{"type": "string", "description": "Provider ID from get_provider_endpoints"},
 				"operation": str("Whitelisted operation e.g. company_profile, ticker_24h, order_book"),
-				"symbol":    str("NVDA for Finnhub or BTCUSDT for Binance (not needed for server_time)"),
+				"symbol":    str("Symbol in the format of the provider whose operation this is, for example NVDA for an equity or BTCUSDT for a crypto pair (not needed by operations without one)"),
 				"from":      str("For company_news only: YYYY-MM-DD"),
 				"to":        str("For company_news only: YYYY-MM-DD, max 31 days"),
 			}, "provider", "operation"),
