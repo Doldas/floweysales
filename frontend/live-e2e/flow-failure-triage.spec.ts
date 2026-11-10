@@ -17,6 +17,13 @@ test('AI input contains counts only, never identifiers or raw errors', () => {
   const summary = summarizeFailures(4, 9, [{ flow: 2, run: 71, status: 'FAILED', category: 'timeout' }]);
   const input = JSON.stringify(safeAnalysisInput(summary));
   assert.equal(summary.categories.timeout, 1);
-  assert.doesNotMatch(input, /node-7|flow\s*":|run\s*":|71|secret|error/);
+  const exported = JSON.parse(input);
+  assert.deepEqual(Object.keys(exported).sort(), ['categories', 'failed_runs', 'inspected_flows', 'inspected_runs', 'schema']);
+  assert.deepEqual(Object.keys(exported.categories).sort(), [
+    'failed_node', 'invalid_flow', 'missing_market_data', 'output_contract',
+    'permission_or_credentials', 'provider_rate_limit', 'provider_unavailable',
+    'timeout', 'unknown',
+  ]);
+  assert.doesNotMatch(input, /node-7|"flow":|"run":|"error":|"secret":/);
   assert.equal(summary.failed_runs, 1);
 });
