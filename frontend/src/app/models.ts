@@ -963,11 +963,13 @@ export interface RoutingSource {
   experimental?: boolean; managed_by?: string;
 }
 
-export interface RoutingDomain { id: string; label: string; group: string; no_fallback: boolean; why?: string; sources: number; routed: boolean }
+export interface RoutingDomain { id: string; label: string; group: string; no_fallback: boolean; why?: string; sources: number; routed: boolean; regional?: boolean }
+/** A market a policy can name; an instrument's market comes from its ticker suffix (".ST" is Sweden). */
+export interface RoutingRegion { code: string; label: string }
 
-export interface RoutingPolicy { domain: string; primary: string; fallback?: string[]; no_fallback?: boolean }
+export interface RoutingPolicy { domain: string; primary: string; fallback?: string[]; no_fallback?: boolean; by_region?: Record<string, string> }
 
-export interface RoutingView { domains: RoutingDomain[]; sources: RoutingSource[]; policies: Record<string, RoutingPolicy>; can_edit: boolean; notice: string }
+export interface RoutingView { domains: RoutingDomain[]; sources: RoutingSource[]; policies: Record<string, RoutingPolicy>; can_edit: boolean; notice: string; regions?: RoutingRegion[] }
 
 /** A variable a user may supply for their own instance of a provider; the value is never returned. */
 export interface OwnKeyVariable { name: string; description: string; required: boolean; saved: boolean }

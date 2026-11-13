@@ -2,7 +2,7 @@
 //   node --test src/app/components/provider-routing-view.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formFrom, groupDomains, moveFallback, policyBody, policyLine, policyProblems, sourceState, sourcesFor, stateLabel, toggleFallback } from './provider-routing-view.ts';
+import { formFrom, groupDomains, moveFallback, policyBody, policyLine, policyProblems, setRegion, sourceState, sourcesFor, stateLabel, toggleFallback } from './provider-routing-view.ts';
 
 const src = (id: string, extra = {}) => ({ id, label: id.toUpperCase(), kind: 'plugin', domains: ['market_quote'], scope: 'system', needs_key: false, configured: true, enabled: true, ...extra }) as never;
 const domain = (extra = {}) => ({ id: 'market_quote', label: 'Quotes', group: 'Market', no_fallback: false, sources: 2, routed: true, ...extra }) as never;
@@ -61,4 +61,23 @@ test('the policy line says what is used and whether a feature reads it', () => {
   assert.equal(policyLine({ domain: 'market_quote', primary: 'yahoo', fallback: ['finnhub'] }, domain(), sources), 'Yahoo, then Finnhub.');
   assert.equal(policyLine({ domain: 'market_quote', primary: 'yahoo', no_fallback: true }, domain(), sources), 'Yahoo, no fallback.');
   assert.match(policyLine({ domain: 'news', primary: 'yahoo' }, domain({ routed: false }), sources), /no feature reads it for this domain yet/);
+});
+
+test('a regional domain can name a source to try first per market', () => {
+  const routable = [src('yahoo'), src('avanza')];
+  let f = formFrom({ domain: 'market_quote', primary: 'yahoo', by_region: { SE: 'avanza' } }, domain({ regional: true }));
+  assert.deepEqual(f.byRegion, { SE: 'avanza' });
+  f = setRegion(setRegion(f, 'NO', 'avanza'), 'SE', '');
+  assert.deepEqual(f.byRegion, { NO: 'avanza' });
+  assert.deepEqual(policyBody(f), { primary: 'yahoo', fallback: [], no_fallback: false, by_region: { NO: 'avanza' } });
+  assert.deepEqual(policyProblems(setRegion(f, 'DK', 'gone'), routable), ['A source chosen for a market is not available.']);
+  // Without overrides nothing extra is sent, so removing the last one clears them.
+  assert.deepEqual(policyBody(setRegion(f, 'NO', '')), { primary: 'yahoo', fallback: [], no_fallback: false });
+});
+
+test('the policy line names the per-market sources', () => {
+  const sources = [src('yahoo', { label: 'Yahoo' }), src('avanza', { label: 'Avanza' })];
+  const regions = [{ code: 'SE', label: 'Sweden' }, { code: 'NO', label: 'Norway' }];
+  assert.equal(policyLine({ domain: 'market_quote', primary: 'yahoo', by_region: { SE: 'avanza' } }, domain({ regional: true }), sources, regions),
+    'Yahoo, no fallback. Tried first per market: Sweden, Avanza.');
 });

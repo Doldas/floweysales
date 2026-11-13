@@ -11,7 +11,7 @@ const src = (id: string, label: string, domains: string[], extra: Record<string,
 function view(over: Record<string, unknown> = {}) {
   return {
     domains: [
-      { id: 'market_quote', label: 'Quotes', group: 'Market', no_fallback: false, sources: 3, routed: true },
+      { id: 'market_quote', label: 'Quotes', group: 'Market', no_fallback: false, sources: 3, routed: true, regional: true },
       { id: 'news', label: 'News', group: 'News', no_fallback: false, sources: 2, routed: false },
       { id: 'web_search', label: 'Web search', group: 'Search', no_fallback: false, sources: 1, routed: false },
       { id: 'ai_vision', label: 'AI vision', group: 'AI', no_fallback: true, why: 'Document images must not reach a provider that was not approved for them.', sources: 1, routed: false },
@@ -23,6 +23,7 @@ function view(over: Record<string, unknown> = {}) {
       src('web_search:brave', 'Brave Search API', ['web_search'], { kind: 'builtin', needs_key: true, managed_by: 'Settings → Web search' }),
       src('VISION1', 'Vision model', ['ai_vision']),
     ],
+    regions: [{ code: 'SE', label: 'Sweden' }, { code: 'NO', label: 'Norway' }],
     policies: {}, can_edit: true, notice: 'Installed plugins and configured providers are different things: a plugin must be installed under Settings → Plugins.',
     ...over,
   };
@@ -84,6 +85,27 @@ test.describe('Settings → Providers', () => {
     await expect(pr.getByRole('status').filter({ hasText: 'Routing for quotes saved.' })).toBeVisible();
     expect(puts).toEqual([{ path: '/api/admin/providers/routing/market_quote', body: { primary: 'YAHOO', fallback: ['STOOQ', 'FINNHUB'], no_fallback: false } }]);
     await expect(quotes).toContainText('Yahoo Finance, then Stooq, then Finnhub.');
+  });
+
+  test('an administrator chooses a source to try first for a market', async ({ page }) => {
+    const puts = await mock(page);
+    const pr = await openProviders(page);
+    const quotes = pr.getByRole('article', { name: 'Quotes' });
+    await expect(pr.getByRole('article', { name: 'News' }).getByRole('group', { name: 'Tried first per market' })).toHaveCount(0);
+    await quotes.getByLabel('Primary source').selectOption('YAHOO');
+    const markets = quotes.getByRole('group', { name: 'Tried first per market' });
+    await expect(markets).toContainText('a ticker suffix such as .ST');
+    await markets.getByLabel('Add a market').selectOption('SE');
+    await markets.getByLabel('Sweden', { exact: true }).selectOption('FINNHUB');
+    await expect(markets.getByLabel('Add a market').locator('option[value=SE]')).toHaveCount(0);
+    await quotes.getByRole('button', { name: 'Save routing' }).click();
+    await expect(pr.getByRole('status').filter({ hasText: 'Routing for quotes saved.' })).toBeVisible();
+    expect(puts[0].body).toEqual({ primary: 'YAHOO', fallback: [], no_fallback: false, by_region: { SE: 'FINNHUB' } });
+    await expect(quotes).toContainText('Tried first per market: Sweden, Finnhub.');
+    await markets.getByRole('button', { name: 'Remove Sweden' }).click();
+    await quotes.getByRole('button', { name: 'Save routing' }).click();
+    await expect.poll(() => puts.length).toBe(2);
+    expect(puts[1].body).toEqual({ primary: 'YAHOO', fallback: [], no_fallback: false });
   });
 
   test('saving needs a primary source and sends nothing without one', async ({ page }) => {

@@ -51,17 +51,20 @@ type DomainInfo struct {
 	// breach a licence or repeat a side effect, so the policy cannot enable it.
 	NoFallback bool   `json:"no_fallback"`
 	Why        string `json:"why,omitempty"`
+	// Regional domains are steered by an instrument, so a policy may name a
+	// source to try first for the instrument's market.
+	Regional bool `json:"regional,omitempty"`
 }
 
 // Domains lists every known domain in display order.
 var Domains = []DomainInfo{
-	{ID: MarketQuote, Label: "Quotes", Group: "Market"},
+	{ID: MarketQuote, Label: "Quotes", Group: "Market", Regional: true},
 	{ID: MarketHistory, Label: "Price history", Group: "Market"},
 	{ID: MarketSearch, Label: "Symbol search", Group: "Market"},
 	{ID: MarketFinancials, Label: "Financial statements", Group: "Financials"},
 	{ID: MarketResearch, Label: "Research data", Group: "Financials"},
-	{ID: News, Label: "News", Group: "News"},
-	{ID: Events, Label: "Corporate events", Group: "News"},
+	{ID: News, Label: "News", Group: "News", Regional: true},
+	{ID: Events, Label: "Corporate events", Group: "News", Regional: true},
 	{ID: Forum, Label: "Forum posts", Group: "News"},
 	{ID: WebSearch, Label: "Web search", Group: "Search"},
 	{ID: IndexMembership, Label: "Index membership", Group: "Indexes", NoFallback: true, Why: "Index lists are licensed and supplied by each user; another source would be a different list."},
@@ -174,6 +177,33 @@ type Policy struct {
 	Fallback []string `json:"fallback,omitempty"`
 	// NoFallback turns fallback off. It is forced on for domains that forbid substitution.
 	NoFallback bool `json:"no_fallback,omitempty"`
+	// ByRegion names, per market (a Regions code), a source to try before
+	// the primary for an instrument of that market. Regional domains only.
+	ByRegion map[string]string `json:"by_region,omitempty"`
+}
+
+// RegionInfo is a market a policy can name. The market of an instrument comes
+// from its ticker suffix (market.RegionOf); one without a suffix has none.
+type RegionInfo struct {
+	Code  string `json:"code"`
+	Label string `json:"label"`
+}
+
+// Regions are the markets a policy can name.
+var Regions = []RegionInfo{
+	{"SE", "Sweden"}, {"NO", "Norway"}, {"DK", "Denmark"}, {"FI", "Finland"}, {"GB", "United Kingdom"},
+	{"DE", "Germany"}, {"FR", "France"}, {"NL", "Netherlands"}, {"CH", "Switzerland"}, {"IT", "Italy"},
+	{"ES", "Spain"}, {"CA", "Canada"}, {"AU", "Australia"}, {"JP", "Japan"}, {"HK", "Hong Kong"}, {"ZA", "South Africa"},
+}
+
+// KnownRegion reports whether code is one of Regions.
+func KnownRegion(code string) bool {
+	for _, r := range Regions {
+		if r.Code == code {
+			return true
+		}
+	}
+	return false
 }
 
 // MaxFallback bounds the chain behind a primary.
@@ -210,6 +240,26 @@ func (p *Policy) Normalize(sources []Source) error {
 	}
 	if err := check(p.Primary); err != nil {
 		return err
+	}
+	byRegion := map[string]string{}
+	for code, id := range p.ByRegion {
+		if id == "" {
+			continue
+		}
+		if !info.Regional {
+			return fmt.Errorf("%s cannot be routed per market", strings.ToLower(info.Label))
+		}
+		if !KnownRegion(code) {
+			return fmt.Errorf("%q is not a known market", code)
+		}
+		if err := check(id); err != nil {
+			return err
+		}
+		byRegion[code] = id
+	}
+	p.ByRegion = nil
+	if len(byRegion) > 0 {
+		p.ByRegion = byRegion
 	}
 	if info.NoFallback {
 		p.NoFallback = true

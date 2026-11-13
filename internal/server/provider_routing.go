@@ -183,7 +183,7 @@ func (e *Engine) routingView(ctx context.Context, userID int64, admin bool) map[
 	if p, ok := e.webSearchRouter().RoutingPolicy(); ok {
 		policies[routing.WebSearch] = p
 	}
-	return map[string]any{"domains": domains, "sources": sources, "policies": policies, "can_edit": admin,
+	return map[string]any{"domains": domains, "sources": sources, "policies": policies, "can_edit": admin, "regions": routing.Regions,
 		"notice": "Installed plugins and configured providers are different things: a plugin must be installed under Settings → Plugins, and a policy here decides which installed source serves a domain. A fallback is always shown in the result, and domains where another source would change meaning or breach a licence cannot have one."}
 }
 
@@ -236,7 +236,7 @@ func (e *Engine) checkRoutingPolicy(w http.ResponseWriter, r *http.Request, p *r
 // source, so the caller keeps its existing behavior; with an own source but no
 // policy, fallback (the caller's default) follows it. userID 0 asks for the
 // system chain only, which is what shared or background work must use.
-func routedCall[T any](ctx context.Context, e *Engine, userID int64, domain routing.Domain, fallback market.Provider, call func(ctx context.Context, p market.Provider) (T, error)) (T, routing.Outcome, bool, error) {
+func routedCall[T any](ctx context.Context, e *Engine, userID int64, domain routing.Domain, region string, fallback market.Provider, call func(ctx context.Context, p market.Provider) (T, error)) (T, routing.Outcome, bool, error) {
 	var zero T
 	policy, has := e.loadRoutingPolicies(ctx)[domain]
 	if !has && userID <= 0 {
@@ -253,7 +253,7 @@ func routedCall[T any](ctx context.Context, e *Engine, userID int64, domain rout
 		}
 		policy = routing.Policy{Domain: domain, Primary: fallback.ID()}
 	}
-	plan, err := routing.MakePlan(&policy, sources, routing.Request{Domain: domain, UserID: userID}, providerHealth())
+	plan, err := routing.MakePlan(&policy, sources, routing.Request{Domain: domain, UserID: userID, Region: region}, providerHealth())
 	if err != nil {
 		return zero, routing.Outcome{Domain: domain, Skipped: plan.Skipped}, true, err
 	}
@@ -270,7 +270,7 @@ func routedCall[T any](ctx context.Context, e *Engine, userID int64, domain rout
 
 // routedQuote answers a quote request through the market-quote policy.
 func (e *Engine) routedQuote(ctx context.Context, userID int64, symbol string) (market.QuoteSnapshot, routing.Outcome, bool, error) {
-	return routedCall(ctx, e, userID, routing.MarketQuote, e.defaultProvider, func(ctx context.Context, p market.Provider) (market.QuoteSnapshot, error) {
+	return routedCall(ctx, e, userID, routing.MarketQuote, market.RegionOf(symbol), e.defaultProvider, func(ctx context.Context, p market.Provider) (market.QuoteSnapshot, error) {
 		return market.LatestSnapshot(ctx, e.providers, symbol, p)
 	})
 }
@@ -279,7 +279,7 @@ func (e *Engine) routedQuote(ctx context.Context, userID int64, symbol string) (
 // decides when one is saved. Each item names the provider that answered.
 func (e *Engine) newsFor(ctx context.Context, userID int64, p market.Provider, symbol string, limit int) ([]market.NewsItem, error) {
 	if p == "" {
-		items, _, routed, err := routedCall(ctx, e, userID, routing.News, firstOffering(e.providers, "news"), func(ctx context.Context, p market.Provider) ([]market.NewsItem, error) {
+		items, _, routed, err := routedCall(ctx, e, userID, routing.News, market.RegionOf(symbol), firstOffering(e.providers, "news"), func(ctx context.Context, p market.Provider) ([]market.NewsItem, error) {
 			return market.NewsFor(ctx, e.providers, p, symbol, limit)
 		})
 		if routed {
@@ -297,7 +297,7 @@ func (e *Engine) eventsFor(ctx context.Context, userID int64, p market.Provider,
 		if _, _, err := market.EventWindow(from, to); err != nil {
 			return nil, nil, err
 		}
-		events, outcome, routed, err := routedCall(ctx, e, userID, routing.Events, firstOffering(e.providers, "events"), func(ctx context.Context, p market.Provider) ([]market.CorporateEvent, error) {
+		events, outcome, routed, err := routedCall(ctx, e, userID, routing.Events, market.RegionOf(symbol), firstOffering(e.providers, "events"), func(ctx context.Context, p market.Provider) ([]market.CorporateEvent, error) {
 			return market.EventsFor(ctx, e.providers, p, symbol, from, to)
 		})
 		if routed {
