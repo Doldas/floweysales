@@ -127,6 +127,8 @@ func allowedAPI(role, method, path string) bool {
 		return true
 	case isTaskRoute(method, path):
 		return true
+	case isOwnKeyRoute(method, path):
+		return true
 	default:
 		return false
 	}
@@ -242,6 +244,10 @@ func (e *Engine) allowedUserAPI(r *http.Request, u identity.User) bool {
 		return true
 	}
 	if strings.HasPrefix(path, "/api/me/tracker-emails") && (method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete) {
+		return true
+	}
+	// A user's own provider keys are their own settings.
+	if isOwnKeyRoute(method, path) {
 		return true
 	}
 	// Owners read the side-effect audit of their own flows; decisions stay SYS_ADMIN-only.
@@ -444,3 +450,13 @@ func (e *Engine) serveAuth(w http.ResponseWriter, r *http.Request) {
 
 // Used for context-aware authentication in future tenant-scoped endpoints.
 func authContext(ctx context.Context) context.Context { return ctx }
+
+// isOwnKeyRoute is a user's own provider keys: the list, and saving or removing
+// the keys of one provider.
+func isOwnKeyRoute(method, path string) bool {
+	if method == http.MethodGet && path == "/api/providers/own-keys" {
+		return true
+	}
+	rest, ok := strings.CutPrefix(path, "/api/providers/own-keys/")
+	return ok && rest != "" && !strings.Contains(rest, "/") && (method == http.MethodPut || method == http.MethodDelete)
+}

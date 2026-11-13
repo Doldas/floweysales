@@ -28,12 +28,13 @@ Yahoo, Finnhub, Avanza, Binance, Stooq, CoinGecko, FRED and ECB are plugins (ADR
 - **Sources** (`Source`): one record per way to obtain data, whether an installed plugin, a built-in adapter or something a user supplied. It states its domains, scope (system or user, with the owner), whether credentials are needed and present, coverage, and restrictions.
 - **Policy per domain** (`Policy`): a primary, an ordered fallback list, and a `no_fallback` switch for domains whose semantics or licence forbid substitution. Validated against the sources that actually serve the domain.
 - **Plan and execution** (`Plan`, `Run`): user-scoped sources are visible only to their owner, disabled and unconfigured sources are skipped, a workflow can pin one source (no fallback), an open circuit breaker skips a failing source for a cool-down. Every result carries an `Outcome` with requested and actual source, each attempt and why it failed, and limitations. Fallback is never silent and an error that says "this must not be substituted" stops the chain.
+- **Own keys** (`internal/server/provider_own_keys.go`, `internal/plugins/user_instances.go`): an administrator allows them per plugin; a user saves values for that plugin's declared secret variables, sealed under a kind that names the user. The user's source (`user:<user>:<provider>`, so one user's failing key never pauses another's) comes first in `MakePlan`; with no policy saved, the caller's default follows it as a disclosed fallback. It runs in a plugin process of its own that never sees the system's secret values; processes are bounded and stopped when idle. Requests that name no user (flows, the agent, the shared world view) use the system chain only.
 - **Agent prompt**: the prompt and tool descriptions name no provider. When an administrator saved a policy for a market domain whose tools take a provider (quotes, history, search, financials, research), `ProviderGuidance` adds one line with that order, computed by `MakePlan` so only sources that can answer now appear. Only provider ids reach the prompt, never text a plugin wrote.
 - **Web search** keeps its own router, because retries and budgets go beyond a shared policy. It is published to the registry as a family of managed sources and cannot be set through the shared policy endpoints.
 - **Consumers**: `GET /api/quote`, `GET /api/events`, the news and events nodes in Flow Studio, the agent's corporate events tool, the world view and Today use the policy of their domain when the caller names no provider. With no policy configured the behavior is unchanged. A saved policy fails closed: when its sources are gone or fail, no other installed provider answers. `GET /api/events` and the agent tool return the `Outcome`; flow rows and headlines name the provider that answered.
 - **Settings**: SYS_ADMIN edits the policy per domain in Settings → Providers; everyone signed in can read which sources exist without any secret.
 
-Not in this slice and not claimed: enrichment (merging several sources), per-region routing, per-source budgets, instances of one plugin with different credentials,.
+Not in this slice and not claimed: enrichment (merging several sources), per-region routing, per-source budgets. Own keys came in a later slice (below).
 
 ## Implementation notes (this slice)
 
@@ -44,5 +45,5 @@ Not in this slice and not claimed: enrichment (merging several sources), per-reg
 
 ## Next steps, in order
 
-1. Release the FRED plugin with the `macro` capability and remove `legacyMacroProviders`.
-2. Per-user provider instances (own keys) with the precedence already encoded in `MakePlan` (a user's own usable source comes first), and an SDK capability for provider-side coverage so regions can be routed.
+1. FRED 1.1.0 (with `macro`) is released; remove `legacyMacroProviders` once installations have updated.
+2. An SDK capability for provider-side coverage (regions, exchanges) so a policy can route per region.

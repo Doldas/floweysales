@@ -135,6 +135,14 @@ listed as *Needs configuration* and its provider reports `enabled: false`.
 6. The tracker loop polls a provider no faster than its
    `min_poll_seconds`, and picks up a plugin installed, updated or removed
    while it runs.
+7. When an administrator lets users add their own key for a provider (Settings
+   → Providers), a user's requests can run in a separate process of the same
+   plugin. That process gets the user's values for the plugin's declared
+   **secret** variables, never the system's, and the system's values for the
+   others; users can supply nothing else. At most 8 such processes run at a
+   time, and one idle for 10 minutes is stopped. All processes of a plugin
+   share its directory, so a plugin must not write anything it fetched with one
+   process's credentials where another process could read it back.
 
 Plugins run with the backend's operating-system user. A plugin is software you
 install: the store pins each binary by SHA-256 and the backend handshakes with

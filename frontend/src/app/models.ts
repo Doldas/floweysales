@@ -968,3 +968,9 @@ export interface RoutingDomain { id: string; label: string; group: string; no_fa
 export interface RoutingPolicy { domain: string; primary: string; fallback?: string[]; no_fallback?: boolean }
 
 export interface RoutingView { domains: RoutingDomain[]; sources: RoutingSource[]; policies: Record<string, RoutingPolicy>; can_edit: boolean; notice: string }
+
+/** A variable a user may supply for their own instance of a provider; the value is never returned. */
+export interface OwnKeyVariable { name: string; description: string; required: boolean; saved: boolean }
+export interface OwnKeyPlugin { plugin_id: string; provider_id: string; label: string; allowed: boolean; variables: OwnKeyVariable[] }
+/** GET /api/providers/own-keys */
+export interface OwnKeysView { plugins: OwnKeyPlugin[]; can_edit: boolean; signed_in: boolean; notice: string }

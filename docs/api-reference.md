@@ -105,6 +105,9 @@ mäter pappersportföljens risk och avvikelse från planen.
 |---|---|---|
 | GET | `/api/providers` | Installed market-data providers: capabilities, whether they are configured, poll interval |
 | GET | `/api/providers/routing` | Every data source (plugins, built-in adapters) by domain, with its state and where it is managed, plus the saved routing policy per domain. No credentials. Any signed-in user. |
+| GET | `/api/providers/own-keys` | Providers that take the signed-in user's own key (all of them for SYS_ADMIN, with whether users may add one), each with its declared secret variables and whether a value is saved. Values are never returned. |
+| PUT, DELETE | `/api/providers/own-keys/{plugin}` | Save (`{"values": {"NAME": "value"}}`, merged; an empty value removes that variable) or remove the signed-in user's own keys for a provider. Only declared secret variables, one line of at most 4,096 characters. 403 when an administrator has not allowed own keys for the provider; 400 without a signed-in account. |
+| PUT | `/api/admin/providers/own-keys/{plugin}` | SYS_ADMIN: `{"allowed": true}` lets users add their own key for a provider; `false` stops saved keys being used (they stay stored). |
 | PUT, DELETE | `/api/admin/providers/routing/{domain}` | SYS_ADMIN: set (`primary`, ordered `fallback`, `no_fallback`) or remove the routing policy of a domain. 422 when a source does not provide the domain, is managed elsewhere or does not exist. |
 | GET | `/api/admin/plugins` | Installerade plugin, senast hämtade butikskatalog och trackers per plugin |
 | POST | `/api/admin/plugins/check` | Hämtar butikskatalogen nu (sök efter uppdateringar) |

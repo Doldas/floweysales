@@ -77,7 +77,7 @@ func runFakePlugin() {
 			if symbol == "CRASH" {
 				os.Exit(3)
 			}
-			reply(map[string]any{"symbol": symbol, "price": 42.5, "currency": "USD", "data": map[string]any{"version": manifest.Version}})
+			reply(map[string]any{"symbol": symbol, "price": 42.5, "currency": "USD", "data": map[string]any{"version": manifest.Version, "key": os.Getenv("FAKE_API_KEY")}})
 		case "history":
 			reply(map[string]any{"symbol": symbol, "range": req.Params["range"], "interval": "1d", "currency": "USD",
 				"points": []map[string]any{{"t": time.Now().Unix() - 60, "o": 1, "h": 1, "l": 1, "c": 1}}})

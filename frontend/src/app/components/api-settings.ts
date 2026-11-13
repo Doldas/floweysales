@@ -2,6 +2,7 @@ import { Component, signal } from '@angular/core';
 import { AdminAccessSettingsComponent } from './admin-access-settings';
 import { UpdateSettingsComponent } from './update-settings';
 import { PluginSettingsComponent } from './plugin-settings';
+import { OwnProviderKeysComponent } from './own-provider-keys';
 import { ProviderRoutingComponent } from './provider-routing';
 import { TradingSettingsComponent } from './trading-settings';
 import { ModelProfilesSettingsComponent } from './model-profiles-settings';
@@ -16,7 +17,7 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
 @Component({
  selector:'fse-api-settings', host:{class:'fs-native-forms'},
  standalone:true,
- imports:[FormsModule,AdminAccessSettingsComponent,UpdateSettingsComponent,PluginSettingsComponent,ProviderRoutingComponent,TradingSettingsComponent,ModelProfilesSettingsComponent,WebSearchSettingsComponent,VisionSettingsComponent],
+ imports:[FormsModule,AdminAccessSettingsComponent,UpdateSettingsComponent,PluginSettingsComponent,ProviderRoutingComponent,OwnProviderKeysComponent,TradingSettingsComponent,ModelProfilesSettingsComponent,WebSearchSettingsComponent,VisionSettingsComponent],
  template:`
  <div class="api-settings">
   @if(!encryptionReady()){
@@ -94,6 +95,7 @@ interface IntegrationInfo {encryption_ready:boolean;ai:{has_key:boolean};web_sea
     <fse-plugin-settings></fse-plugin-settings>
   } @else if(tab()==='providers'){
     <fse-provider-routing></fse-provider-routing>
+    <fse-own-provider-keys></fse-own-provider-keys>
   } @else if(tab()==='updates'){
     <fse-update-settings></fse-update-settings>
   } @else {
