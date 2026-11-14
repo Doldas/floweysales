@@ -28,6 +28,7 @@ This guide covers only what is built. Each page says what a screen does, what yo
 | Area | What it does | Guide page |
 | --- | --- | --- |
 | Markets | Price chart, indicators, watchlist, fundamentals, quarterly financials, World news themes | [Markets](markets.md) |
+| Collections | Your own sets of instruments: watch collections and hypothetical model portfolios, with composition by count or weight | [Collections](collections.md) |
 | Leaderboard | Ranks a list of companies on six factors, with the method and data shown | [Leaderboard](leaderboard.md) |
 | Strategies and backtests | Rule strategies on one instrument; leaderboard strategy backtests with batch checks, settings checks, saved runs and exports | [Strategies and backtests](strategies.md) |
 | Flow Studio | Saved automations with versions, schedules, approvals and an audit trail | [Flow Studio](flows.md) |

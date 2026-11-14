@@ -2,12 +2,15 @@
 title: What's new
 order: 13
 summary: What changed in the November 2026 release, and what is still not available.
-last-reviewed: 2026-11-07
+last-reviewed: 2026-11-14
 ---
 
 # What's new
 
 ## November 2026 release
+
+**Collections**
+- Keep your own sets of instruments on the server: watch collections, and model portfolios with hypothetical weights. Add from provider search, the selected instrument or by hand, filter by category and tag, copy or move between collections, export and import. Each collection shows its composition by asset type, exchange, currency, country or data provider: a count for watch collections, weights and the unallocated rest for model portfolios, with unknown values shown as Unknown. See [Collections](collections.md).
 
 **Sources everywhere**
 - Prices, history, financial statements, SEC filings, valuations, backtests, strategy results, the wealth plan, portfolio risk and the Today briefing now show where they came from: provider, what was calculated and how, and the as-of and retrieval times in UTC. Open the **Source** button next to a figure. When no source was recorded it says "Source unknown" instead of guessing. Flow rows and agent tool results carry the same information. See [Where data comes from](provenance.md).

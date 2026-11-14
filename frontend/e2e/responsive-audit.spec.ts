@@ -7,7 +7,7 @@ import type { Page } from '@playwright/test';
  * being inside a scroll container, and touch targets on touch-size screens.
  * The matrix of findings is documented in docs/responsive-audit.md.
  */
-export const ROUTES = ['', 'agent', 'team', 'flows', 'inbox', 'markets', 'strategies', 'world', 'plan', 'financials', 'portfolio',
+export const ROUTES = ['', 'agent', 'team', 'flows', 'inbox', 'markets', 'collections', 'strategies', 'world', 'plan', 'financials', 'portfolio',
   'workspace', 'community', 'notifications', 'settings', 'help', 'about'];
 export const WIDTHS = [320, 360, 390, 412, 600, 768, 820, 1024];
 

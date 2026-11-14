@@ -7,9 +7,10 @@ meant to become a scope for dashboards, news, the Research Agent and Flow
 Studio. The design decisions are in
 [ADR 0004](adr/0004-market-collections.md).
 
-**Status:** Phase 1 (domain, storage, API) is implemented. The user
-interface, profile enrichment, taxonomy, news, agent and flow integrations
-are planned and are listed below as planned.
+**Status:** Phase 1 (domain, storage, API) and the collection manager and
+dashboard of Phase 3 are implemented. Profile enrichment, taxonomy, news,
+agent and flow integrations are planned and are listed below as planned.
+The user guide page is [Collections](guide/collections.md).
 
 ## What exists today
 
@@ -109,10 +110,16 @@ Each phase is a separate, reviewable change with tests.
    geography, theme) with provider mappings and user overrides kept apart
    from provider facts. No provider means an explicit "no profile source"
    state; manual classification always works.
-3. **User experience (planned):** collection manager, add from global
-   search, category and tag filters, active collection scope, per-collection
-   dashboard (composition by count for watch collections, by weight for
-   models; coverage and freshness labeled).
+3. **User experience (done, except the scope):** collection manager on the
+   Collections page (`frontend/src/app/pages/collections-page.ts`), add from
+   provider search, the selected instrument or by hand, category and tag
+   filters, archive, copy and move, export and import, and a per-collection
+   dashboard: composition by count for watch collections and by weight for
+   models, with unallocated weight and Unknown values shown and coverage
+   labeled. Deferred: the active collection scope moves to phase 4 with news;
+   composition by sector and theme waits for phase 2 profiles; freshness is
+   labeled once profiles carry an as-of time; importing the browser-local
+   research watchlist into a collection is still open.
 4. **News and AI (planned):** collection news scope through the
    provider-neutral news interface with direct versus thematic relevance
    and reasons; permission-checked Research Agent tools that read only the
