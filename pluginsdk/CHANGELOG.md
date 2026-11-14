@@ -8,11 +8,16 @@ publishes the section for the tagged version as the release notes. See
 
 ## Unreleased
 
+## v0.4.0
+
 - Additive: optional manifest field `provider.markets`, the markets a provider
   covers as ISO 3166-1 alpha-2 codes (`SE`, `US`), and
   `ProviderInfo.CoversMarket`. FloweySales warns in Settings when a source
   chosen for a market does not list it; it never changes routing. Older
   backends ignore the field, so existing plugins and backends keep working.
+  A plugin built with an earlier SDK drops the field from `describe`, so a
+  plugin that states markets needs v0.4.0. Avanza 1.1.0 and Stooq 1.1.0 are
+  the first official plugins to state them.
 
 ## v0.3.0
 
