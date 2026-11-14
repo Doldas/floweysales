@@ -29,7 +29,13 @@ func (m *Manager) call(ctx context.Context, p market.Provider, capability, metho
 	if !installed.Manifest.Provider.HasCapability(capability) {
 		return fmt.Errorf("%w: %s does not offer %s", market.ErrUnsupported, p.ID(), capability)
 	}
-	proc, err := m.process(installed)
+	var proc *process
+	var err error
+	if inst, ok := userInstanceFrom(ctx); ok {
+		proc, err = m.userProcess(installed, inst)
+	} else {
+		proc, err = m.process(installed)
+	}
 	if err != nil {
 		return err
 	}

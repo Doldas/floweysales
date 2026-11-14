@@ -25,6 +25,7 @@ var (
 const (
 	OriginPinned   = "pinned"
 	OriginUser     = "user"
+	OriginRegion   = "region"
 	OriginPrimary  = "primary"
 	OriginFallback = "fallback"
 )
@@ -56,6 +57,8 @@ type Request struct {
 	UserID int64
 	// Pin names one source for this workflow; no fallback is then allowed.
 	Pin string
+	// Region is the instrument's market (a Regions code), empty when unknown.
+	Region string
 }
 
 // MakePlan orders the sources for a request. A user's own usable sources come
@@ -121,6 +124,9 @@ func MakePlan(policy *Policy, sources []Source, req Request, h *Health) (Plan, e
 		add(id, OriginUser)
 	}
 	if policy != nil && policy.Domain == req.Domain {
+		if id := policy.ByRegion[req.Region]; req.Region != "" && id != "" {
+			add(id, OriginRegion)
+		}
 		add(policy.Primary, OriginPrimary)
 		for _, id := range policy.Fallback {
 			add(id, OriginFallback)

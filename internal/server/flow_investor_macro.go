@@ -215,7 +215,8 @@ func (e *Engine) readMacroSeries(ctx context.Context, provider market.Provider) 
 // saved. One provider answers the whole regime: series from different sources
 // are never combined, so a fallback replaces the set.
 func (e *Engine) runMacroNode(ctx context.Context, now time.Time) (string, error) {
-	series, outcome, routed, err := routedCall(ctx, e, 0, routing.Macro, e.readMacroSeries)
+	fallback, _ := e.macroProvider()
+	series, outcome, routed, err := routedCall(ctx, e, 0, routing.Macro, "", fallback, e.readMacroSeries)
 	var answered market.Provider
 	if routed {
 		answered = market.ParseProvider(outcome.Actual)

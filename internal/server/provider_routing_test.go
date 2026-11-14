@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -249,5 +250,35 @@ func TestRegistryShowsTheWebSearchRoutersLivePolicy(t *testing.T) {
 	// The router's own settings stay the only place to change it.
 	if code, body := putPolicy(e, "web_search", map[string]any{"primary": "web_search:tavily"}); code != http.StatusUnprocessableEntity {
 		t.Errorf("%d %v", code, body)
+	}
+}
+
+func TestQuoteUsesTheRegionsSourceForItsMarket(t *testing.T) {
+	e, b := routingEngine(t, "AAA", "BBB")
+	volvo := markettest.History(t, "history_nvda_1h.json")
+	volvo.Symbol = "VOLV-B.ST"
+	for _, p := range []string{"AAA", "BBB"} {
+		b.Serve(p, "VOLV-B.ST", volvo)
+	}
+	if code, out := putPolicy(e, "market_quote", map[string]any{"primary": "AAA", "by_region": map[string]string{"SE": "BBB"}}); code != 200 {
+		t.Fatalf("%v", out)
+	}
+	_, outcome, routed, err := e.routedQuote(context.Background(), 0, "VOLV-B.ST")
+	if err != nil || !routed || outcome.Actual != "BBB" || outcome.Attempts[0].Origin != "region" {
+		t.Errorf("a Swedish symbol goes to the source chosen for Sweden: %v %+v", err, outcome)
+	}
+	_, outcome, _, err = e.routedQuote(context.Background(), 0, "NVDA")
+	if err != nil || outcome.Actual != "AAA" {
+		t.Errorf("a symbol without a market suffix keeps the domain's chain: %v %+v", err, outcome)
+	}
+	_, view, raw := icall(e, "GET", "/api/providers/routing", nil)
+	if regions, _ := view["regions"].([]any); len(regions) < 10 || !strings.Contains(raw, `"code":"SE"`) {
+		t.Errorf("the view lists the markets a policy can name: %v", view["regions"])
+	}
+	for _, d := range view["domains"].([]any) {
+		dm := d.(map[string]any)
+		if (dm["id"] == "market_quote") != (dm["regional"] == true) && (dm["id"] == "market_quote" || dm["id"] == "market_history") {
+			t.Errorf("only domains a symbol steers are regional: %v", dm)
+		}
 	}
 }

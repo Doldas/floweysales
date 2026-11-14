@@ -2,8 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { FormsModule } from '@angular/forms';
 
 import { MarketService } from '../services';
-import type { RoutingDomain, RoutingSource, RoutingView } from '../models';
-import { type PolicyForm, formFrom, groupDomains, moveFallback, policyBody, policyLine, policyProblems, sourceState, sourcesFor, stateLabel, toggleFallback } from './provider-routing-view';
+import type { RoutingDomain, RoutingRegion, RoutingSource, RoutingView } from '../models';
+import { type PolicyForm, formFrom, groupDomains, moveFallback, policyBody, policyLine, policyProblems, setRegion, sourceState, sourcesFor, stateLabel, toggleFallback } from './provider-routing-view';
 
 /**
  * Settings → Providers. Lists every source FloweySales can get data from,
@@ -76,6 +76,30 @@ import { type PolicyForm, formFrom, groupDomains, moveFallback, policyBody, poli
                         </fieldset>
                       }
                     }
+                    @if (d.regional && regions().length) {
+                      <fieldset class="pr-markets">
+                        <legend>Tried first per market</legend>
+                        <p class="muted pr-hint">For an instrument with a ticker suffix such as .ST (Sweden), this source is tried before the primary; other instruments use the chain above.</p>
+                        @for (code of marketCodes(d); track code) {
+                          <div class="pr-row">
+                            <label>{{ regionLabel(code) }}
+                              <select [ngModel]="form(d).byRegion?.[code]" (ngModelChange)="pickRegion(d, code, $event)" [name]="'region-' + d.id + '-' + code" [attr.aria-label]="regionLabel(code)">
+                                @for (s of sources(d).routable; track s.id) { <option [value]="s.id">{{ s.label }}</option> }
+                              </select>
+                            </label>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" (click)="pickRegion(d, code, '')" [attr.aria-label]="'Remove ' + regionLabel(code)">Remove</button>
+                          </div>
+                        }
+                        @if (unusedRegions(d).length) {
+                          <label>Add a market
+                            <select [ngModel]="''" (ngModelChange)="addRegion(d, $event)" [name]="'region-add-' + d.id">
+                              <option value="">Choose…</option>
+                              @for (r of unusedRegions(d); track r.code) { <option [value]="r.code">{{ r.label }}</option> }
+                            </select>
+                          </label>
+                        }
+                      </fieldset>
+                    }
                     @if (problems(d).length && touched()[d.id]) { <ul class="pr-errors" role="alert">@for (p of problems(d); track p) { <li>{{ p }}</li> }</ul> }
                     <div class="pr-actions">
                       <button type="submit" class="btn btn-sm btn-primary" [disabled]="busy()">Save routing</button>
@@ -105,6 +129,9 @@ import { type PolicyForm, formFrom, groupDomains, moveFallback, policyBody, poli
     .pr-state { font-size: 0.72rem; font-weight: 600; padding: 0 0.4rem; border: 1px solid currentColor; border-radius: 0.6rem; }
     .pr-state[data-state='ready'] { color: var(--fs-pos); }
     .pr-state[data-state='needs_key'], .pr-state[data-state='disabled'] { color: var(--fs-warn); }
+    .pr-markets { display: grid; gap: 0.4rem; border: 0; padding: 0; margin: 0; min-width: 0; }
+    .pr-markets legend { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.2rem; }
+    .pr-hint { margin: 0; font-size: 0.75rem; }
     .pr-form { display: grid; gap: 0.5rem; max-width: 34rem; margin-top: 0.3rem; }
     .pr-form label { display: grid; gap: 0.2rem; font-size: 0.8rem; }
     .pr-check { display: flex !important; gap: 0.5rem; align-items: center; }
@@ -144,7 +171,17 @@ export class ProviderRoutingComponent {
   sources(d: RoutingDomain): { routable: RoutingSource[]; managed: RoutingSource[] } { return sourcesFor(d.id, this.view()?.sources ?? []); }
   form(d: RoutingDomain): PolicyForm { return this.forms()[d.id] ?? formFrom(undefined, d); }
   problems(d: RoutingDomain): string[] { return policyProblems(this.form(d), this.sources(d).routable); }
-  line(d: RoutingDomain): string { return policyLine(this.view()?.policies[d.id], d, this.view()?.sources ?? []); }
+  line(d: RoutingDomain): string { return policyLine(this.view()?.policies[d.id], d, this.view()?.sources ?? [], this.regions()); }
+  regions(): RoutingRegion[] { return this.view()?.regions ?? []; }
+  regionLabel(code: string): string { return this.regions().find(r => r.code === code)?.label ?? code; }
+  marketCodes(d: RoutingDomain): string[] { return Object.keys(this.form(d).byRegion ?? {}); }
+  unusedRegions(d: RoutingDomain): RoutingRegion[] { return this.regions().filter(r => !(r.code in (this.form(d).byRegion ?? {}))); }
+  pickRegion(d: RoutingDomain, code: string, id: string): void { this.patch(d, setRegion(this.form(d), code, id)); }
+  addRegion(d: RoutingDomain, code: string): void {
+    if (!code) return;
+    const f = this.form(d);
+    this.patch(d, setRegion(f, code, f.primary || this.sources(d).routable[0]?.id || ''));
+  }
   state(s: RoutingSource): string { return sourceState(s); }
   stateText(s: RoutingSource): string { return stateLabel(s); }
 

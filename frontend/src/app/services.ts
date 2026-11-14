@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, catchError, map, of } from 'rxjs';
 import {
-  IndexComparison, IndicesResponse, RoutingPolicy, RoutingView,
+  IndexComparison, IndicesResponse, OwnKeysView, RoutingPolicy, RoutingView,
   AboutInfo,
   ForumPost,
   FinancialsResponse,
@@ -128,6 +128,24 @@ export class MarketService {
 
   clearProviderPolicy(domain: string): Observable<{ deleted: boolean }> {
     return this.http.delete<{ deleted: boolean }>(`/api/admin/providers/routing/${encodeURIComponent(domain)}`);
+  }
+
+  /** The providers that take the signed-in user's own key; values are never returned. */
+  getOwnKeys(): Observable<OwnKeysView> {
+    return this.http.get<OwnKeysView>('/api/providers/own-keys');
+  }
+
+  saveOwnKeys(pluginId: string, values: Record<string, string>): Observable<{ saved: boolean }> {
+    return this.http.put<{ saved: boolean }>(`/api/providers/own-keys/${encodeURIComponent(pluginId)}`, { values });
+  }
+
+  deleteOwnKeys(pluginId: string): Observable<{ deleted: boolean }> {
+    return this.http.delete<{ deleted: boolean }>(`/api/providers/own-keys/${encodeURIComponent(pluginId)}`);
+  }
+
+  /** SYS_ADMIN: whether users may add their own key for a provider. */
+  allowOwnKeys(pluginId: string, allowed: boolean): Observable<{ saved: boolean }> {
+    return this.http.put<{ saved: boolean }>(`/api/admin/providers/own-keys/${encodeURIComponent(pluginId)}`, { allowed });
   }
 
   /** Compares two to six of the user's own index lists. */

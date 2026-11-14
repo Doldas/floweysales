@@ -78,6 +78,23 @@ var (
 	}
 )
 
+// regionBySuffix is the market (a country code) of each Yahoo-style suffix.
+var regionBySuffix = map[string]string{
+	"ST": "SE", "L": "GB", "DE": "DE", "F": "DE", "PA": "FR", "AS": "NL", "CO": "DK", "HE": "FI", "OL": "NO",
+	"SW": "CH", "MI": "IT", "MC": "ES", "TO": "CA", "AX": "AU", "T": "JP", "HK": "HK", "JO": "ZA",
+}
+
+// RegionOf is the market of an instrument from its ticker suffix (".ST" is
+// SE). A symbol without a known suffix has none: a bare ticker may be a US
+// listing, a crypto pair or a currency, and is not guessed.
+func RegionOf(symbol string) string {
+	symbol = strings.TrimSpace(symbol)
+	if i := strings.LastIndex(symbol, "."); i > 0 && i < len(symbol)-1 {
+		return regionBySuffix[strings.ToUpper(symbol[i+1:])]
+	}
+	return ""
+}
+
 func exchangeFor(symbol, exchange string) (exchangeHours, bool) {
 	if i := strings.LastIndex(symbol, "."); i > 0 && i < len(symbol)-1 {
 		h, ok := bySuffix[strings.ToUpper(symbol[i+1:])]

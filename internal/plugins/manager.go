@@ -34,6 +34,9 @@ type Config struct {
 	// LookupEnv resolves a variable a plugin declares (environment, then
 	// config.properties). Nil forwards nothing.
 	LookupEnv func(name string) string
+	// MaxUserProcesses bounds the processes run with a user's own keys; the
+	// least recently used one is stopped first. Zero means 8.
+	MaxUserProcesses int
 	// CallTimeout bounds one plugin call; zero means 45s.
 	CallTimeout time.Duration
 	// AppVersion is the running release version (for example "0.6.0"); empty
@@ -83,6 +86,7 @@ type Manager struct {
 	saved     map[string]string          // values entered in Settings, behind environment and config.properties
 	installed map[string]InstalledPlugin // by plugin id
 	procs     map[string]*process
+	userUse   map[string]userUse // processes run with a user's own keys
 	failures  map[string]startFailure
 	checks    map[string]compatCheck // last handshake per plugin id
 	lastRun   *runtimeState          // what ran against this directory before this start
@@ -139,7 +143,7 @@ func Open(cfg Config) (*Manager, error) {
 		}
 	}
 	m := &Manager{cfg: cfg, store: store, http: client, installed: map[string]InstalledPlugin{},
-		saved: map[string]string{}, procs: map[string]*process{}, failures: map[string]startFailure{}, checks: map[string]compatCheck{}}
+		saved: map[string]string{}, procs: map[string]*process{}, userUse: map[string]userUse{}, failures: map[string]startFailure{}, checks: map[string]compatCheck{}}
 	raw, err := os.ReadFile(m.statePath())
 	switch {
 	case errors.Is(err, os.ErrNotExist):
@@ -301,11 +305,14 @@ func (m *Manager) process(p InstalledPlugin) (*process, error) {
 	return proc, nil
 }
 
-// stopLocked stops a plugin process. Callers hold m.mu.
+// stopLocked stops a plugin's processes, its users' own included. Callers hold m.mu.
 func (m *Manager) stopLocked(id string) {
-	if proc := m.procs[id]; proc != nil {
-		delete(m.procs, id)
-		go proc.stop(5 * time.Second)
+	for key, proc := range m.procs {
+		if key == id || strings.HasPrefix(key, id+userKeySep) {
+			delete(m.procs, key)
+			delete(m.userUse, key)
+			go proc.stop(5 * time.Second)
+		}
 	}
 	delete(m.failures, id)
 }

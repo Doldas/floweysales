@@ -143,6 +143,7 @@ type Engine struct {
 	config           *SharedMarketConfig
 	providers        market.Backend
 	plugins          *plugins.Manager
+	userSecrets      func(pluginID string) []plugins.EnvVar // tests; else plugins.UserSecrets
 	defaultProvider  market.Provider
 	trackerCfg       tracker.Config
 
@@ -269,6 +270,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerIndexSourceRoutes()
 	e.registerIndexCompareRoutes()
 	e.registerProviderRoutingRoutes()
+	e.registerOwnKeyRoutes()
 	e.registerRankingPreferenceRoutes()
 	e.registerBacktestRoutes()
 	e.registerBacktestBatchRoutes()

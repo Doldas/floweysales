@@ -116,6 +116,18 @@ func (b *Backend) Serve(provider, symbol string, s market.HistorySeries) *Backen
 	return b
 }
 
+// Plugin names the plugin that contributes a provider.
+func (b *Backend) Plugin(provider, pluginID string) *Backend {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for i := range b.caps {
+		if b.caps[i].ID == provider {
+			b.caps[i].PluginID = pluginID
+		}
+	}
+	return b
+}
+
 // Declare makes a provider list a capability.
 func (b *Backend) Declare(provider, capability string) *Backend {
 	b.mu.Lock()

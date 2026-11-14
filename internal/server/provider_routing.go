@@ -91,6 +91,7 @@ func (e *Engine) routingSources(ctx context.Context, userID int64) []routing.Sou
 	out = append(out, routing.Source{ID: "sec_edgar", Label: "SEC EDGAR", Kind: routing.KindBuiltin, Domains: []routing.Domain{routing.Filings},
 		Scope: routing.ScopeSystem, Configured: true, Enabled: true, Restrictions: "Public regulatory filings read directly; no credentials.",
 		ManagedBy: "the app itself (a privileged internal integration, not routable)"})
+	out = append(out, e.ownSources(ctx, userID, out)...)
 	visible := out[:0:0]
 	for _, s := range out {
 		if s.VisibleTo(userID) {
@@ -104,6 +105,7 @@ func (e *Engine) routingSources(ctx context.Context, userID int64) []routing.Sou
 type routingStore interface {
 	GetAPIIntegrationSecret(ctx context.Context, kind string) (storage.APIIntegrationSecret, error)
 	SaveAPIIntegrationSecret(ctx context.Context, kind, provider string, ciphertext []byte) error
+	DeleteAPIIntegrationSecret(ctx context.Context, kind string) error
 }
 
 func (e *Engine) routingStore() routingStore {
@@ -181,7 +183,7 @@ func (e *Engine) routingView(ctx context.Context, userID int64, admin bool) map[
 	if p, ok := e.webSearchRouter().RoutingPolicy(); ok {
 		policies[routing.WebSearch] = p
 	}
-	return map[string]any{"domains": domains, "sources": sources, "policies": policies, "can_edit": admin,
+	return map[string]any{"domains": domains, "sources": sources, "policies": policies, "can_edit": admin, "regions": routing.Regions,
 		"notice": "Installed plugins and configured providers are different things: a plugin must be installed under Settings → Plugins, and a policy here decides which installed source serves a domain. A fallback is always shown in the result, and domains where another source would change meaning or breach a licence cannot have one."}
 }
 
@@ -229,16 +231,29 @@ func (e *Engine) checkRoutingPolicy(w http.ResponseWriter, r *http.Request, p *r
 	return true
 }
 
-// routedCall answers through the saved policy of a domain. routed is false
-// when none is saved, so the caller keeps its existing behavior. userID 0 asks
-// for the system chain only, which is what shared or background work must use.
-func routedCall[T any](ctx context.Context, e *Engine, userID int64, domain routing.Domain, call func(ctx context.Context, p market.Provider) (T, error)) (T, routing.Outcome, bool, error) {
+// routedCall answers through the saved policy of a domain, after the user's
+// own sources. routed is false when no policy is saved and the user has no own
+// source, so the caller keeps its existing behavior; with an own source but no
+// policy, fallback (the caller's default) follows it. userID 0 asks for the
+// system chain only, which is what shared or background work must use.
+func routedCall[T any](ctx context.Context, e *Engine, userID int64, domain routing.Domain, region string, fallback market.Provider, call func(ctx context.Context, p market.Provider) (T, error)) (T, routing.Outcome, bool, error) {
 	var zero T
 	policy, has := e.loadRoutingPolicies(ctx)[domain]
-	if !has {
+	if !has && userID <= 0 {
 		return zero, routing.Outcome{}, false, nil
 	}
-	plan, err := routing.MakePlan(&policy, e.routingSources(ctx, userID), routing.Request{Domain: domain, UserID: userID}, providerHealth())
+	sources := e.routingSources(ctx, userID)
+	if !has {
+		own := false
+		for _, s := range sources {
+			own = own || (s.Kind == routing.KindUser && s.Serves(domain))
+		}
+		if !own {
+			return zero, routing.Outcome{}, false, nil
+		}
+		policy = routing.Policy{Domain: domain, Primary: fallback.ID()}
+	}
+	plan, err := routing.MakePlan(&policy, sources, routing.Request{Domain: domain, UserID: userID, Region: region}, providerHealth())
 	if err != nil {
 		return zero, routing.Outcome{Domain: domain, Skipped: plan.Skipped}, true, err
 	}
@@ -247,6 +262,7 @@ func routedCall[T any](ctx context.Context, e *Engine, userID int64, domain rout
 			return strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "symbol")
 		},
 	}, func(ctx context.Context, id string) (T, error) {
+		ctx, id = e.withOwnInstance(ctx, userID, id)
 		return call(ctx, market.ParseProvider(id))
 	})
 	return v, outcome, true, err
@@ -254,7 +270,7 @@ func routedCall[T any](ctx context.Context, e *Engine, userID int64, domain rout
 
 // routedQuote answers a quote request through the market-quote policy.
 func (e *Engine) routedQuote(ctx context.Context, userID int64, symbol string) (market.QuoteSnapshot, routing.Outcome, bool, error) {
-	return routedCall(ctx, e, userID, routing.MarketQuote, func(ctx context.Context, p market.Provider) (market.QuoteSnapshot, error) {
+	return routedCall(ctx, e, userID, routing.MarketQuote, market.RegionOf(symbol), e.defaultProvider, func(ctx context.Context, p market.Provider) (market.QuoteSnapshot, error) {
 		return market.LatestSnapshot(ctx, e.providers, symbol, p)
 	})
 }
@@ -263,7 +279,7 @@ func (e *Engine) routedQuote(ctx context.Context, userID int64, symbol string) (
 // decides when one is saved. Each item names the provider that answered.
 func (e *Engine) newsFor(ctx context.Context, userID int64, p market.Provider, symbol string, limit int) ([]market.NewsItem, error) {
 	if p == "" {
-		items, _, routed, err := routedCall(ctx, e, userID, routing.News, func(ctx context.Context, p market.Provider) ([]market.NewsItem, error) {
+		items, _, routed, err := routedCall(ctx, e, userID, routing.News, market.RegionOf(symbol), firstOffering(e.providers, "news"), func(ctx context.Context, p market.Provider) ([]market.NewsItem, error) {
 			return market.NewsFor(ctx, e.providers, p, symbol, limit)
 		})
 		if routed {
@@ -281,7 +297,7 @@ func (e *Engine) eventsFor(ctx context.Context, userID int64, p market.Provider,
 		if _, _, err := market.EventWindow(from, to); err != nil {
 			return nil, nil, err
 		}
-		events, outcome, routed, err := routedCall(ctx, e, userID, routing.Events, func(ctx context.Context, p market.Provider) ([]market.CorporateEvent, error) {
+		events, outcome, routed, err := routedCall(ctx, e, userID, routing.Events, market.RegionOf(symbol), firstOffering(e.providers, "events"), func(ctx context.Context, p market.Provider) ([]market.CorporateEvent, error) {
 			return market.EventsFor(ctx, e.providers, p, symbol, from, to)
 		})
 		if routed {
@@ -335,4 +351,24 @@ func (s engineSource) ProviderGuidance(ctx context.Context) string {
 	}
 	return "- Provider order an administrator saved, for tools that take a provider: " + strings.Join(parts, "; ") +
 		". Pass the first provider that can answer the instrument, and name another only when the user asks for it or the first cannot answer; get_provider_capabilities lists what each one offers."
+}
+
+// firstOffering is the default a news or events request uses without a
+// policy: the first installed provider that offers the capability.
+func firstOffering(b market.Backend, capability string) market.Provider {
+	var list []market.Provider
+	switch capability {
+	case "news":
+		if s, ok := b.(market.NewsSource); ok {
+			list = s.NewsProviders()
+		}
+	case "events":
+		if s, ok := b.(market.EventSource); ok {
+			list = s.EventProviders()
+		}
+	}
+	if len(list) == 0 {
+		return ""
+	}
+	return list[0]
 }
