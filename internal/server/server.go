@@ -14,6 +14,7 @@ import (
 
 	"floweysales/internal/ai"
 	"floweysales/internal/app"
+	"floweysales/internal/collections"
 	"floweysales/internal/identity"
 	"floweysales/internal/indexsource"
 	"floweysales/internal/market"
@@ -197,18 +198,20 @@ type Engine struct {
 	flowRunCancels map[int64]context.CancelFunc
 	adapterLimits  adapterLimiter
 	// Test seams for investor nodes; nil uses SEC EDGAR and the database.
-	secFilings    func(ctx context.Context, ticker string, limit int) (sec.Filings, error)
-	flowState     flowNodeStateStore
-	profiles      investorProfileStore
-	rankingPrefs  rankingPreferencesStore // leaderboard objective and constraints per user; tests replace the database
-	indexSources  indexSourceStore        // user-supplied index constituent lists; tests replace the database
-	indexSecrets  indexSecretStore        // sealed per-user Financial Modeling Prep keys; tests replace the database
-	indexHTTP     indexsource.HTTPDoer    // injectable client for the FMP adapter
-	indexFMPBase  string                  // test seam for the FMP host; empty is FMP
-	strategies    strategyStore
-	modelProfiles modelProfileStore // model profiles; tests replace the database
-	teams         teamStore         // saved agent teams
-	backtestRuns  backtestRunStore  // saved backtest results
+	secFilings   func(ctx context.Context, ticker string, limit int) (sec.Filings, error)
+	flowState    flowNodeStateStore
+	profiles     investorProfileStore
+	rankingPrefs rankingPreferencesStore // leaderboard objective and constraints per user; tests replace the database
+	indexSources indexSourceStore        // user-supplied index constituent lists; tests replace the database
+	indexSecrets indexSecretStore        // sealed per-user Financial Modeling Prep keys; tests replace the database
+	indexHTTP    indexsource.HTTPDoer    // injectable client for the FMP adapter
+	indexFMPBase string                  // test seam for the FMP host; empty is FMP
+	strategies   strategyStore
+	// collectionStore keeps each user's Market Collections; tests replace the database.
+	collectionStore collections.Store
+	modelProfiles   modelProfileStore // model profiles; tests replace the database
+	teams           teamStore         // saved agent teams
+	backtestRuns    backtestRunStore  // saved backtest results
 	// summarize replaces the model call that writes a backtest summary in tests.
 	summarize    func(ctx context.Context, messages []ai.Message) (string, error)
 	transactions transactionStore
@@ -287,6 +290,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerTeamRoutes()
 	e.registerProfileRoutes()
 	e.registerStrategyRoutes()
+	e.registerCollectionRoutes()
 	e.registerStrategyMonteCarloRoutes()
 	e.registerStrategyFitRoutes()
 	e.registerWorldRoutes()
