@@ -252,10 +252,13 @@ async function backToList(page: Page) {
 async function addByHand(page: Page, provider: string, symbol: string) {
   const manual = page.locator('details.manual');
   if (!(await manual.getAttribute('open') !== null)) await manual.locator('summary').click();
+  // The same symbol may already be listed from another provider: wait for one more row, not for any.
+  const rows = page.getByRole('table', { name: /Instruments in/ }).getByRole('rowheader', { name: new RegExp('^' + symbol.replace(/[\^=.]/g, '\\$&')) });
+  const before = await rows.count();
   await manual.getByLabel('Provider').fill(provider);
   await manual.getByLabel('Symbol').fill(symbol);
   await manual.getByRole('button', { name: 'Add' }).click();
-  await expect(page.getByRole('table', { name: /Instruments in/ }).getByRole('rowheader', { name: new RegExp('^' + symbol.replace(/[\^=.]/g, '\\$&')) })).toBeVisible();
+  await expect(rows).toHaveCount(before + 1);
 }
 
 test.describe('Markets → Collections', () => {
