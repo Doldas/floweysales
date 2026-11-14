@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="046-market-collections" author="floweysales" dbms="mysql">
+  <!-- No foreign key to auth_users: with authentication disabled the single user is id 0.
+       Deleting an account removes its rows in Service.DeleteUser. New tables only:
+       tracked_assets and every existing list stay as they are. -->
+  <createTable tableName="market_collections" remarks="User-owned sets of instruments: watch collections and model portfolios">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_market_collections"/></column>
+   <column name="user_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="name" type="VARCHAR(80)"><constraints nullable="false"/></column>
+   <column name="description" type="TEXT"><constraints nullable="false"/></column>
+   <column name="kind" type="VARCHAR(16)" defaultValue="watch" remarks="watch, model or linked; a watch collection has no weights"><constraints nullable="false"/></column>
+   <column name="category" type="VARCHAR(60)" defaultValue=""><constraints nullable="false"/></column>
+   <column name="tags" type="TEXT" remarks="JSON array of user tags"><constraints nullable="false"/></column>
+   <column name="archived" type="BOOLEAN" defaultValueBoolean="false"><constraints nullable="false"/></column>
+   <column name="created_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+   <column name="updated_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <addUniqueConstraint tableName="market_collections" columnNames="user_id, name" constraintName="uq_market_collections_user_name"/>
+
+  <createTable tableName="market_collection_members" remarks="Instruments in a collection, identified by provider and symbol">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_market_collection_members"/></column>
+   <column name="collection_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="provider" type="VARCHAR(32)"><constraints nullable="false"/></column>
+   <column name="symbol" type="VARCHAR(40)"><constraints nullable="false"/></column>
+   <column name="name" type="VARCHAR(200)" defaultValue=""><constraints nullable="false"/></column>
+   <column name="asset_type" type="VARCHAR(16)" defaultValue=""><constraints nullable="false"/></column>
+   <column name="exchange" type="VARCHAR(60)" defaultValue=""><constraints nullable="false"/></column>
+   <column name="mic" type="VARCHAR(4)" defaultValue=""><constraints nullable="false"/></column>
+   <column name="isin" type="VARCHAR(12)" defaultValue=""><constraints nullable="false"/></column>
+   <column name="currency" type="VARCHAR(3)" defaultValue=""><constraints nullable="false"/></column>
+   <column name="country" type="VARCHAR(2)" defaultValue=""><constraints nullable="false"/></column>
+   <column name="note" type="TEXT"><constraints nullable="false"/></column>
+   <column name="tags" type="TEXT" remarks="JSON array of user tags"><constraints nullable="false"/></column>
+   <column name="weight" type="DECIMAL(9,6)" remarks="Hypothetical weight in percent; model portfolios only"/>
+   <column name="added_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <addUniqueConstraint tableName="market_collection_members" columnNames="collection_id, provider, symbol" constraintName="uq_market_collection_member"/>
+  <createIndex tableName="market_collection_members" indexName="idx_market_collection_members_instrument"><column name="provider"/><column name="symbol"/></createIndex>
+  <addForeignKeyConstraint baseTableName="market_collection_members" baseColumnNames="collection_id"
+   referencedTableName="market_collections" referencedColumnNames="id" constraintName="fk_market_collection_member" onDelete="CASCADE"/>
+  <rollback>
+   <dropTable tableName="market_collection_members"/>
+   <dropTable tableName="market_collections"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

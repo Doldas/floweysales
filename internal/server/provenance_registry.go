@@ -131,6 +131,7 @@ var provenanceRules = []struct {
 	{"GET /api/userspace/", exempt("The caller's own files.")},
 	{"GET /api/symbols", exempt("The list of symbols the tracker follows (configuration).")},
 	{"GET /api/search", exempt("Symbol autocomplete labels; every symbol picked leads to a surface that states its source.")},
+	{"GET /api/collections", exempt("The caller's own collections: names, notes, tags and the instrument identities the user chose; no prices or results.")},
 	{"GET /api/strategies", exempt("The caller's saved strategy definitions (rules the user wrote), not results.")},
 }
 

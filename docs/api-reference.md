@@ -57,6 +57,21 @@ Karaktärernas regelstrategier (`family: persona`, med `persona` satt) ligger bl
 
 En strategi är data: villkor (pris, EMA/SMA, RSI, ATR, högsta/lägsta, Fibonacci-nivåer), stop, mål, tidsgräns och storlek. Fibonacci-nivåer mäts på den senaste *bekräftade* svängen (pivå med `swing_bars` staplar på var sida), så en nivå flyttas aldrig bakåt i tiden. Signaler på stängning fylls på nästa öppning; träffar en stapel både stop och mål antas stoppet först.
 
+## Market Collections
+
+Each user's own sets of instruments (tables `market_collections` and `market_collection_members`, changeset 046). Every route reads and writes only the caller's rows; another user's collection answers 404. Details, limits and the export format: [market-collections.md](market-collections.md).
+
+- `GET /api/collections?q=&kind=watch|model&category=&tag=&archived=exclude|include|only&sort=name|updated|created|members` – the caller's collections with `member_count`.
+- `POST /api/collections` – `{name, description?, kind?: watch|model, category?, tags?}`. `linked` (views of real positions) answers 422 until a portfolio source exists.
+- `GET /api/collections/{id}?limit=&offset=` – the collection and one page of members (default 100, max 500). `GET /api/collections/{id}/members` returns the page alone.
+- `PATCH /api/collections/{id}` – `{name?, description?, category?, tags?, archived?}`; the kind never changes. `DELETE /api/collections/{id}` removes it and its members only.
+- `POST /api/collections/{id}/members` – `{instrument: {provider, symbol, name?, type?, exchange?, mic?, isin?, currency?, country?}, note?, tags?, weight?}`. `weight` (percent) is accepted only in model portfolios, and a model's weights never add up to more than 100.
+- `PATCH /api/collections/{id}/members/{member}` – `{note?, tags?, weight?, clear_weight?}`; `DELETE` removes the instrument from this collection only.
+- `POST /api/collections/{id}/members/{member}/transfer` – `{to, move?, weight?}` copies (or moves) a member with its note and tags; a weight is never carried over.
+- `GET /api/collections/containing?provider=&symbol=` – which of the caller's collections hold an instrument.
+- `GET /api/collections/export?ids=1,2` and `POST /api/collections/import?on_conflict=rename|skip` – the versioned `floweysales.collections` v1 file. An import validates the whole file before writing and never merges into an existing collection.
+- `POST /api/collections/from-trackers` – SYS_ADMIN: copies the system tracker list into a new watch collection; the tracker list is unchanged.
+
 ## Omvärld (World)
 
 - `GET /api/world[?refresh=1]` – rubriker sorterade i teman (olja, räntor, geopolitik, tullar, AI/halvledare, Kina, kredit, tillväxt, valuta, metaller, mat/väder, hälsopolitik, reglering) med vilka sektorer och råvaror varje tema berör. Källor: en nyhets-plugin (`news`-capability) och den sparade webbsökningsnyckeln. Cachas i 15 minuter.
