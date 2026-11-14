@@ -223,7 +223,7 @@ func (e *Engine) ownSources(ctx context.Context, userID int64, system []routing.
 			if s.ID == c.ID && s.Kind == routing.KindPlugin {
 				out = append(out, routing.Source{ID: ownSourceID(userID, c.ID), Label: c.Label + " (your key)", Kind: routing.KindUser,
 					Domains: append([]routing.Domain(nil), s.Domains...), Scope: routing.ScopeUser, OwnerID: userID,
-					NeedsKey: true, Configured: true, Enabled: true, Origin: "your own key", Restrictions: s.Restrictions})
+					NeedsKey: true, Configured: true, Enabled: true, Origin: "your own key", Restrictions: s.Restrictions, Regions: s.Regions})
 			}
 		}
 	}

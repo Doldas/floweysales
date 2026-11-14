@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 
 import { MarketService } from '../services';
 import type { RoutingDomain, RoutingRegion, RoutingSource, RoutingView } from '../models';
-import { type PolicyForm, formFrom, groupDomains, moveFallback, policyBody, policyLine, policyProblems, setRegion, sourceState, sourcesFor, stateLabel, toggleFallback } from './provider-routing-view';
+import { type PolicyForm, formFrom, groupDomains, marketWarning, moveFallback, policyBody, policyLine, policyProblems, setRegion, sourceState, sourcesFor, stateLabel, toggleFallback } from './provider-routing-view';
 
 /**
  * Settings → Providers. Lists every source FloweySales can get data from,
@@ -89,6 +89,9 @@ import { type PolicyForm, formFrom, groupDomains, moveFallback, policyBody, poli
                             </label>
                             <button type="button" class="btn btn-sm btn-outline-secondary" (click)="pickRegion(d, code, '')" [attr.aria-label]="'Remove ' + regionLabel(code)">Remove</button>
                           </div>
+                          @if (coverage(d, code); as warning) {
+                            <p class="pr-warning" role="status">{{ warning }}</p>
+                          }
                         }
                         @if (unusedRegions(d).length) {
                           <label>Add a market
@@ -132,6 +135,7 @@ import { type PolicyForm, formFrom, groupDomains, moveFallback, policyBody, poli
     .pr-markets { display: grid; gap: 0.4rem; border: 0; padding: 0; margin: 0; min-width: 0; }
     .pr-markets legend { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.2rem; }
     .pr-hint { margin: 0; font-size: 0.75rem; }
+    .pr-warning { margin: 0; font-size: 0.75rem; color: var(--fs-warn); }
     .pr-form { display: grid; gap: 0.5rem; max-width: 34rem; margin-top: 0.3rem; }
     .pr-form label { display: grid; gap: 0.2rem; font-size: 0.8rem; }
     .pr-check { display: flex !important; gap: 0.5rem; align-items: center; }
@@ -176,6 +180,10 @@ export class ProviderRoutingComponent {
   regionLabel(code: string): string { return this.regions().find(r => r.code === code)?.label ?? code; }
   marketCodes(d: RoutingDomain): string[] { return Object.keys(this.form(d).byRegion ?? {}); }
   unusedRegions(d: RoutingDomain): RoutingRegion[] { return this.regions().filter(r => !(r.code in (this.form(d).byRegion ?? {}))); }
+  coverage(d: RoutingDomain, code: string): string {
+    const id = this.form(d).byRegion?.[code];
+    return marketWarning(this.sources(d).routable.find(s => s.id === id), code, this.regionLabel(code));
+  }
   pickRegion(d: RoutingDomain, code: string, id: string): void { this.patch(d, setRegion(this.form(d), code, id)); }
   addRegion(d: RoutingDomain, code: string): void {
     if (!code) return;

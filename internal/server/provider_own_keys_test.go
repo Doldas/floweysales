@@ -31,7 +31,7 @@ func (b *ownKeyBackend) History(ctx context.Context, p market.Provider, symbol, 
 func ownKeyEngine(t *testing.T) (*Engine, *ownKeyBackend) {
 	t.Helper()
 	e, b := routingEngine(t, "AAA", "BBB")
-	b.Plugin("AAA", "aaa").Plugin("BBB", "bbb")
+	b.Plugin("AAA", "aaa").Plugin("BBB", "bbb").Markets("AAA", "SE")
 	ob := &ownKeyBackend{Backend: b}
 	e.providers = ob
 	e.defaultProvider = "AAA"
@@ -126,6 +126,9 @@ func TestAnOwnSourceIsListedForItsOwnerOnly(t *testing.T) {
 	s := find(7)
 	if s == nil || s.ID != "user:7:AAA" || s.OwnerID != 7 || !s.Serves(routing.MarketQuote) || !s.Usable() {
 		t.Fatalf("%+v", s)
+	}
+	if strings.Join(s.Regions, ",") != "SE" {
+		t.Errorf("an own source covers the markets its plugin states: %v", s.Regions)
 	}
 	if find(8) != nil || find(0) != nil {
 		t.Error("nobody else sees it")

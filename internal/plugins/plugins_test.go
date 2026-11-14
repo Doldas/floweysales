@@ -120,7 +120,7 @@ func fakeManifest(version string) Manifest {
 	return Manifest{
 		Protocol: 1, ID: "fake", Name: "Fake provider", Version: version, Description: "Test double.", Publisher: "Tests",
 		Provider: ProviderInfo{ID: "FAKE", Label: "Fake", Capabilities: []string{CapQuote, CapHistory, CapFinancials, CapResearch, CapForum, CapEvents},
-			QuoteKind: "ohlc_bar_close", MinPollSeconds: 3,
+			QuoteKind: "ohlc_bar_close", MinPollSeconds: 3, Markets: []string{"SE", "US"},
 			Research: []ResearchOperation{{Operation: "profile", Path: "/profile", Description: "Profile", SymbolRequired: true}}},
 		Env: []EnvVar{{Name: "FAKE_API_KEY", Secret: true, Required: true, Description: "Key"}},
 	}
@@ -233,7 +233,7 @@ func TestInstallCheckUpdateAndUninstallFromStore(t *testing.T) {
 		t.Fatalf("%+v", installed)
 	}
 	caps := m.Providers()
-	if len(caps) != 1 || caps[0].ID != "FAKE" || caps[0].Enabled || !caps[0].RequiresKey || caps[0].MinPollSeconds != 3 {
+	if len(caps) != 1 || caps[0].ID != "FAKE" || caps[0].Enabled || !caps[0].RequiresKey || caps[0].MinPollSeconds != 3 || strings.Join(caps[0].Markets, ",") != "SE,US" {
 		t.Fatalf("missing key must disable the provider: %+v", caps)
 	}
 	if _, err := m.Quote(ctx, "FAKE", "NVDA"); err == nil {

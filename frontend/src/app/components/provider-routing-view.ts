@@ -44,6 +44,12 @@ export function setRegion(f: PolicyForm, code: string, id: string): PolicyForm {
   return { ...f, byRegion };
 }
 
+/** A note when a source that lists its markets does not list this one; it never blocks saving. */
+export function marketWarning(source: RoutingSource | undefined, code: string, label: string): string {
+  if (!source?.regions?.length || source.regions.includes(code)) return '';
+  return `${source.label} does not list ${label} among the markets it covers.`;
+}
+
 /** What must be fixed before saving; the server checks everything again. */
 export function policyProblems(f: PolicyForm, routable: RoutingSource[]): string[] {
   const ids = new Set(routable.map(s => s.id));
