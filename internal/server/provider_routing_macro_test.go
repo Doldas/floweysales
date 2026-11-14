@@ -56,20 +56,17 @@ func TestMacroWithoutPolicyUsesTheProviderThatDeclaresIt(t *testing.T) {
 	}
 }
 
-func TestMacroStillFindsAFREDPluginThatPredatesTheCapability(t *testing.T) {
+func TestMacroIgnoresAProviderThatDoesNotDeclareIt(t *testing.T) {
 	e, b := routingEngine(t, "AAA", "FRED")
 	serveMacroSeries(b, "FRED", "")
-	out, err := e.runMacroNode(context.Background(), macroNow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if row := macroRow(t, out); row["provider"] != "FRED" {
-		t.Errorf("%v", row)
+	_, err := e.runMacroNode(context.Background(), macroNow)
+	if err == nil || !strings.Contains(err.Error(), "Install or update a provider plugin that offers macro series") {
+		t.Fatalf("a plugin version without the macro capability is not used: %v", err)
 	}
 	_, view, raw := icall(e, "GET", "/api/providers/routing", nil)
 	for _, d := range view["domains"].([]any) {
-		if dm := d.(map[string]any); dm["id"] == "macro" && (dm["routed"] != true || int(dm["sources"].(float64)) != 1) {
-			t.Errorf("the macro domain must list FRED only: %s", raw)
+		if dm := d.(map[string]any); dm["id"] == "macro" && int(dm["sources"].(float64)) != 0 {
+			t.Errorf("the macro domain lists no source: %s", raw)
 		}
 	}
 }
@@ -77,7 +74,7 @@ func TestMacroStillFindsAFREDPluginThatPredatesTheCapability(t *testing.T) {
 func TestMacroWithNoProviderGivesANeutralHint(t *testing.T) {
 	e, _ := routingEngine(t, "AAA")
 	_, err := e.runMacroNode(context.Background(), macroNow)
-	if err == nil || !strings.Contains(err.Error(), "Install a provider plugin that offers macro series") {
+	if err == nil || !strings.Contains(err.Error(), "Install or update a provider plugin that offers macro series") {
 		t.Errorf("%v", err)
 	}
 }

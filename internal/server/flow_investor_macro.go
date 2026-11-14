@@ -20,11 +20,7 @@ var macroSeries = []struct{ id, field string }{
 	{"T10Y2Y", "curve_spread"}, {"UNRATE", "unemployment"}, {"FEDFUNDS", "fed_funds"}, {"BAMLH0A0HYM2", "hy_spread"}, {"VIXCLS", "vix"},
 }
 
-const macroNotInstalled = "Install a provider plugin that offers macro series (for example FRED) and enter its key under Settings → Plugins."
-
-// legacyMacroProviders serve macro series although their released plugin
-// predates the macro capability. Remove an entry when that plugin declares it.
-var legacyMacroProviders = map[string]bool{"FRED": true}
+const macroNotInstalled = "Install or update a provider plugin that offers macro series (for example FRED 1.1.0 or later) and enter its key under Settings → Plugins."
 
 type obs struct {
 	at time.Time
@@ -157,7 +153,7 @@ func macroRegime(series map[string]market.HistorySeries, now time.Time) map[stri
 
 // servesMacro reports whether a provider's history answers the macro series.
 func servesMacro(c market.ProviderCapability) bool {
-	return slices.Contains(c.Capabilities, "macro") || legacyMacroProviders[c.ID]
+	return slices.Contains(c.Capabilities, "macro")
 }
 
 // macroProvider is the provider used when no policy is saved: the first that
