@@ -8,6 +8,16 @@ publishes the section for the tagged version as the release notes. See
 
 ## Unreleased
 
+- Additive: capability `profile` (method `profile`, `ProfileParams`,
+  `InstrumentProfile` with optional `CompanyProfile`, `FundProfile`,
+  `CommodityProfile` and `CryptoProfile` parts). A provider states what it
+  knows about one instrument: kind, name, codes (ISIN, MIC, currency,
+  country), its own sector and industry, kind-specific facts, and an as-of
+  time. Fields the provider does not state are left out, never guessed.
+  Existing plugins keep working. A backend from before this capability
+  rejects a plugin version that declares it, so declare it together with a
+  `min_app_version` that knows `profile`.
+
 ## v0.4.0
 
 - Additive: optional manifest field `provider.markets`, the markets a provider

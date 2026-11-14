@@ -7,8 +7,9 @@ meant to become a scope for dashboards, news, the Research Agent and Flow
 Studio. The design decisions are in
 [ADR 0004](adr/0004-market-collections.md).
 
-**Status:** Phase 1 (domain, storage, API) and the collection manager and
-dashboard of Phase 3 are implemented. Profile enrichment, taxonomy, news,
+**Status:** Phase 1 (domain, storage, API), the collection manager and
+dashboard of Phase 3 and the backend of Phase 2 (profiles, taxonomy,
+classification, identity links) are implemented. The Phase 2 screens, news,
 agent and flow integrations are planned and are listed below as planned.
 The user guide page is [Collections](guide/collections.md).
 
@@ -20,7 +21,8 @@ The user guide page is [Collections](guide/collections.md).
 | Store contract and conformance suite | `collections.Store`, `internal/collections/collectionstest` |
 | MySQL store | `internal/storage/market_collections.go`, changeset `046-market-collections.xml` |
 | HTTP API | `internal/server/collections.go`, listed in [api-reference.md](api-reference.md#market-collections) |
-| Account deletion removes a user's collections | `identity.Service.DeleteUser` |
+| Account deletion removes a user's collections and classifications | `identity.Service.DeleteUser` |
+| Profiles, taxonomy, classification, identity links | `internal/instruments`, `internal/storage/instrument_intelligence.go`, changeset `047-instrument-intelligence.xml`, `internal/server/instruments_api.go` |
 
 ### Kinds
 
@@ -90,6 +92,60 @@ reads, this document:
 - At most 50 collections per file. A future version 2 will be read alongside
   version 1.
 
+## Instrument intelligence
+
+### Profiles
+
+A plugin that declares the `profile` capability describes an instrument as
+the provider states it (shape in [plugins.md](plugins.md)). FloweySales asks
+only the instrument's own provider: `FINNHUB:NVDA` is described by Finnhub,
+`YAHOO:NVDA` by Yahoo, and when Yahoo offers no profiles the answer is
+`no_source`, never Finnhub's. A symbol means something only to its own
+provider, so another provider's answer could describe a different
+instrument. The `instrument_profile` routing domain is listed in the
+provider registry with fallback off for that reason.
+
+Profiles are provider facts shared by every user and read with the system
+plugin instance, never a user's own key. They are cached in
+`instrument_profiles`: an answer for 7 days, "not found" for 1 day. Errors
+are not cached, and a failed refresh keeps the profile already stored.
+Opening a collection reads the cache only; the provider is asked when one
+instrument's profile is opened, or when the user refreshes a collection's
+profiles (20 per call, at most once a minute per instrument). Every cached
+answer carries its provider, retrieval time, as-of time and source link as a
+provenance fact. Output is cleaned before it is stored: provider and symbol
+come from the request, malformed codes, non-http links and impossible numbers
+are dropped, never repaired.
+
+### Taxonomy and classification
+
+The platform taxonomy is fixed in `internal/instruments/taxonomy.go`:
+asset class, sector (11 ids), industry (free text), country (ISO code),
+region (derived from the country) and theme (the user's own words).
+Provider sector and industry wording is mapped by one word table; wording
+it does not know stays unmapped and is shown as the provider wrote it.
+
+Each value of an instrument's classification says where it came from:
+the user's override (`user`), the mapped profile (`profile`, with the
+provider) or what was stored with the member (`member`). A user's override,
+in `instrument_classifications`, is private to them, wins only for the
+fields they set and never changes the profile. Themes come only from
+overrides. Manual classification works without any profile source.
+Account deletion removes a user's overrides.
+
+### Identity links
+
+Members are never merged. `GET /api/collections/{id}/intelligence` lists
+how members relate, from the ISIN and MIC stored with each member or, when
+missing, from its profile:
+
+| Link | Meaning |
+| --- | --- |
+| `same_listing` | Same ISIN and MIC: the same listing from two providers |
+| `same_security` | Same ISIN on different or unknown venues |
+| `same_ticker` | Same ticker, nothing confirms they are the same instrument |
+| `different_instruments` | Same ticker, different ISINs |
+
 ### Migration from the tracker list
 
 The tracker list stays as it is. A SYS_ADMIN can copy it into a new watch
@@ -102,7 +158,7 @@ Each phase is a separate, reviewable change with tests.
 
 1. **Foundations (done):** domain, MySQL store, API, ownership checks,
    import/export, tracker copy.
-2. **Instrument intelligence (planned):** a `profile` plugin capability in
+2. **Instrument intelligence (backend done, screens planned):** a `profile` plugin capability in
    the SDK (company, fund, commodity and crypto shapes, with source and
    as-of time), routed through the #421 provider registry; a cache with TTL;
    a canonical listing identity that links members across providers and

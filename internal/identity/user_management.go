@@ -225,6 +225,9 @@ func (s *Service) DeleteUser(ctx context.Context, id int64) error {
 	if _, err = tx.ExecContext(ctx, "DELETE FROM market_collections WHERE user_id=?", id); err != nil {
 		return err
 	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM instrument_classifications WHERE user_id=?", id); err != nil {
+		return err
+	}
 	if _, err = tx.ExecContext(ctx, "DELETE FROM auth_users WHERE id=?", id); err != nil {
 		return err
 	}

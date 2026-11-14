@@ -28,6 +28,7 @@ const (
 	MarketSearch     Domain = "market_search"
 	MarketFinancials Domain = "market_financials"
 	MarketResearch   Domain = "market_research"
+	Profile          Domain = "instrument_profile"
 	News             Domain = "news"
 	Events           Domain = "events"
 	Forum            Domain = "forum"
@@ -63,6 +64,7 @@ var Domains = []DomainInfo{
 	{ID: MarketSearch, Label: "Symbol search", Group: "Market"},
 	{ID: MarketFinancials, Label: "Financial statements", Group: "Financials"},
 	{ID: MarketResearch, Label: "Research data", Group: "Financials"},
+	{ID: Profile, Label: "Instrument profiles", Group: "Market", NoFallback: true, Why: "A profile belongs to the provider's own symbol; another provider's symbol may be a different instrument, so it is read only from the instrument's own provider."},
 	{ID: News, Label: "News", Group: "News", Regional: true},
 	{ID: Events, Label: "Corporate events", Group: "News", Regional: true},
 	{ID: Forum, Label: "Forum posts", Group: "News"},

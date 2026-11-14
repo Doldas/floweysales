@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="047-instrument-intelligence" author="floweysales" dbms="mysql">
+  <!-- Provider facts and user overrides live in separate tables: an override never
+       changes a cached profile. New tables only. -->
+  <createTable tableName="instrument_profiles" remarks="Cached answers of the profile plugin capability, shared by all users">
+   <column name="provider" type="VARCHAR(32)"><constraints nullable="false"/></column>
+   <column name="symbol" type="VARCHAR(40)"><constraints nullable="false"/></column>
+   <column name="status" type="VARCHAR(16)" remarks="ok, or not_found when the provider has no profile"><constraints nullable="false"/></column>
+   <column name="profile" type="MEDIUMTEXT" remarks="Cleaned profile as JSON; empty when not found"><constraints nullable="false"/></column>
+   <column name="retrieved_at" type="DATETIME(6)"><constraints nullable="false"/></column>
+   <column name="expires_at" type="DATETIME(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <addPrimaryKey tableName="instrument_profiles" columnNames="provider, symbol" constraintName="pk_instrument_profiles"/>
+
+  <!-- No foreign key to auth_users: with authentication disabled the single user is id 0.
+       Deleting an account removes its rows in Service.DeleteUser. -->
+  <createTable tableName="instrument_classifications" remarks="Each user's own classification of an instrument">
+   <column name="user_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="provider" type="VARCHAR(32)"><constraints nullable="false"/></column>
+   <column name="symbol" type="VARCHAR(40)"><constraints nullable="false"/></column>
+   <column name="asset_class" type="VARCHAR(20)" defaultValue=""><constraints nullable="false"/></column>
+   <column name="sector" type="VARCHAR(40)" defaultValue=""><constraints nullable="false"/></column>
+   <column name="industry" type="VARCHAR(100)" defaultValue=""><constraints nullable="false"/></column>
+   <column name="country" type="VARCHAR(2)" defaultValue=""><constraints nullable="false"/></column>
+   <column name="themes" type="TEXT" remarks="JSON array of user themes"><constraints nullable="false"/></column>
+   <column name="updated_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <addPrimaryKey tableName="instrument_classifications" columnNames="user_id, provider, symbol" constraintName="pk_instrument_classifications"/>
+  <rollback>
+   <dropTable tableName="instrument_classifications"/>
+   <dropTable tableName="instrument_profiles"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

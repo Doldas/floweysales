@@ -40,6 +40,7 @@ var capabilityDomains = map[string]routing.Domain{
 	"quote": routing.MarketQuote, "history": routing.MarketHistory, "search": routing.MarketSearch,
 	"financials": routing.MarketFinancials, "research": routing.MarketResearch,
 	"news": routing.News, "events": routing.Events, "forum": routing.Forum,
+	"profile": routing.Profile,
 }
 
 // routingSources lists every source the caller may see. Credentials never

@@ -8,13 +8,15 @@ import (
 	"strings"
 	"sync"
 
+	"floweysales/internal/instruments"
 	"floweysales/internal/market"
 )
 
 var (
-	_ market.Backend     = (*Manager)(nil)
-	_ market.NewsSource  = (*Manager)(nil)
-	_ market.EventSource = (*Manager)(nil)
+	_ market.Backend            = (*Manager)(nil)
+	_ market.NewsSource         = (*Manager)(nil)
+	_ market.EventSource        = (*Manager)(nil)
+	_ instruments.ProfileSource = (*Manager)(nil)
 )
 
 // call routes one request to the plugin providing p, checking that it
@@ -232,6 +234,37 @@ func (m *Manager) Events(ctx context.Context, p market.Provider, symbol, from, t
 		return []market.CorporateEvent{}, err
 	}
 	return market.CleanEvents(out, p, symbol), nil
+}
+
+// ProfileProviders lists the installed providers that offer instrument profiles.
+func (m *Manager) ProfileProviders() []market.Provider {
+	out := []market.Provider{}
+	for _, p := range m.Providers() {
+		if p.Enabled && contains(p.Capabilities, CapProfile) {
+			out = append(out, market.Provider(p.ID))
+		}
+	}
+	return out
+}
+
+// Profile asks p what it states about symbol. found is false when the
+// provider has no profile for it: it says the symbol is unknown, or answers
+// with nothing usable. Plugin output is cleaned (instruments.CleanProfile).
+func (m *Manager) Profile(ctx context.Context, p market.Provider, symbol string) (instruments.Profile, bool, error) {
+	symbol = strings.ToUpper(strings.TrimSpace(symbol))
+	if symbol == "" {
+		return instruments.Profile{}, false, fmt.Errorf("[Profile] empty symbol")
+	}
+	var out instruments.Profile
+	if err := m.call(ctx, p, CapProfile, "profile", map[string]any{"symbol": symbol}, &out); err != nil {
+		var coded *CallError
+		if errors.As(err, &coded) && coded.Code == CodeInvalidArgument {
+			return instruments.Profile{}, false, nil
+		}
+		return instruments.Profile{}, false, err
+	}
+	clean, ok := instruments.CleanProfile(out, p.ID(), symbol)
+	return clean, ok, nil
 }
 
 func contains(list []string, want string) bool {
