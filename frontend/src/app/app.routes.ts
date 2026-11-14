@@ -23,6 +23,8 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/inbox-page').then(m => m.InboxPage) },
   { path: 'markets', title: 'Markets · FloweySales', data: { title: 'Markets', instrument: 'used' },
     loadComponent: () => import('./pages/markets-page').then(m => m.MarketsPage) },
+  { path: 'collections', title: 'Collections · FloweySales', data: { title: 'Collections', instrument: 'used' },
+    loadComponent: () => import('./pages/collections-page').then(m => m.CollectionsPage) },
   { path: 'strategies', title: 'Strategies · FloweySales', data: { title: 'Strategies', instrument: 'used' },
     loadComponent: () => import('./pages/strategies-page').then(m => m.StrategiesPage) },
   { path: 'world', title: 'World · FloweySales', data: { title: 'World', instrument: 'used' },

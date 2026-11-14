@@ -28,6 +28,8 @@ What this row is depends on your role:
 
 If a figure is missing, the screen shows a dash, not zero.
 
+To keep larger sets of instruments, grouped by theme and stored on the server, use [Collections](collections.md).
+
 ## The price chart
 
 - **History range:** 1D, 5D, 1M, 3M, 1Y, 3Y, 5Y, 10Y or MAX. The default is 1M.

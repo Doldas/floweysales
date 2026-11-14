@@ -341,6 +341,10 @@ export function mockResponse(url, { role = 'SYS_ADMIN', permissions = ['flows.re
       worth_a_look: { leaderboard: { symbol: 'GOOGL', score: 84, grade: 'A', reasons: 'value: P/E 21.3', universe: 'us_mega', strategy: 'best' },
         insider: { symbol: 'MSFT', largest_buy_value: 250000, largest_buyer: 'Doe Jane', cluster_buy: true, latest: '2026-10-25' },
         earnings: { symbol: 'NVDA', date: '2026-11-20', confirmed: false } } },
+    '/api/collections': { collections: [
+      { id: 1, name: 'Technology', description: 'Long-term ideas', kind: 'watch', category: 'Sector', tags: ['AI'], archived: false, member_count: 3, created_at: '2026-11-01T09:00:00Z', updated_at: '2026-11-10T12:00:00Z' },
+      { id: 2, name: 'Balanced model', description: '', kind: 'model', category: '', tags: [], archived: false, member_count: 2, created_at: '2026-11-02T09:00:00Z', updated_at: '2026-11-09T12:00:00Z' },
+    ], limits: { collections: 200, members: 1000 } },
     '/api/plan': wealthPlan(),
     '/api/plan/preview': wealthPlan(),
     '/api/plan/profile': wealthPlan(),
