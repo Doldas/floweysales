@@ -72,6 +72,17 @@ Each user's own sets of instruments (tables `market_collections` and `market_col
 - `GET /api/collections/export?ids=1,2` and `POST /api/collections/import?on_conflict=rename|skip` – the versioned `floweysales.collections` v1 file. An import validates the whole file before writing and never merges into an existing collection.
 - `POST /api/collections/from-trackers` – SYS_ADMIN: copies the system tracker list into a new watch collection; the tracker list is unchanged.
 
+## Instrument intelligence
+
+Provider profiles, the platform taxonomy and each user's own classification (tables `instrument_profiles` and `instrument_classifications`, changeset 047). A profile is read only from the instrument's own provider, through its plugin's `profile` capability; another provider is never asked, since its symbol may be a different instrument. Profiles are shared provider facts and cached (7 days, a "not found" answer 1 day; errors are never cached). Classifications belong to the caller and never change a profile. Details: [market-collections.md](market-collections.md#instrument-intelligence).
+
+- `GET /api/instruments/taxonomy` – `{asset_classes, sectors, regions, limits}`, the platform's fixed ids and labels.
+- `GET /api/instruments/profile?provider=&symbol=[&refresh=1]` – `{profile: {key, status, profile?, retrieved_at?, expires_at?, stale, error?, provenance?}, classification, override}`. `status` is `ok`, `not_found`, `no_source` (the provider offers no profiles) or `unavailable` (the provider failed and nothing is cached). A missing or expired profile is fetched; `refresh=1` asks again, at most once a minute per instrument. A failed request keeps the cached profile and sets `error`.
+- `PUT /api/instruments/classification` – `{provider, symbol, asset_class?, sector?, industry?, country?, themes?}` (taxonomy ids, an ISO country code, at most 10 themes). Fields left empty keep the profile's value; an override with nothing set is deleted. `DELETE /api/instruments/classification?provider=&symbol=` removes it.
+- `GET /api/collections/{id}/intelligence` – reads the cache only, never a provider: per member `profile_status` (`ok`, `not_found`, `missing`, `no_source`), `stale`, `provenance`, the effective `classification` (each value with its `source`: `user`, `profile` or `member`, and the provider's own wording as `raw` when it does not map), plus `coverage` counts, `composition` by asset class, sector, region and theme (counts, and weights for model portfolios; an empty id is unclassified) and `links` between members.
+- `POST /api/collections/{id}/profiles/refresh` – fetches missing or expired profiles, 20 per call and 4 at a time; answers `{fetched, not_found, failed, no_source, fresh, remaining}`. Call again while `remaining` is above 0.
+- `DELETE /api/admin/instruments/profiles[?provider=]` – SYS_ADMIN: clears the profile cache, of one provider or all.
+
 ## Omvärld (World)
 
 - `GET /api/world[?refresh=1]` – rubriker sorterade i teman (olja, räntor, geopolitik, tullar, AI/halvledare, Kina, kredit, tillväxt, valuta, metaller, mat/väder, hälsopolitik, reglering) med vilka sektorer och råvaror varje tema berör. Källor: en nyhets-plugin (`news`-capability) och den sparade webbsökningsnyckeln. Cachas i 15 minuter.

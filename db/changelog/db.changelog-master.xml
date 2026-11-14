@@ -48,4 +48,5 @@
   <include file="044-index-sources.xml" relativeToChangelogFile="true"/>
   <include file="045-web-search-usage.xml" relativeToChangelogFile="true"/>
   <include file="046-market-collections.xml" relativeToChangelogFile="true"/>
+  <include file="047-instrument-intelligence.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

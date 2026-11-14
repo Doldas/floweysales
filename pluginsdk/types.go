@@ -150,6 +150,101 @@ type CorporateEvent struct {
 	Provider  string   `json:"provider,omitempty"`
 }
 
+// Profile kinds. Kind says which of the kind-specific parts may be set.
+const (
+	ProfileCompany   = "company"
+	ProfileFund      = "fund"
+	ProfileCommodity = "commodity"
+	ProfileCrypto    = "crypto"
+	ProfileIndex     = "index"
+	ProfileCurrency  = "currency"
+	ProfileOther     = "other"
+)
+
+// InstrumentProfile is what a provider states about one instrument. Every
+// field but Symbol and Kind is optional: leave out what the provider does not
+// state, never fill in a guess or a default (an unknown employee count is
+// nil, not 0). Codes use ISO shapes: Country ISO 3166-1 alpha-2, Currency ISO
+// 4217, MIC ISO 10383. Dates are "2026-11-14"; AsOf is RFC 3339 in UTC.
+type InstrumentProfile struct {
+	Symbol string `json:"symbol"`
+	Kind   string `json:"kind"`
+	Name   string `json:"name,omitempty"`
+	// Description is plain text written by the provider, at most 4,000
+	// characters; the backend shortens a longer one.
+	Description string `json:"description,omitempty"`
+	ISIN        string `json:"isin,omitempty"`
+	Exchange    string `json:"exchange,omitempty"`
+	MIC         string `json:"mic,omitempty"`
+	// Currency is the trading currency; amounts in the profile are in it.
+	Currency string `json:"currency,omitempty"`
+	// Country is the domicile of the company or fund, or the issuing country
+	// of a currency.
+	Country string `json:"country,omitempty"`
+	Website string `json:"website,omitempty"`
+	// Sector and Industry are the provider's own classification, spelled as
+	// the provider spells it. FloweySales maps them to its own taxonomy and
+	// keeps the original next to the mapping.
+	Sector    string            `json:"sector,omitempty"`
+	Industry  string            `json:"industry,omitempty"`
+	Company   *CompanyProfile   `json:"company,omitempty"`
+	Fund      *FundProfile      `json:"fund,omitempty"`
+	Commodity *CommodityProfile `json:"commodity,omitempty"`
+	Crypto    *CryptoProfile    `json:"crypto,omitempty"`
+	// AsOf is when the provider says its data was valid, or empty when it
+	// does not say. The backend records the retrieval time itself.
+	AsOf string `json:"as_of,omitempty"`
+	// SourceURL is a public page for the profile, when there is one.
+	SourceURL string `json:"source_url,omitempty"`
+	Provider  string `json:"provider,omitempty"`
+}
+
+// CompanyProfile holds facts about an operating company.
+type CompanyProfile struct {
+	Employees         *int64   `json:"employees,omitempty"`
+	MarketCap         *float64 `json:"market_cap,omitempty"` // full units of Currency
+	SharesOutstanding *float64 `json:"shares_outstanding,omitempty"`
+	IPODate           string   `json:"ipo_date,omitempty"`
+	Headquarters      string   `json:"headquarters,omitempty"` // city, as the provider states it
+}
+
+// FundProfile holds facts about an ETF or a mutual fund. ExpenseRatio is in
+// percent (0.09 means 0.09 %).
+type FundProfile struct {
+	Issuer        string        `json:"issuer,omitempty"`
+	Category      string        `json:"category,omitempty"`
+	AssetClass    string        `json:"asset_class,omitempty"`
+	Benchmark     string        `json:"benchmark,omitempty"`
+	ExpenseRatio  *float64      `json:"expense_ratio,omitempty"`
+	TotalAssets   *float64      `json:"total_assets,omitempty"` // full units of Currency
+	InceptionDate string        `json:"inception_date,omitempty"`
+	TopHoldings   []FundHolding `json:"top_holdings,omitempty"` // at most 25
+}
+
+// FundHolding is one of a fund's largest holdings; Weight is in percent.
+type FundHolding struct {
+	Symbol string   `json:"symbol,omitempty"`
+	Name   string   `json:"name,omitempty"`
+	Weight *float64 `json:"weight,omitempty"`
+}
+
+// CommodityProfile describes a commodity, future or spot contract.
+type CommodityProfile struct {
+	Underlying   string   `json:"underlying,omitempty"` // "Gold", "Brent crude oil"
+	Unit         string   `json:"unit,omitempty"`       // "troy ounce", "barrel"
+	ContractSize *float64 `json:"contract_size,omitempty"`
+	Expiry       string   `json:"expiry,omitempty"`
+}
+
+// CryptoProfile describes a crypto asset. Supplies are in coins.
+type CryptoProfile struct {
+	Network           string   `json:"network,omitempty"`
+	Categories        []string `json:"categories,omitempty"` // as the provider names them, at most 20
+	CirculatingSupply *float64 `json:"circulating_supply,omitempty"`
+	MaxSupply         *float64 `json:"max_supply,omitempty"`
+	GenesisDate       string   `json:"genesis_date,omitempty"`
+}
+
 // Supported history ranges.
 const (
 	Range1D  = "1D"

@@ -25,6 +25,7 @@ const (
 	MethodForumPosts = "forum_posts"
 	MethodNews       = "news"
 	MethodEvents     = "events"
+	MethodProfile    = "profile"
 	// MethodDomain runs an operation of a domain provider (see domain.go).
 	MethodDomain = "domain"
 	// MethodTool runs a tool declared in Manifest.Tools (see tools.go).
@@ -41,6 +42,7 @@ const (
 	CapForum      = "forum"
 	CapNews       = "news"
 	CapEvents     = "events"
+	CapProfile    = "profile"
 	// CapMacro has no method of its own: it says the provider's history
 	// answers the macro series ids listed in docs/plugins.md.
 	CapMacro = "macro"
@@ -141,7 +143,7 @@ var (
 )
 
 var knownCapabilities = map[string]bool{
-	CapQuote: true, CapHistory: true, CapSearch: true, CapFinancials: true, CapResearch: true, CapForum: true, CapNews: true, CapEvents: true, CapMacro: true,
+	CapQuote: true, CapHistory: true, CapSearch: true, CapFinancials: true, CapResearch: true, CapForum: true, CapNews: true, CapEvents: true, CapProfile: true, CapMacro: true,
 }
 
 // reservedEnv can never be forwarded to a plugin: they belong to the backend.
@@ -316,6 +318,11 @@ type (
 		Symbol string `json:"symbol"`
 		From   string `json:"from"`
 		To     string `json:"to"`
+	}
+	// ProfileParams asks for what a provider states about one instrument:
+	// company, fund, commodity or crypto facts (see InstrumentProfile).
+	ProfileParams struct {
+		Symbol string `json:"symbol"`
 	}
 	// NewsParams asks for the most recent headlines about one instrument.
 	NewsParams struct {

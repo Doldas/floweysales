@@ -30,6 +30,7 @@ const (
 	CapForum      = "forum"
 	CapNews       = "news"
 	CapEvents     = "events"
+	CapProfile    = "profile"
 	// CapMacro has no method of its own: it says the provider's history
 	// answers the macro series ids listed in docs/plugins.md.
 	CapMacro = "macro"
@@ -118,7 +119,7 @@ var (
 )
 
 var knownCapabilities = map[string]bool{
-	CapQuote: true, CapHistory: true, CapSearch: true, CapFinancials: true, CapResearch: true, CapForum: true, CapNews: true, CapEvents: true, CapMacro: true,
+	CapQuote: true, CapHistory: true, CapSearch: true, CapFinancials: true, CapResearch: true, CapForum: true, CapNews: true, CapEvents: true, CapProfile: true, CapMacro: true,
 }
 
 // reservedEnv are backend secrets that a plugin can never ask for.

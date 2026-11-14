@@ -175,9 +175,12 @@ Responses may arrive in any order. Lines are limited to 1 MiB (requests) and
 | `forum_posts` | `symbol`, `limit` | `[{id,title,content,symbol,upvotes,author,timestamp}]` | `forum` |
 | `news` | `symbol`, `limit` (1–20) | `[{title,url,source,published,summary,symbol,provider}]` (`published` unix seconds, optional) | `news` |
 | `events` | `symbol`, `from`, `to` (ISO dates, window at most 400 days) | `[{symbol,kind,date,amount,currency,ratio,confirmed,provider}]` | `events` |
+| `profile` | `symbol` | instrument profile (below) | `profile` |
 | `tool` | `tool`, `input` | `{title?, blocks:[…]}` | manifest `tools` |
 
 The `macro` capability adds no method. It declares that `history` answers the macro series the regime reads, under the ids `T10Y2Y` (10-year minus 2-year Treasury spread), `UNRATE` (unemployment rate), `FEDFUNDS` (policy rate), `BAMLH0A0HYM2` (high-yield spread) and `VIXCLS` (volatility index), with the same meaning and units as FRED's series of those names. It requires the `history` capability. A series the provider cannot answer is reported as missing; one provider answers the whole regime.
+
+The `profile` method describes one instrument as the provider states it: `kind` (`company`, `fund`, `commodity`, `crypto`, `index`, `currency` or `other`), `name`, `description`, codes (`isin`, `exchange`, `mic`, `currency`, `country`), `website`, the provider's own `sector` and `industry` wording, an `as_of` time (RFC 3339), a `source_url`, and at most one part for the kind: `company` (employees, market cap, shares outstanding, IPO date, headquarters), `fund` (issuer, category, asset class, benchmark, expense ratio in percent, total assets, inception date, at most 25 top holdings), `commodity` (underlying, unit, contract size, expiry) or `crypto` (network, at most 20 categories, circulating and max supply, genesis date). Leave out what the provider does not state; never fill a field from another source or a guess. Answer `invalid_argument` for a symbol the provider does not know. The backend takes provider and symbol from the request, drops malformed codes, non-http links, non-finite or negative numbers and parts that do not match the kind, and caches the result. A backend older than this capability rejects a plugin that declares it, so set `min_app_version` too.
 
 Error codes: `unsupported`, `invalid_argument` (HTTP 400), `not_configured`
 (503), `upstream` and `internal` (502). An uninstalled provider is HTTP 404.

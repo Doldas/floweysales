@@ -17,6 +17,7 @@ import (
 	"floweysales/internal/collections"
 	"floweysales/internal/identity"
 	"floweysales/internal/indexsource"
+	"floweysales/internal/instruments"
 	"floweysales/internal/market"
 	"floweysales/internal/plugins"
 	"floweysales/internal/redact"
@@ -209,6 +210,9 @@ type Engine struct {
 	strategies   strategyStore
 	// collectionStore keeps each user's Market Collections; tests replace the database.
 	collectionStore collections.Store
+	// instrumentStore keeps instrument profiles and classifications; tests replace the database.
+	instrumentStore instruments.Store
+	profileAttempts profileAttempts
 	modelProfiles   modelProfileStore // model profiles; tests replace the database
 	teams           teamStore         // saved agent teams
 	backtestRuns    backtestRunStore  // saved backtest results
@@ -291,6 +295,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerProfileRoutes()
 	e.registerStrategyRoutes()
 	e.registerCollectionRoutes()
+	e.registerInstrumentRoutes()
 	e.registerStrategyMonteCarloRoutes()
 	e.registerStrategyFitRoutes()
 	e.registerWorldRoutes()

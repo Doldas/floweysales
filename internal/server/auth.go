@@ -153,7 +153,7 @@ func isPlanRoute(method, path string) bool {
 		(method == http.MethodPut && path == "/api/plan/profile") ||
 		(method == http.MethodPost && path == "/api/plan/preview") ||
 		(method == http.MethodGet && path == "/api/today") ||
-		isStrategyRoute(method, path) || isCollectionRoute(method, path)
+		isStrategyRoute(method, path) || isCollectionRoute(method, path) || isInstrumentRoute(method, path)
 }
 
 // isOwnSettingsRoute matches the settings a user keeps for themselves: the

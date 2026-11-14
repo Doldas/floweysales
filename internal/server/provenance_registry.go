@@ -73,6 +73,8 @@ var provenanceRoutes = map[string]provenanceRoute{
 	"GET /api/market/backtest/montecarlo":               covered(),
 	"GET /api/market/backtest/sensitivity":              covered(),
 	"GET /api/market/backtest/runs":                     covered("backtest_runs.go"),
+	"GET /api/instruments/profile":                      covered("instruments_api.go"),
+	"GET /api/collections/{id}/intelligence":            covered("instruments_api.go"),
 	"GET /api/market/backtest/runs/{id}":                covered("backtest_runs.go"),
 	"GET /api/market/backtest/runs/{id}/export":         covered("backtest_runs.go"),
 	"POST /api/market/backtest/runs/{id}/summary":       covered("backtest_runs.go"),
@@ -131,6 +133,7 @@ var provenanceRules = []struct {
 	{"GET /api/userspace/", exempt("The caller's own files.")},
 	{"GET /api/symbols", exempt("The list of symbols the tracker follows (configuration).")},
 	{"GET /api/search", exempt("Symbol autocomplete labels; every symbol picked leads to a surface that states its source.")},
+	{"GET /api/instruments/taxonomy", exempt("The platform's own fixed taxonomy (asset classes, sectors, regions); no provider data.")},
 	{"GET /api/collections", exempt("The caller's own collections: names, notes, tags and the instrument identities the user chose; no prices or results.")},
 	{"GET /api/strategies", exempt("The caller's saved strategy definitions (rules the user wrote), not results.")},
 }
