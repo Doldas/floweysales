@@ -2,7 +2,7 @@
 title: Collections
 order: 3.5
 summary: Keep your own sets of instruments, such as a watch list per theme or a hypothetical model portfolio, and see what each one is made of.
-last-reviewed: 2026-11-14
+last-reviewed: 2026-11-15
 ---
 
 # Collections
@@ -92,6 +92,24 @@ When two instruments in a collection share an ISIN, the **Identity** card says w
 
 Each link gives its reason. Instruments are never merged: they stay separate rows, with their own provider data.
 
+## News
+
+The **News** card lists recent headlines for the instruments in the collection. Nothing is fetched when you open a collection: select **Load news** to ask the providers, and **Reload news** later for newer headlines.
+
+Each instrument's headlines come from its own data provider. When that provider offers no news, the instrument gets none: FloweySales never borrows another provider's headlines for the same ticker. The note under the list names the providers that offer news.
+
+Every headline says why it is listed:
+
+- **Direct**: the headline or its summary names an instrument in the collection, by ticker or by name, for example `Names "NVIDIA" (FINNHUB NVDA)`.
+- **Thematic**: it mentions a theme or industry of an instrument, for example `Mentions theme "AI"`. Themes and industries come from your classification first, then the provider profile.
+- **Listed**: the provider filed it under an instrument, but the text names none of them.
+
+Relevance is a plain text match with its reason, not a judgment of the story, and nothing here is advice. Use the filter to show one relevance at a time. Dates are shown in UTC, and a headline without a date says **Date unknown**. Links open in a new tab.
+
+A load asks for at most 25 instruments. The line under the list says how many instruments gave headlines, how many are on a provider without news, how many could not be reached and how many were not asked. Headlines are kept for 10 minutes, so reloading soon after does not ask the providers again.
+
+The Research Agent can read the same news; see [Agents](agents.md#collections).
+
 ## Export and import
 
 **Export** downloads all your collections as a JSON file named with today's UTC date. **Import** reads such a file. An import always creates new collections: when a name is taken the collection is saved under a new name, for example "Energy (2)", and the result lists what was created. Nothing is merged into an existing collection, and the whole file is checked before anything is saved.
@@ -100,7 +118,8 @@ Each link gives its reason. Instruments are never merged: they stay separate row
 
 - At most 200 collections, 1,000 instruments per collection and 20 tags per collection or instrument.
 - Profiles depend on the installed data provider plugins. A provider without the profile capability has no profiles.
-- Collections are not yet a scope for news, the Research Agent or Flow Studio. These are planned.
+- At most 25 instruments are asked for news per load, and only providers with the news capability give headlines.
+- Collections are not yet a scope for Flow Studio. This is planned.
 - Linked portfolio views, derived from real positions, are not available.
 
 The technical design is in [Market Collections](../market-collections.md).

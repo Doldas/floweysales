@@ -7,7 +7,8 @@ import { expect, open, test } from './fixtures';
 // the server's rules (unique names ignoring case, no weights in watch
 // collections, model weights never above 100% in total, weights never copied).
 // Phase 2 adds instrument profiles: only FINNHUB offers them, profiles are
-// fetched on request, overrides stay apart from provider facts.
+// fetched on request, overrides stay apart from provider facts. Phase 4 adds
+// collection news: only FINNHUB offers news, asked for on request.
 
 interface Col { id: number; name: string; description: string; kind: string; category: string; tags: string[]; archived: boolean; member_count: number; created_at: string; updated_at: string }
 interface Mem { id: number; collection_id: number; instrument: Record<string, string>; note: string; tags: string[]; weight?: number; added_at: string }
@@ -27,6 +28,15 @@ const TAXONOMY = {
   limits: { themes: 10, theme_length: 40, industry_length: 100 },
 };
 const REGION: Record<string, string> = { US: 'north_america', CH: 'europe', SE: 'europe' };
+// Headlines FINNHUB lists under NVDA, related as the server would relate them.
+const NEWS = [
+  { title: 'Nvidia beats estimates', url: 'https://news.example/nvda-beats', source: 'Reuters', published: 1794645600, provider: 'FINNHUB', symbol: 'NVDA', relevance: 'direct',
+    matches: [{ relevance: 'direct', members: [0], term: 'NVIDIA', reason: 'Names "NVIDIA" (FINNHUB NVDA)' }] },
+  { title: 'Chip stocks rally on AI demand', url: 'https://news.example/chips', published: 1794642000, provider: 'FINNHUB', symbol: 'NVDA', relevance: 'thematic',
+    matches: [{ relevance: 'thematic', members: [0], term: 'Semiconductors', reason: 'Mentions industry "Semiconductors"' }, { relevance: 'listed', members: [0], reason: 'Listed by FINNHUB under NVDA' }] },
+  { title: 'Markets close mixed', url: 'https://news.example/close', provider: 'FINNHUB', symbol: 'NVDA', relevance: 'listed',
+    matches: [{ relevance: 'listed', members: [0], reason: 'Listed by FINNHUB under NVDA' }] },
+];
 
 async function backend(page: Page) {
   const cols: Col[] = [];
@@ -34,6 +44,7 @@ async function backend(page: Page) {
   const cache = new Map<string, { status: string; profile?: Record<string, unknown> }>();
   const overrides = new Map<string, Record<string, unknown>>();
   const providerCalls: string[] = [];
+  const newsCalls: string[] = [];
   let seq = 100;
   const json = (status: number, body: unknown) => ({ status, contentType: 'application/json', body: body === null ? '' : JSON.stringify(body) });
   const count = (c: Col) => ({ ...c, member_count: mems.filter(m => m.collection_id === c.id).length });
@@ -193,6 +204,16 @@ async function backend(page: Page) {
       return route.fulfill(json(201, m));
     }
     if (parts[1] === 'intelligence' && method === 'GET') return route.fulfill(json(200, intelligence(c)));
+    if (parts[1] === 'news' && method === 'GET') {
+      const members = mems.filter(x => x.collection_id === c.id);
+      const asked = members.filter(m => m.instrument.provider === 'FINNHUB');
+      newsCalls.push(...asked.map(m => keyOf(m.instrument.provider, m.instrument.symbol)));
+      const items = asked.some(m => m.instrument.symbol === 'NVDA') ? NEWS : [];
+      return route.fulfill(json(200, {
+        collection_id: c.id, items, news_providers: ['FINNHUB'], retrieved_at: NOW,
+        coverage: { members: members.length, fetched: asked.length, cached: 0, failed: 0, no_source: members.length - asked.length, skipped: 0 },
+      }));
+    }
     if (parts[1] === 'profiles' && parts[2] === 'refresh' && method === 'POST') {
       const r = { fetched: 0, not_found: 0, failed: 0, no_source: 0, fresh: 0, remaining: 0 };
       for (const m of mems.filter(x => x.collection_id === c.id)) {
@@ -230,7 +251,7 @@ async function backend(page: Page) {
     if (method === 'DELETE') { mems.splice(mems.indexOf(m), 1); return route.fulfill({ status: 204, body: '' }); }
     return route.fulfill(json(405, { error: 'unexpected' }));
   });
-  return { cols, mems, overrides, providerCalls };
+  return { cols, mems, overrides, providerCalls, newsCalls };
 }
 
 async function createCollection(page: Page, name: string, kind: 'watch' | 'model', extra: { category?: string; tags?: string } = {}) {
@@ -445,6 +466,39 @@ test.describe('Markets → Collections', () => {
     await expect(identity).toContainText('Same ISIN and the same exchange (MIC)');
   });
 
+  test('news comes from each instrument\'s own provider, with relevance and the reason', async ({ page }) => {
+    const db = await backend(page);
+    await open(page, 'collections');
+    await createCollection(page, 'Chips', 'watch');
+    await addByHand(page, 'FINNHUB', 'NVDA');
+    await addByHand(page, 'YAHOO', 'NVDA');
+
+    // Opening the collection never asks for news.
+    const news = page.getByRole('region', { name: 'News' });
+    await expect(news).toContainText('Select Load news');
+    expect(db.newsCalls).toEqual([]);
+
+    await news.getByRole('button', { name: 'Load news' }).click();
+    const list = news.getByRole('list').filter({ has: page.getByRole('link') });
+    await expect(list.getByRole('listitem').filter({ has: page.getByRole('link') })).toHaveCount(3);
+    expect(db.newsCalls).toEqual(['FINNHUB:NVDA'], 'YAHOO:NVDA is never filled with FINNHUB headlines');
+    await expect(news.getByTestId('news-coverage')).toHaveText('Headlines from 1 of 2 instruments, 1 on a provider that offers no news. Retrieved Nov 14, 2026, 12:00 UTC.');
+    await expect(news.getByText('never borrows another provider\'s headlines')).toBeVisible();
+
+    const direct = news.getByRole('link', { name: 'Nvidia beats estimates' });
+    await expect(direct).toHaveAttribute('href', 'https://news.example/nvda-beats');
+    await expect(direct).toHaveAttribute('rel', 'noopener noreferrer');
+    await expect(news.getByRole('list', { name: 'Why it is listed: Nvidia beats estimates' })).toHaveText('Names "NVIDIA" (FINNHUB NVDA)');
+    await expect(news.getByText('FINNHUB · Reuters · Nov 14, 2026, 08:40 UTC')).toBeVisible();
+    await expect(news.getByText('FINNHUB · Date unknown')).toBeVisible();
+
+    await news.getByRole('button', { name: /^Thematic/ }).click();
+    await expect(news.getByRole('link')).toHaveCount(1);
+    await expect(news.getByRole('list', { name: 'Why it is listed: Chip stocks rally on AI demand' })).toContainText('Mentions industry "Semiconductors"');
+    await news.getByRole('button', { name: /^Listed/ }).click();
+    await expect(news.getByRole('link')).toHaveText(['Markets close mixed']);
+  });
+
   test('has no WCAG A/AA violations with a model portfolio open, in both themes', async ({ page }) => {
     await backend(page);
     await open(page, 'collections');
@@ -453,6 +507,9 @@ test.describe('Markets → Collections', () => {
     await page.getByRole('button', { name: 'Edit SPY' }).click();
     await page.getByRole('button', { name: 'Details of SPY on YAHOO' }).click();
     await expect(page.getByLabel('Themes')).toBeVisible();
+    await page.getByRole('button', { name: 'Load news' }).click();
+    await expect(page.getByTestId('news-coverage')).toBeVisible();
+    await page.mouse.move(0, 0); // no hover state left on whatever moved under the pointer
     await page.addScriptTag({ content: axeSource });
     await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
     for (const theme of ['light', 'dark']) {
@@ -460,7 +517,7 @@ test.describe('Markets → Collections', () => {
       const found = await page.evaluate(async () => {
         // @ts-expect-error axe is injected above
         const r = await window.axe.run(document.querySelector('fs-collections-page'), { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } });
-        return r.violations.map((v: { id: string; nodes: { html: string }[] }) => `${v.id}: ${v.nodes[0]?.html.slice(0, 110)}`);
+        return r.violations.map((v: { id: string; nodes: { html: string; failureSummary?: string }[] }) => `${v.id}: ${v.nodes[0]?.html.slice(0, 110)} ${v.nodes[0]?.failureSummary}`);
       });
       expect(found, `axe in ${theme} theme`).toEqual([]);
     }

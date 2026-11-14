@@ -10,6 +10,7 @@ import {
 } from '../core/collections';
 import { CollectionsService } from '../core/collections.service';
 import { CollectionIntelligence } from './collection-intelligence';
+import { CollectionNews } from './collection-news';
 import { instrumentKey } from '../core/instrument-ref';
 import { MarketState } from '../core/market-state';
 import { NotifyService } from '../core/notify.service';
@@ -27,7 +28,7 @@ const DIMENSIONS: Dimension[] = ['type', 'exchange', 'currency', 'country', 'pro
  */
 @Component({
   selector: 'fs-collections-page',
-  imports: [CollectionIntelligence],
+  imports: [CollectionIntelligence, CollectionNews],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 <div class="fs-page">
@@ -296,6 +297,7 @@ const DIMENSIONS: Dimension[] = ['type', 'exchange', 'currency', 'country', 'pro
         </section>
 
         <fs-collection-intelligence [collection]="c" [version]="allMembers()" />
+        <fs-collection-news [collection]="c" />
 
         <section class="card" aria-labelledby="add-title">
           <div class="card-header"><h2 class="card-title" id="add-title">Add instruments</h2></div>

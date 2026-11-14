@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map, shareReplay } from 'rxjs';
 
+import type { CollectionNews } from './collection-news';
 import type { InstrumentKey, Intelligence, Override, ProfileView, RefreshResult, Taxonomy } from './instruments';
 
 /**
@@ -43,6 +44,15 @@ export class InstrumentsService {
       members: (i.members ?? []).map(m => ({ ...m, classification: { ...m.classification, themes: m.classification.themes ?? [] } })),
       links: i.links ?? [],
       profile_providers: i.profile_providers ?? [],
+    })));
+  }
+
+  /** Headlines from each member's own provider, related to the collection. Asks providers (cached for a while). */
+  collectionNews(collectionId: number): Observable<CollectionNews> {
+    return this.http.get<CollectionNews>(`/api/collections/${collectionId}/news`).pipe(map(n => ({
+      ...n,
+      items: (n.items ?? []).map(i => ({ ...i, matches: (i.matches ?? []).map(m => ({ ...m, members: m.members ?? [] })) })),
+      news_providers: n.news_providers ?? [],
     })));
   }
 

@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"floweysales/internal/ai"
@@ -197,9 +198,10 @@ func mcpTools() []mcpTool {
 	defs := ai.ToolDefs()
 	out := make([]mcpTool, 0, len(defs))
 	for _, d := range defs {
-		// read_source needs a run's source registry and delegate_to_team a signed-in
-		// user's saved teams; the MCP server has neither.
-		if d.Function.Name == "read_source" || d.Function.Name == ai.DelegateToolName {
+		// read_source needs a run's source registry, delegate_to_team a signed-in
+		// user's saved teams and the collection tools a signed-in user's
+		// collections; the MCP server has none of them.
+		if d.Function.Name == "read_source" || d.Function.Name == ai.DelegateToolName || slices.Contains(ai.CollectionToolNames, d.Function.Name) {
 			continue
 		}
 		out = append(out, mcpTool{

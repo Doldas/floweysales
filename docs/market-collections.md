@@ -9,9 +9,10 @@ Studio. The design decisions are in
 
 **Status:** Phase 1 (domain, storage, API), the collection manager and
 dashboard of Phase 3 and Phase 2 (profiles, taxonomy, classification,
-identity links, with their screens) are implemented. Profiles come from
-provider plugins that offer the `profile` capability. News, agent and flow integrations are
-planned and are listed below as planned.
+identity links, with their screens) and Phase 4 (collection news and
+read-only Research Agent tools) are implemented. Profiles come from
+provider plugins that offer the `profile` capability, headlines from those
+that offer `news`. Flow Studio integration is planned.
 The user guide page is [Collections](guide/collections.md).
 
 ## What exists today
@@ -24,6 +25,8 @@ The user guide page is [Collections](guide/collections.md).
 | HTTP API | `internal/server/collections.go`, listed in [api-reference.md](api-reference.md#market-collections) |
 | Account deletion removes a user's collections and classifications | `identity.Service.DeleteUser` |
 | Profiles, taxonomy, classification, identity links | `internal/instruments`, `internal/storage/instrument_intelligence.go`, changeset `047-instrument-intelligence.xml`, `internal/server/instruments_api.go` |
+| Collection news and relevance | `instruments.RelateNews`, `internal/server/collection_news.go`, `frontend/src/app/pages/collection-news.ts` |
+| Research Agent collection tools | `ai.CollectionSource`, `internal/server/ai_collection_tools.go` |
 
 ### Kinds
 
@@ -153,6 +156,44 @@ The tracker list stays as it is. A SYS_ADMIN can copy it into a new watch
 collection with `POST /api/collections/from-trackers`; the description
 records when the copy was made (UTC).
 
+## Collection news
+
+`GET /api/collections/{id}/news?limit=` (owner only; another user's
+collection is 404) returns headlines for the members, newest first, undated
+last, at most 50.
+
+- **Own provider only.** Each member is asked through its own provider's
+  `news` capability (`market.NewsFor`, cleaned by `market.CleanNews`). A
+  member whose provider has no news counts as `no_source`; FloweySales never
+  substitutes another provider's headlines for the same ticker.
+- **Bounded.** At most 25 members per request (the rest count as
+  `skipped`), 5 headlines each, 4 providers asked at a time. Headlines are
+  cached per instrument key for 10 minutes, shared across users because
+  they are provider data, not user data; failures are not cached.
+- **Relevance.** `instruments.RelateNews` matches the title and summary
+  against each member's symbol and short name (`direct`), its themes and
+  industry from the user's classification or the provider profile
+  (`thematic`), and otherwise records that the provider filed it under the
+  member (`listed`). Every match carries the term, the members and a reason
+  string. Terms match on word boundaries; tickers shorter than three
+  letters are not matched, and terms of three letters or fewer match
+  case-sensitively, so a ticker like `ALL` does not match the word "all".
+- **Response.** `items[]` (provider news item plus `relevance` and
+  `matches`), `coverage` (`members`, `fetched`, `cached`, `failed`,
+  `no_source`, `skipped`), `news_providers` and `retrieved_at` (UTC).
+
+## Research Agent tools
+
+`list_collections`, `get_collection` and `get_collection_news` read
+through `ai.CollectionSource`, implemented by the server for the user the
+chat acts for (`agentUser`). They are classed as own-data tools
+(`toolOwn`), so every user role has them; `get_collection_news` is metered
+because it asks providers. A collection is resolved by id or by name among
+the caller's collections only. Without a signed-in user, such as a flow's
+agent node, the tools refuse, and they are left out of the flow tool
+catalog and the MCP server. There is no tool that writes a collection or
+places an order.
+
 ## Plan
 
 Each phase is a separate, reviewable change with tests.
@@ -178,10 +219,11 @@ Each phase is a separate, reviewable change with tests.
    details with provenance and the classification form are in
    `frontend/src/app/pages/collection-intelligence.ts`; importing the browser-local
    research watchlist into a collection is still open.
-4. **News and AI (planned):** collection news scope through the
-   provider-neutral news interface with direct versus thematic relevance
-   and reasons; permission-checked Research Agent tools that read only the
-   caller's collections and never trade.
+4. **News and AI (done):** collection news through the provider-neutral
+   news interface, with direct, thematic and listed relevance and a reason
+   per match; read-only Research Agent tools for the caller's own
+   collections. See [Collection news](#collection-news) and
+   [Research Agent tools](#research-agent-tools).
 5. **Automation (planned):** Flow Studio nodes that read collection members,
    reusing existing node contracts and budgets.
 6. **Quality (planned):** Playwright journeys, caching, mobile layouts and
