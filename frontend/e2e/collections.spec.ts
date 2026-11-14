@@ -6,6 +6,8 @@ import { expect, open, test } from './fixtures';
 // #441 Phase 3: the collection manager against an in-memory backend that keeps
 // the server's rules (unique names ignoring case, no weights in watch
 // collections, model weights never above 100% in total, weights never copied).
+// Phase 2 adds instrument profiles: only FINNHUB offers them, profiles are
+// fetched on request, overrides stay apart from provider facts.
 
 interface Col { id: number; name: string; description: string; kind: string; category: string; tags: string[]; archived: boolean; member_count: number; created_at: string; updated_at: string }
 interface Mem { id: number; collection_id: number; instrument: Record<string, string>; note: string; tags: string[]; weight?: number; added_at: string }
@@ -13,13 +15,115 @@ interface Mem { id: number; collection_id: number; instrument: Record<string, st
 const NOW = '2026-11-14T12:00:00Z';
 const axeSource = readFileSync(join(process.cwd(), 'node_modules', 'axe-core', 'axe.min.js'), 'utf8');
 
+// What FINNHUB states about two instruments. ABB's sector is not in the taxonomy.
+const PROFILES: Record<string, Record<string, unknown>> = {
+  'FINNHUB:NVDA': { kind: 'company', name: 'NVIDIA Corp', isin: 'US67066G1040', mic: 'XNAS', exchange: 'NASDAQ', country: 'US', currency: 'USD', sector: 'Technology', industry: 'Semiconductors', company: { market_cap: 4250000000000 }, source_url: 'https://finnhub.io/' },
+  'FINNHUB:ABB': { kind: 'company', name: 'ABB Ltd', isin: 'CH0012221716', country: 'CH', sector: 'Conglomerate of the future' },
+};
+const TAXONOMY = {
+  asset_classes: [{ id: 'equity', label: 'Equity' }, { id: 'fund', label: 'Fund' }],
+  sectors: [{ id: 'technology', label: 'Technology' }, { id: 'industrials', label: 'Industrials' }],
+  regions: [{ id: 'north_america', label: 'North America' }, { id: 'europe', label: 'Europe' }],
+  limits: { themes: 10, theme_length: 40, industry_length: 100 },
+};
+const REGION: Record<string, string> = { US: 'north_america', CH: 'europe', SE: 'europe' };
+
 async function backend(page: Page) {
   const cols: Col[] = [];
   const mems: Mem[] = [];
+  const cache = new Map<string, { status: string; profile?: Record<string, unknown> }>();
+  const overrides = new Map<string, Record<string, unknown>>();
+  const providerCalls: string[] = [];
   let seq = 100;
   const json = (status: number, body: unknown) => ({ status, contentType: 'application/json', body: body === null ? '' : JSON.stringify(body) });
   const count = (c: Col) => ({ ...c, member_count: mems.filter(m => m.collection_id === c.id).length });
   const weightOf = (cid: number, except = 0) => mems.filter(m => m.collection_id === cid && m.id !== except).reduce((s, m) => s + (m.weight ?? 0), 0);
+
+  const keyOf = (provider: string, symbol: string) => `${provider.toUpperCase()}:${symbol.toUpperCase()}`;
+  /** Asks "the provider": only FINNHUB has profiles. */
+  const fetchProfile = (k: string) => {
+    providerCalls.push(k);
+    const p = PROFILES[k];
+    const entry = p ? { status: 'ok', profile: { ...p, symbol: k.split(':')[1], provider: 'FINNHUB' } } : { status: 'not_found' };
+    cache.set(k, entry);
+    return entry;
+  };
+  const classify = (k: string, inst: Record<string, string> = {}) => {
+    const p = cache.get(k)?.profile as Record<string, string> | undefined;
+    const o = (overrides.get(k) ?? {}) as Record<string, string> & { themes?: string[] };
+    const fact = (user?: string, value?: string, raw?: string) => user ? { value: user, source: 'user' }
+      : value ? { value, source: 'profile', provider: 'FINNHUB' } : raw ? { raw, source: 'profile', provider: 'FINNHUB' } : {};
+    const sector = p?.sector === 'Technology' ? 'technology' : undefined;
+    const country = o.country || p?.country || inst.country;
+    return {
+      asset_class: fact(o.asset_class, p?.kind === 'company' ? 'equity' : undefined),
+      sector: fact(o.sector, sector, sector ? undefined : p?.sector),
+      industry: fact(o.industry, p?.industry),
+      country: country ? { value: country, source: o.country ? 'user' : 'profile' } : {},
+      region: country && REGION[country] ? { value: REGION[country], source: o.country ? 'user' : 'profile' } : {},
+      themes: o.themes ?? [],
+    };
+  };
+  const intelligence = (c: Col) => {
+    const members = mems.filter(m => m.collection_id === c.id).map(m => {
+      const k = keyOf(m.instrument.provider, m.instrument.symbol);
+      const hit = cache.get(k);
+      const status = m.instrument.provider !== 'FINNHUB' ? 'no_source' : hit ? hit.status : 'missing';
+      return { member_id: m.id, key: { provider: m.instrument.provider, symbol: m.instrument.symbol }, name: (hit?.profile?.name as string) ?? m.instrument.name,
+        profile_status: status, stale: false, classification: classify(k, m.instrument), overridden: overrides.has(k), ...(m.weight !== undefined ? { weight: m.weight } : {}),
+        isin: (hit?.profile?.isin as string) ?? m.instrument.isin, mic: (hit?.profile?.mic as string) ?? m.instrument.mic };
+    });
+    const group = (pick: (m: typeof members[number]) => string[]) => {
+      const rows = new Map<string, { id: string; count: number; weight?: number }>();
+      for (const m of members) for (const id of (pick(m).length ? pick(m) : [''])) {
+        const r = rows.get(id) ?? { id, count: 0 };
+        r.count++;
+        if (c.kind === 'model') r.weight = (r.weight ?? 0) + (m.weight ?? 0);
+        rows.set(id, r);
+      }
+      return [...rows.values()].sort((a, b) => (a.id === '' ? 1 : 0) - (b.id === '' ? 1 : 0) || b.count - a.count);
+    };
+    const one = (v?: string) => v ? [v] : [];
+    const links = [];
+    for (let i = 0; i < members.length; i++) for (let j = i + 1; j < members.length; j++) {
+      const a = members[i], b = members[j];
+      if (a.isin && a.isin === b.isin && a.mic && a.mic === b.mic) links.push({ kind: 'same_listing', isin: a.isin, members: [a.member_id, b.member_id], reason: 'Same ISIN and the same exchange (MIC): the same instrument from different providers.' });
+    }
+    const count = (s: string) => members.filter(m => m.profile_status === s).length;
+    return {
+      collection_id: c.id, kind: c.kind, links, profile_providers: ['FINNHUB'],
+      members: members.map(({ isin: _i, mic: _m, ...m }) => m),
+      coverage: { ok: count('ok'), not_found: count('not_found'), missing: count('missing'), no_source: count('no_source'), stale: 0, overridden: members.filter(m => m.overridden).length },
+      composition: {
+        asset_class: group(m => one(m.classification.asset_class.value)), sector: group(m => one(m.classification.sector.value)),
+        region: group(m => one(m.classification.region.value)), theme: group(m => m.classification.themes).filter(r => r.id),
+      },
+    };
+  };
+
+  await page.route(/\/api\/instruments\/.*/, async route => {
+    const req = route.request();
+    const url = new URL(req.url());
+    const json = (status: number, body: unknown) => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    if (url.pathname.endsWith('/taxonomy')) return route.fulfill(json(200, TAXONOMY));
+    const k = keyOf(url.searchParams.get('provider') ?? req.postDataJSON()?.provider ?? '', url.searchParams.get('symbol') ?? req.postDataJSON()?.symbol ?? '');
+    if (url.pathname.endsWith('/profile')) {
+      const [provider, symbol] = k.split(':');
+      const entry = provider !== 'FINNHUB' ? { status: 'no_source' } : (url.searchParams.get('refresh') || !cache.has(k)) ? fetchProfile(k) : cache.get(k)!;
+      return route.fulfill(json(200, {
+        profile: { key: { provider, symbol }, stale: false, ...entry, ...(entry.status === 'ok' || entry.status === 'not_found' ? { retrieved_at: NOW, provenance: { kind: 'instrument_profile', status: 'known', provider } } : {}) },
+        classification: classify(k), override: overrides.get(k) ?? null,
+      }));
+    }
+    if (url.pathname.endsWith('/classification')) {
+      if (req.method() === 'DELETE') { overrides.delete(k); return route.fulfill({ status: 204, body: '' }); }
+      const body = req.postDataJSON();
+      const o = { provider: k.split(':')[0], symbol: k.split(':')[1], asset_class: body.asset_class, sector: body.sector, industry: body.industry, country: body.country, themes: body.themes, updated_at: NOW };
+      overrides.set(k, o);
+      return route.fulfill(json(200, { override: o }));
+    }
+    return route.fulfill(json(404, { error: 'unexpected' }));
+  });
 
   await page.route(/\/api\/collections(\/.*)?(\?.*)?$/, async route => {
     const req = route.request();
@@ -88,6 +192,18 @@ async function backend(page: Page) {
       mems.push(m);
       return route.fulfill(json(201, m));
     }
+    if (parts[1] === 'intelligence' && method === 'GET') return route.fulfill(json(200, intelligence(c)));
+    if (parts[1] === 'profiles' && parts[2] === 'refresh' && method === 'POST') {
+      const r = { fetched: 0, not_found: 0, failed: 0, no_source: 0, fresh: 0, remaining: 0 };
+      for (const m of mems.filter(x => x.collection_id === c.id)) {
+        const k = keyOf(m.instrument.provider, m.instrument.symbol);
+        if (m.instrument.provider !== 'FINNHUB') r.no_source++;
+        else if (cache.has(k)) r.fresh++;
+        else if (fetchProfile(k).status === 'ok') r.fetched++;
+        else r.not_found++;
+      }
+      return route.fulfill(json(200, r));
+    }
     const m = mems.find(x => x.id === Number(parts[2]) && x.collection_id === c.id);
     if (!m) return route.fulfill(json(404, { error: 'Instrument not found in this collection' }));
     if (parts[3] === 'transfer') {
@@ -114,7 +230,7 @@ async function backend(page: Page) {
     if (method === 'DELETE') { mems.splice(mems.indexOf(m), 1); return route.fulfill({ status: 204, body: '' }); }
     return route.fulfill(json(405, { error: 'unexpected' }));
   });
-  return { cols, mems };
+  return { cols, mems, overrides, providerCalls };
 }
 
 async function createCollection(page: Page, name: string, kind: 'watch' | 'model', extra: { category?: string; tags?: string } = {}) {
@@ -136,10 +252,13 @@ async function backToList(page: Page) {
 async function addByHand(page: Page, provider: string, symbol: string) {
   const manual = page.locator('details.manual');
   if (!(await manual.getAttribute('open') !== null)) await manual.locator('summary').click();
+  // The same symbol may already be listed from another provider: wait for one more row, not for any.
+  const rows = page.getByRole('table', { name: /Instruments in/ }).getByRole('rowheader', { name: new RegExp('^' + symbol.replace(/[\^=.]/g, '\\$&')) });
+  const before = await rows.count();
   await manual.getByLabel('Provider').fill(provider);
   await manual.getByLabel('Symbol').fill(symbol);
   await manual.getByRole('button', { name: 'Add' }).click();
-  await expect(page.getByRole('table', { name: /Instruments in/ }).getByRole('rowheader', { name: new RegExp('^' + symbol.replace(/[\^=.]/g, '\\$&')) })).toBeVisible();
+  await expect(rows).toHaveCount(before + 1);
 }
 
 test.describe('Markets → Collections', () => {
@@ -183,7 +302,7 @@ test.describe('Markets → Collections', () => {
     await addByHand(page, 'YAHOO', 'NVDA');
     await backToList(page);
     await createCollection(page, 'Balanced', 'model');
-    await expect(page.getByText('Not a holding and not advice')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Composition' }).getByText('Not a holding and not advice')).toBeVisible();
     await addByHand(page, 'YAHOO', 'SPY');
 
     await page.getByRole('button', { name: 'Edit SPY' }).click();
@@ -250,12 +369,90 @@ test.describe('Markets → Collections', () => {
     await expect(page.getByRole('list', { name: 'Collections' }).getByRole('button', { name: /Energy \(2\)/ })).toBeVisible();
   });
 
+  test('profiles come only from the instrument\'s own provider, and your classification stays apart', async ({ page }) => {
+    const db = await backend(page);
+    await open(page, 'collections');
+    await createCollection(page, 'Chips', 'watch');
+    await addByHand(page, 'FINNHUB', 'NVDA');
+    await addByHand(page, 'FINNHUB', 'ABB');
+    await addByHand(page, 'YAHOO', 'NVDA');
+
+    // Opening the collection never asks a provider.
+    const intel = page.getByRole('region', { name: 'Classification' });
+    await expect(intel.getByTestId('profile-coverage')).toHaveText('0 of 3 instruments have a provider profile, 2 not fetched yet, 1 on a provider that offers no profiles.');
+    await expect(intel.getByText('never copies another provider\'s profile')).toBeVisible();
+    expect(db.providerCalls).toEqual([]);
+
+    await intel.getByRole('button', { name: 'Fetch profiles' }).click();
+    await expect(intel.getByRole('status')).toHaveText('2 fetched.');
+    await expect(intel.getByTestId('profile-coverage')).toHaveText('2 of 3 instruments have a provider profile, 1 on a provider that offers no profiles.');
+    expect(db.providerCalls.sort()).toEqual(['FINNHUB:ABB', 'FINNHUB:NVDA'], 'YAHOO:NVDA is never filled from FINNHUB');
+    await expect(intel.getByRole('button', { name: 'Fetch profiles' })).toBeDisabled();
+
+    // Watch collections count; unmapped wording counts as unclassified.
+    const table = intel.getByRole('table');
+    await expect(table.getByRole('row', { name: /Technology 1 · 33.33%/ })).toBeVisible();
+    await expect(table.getByRole('row', { name: /Unclassified 2 · 66.67%/ })).toBeVisible();
+    await intel.getByRole('button', { name: 'Region' }).click();
+    await expect(table.getByRole('row', { name: /North America 1/ })).toBeVisible();
+    await expect(table.getByRole('row', { name: /Europe 1/ })).toBeVisible();
+
+    const classes = page.getByRole('region', { name: 'Instrument classes' });
+    await expect(classes.getByRole('row', { name: /ABB/ })).toContainText('Conglomerate of the future (unmapped)');
+    await expect(classes.getByRole('row', { name: /^NVDA YAHOO/ })).toContainText('No profile source');
+
+    // Details: provider facts with provenance in UTC, then a private override.
+    await classes.getByRole('button', { name: 'Details of NVDA on FINNHUB' }).click();
+    const detail = page.getByRole('region', { name: /NVDA FINNHUB/ });
+    await expect(detail.getByText('NVIDIA Corp')).toBeVisible();
+    await expect(detail.getByText('4.25T')).toBeVisible();
+    await expect(detail.getByTestId('profile-provenance')).toContainText('Source: FINNHUB · retrieved Nov 14, 2026, 12:00 UTC');
+    await detail.getByLabel('Sector').selectOption('industrials');
+    await detail.getByLabel('Themes').fill('AI, Robotics, ai');
+    await detail.getByLabel('Country (ISO code)').fill('S1');
+    await expect(detail.getByRole('alert')).toHaveText('Country must be a 2-letter ISO code, such as SE or US.');
+    await expect(detail.getByRole('button', { name: 'Save classification' })).toBeDisabled();
+    await detail.getByLabel('Country (ISO code)').fill('');
+    await detail.getByRole('button', { name: 'Save classification' }).click();
+    await expect.poll(() => db.overrides.get('FINNHUB:NVDA')).toMatchObject({ sector: 'industrials', themes: ['AI', 'Robotics'], country: '' });
+    await expect(classes.getByRole('row', { name: /^NVDA FINNHUB/ })).toContainText('Industrials');
+    await expect(detail.getByRole('definition').filter({ hasText: /^Technology$/ })).toBeVisible(); // the provider's own sector is unchanged
+
+    await intel.getByRole('button', { name: 'Theme' }).click();
+    await expect(table.getByRole('row', { name: /Robotics 1/ })).toBeVisible();
+
+    await detail.getByRole('button', { name: 'Reset to provider' }).click();
+    await page.getByRole('dialog', { name: 'Reset classification' }).getByRole('button', { name: 'Reset' }).click();
+    await expect.poll(() => db.overrides.has('FINNHUB:NVDA')).toBe(false);
+    await expect(classes.getByRole('row', { name: /^NVDA FINNHUB/ })).toContainText('Technology');
+  });
+
+  test('the same listing from two providers is linked, with the reason', async ({ page }) => {
+    await backend(page);
+    await open(page, 'collections');
+    const doc = { format: 'floweysales.collections', version: 1, collections: [{ name: 'Listings', kind: 'watch', members: [
+      { instrument: { provider: 'FINNHUB', symbol: 'NVDA' } },
+      { instrument: { provider: 'YAHOO', symbol: 'NVDA', isin: 'US67066G1040', mic: 'XNAS' } },
+    ] }] };
+    await page.locator('input[type=file]').setInputFiles({ name: 'collections.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(doc)) });
+    await page.getByRole('list', { name: 'Collections' }).getByRole('button', { name: /Listings/ }).click();
+    // Before the profile is fetched, nothing confirms the FINNHUB instrument's ISIN.
+    await expect(page.getByRole('region', { name: 'Identity' })).toHaveCount(0);
+    await page.getByRole('region', { name: 'Classification' }).getByRole('button', { name: 'Fetch profiles' }).click();
+    const identity = page.getByRole('region', { name: 'Identity' });
+    await expect(identity).toContainText('Same listing');
+    await expect(identity).toContainText('NVDA (FINNHUB) and NVDA (YAHOO)');
+    await expect(identity).toContainText('Same ISIN and the same exchange (MIC)');
+  });
+
   test('has no WCAG A/AA violations with a model portfolio open, in both themes', async ({ page }) => {
     await backend(page);
     await open(page, 'collections');
     await createCollection(page, 'Balanced', 'model', { category: 'Models', tags: 'core' });
     await addByHand(page, 'YAHOO', 'SPY');
     await page.getByRole('button', { name: 'Edit SPY' }).click();
+    await page.getByRole('button', { name: 'Details of SPY on YAHOO' }).click();
+    await expect(page.getByLabel('Themes')).toBeVisible();
     await page.addScriptTag({ content: axeSource });
     await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
     for (const theme of ['light', 'dark']) {

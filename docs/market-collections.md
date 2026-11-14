@@ -8,9 +8,10 @@ Studio. The design decisions are in
 [ADR 0004](adr/0004-market-collections.md).
 
 **Status:** Phase 1 (domain, storage, API), the collection manager and
-dashboard of Phase 3 and the backend of Phase 2 (profiles, taxonomy,
-classification, identity links) are implemented. The Phase 2 screens, news,
-agent and flow integrations are planned and are listed below as planned.
+dashboard of Phase 3 and Phase 2 (profiles, taxonomy, classification,
+identity links, with their screens) are implemented. Profiles come from
+provider plugins that offer the `profile` capability. News, agent and flow integrations are
+planned and are listed below as planned.
 The user guide page is [Collections](guide/collections.md).
 
 ## What exists today
@@ -158,7 +159,7 @@ Each phase is a separate, reviewable change with tests.
 
 1. **Foundations (done):** domain, MySQL store, API, ownership checks,
    import/export, tracker copy.
-2. **Instrument intelligence (backend done, screens planned):** a `profile` plugin capability in
+2. **Instrument intelligence (done):** a `profile` plugin capability in
    the SDK (company, fund, commodity and crypto shapes, with source and
    as-of time), routed through the #421 provider registry; a cache with TTL;
    a canonical listing identity that links members across providers and
@@ -173,8 +174,9 @@ Each phase is a separate, reviewable change with tests.
    dashboard: composition by count for watch collections and by weight for
    models, with unallocated weight and Unknown values shown and coverage
    labeled. Deferred: the active collection scope moves to phase 4 with news;
-   composition by sector and theme waits for phase 2 profiles; freshness is
-   labeled once profiles carry an as-of time; importing the browser-local
+   composition by asset class, sector, region and theme, profile
+   details with provenance and the classification form are in
+   `frontend/src/app/pages/collection-intelligence.ts`; importing the browser-local
    research watchlist into a collection is still open.
 4. **News and AI (planned):** collection news scope through the
    provider-neutral news interface with direct versus thematic relevance
