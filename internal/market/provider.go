@@ -54,6 +54,8 @@ type ProviderCapability struct {
 	MinPollSeconds  int      `json:"min_poll_seconds"`
 	CacheTTLSeconds int      `json:"cache_ttl_seconds"`
 	Notes           string   `json:"notes"`
+	// Markets the provider states it covers (ISO 3166-1 alpha-2); empty means not stated.
+	Markets []string `json:"markets,omitempty"`
 }
 
 // Backend is the market-data surface the application uses. The plugin

@@ -335,7 +335,8 @@ returned by `describe`, uploaded with each release and copied into the store.
     "quote_kind": "ohlc_bar_close",
     "min_poll_seconds": 5,
     "cache_ttl_seconds": 60,
-    "notes": "Access, licensing and freshness caveats."
+    "notes": "Access, licensing and freshness caveats.",
+    "markets": ["SE", "NO", "US"]
   },
   "min_app_version": "0.6.0",
   "max_app_version": "0.9.0",
@@ -350,6 +351,13 @@ same provider id. Run `my-plugin --manifest` to print the embedded manifest.
 versions of FloweySales (see "Supported FloweySales versions"); leave them out
 unless you know a bound. They are additive to protocol 1, so the SDK change
 needs a new `pluginsdk/v<semver>` tag after merge.
+
+`markets` is optional: the markets the provider covers, as ISO 3166-1
+alpha-2 country codes. Settings → Providers uses it only to warn when a source
+chosen for a market in "Tried first per market" does not list that market. It
+never changes which source is called. Leave it out when coverage is global or
+unclear, and the app then never warns. Backends from before the field ignore
+it, so it needs no `min_app_version`.
 
 Try a plugin locally with `floweysales_backend plugins install --file`, or
 build a local store (below).

@@ -35,6 +35,25 @@ func putPolicy(e *Engine, domain string, body map[string]any) (int, map[string]a
 	return code, out
 }
 
+func TestRegistryListsTheMarketsAPluginStates(t *testing.T) {
+	e, b := routingEngine(t, "AAA", "BBB")
+	b.Markets("AAA", "SE", "NO")
+	_, out, raw := icall(e, "GET", "/api/providers/routing", nil)
+	for _, s := range out["sources"].([]any) {
+		sm := s.(map[string]any)
+		switch sm["id"] {
+		case "AAA":
+			if fmt.Sprint(sm["regions"]) != "[SE NO]" {
+				t.Errorf("AAA states SE and NO: %s", raw)
+			}
+		case "BBB":
+			if sm["regions"] != nil {
+				t.Errorf("BBB states no markets: %v", sm)
+			}
+		}
+	}
+}
+
 func TestRegistryListsEverySourceWithoutSecrets(t *testing.T) {
 	e, _ := routingEngine(t, "AAA", "BBB")
 	code, out, raw := icall(e, "GET", "/api/providers/routing", nil)

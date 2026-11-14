@@ -70,6 +70,7 @@ func (m *Manager) Providers() []market.ProviderCapability {
 			Fundamentals: info.HasCapability(CapFinancials), Capabilities: append([]string{}, info.Capabilities...),
 			QuoteKind: info.QuoteKind, RequiresKey: requiresKey, Experimental: info.Experimental, Enabled: len(missing) == 0,
 			MinPollSeconds: info.MinPollSeconds, CacheTTLSeconds: info.CacheTTLSeconds, Notes: info.Notes,
+			Markets: append([]string(nil), info.Markets...),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })

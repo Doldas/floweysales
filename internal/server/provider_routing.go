@@ -80,7 +80,7 @@ func (e *Engine) routingSources(ctx context.Context, userID int64) []routing.Sou
 		}
 		out = append(out, routing.Source{ID: c.ID, Label: c.Label, Kind: routing.KindPlugin, Domains: domains, Scope: routing.ScopeSystem,
 			NeedsKey: c.RequiresKey, Configured: c.Enabled, Enabled: c.Enabled, Restrictions: c.Notes, Experimental: c.Experimental,
-			Origin: "plugin " + c.PluginID + " " + c.PluginVersion})
+			Origin: "plugin " + c.PluginID + " " + c.PluginVersion, Regions: append([]string(nil), c.Markets...)})
 	}
 	out = append(out, e.webSearchRouter().Sources()...)
 	for _, a := range indexsource.Adapters("") {

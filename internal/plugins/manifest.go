@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -71,6 +72,9 @@ type ProviderInfo struct {
 	// type (see domain.go) whose capabilities are callable operations.
 	Type       string            `json:"type,omitempty"`
 	Operations []DomainOperation `json:"operations,omitempty"`
+	// Markets lists the markets (ISO 3166-1 alpha-2 codes) the provider
+	// covers; empty means not stated.
+	Markets []string `json:"markets,omitempty"`
 }
 
 // EnvVar is a configuration value forwarded to the plugin process.
@@ -100,7 +104,14 @@ func (p ProviderInfo) HasCapability(c string) bool {
 	return false
 }
 
+// CoversMarket reports whether the provider covers a market. One that states
+// no markets is not known to miss any.
+func (p ProviderInfo) CoversMarket(code string) bool {
+	return len(p.Markets) == 0 || slices.Contains(p.Markets, code)
+}
+
 var (
+	marketPattern     = regexp.MustCompile(`^[A-Z]{2}$`)
 	pluginIDPattern   = regexp.MustCompile(`^[a-z][a-z0-9-]{1,39}$`)
 	providerIDPattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]{1,31}$`)
 	envNamePattern    = regexp.MustCompile(`^[A-Z][A-Z0-9_]{1,63}$`)
@@ -159,6 +170,11 @@ func (m Manifest) validateProvider() error {
 	}
 	if p.HasCapability(CapMacro) && !p.HasCapability(CapHistory) {
 		return errors.New("macro series are read through history, so the macro capability needs the history capability")
+	}
+	for i, code := range p.Markets {
+		if !marketPattern.MatchString(code) || slices.Contains(p.Markets[:i], code) {
+			return fmt.Errorf("invalid or duplicate market %q: use ISO 3166-1 alpha-2 codes such as SE or US", code)
+		}
 	}
 	return nil
 }

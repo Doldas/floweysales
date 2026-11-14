@@ -2,7 +2,7 @@
 //   node --test src/app/components/provider-routing-view.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formFrom, groupDomains, moveFallback, policyBody, policyLine, policyProblems, setRegion, sourceState, sourcesFor, stateLabel, toggleFallback } from './provider-routing-view.ts';
+import { formFrom, groupDomains, marketWarning, moveFallback, policyBody, policyLine, policyProblems, setRegion, sourceState, sourcesFor, stateLabel, toggleFallback } from './provider-routing-view.ts';
 
 const src = (id: string, extra = {}) => ({ id, label: id.toUpperCase(), kind: 'plugin', domains: ['market_quote'], scope: 'system', needs_key: false, configured: true, enabled: true, ...extra }) as never;
 const domain = (extra = {}) => ({ id: 'market_quote', label: 'Quotes', group: 'Market', no_fallback: false, sources: 2, routed: true, ...extra }) as never;
@@ -73,6 +73,15 @@ test('a regional domain can name a source to try first per market', () => {
   assert.deepEqual(policyProblems(setRegion(f, 'DK', 'gone'), routable), ['A source chosen for a market is not available.']);
   // Without overrides nothing extra is sent, so removing the last one clears them.
   assert.deepEqual(policyBody(setRegion(f, 'NO', '')), { primary: 'yahoo', fallback: [], no_fallback: false });
+});
+
+test('a source that lists its markets is flagged for a market it does not cover', () => {
+  assert.equal(marketWarning(src('avanza', { label: 'Avanza', regions: ['SE'] }), 'SE', 'Sweden'), '');
+  assert.equal(marketWarning(src('avanza', { label: 'Avanza', regions: ['SE'] }), 'NO', 'Norway'), 'Avanza does not list Norway among the markets it covers.');
+  // A source that states no markets is not known to miss one.
+  assert.equal(marketWarning(src('yahoo'), 'NO', 'Norway'), '');
+  assert.equal(marketWarning(src('yahoo', { regions: [] }), 'NO', 'Norway'), '');
+  assert.equal(marketWarning(undefined, 'NO', 'Norway'), '');
 });
 
 test('the policy line names the per-market sources', () => {

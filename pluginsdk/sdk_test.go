@@ -64,6 +64,9 @@ func TestManifestValidation(t *testing.T) {
 		"backend env":       func(m *Manifest) { m.Env = []EnvVar{{Name: "FLOWEYSALES_ANYTHING"}} },
 		"app version":       func(m *Manifest) { m.MinAppVersion = "latest" },
 		"macro alone":       func(m *Manifest) { m.Provider.Capabilities = []string{CapMacro} },
+		"market lowercase":  func(m *Manifest) { m.Provider.Markets = []string{"se"} },
+		"market length":     func(m *Manifest) { m.Provider.Markets = []string{"SWE"} },
+		"market twice":      func(m *Manifest) { m.Provider.Markets = []string{"SE", "SE"} },
 	}
 	for name, mutate := range cases {
 		m := base
@@ -72,6 +75,25 @@ func TestManifestValidation(t *testing.T) {
 		if err := m.Validate(); err == nil {
 			t.Errorf("%s: invalid manifest accepted", name)
 		}
+	}
+}
+
+func TestManifestMarketsAreOptionalCountryCodes(t *testing.T) {
+	raw, _ := os.ReadFile(filepath.Join("testdata", "contract", "manifest.json"))
+	m, _ := ParseManifest(raw)
+	if len(m.Provider.Markets) != 0 {
+		t.Fatalf("the fixture states no markets: %v", m.Provider.Markets)
+	}
+	m.Provider.Markets = []string{"SE", "NO", "US"}
+	if err := m.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if !m.Provider.CoversMarket("NO") || m.Provider.CoversMarket("DE") {
+		t.Error("a provider covers the markets it lists")
+	}
+	m.Provider.Markets = nil
+	if !m.Provider.CoversMarket("DE") {
+		t.Error("a provider that lists no markets is not known to miss one")
 	}
 }
 

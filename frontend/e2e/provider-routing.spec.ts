@@ -18,7 +18,7 @@ function view(over: Record<string, unknown> = {}) {
     ],
     sources: [
       src('YAHOO', 'Yahoo Finance', ['market_quote', 'news'], { origin: 'plugin yahoo 1.0.0' }),
-      src('FINNHUB', 'Finnhub', ['market_quote', 'news'], { needs_key: true, configured: false, restrictions: 'Needs your own API key.' }),
+      src('FINNHUB', 'Finnhub', ['market_quote', 'news'], { needs_key: true, configured: false, restrictions: 'Needs your own API key.', regions: ['US'] }),
       src('STOOQ', 'Stooq', ['market_quote'], { enabled: false }),
       src('web_search:brave', 'Brave Search API', ['web_search'], { kind: 'builtin', needs_key: true, managed_by: 'Settings → Web search' }),
       src('VISION1', 'Vision model', ['ai_vision']),
@@ -98,6 +98,11 @@ test.describe('Settings → Providers', () => {
     await markets.getByLabel('Add a market').selectOption('SE');
     await markets.getByLabel('Sweden', { exact: true }).selectOption('FINNHUB');
     await expect(markets.getByLabel('Add a market').locator('option[value=SE]')).toHaveCount(0);
+    // Finnhub lists only US, so it is flagged for Sweden; the warning does not block saving.
+    await expect(markets.getByRole('status')).toHaveText('Finnhub does not list Sweden among the markets it covers.');
+    await markets.getByLabel('Sweden', { exact: true }).selectOption('YAHOO');
+    await expect(markets.getByRole('status')).toHaveCount(0);
+    await markets.getByLabel('Sweden', { exact: true }).selectOption('FINNHUB');
     await quotes.getByRole('button', { name: 'Save routing' }).click();
     await expect(pr.getByRole('status').filter({ hasText: 'Routing for quotes saved.' })).toBeVisible();
     expect(puts[0].body).toEqual({ primary: 'YAHOO', fallback: [], no_fallback: false, by_region: { SE: 'FINNHUB' } });
@@ -167,7 +172,12 @@ test.describe('Settings → Providers', () => {
   test('has no WCAG A/AA violations in both themes', async ({ page }) => {
     await mock(page);
     const pr = await openProviders(page);
-    await pr.getByRole('article', { name: 'Quotes' }).getByLabel('Primary source').selectOption('YAHOO');
+    const quotes = pr.getByRole('article', { name: 'Quotes' });
+    await quotes.getByLabel('Primary source').selectOption('YAHOO');
+    // With a coverage warning showing, so its contrast is checked in both themes.
+    await quotes.getByLabel('Add a market').selectOption('SE');
+    await quotes.getByLabel('Sweden', { exact: true }).selectOption('FINNHUB');
+    await expect(quotes.getByText('Finnhub does not list Sweden')).toBeVisible();
     await page.addScriptTag({ content: axeSource });
     await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
     for (const theme of ['light', 'dark']) {

@@ -128,6 +128,18 @@ func (b *Backend) Plugin(provider, pluginID string) *Backend {
 	return b
 }
 
+// Markets makes a provider state the markets it covers.
+func (b *Backend) Markets(provider string, codes ...string) *Backend {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for i := range b.caps {
+		if b.caps[i].ID == provider {
+			b.caps[i].Markets = append([]string(nil), codes...)
+		}
+	}
+	return b
+}
+
 // Declare makes a provider list a capability.
 func (b *Backend) Declare(provider, capability string) *Backend {
 	b.mu.Lock()
