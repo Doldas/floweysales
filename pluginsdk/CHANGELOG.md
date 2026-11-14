@@ -8,6 +8,8 @@ publishes the section for the tagged version as the release notes. See
 
 ## Unreleased
 
+## v0.5.0
+
 - Additive: capability `profile` (method `profile`, `ProfileParams`,
   `InstrumentProfile` with optional `CompanyProfile`, `FundProfile`,
   `CommodityProfile` and `CryptoProfile` parts). A provider states what it
@@ -16,7 +18,9 @@ publishes the section for the tagged version as the release notes. See
   time. Fields the provider does not state are left out, never guessed.
   Existing plugins keep working. A backend from before this capability
   rejects a plugin version that declares it, so declare it together with a
-  `min_app_version` that knows `profile`.
+  `min_app_version` that knows `profile` once a release version is known.
+  Finnhub 1.3.0 and CoinGecko 1.1.0 are the first official plugins to
+  answer it.
 
 ## v0.4.0
 
