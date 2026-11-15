@@ -19,7 +19,7 @@ You see Flows in the sidebar only if your role has the flow read permission. Whi
 | --- | --- |
 | **My Flows** | A searchable list of your flows with status, trigger and publish state. Start a new flow or open one. |
 | **Flow editor** | The canvas. Add nodes, wire them, set each node's options and check the graph. |
-| **Run history** | Every run of a flow, with its status, timing and the graph as it was when it ran. Inspect a run node by node. |
+| **Run history** | Every run of a flow, with its status, timing and the graph as it was when it ran. Inspect a run node by node. A run started in the editor can also be followed there; see [Follow a run in the editor](#follow-a-run-in-the-editor). |
 | **Approvals & audit** | Steps that wait for a decision, and the record of every change a flow made outside itself. |
 | **Function library & triggers** | Reusable functions and custom triggers, drawn on the same canvas as the flow editor (zoom, fit, keyboard navigation). Administrators only. |
 
@@ -55,6 +55,14 @@ A flow always reads the collections of the person who owns the flow, even when s
 ## Run a flow
 
 - **Manual:** **Run now**. Runs are queued and executed in order. While a run waits for a worker you can cancel it.
+
+### Follow a run in the editor
+
+When you press **Run now**, **Run draft** or **Test unsaved draft** in the Flow editor, a run panel opens under the run buttons and follows the run while you stay in the editor. It shows the status, the elapsed time and how many nodes have finished, with a progress bar. Each node that has run is listed with its status, duration, output preview and any error; a failed node opens on its own. When the run ends, the panel shows the final output or the run error.
+
+The canvas follows along: each node states its status in text (`✓ 8.0 s`, `✕ failed`, `– skipped`, `… waiting`) and is toned to match. While the run is going, a node whose inputs have all finished is marked `… next`. You can keep editing; the run uses the graph as it was when you pressed run, so for a saved run the canvas shows the editor's graph, which can differ from the saved version.
+
+From the panel you can cancel the run or remove it from the queue, open **Review in Approvals & audit** when a side effect waits for approval, or **Open in Run history** for the full trace. Close the panel to clear the canvas. The panel asks the server every 1.5 seconds while the run is going, and every 5 seconds while it waits for approval.
 - **Scheduled:** an enabled flow with an interval (5 minutes to 30 days) runs on that schedule.
 - **On an event:** an enabled flow with an event key runs when that event arrives, either from another flow or from a signed webhook.
 

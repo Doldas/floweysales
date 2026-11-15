@@ -1,6 +1,6 @@
 import { CanvasGestures } from './canvas-gestures';
 import { ProgressStatusComponent } from '../ui/progress-status';
-import { HostListener, Component, ChangeDetectionStrategy, signal, effect, computed } from '@angular/core';
+import { HostListener, Component, ChangeDetectionStrategy, DestroyRef, ElementRef, signal, effect, computed, viewChild } from '@angular/core';
 import { MarkdownRunOutputComponent } from './markdown-run-output';
 import { DRAFT_HISTORY_SCOPE, draftRunBody, historyPath, isDraftTest, runButtonHint, runButtonLabel, runKindLabel, shortHash } from './draft-test';
 import { FlowSideEffectsComponent } from './flow-side-effects';
@@ -25,6 +25,8 @@ import { FlowNotifyChannelsComponent } from './flow-notify-channels';
 import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES, SCREEN_FIELDS, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 import { formatUtcDateTime } from '../ui/datetime';
+import { isLiveRunOpen, liveRunPollMs, liveRunProgress, nodeRunBadge, nodeStatuses } from './live-run';
+import { toneForStatus } from '../ui/flow-canvas/flow-canvas-geometry';
 import { evidenceForOutputMode, findingLabel, jsonCitationLine, patchNodeEvidence, removedSummary, settingsFromPolicy, settingsSummary, type AnswerFinding, type AnswerSource, type EvidencePolicy, type JsonCitation } from '../core/answer-sources';
 
 interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'|'watchlist_quotes'|'technical_scan'|'fundamentals'|'sec_filings'|'news'|'leaderboard'|'screen'|'only_new'|'report_table'|'notify'|'insider_activity'|'macro_regime'|'portfolio_check'|'corporate_events'|'wealth_plan'|'backtest'|'collection'|'collection_news'; label:string; collection?:string; symbols?:string; universe?:string; strategy?:string; provider?:string; rule?:string; sort_by?:string; limit?:number; columns?:string; title?:string; key_fields?:string; cooldown_hours?:number; lookback_days?:number; forms?:string; kinds?:string; years?:number; channel?:'email'|'webhook'; subject?:string; skip_empty?:boolean; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; profile_id?:number; team_id?:number; evidence?:EvidencePolicy; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number;persona?:string;require_grounding?:boolean; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
@@ -132,10 +134,11 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
      @for(n of graph().nodes;track n.id){
        <g data-canvas-node (click)="$event.stopPropagation();openQuickNode(n.id)" (pointerdown)="dragStart($event,n.id)" style="cursor:move" tabindex="0"
           (keydown.enter)="openQuickNode(n.id)" [attr.aria-label]="'Select '+n.label">
-         <rect class="flow-node" [class.selected]="n.id===selectedNode()?.id" [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="12"/>
+         <rect class="flow-node" [class]="liveNodeTone(n.id)" [class.selected]="n.id===selectedNode()?.id" [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="12"/>
          <rect class="flow-node-accent" [attr.data-type]="n.type" [attr.x]="n.x" [attr.y]="n.y" width="4" height="70" rx="2"/>
          <text class="node-type" [attr.x]="n.x+12" [attr.y]="n.y+24" font-size="11">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':n.type==='workspace_read'?'▤ READ FILE':n.type==='workspace_write'?'▣ WRITE FILE':n.type==='output'?'→ OUTPUT':n.type==='condition'?'◇ IF / ELSE':n.type==='merge'?'⇉ MERGE':n.type==='json_get'?'{} JSON FIELD':n.type==='emit_event'?'⇢ EMIT EVENT':investorTag(n.type)}}</text>
          <text class="node-label" [attr.x]="n.x+12" [attr.y]="n.y+48" font-size="13">{{n.label.slice(0,16)}}</text>
+         @if(liveOverlay()){<text class="node-sub live-badge" [attr.x]="n.x+12" [attr.y]="n.y+63" font-size="10">{{liveNodeBadge(n.id)}}</text>}
           @for(pin of functionPins(n).inputs;track pin.name;let i=$index){<g><circle [attr.cx]="n.x" [attr.cy]="n.y+pinOffset(i,functionPins(n).inputs.length,70)" r="6" class="canvas-port pin-in" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation()"><title>Input {{pin.name}} ({{pin.type}})</title></circle><text [attr.x]="n.x+8" [attr.y]="n.y+pinOffset(i,functionPins(n).inputs.length,70)+3" font-size="8" class="pin-label">{{pin.name.slice(0,8)}}</text></g>}
           @for(pin of functionPins(n).outputs;track pin.name;let i=$index){<g><circle [attr.cx]="n.x+125" [attr.cy]="n.y+pinOffset(i,functionPins(n).outputs.length,70)" r="6" class="canvas-port pin-out" (pointerdown)="startWire($event,n.id,pin.name)" (click)="$event.stopPropagation()"><title>Output {{pin.name}} ({{pin.type}})</title></circle><text [attr.x]="n.x+117" [attr.y]="n.y+pinOffset(i,functionPins(n).outputs.length,70)+3" font-size="8" class="pin-label" text-anchor="end">{{pin.name.slice(0,8)}}</text></g>}
           @if(n.type!=='trigger'&&!functionPins(n).inputs.length){<circle class="canvas-port input-port" [attr.cx]="n.x" [attr.cy]="n.y+35" r="8" tabindex="0" role="button" [attr.aria-label]="'Connect into '+n.label" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation();onInputPortClick(n.id)" (keydown.enter)="$event.stopPropagation();chooseInputPort(n.id)"/>}
@@ -490,6 +493,40 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
      <button class="btn btn-sm btn-outline-secondary" (click)="emitEvent()" [disabled]="busy()||!eventKey()">Trigger event</button>
      <button class="btn btn-sm btn-outline-secondary" (click)="refresh()">Refresh</button>
    </div>
+   @if(liveOverlay()&&liveRun();as live){
+   <section #liveRunPanel class="live-run" tabindex="-1" [attr.aria-label]="'Run '+live.runId">
+     <header class="live-run-head">
+       <strong>Run #{{live.runId}}</strong>
+       <span class="fs-status" [class.is-success]="liveStatus()==='SUCCESS'" [class.is-danger]="liveStatus()==='FAILED'||liveStatus()==='DEAD'" [class.is-warning]="liveOpen()">{{runStatusLabel(liveStatus()||'QUEUED')}}</span>
+       <span class="muted">{{live.label}} · {{liveElapsed()}}</span>
+       <span class="live-run-actions">
+         @if(canCancelRun(liveStatus()||'QUEUED')){<button class="btn btn-sm btn-outline-danger" type="button" (click)="cancelLiveRun()" [disabled]="liveCancelling()">{{liveStatus()==='RUNNING'||liveStatus()==='AWAITING_APPROVAL'?'Cancel run':'Remove from queue'}}</button>}
+         <button class="btn btn-sm btn-outline-secondary" type="button" (click)="openLiveRunInHistory()">Open in Run history</button>
+         <button class="btn-close" type="button" (click)="closeLiveRun()" aria-label="Close run panel"></button>
+       </span>
+     </header>
+     <p class="live-run-summary" role="status">{{liveSummary()}}</p>
+     <div class="live-progress" role="progressbar" aria-label="Nodes finished" [attr.aria-valuenow]="liveProgress().done" aria-valuemin="0" [attr.aria-valuemax]="liveProgress().total"><span [style.width.%]="liveProgress().total?liveProgress().done/liveProgress().total*100:0" [class.is-failed]="liveProgress().failed"></span></div>
+     @if(liveStatus()==='AWAITING_APPROVAL'){<p class="live-run-note">A side effect waits for approval. <button class="btn btn-sm btn-outline-secondary" type="button" (click)="studioTab.set('approvals')">Review in Approvals &amp; audit</button></p>}
+     @if(liveError()){<p class="live-run-note" role="alert">{{liveError()}}</p>}
+     @if(liveSteps().length){
+       <ol class="live-steps" aria-label="Nodes run so far">
+         @for(step of liveSteps();track step.id){
+           <li>
+             <details [open]="step.status==='FAILED'">
+               <summary><span class="live-step-status" [attr.data-tone]="toneOf(step.status)">{{step.status}}</span> {{step.label||step.node}} <span class="muted">{{step.duration_ms==null?'':displayStepDuration(step.duration_ms)}}</span></summary>
+               @if(step.error){<pre class="live-step-error">{{step.error}}</pre>}
+               @if(step.output){<pre>{{step.output}}</pre>}@else if(!step.error){<p class="muted">No output.</p>}
+             </details>
+           </li>
+         }
+       </ol>
+     } @else if(liveOpen()){<p class="muted">{{liveStatus()==='QUEUED'||!liveStatus()?'Waiting for a worker to pick up the run.':'No node has finished yet.'}}</p>}
+     @if(liveRunInfo()?.error){<div class="exec-error-hint" role="alert"><strong>Run error:</strong> {{liveRunInfo()!.error}}</div>}
+     @if(!liveOpen()&&liveRunInfo()?.output){<section class="live-output"><h5>Output</h5><fse-markdown-run-output [raw]="liveRunInfo()!.output"></fse-markdown-run-output></section>}
+     <p class="muted live-run-foot">{{liveOpen()?'Updates while the run is going. You can keep editing; the run uses the graph as it was when you pressed run.':'Finished '+displayRunTime(liveRunInfo()?.finished_at)+'. Previews are capped; Run history has the full trace.'}}</p>
+   </section>
+   }
    @if(currentFlow();as current){
    <section class="flow-versions" aria-label="Published versions">
      <header><strong>Versions</strong><span role="status">{{publishStatusLabel(current)}}</span></header>
@@ -537,7 +574,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
     @if(runs().some(run=>isActiveRun(run.status))){<p class="muted" role="status">Queued or running run detected · history refreshes automatically every 5 seconds while this tab is open.</p>}
     @if(historyFlowId()&&runs().length&&!filteredRuns().length){<p class="muted">No runs match your filters.</p>}
    @for(run of filteredRuns();track run.id){
-    <details class="flow-run">
+    <details class="flow-run" [open]="traceRunId()===run.id||null">
       <summary><span class="fs-status" [class.is-success]="run.status==='SUCCESS'" [class.is-danger]="run.status==='FAILED'||run.status==='DEAD'" [class.is-warning]="canCancelRun(run.status)">{{runStatusLabel(run.status)}}</span> #{{run.id}} · <span class="run-kind" [class.draft-test]="isDraftTest(run)">{{runKindLabel(run)}}</span>@if(runAttemptLabel(run.attempts,run.max_attempts);as attempt){ · {{attempt}}} <span class="muted">· {{displayRunTime(run.status==='QUEUED'?run.queued_at:run.started_at)}} · {{displayRunDuration(run)}}</span></summary>
       <div class="run-diagnostics">
        @if(run.queued_at){<span><strong>Queued:</strong> {{displayRunTime(run.queued_at)}}</span>}
@@ -761,6 +798,24 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
  .capability-summary button,.graph-validation li button{background:none;border:0;text-decoration:underline;color:var(--fs-accent-text);font:inherit;padding:0;text-align:left}
  .graph-validation ul{padding-left:20px;margin:8px 0 0}.graph-validation li{padding:3px 0;overflow-wrap:anywhere}
  .graph-validation p{margin:6px 0 0}
+ .live-run{margin:0 0 14px;padding:12px;border:1px solid var(--fs-border);border-left:3px solid var(--fs-accent);border-radius:var(--bs-border-radius-lg);background:var(--fs-surface)}
+ .live-run:focus{outline:none}.live-run:focus-visible{outline:2px solid var(--fs-accent);outline-offset:2px}
+ .live-run-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+ .live-run-actions{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;margin-left:auto}
+ .live-run-summary{margin:8px 0 6px;font-size:.875rem}
+ .live-progress{height:6px;border-radius:3px;background:var(--fs-surface-3,var(--fs-border));overflow:hidden}
+ .live-progress span{display:block;height:100%;background:var(--fs-accent);transition:width .4s ease}
+ .live-progress span.is-failed{background:var(--fs-neg)}
+ .live-run-note{margin:8px 0 0;font-size:.875rem}
+ .live-steps{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:4px}
+ .live-steps summary{cursor:pointer;font-size:.875rem;min-height:24px;overflow-wrap:anywhere}
+ .live-steps pre{max-height:16rem;overflow:auto;margin:6px 0 4px;padding:8px;background:var(--fs-surface-2);border-radius:6px;font-size:.75rem;white-space:pre-wrap;overflow-wrap:anywhere}
+ .live-step-status{display:inline-block;min-width:5.5em;font-size:.6875rem;font-weight:700;letter-spacing:.04em;color:var(--fs-muted)}
+ .live-step-status[data-tone=ok]{color:var(--fs-pos)}.live-step-status[data-tone=fail]{color:var(--fs-neg)}
+ pre.live-step-error{border-left:3px solid var(--fs-neg)}
+ .live-output{margin-top:10px}.live-output h5{font-size:.875rem;margin:0 0 4px}
+ .live-run-foot{margin:10px 0 0;font-size:.8125rem}
+ @media(prefers-reduced-motion:reduce){.live-progress span{transition:none}}
  .flow-message{border-left:3px solid var(--fs-accent);background:var(--fs-accent-soft);padding:8px 12px;border-radius:0 6px 6px 0;margin:10px 0}
  .flow-actions{padding:12px;border:1px solid var(--fs-border);border-radius:var(--bs-border-radius-lg);background:var(--fs-surface);align-items:center}
  .flow-actions label{flex:0 1 220px;min-width:160px}
@@ -1213,6 +1268,7 @@ export class FlowStudioComponent {
  readonly message=signal('');
  private dragging:{id:string;startX:number;startY:number;x:number;y:number}|null=null;
  constructor(){
+   inject(DestroyRef).onDestroy(()=>this.stopLivePolling());
   // Load the revision list of the selected call node's target for its pin selector.
   effect(()=>{const n=this.selectedNode();if(n?.type==='flow'&&n.flow_id)void this.loadTargetRevisions('flow',n.flow_id);if(n?.type==='function'&&n.function_id)void this.loadTargetRevisions('function',n.function_id)});
   this.resetGraphHistory();this.savedSnapshot.set(this.currentSnapshot());void this.refresh();if(this.auth.user()?.role==='SYS_ADMIN'){void this.loadFunctions();void this.loadAgentTools()}void this.loadModels();void this.loadPersonas();void this.loadChoices();void this.loadProviders();void this.loadCollections();
@@ -1682,6 +1738,95 @@ export class FlowStudioComponent {
  async save(){this.busy.set(true);try{const id=this.selectedId();const body={name:this.name(),graph:this.graph(),enabled:this.enabled(),interval_minutes:this.interval(),event_key:this.eventKey()};
    const flow:SavedFlow=await this.request(id?'/api/admin/flows/'+id:'/api/admin/flows',{method:id?'PUT':'POST',body:JSON.stringify(body)});
    this.selectedId.set(flow.id);this.historyFlowId.set(flow.id);this.savedSnapshot.set(this.currentSnapshot());this.message.set(flow.active_revision?'Draft saved; publish it to change what runs.':'Flow saved');await this.refresh();await this.loadRevisions()}catch(e){this.message.set(String(e));void this.loadReadiness()}finally{this.busy.set(false)}}
+
+ // A run started from the editor is followed here, next to the graph.
+ readonly liveRun=signal<{scope:number;flowId:number;runId:number;label:string;nodeIds:string[];startedAt:number}|null>(null);
+ readonly liveRunInfo=signal<FlowRun|null>(null);
+ readonly liveSteps=signal<FlowRunStep[]>([]);
+ readonly liveError=signal('');
+ readonly liveCancelling=signal(false);
+ private readonly liveNow=signal(Date.now());
+ private liveTimer:ReturnType<typeof setTimeout>|undefined;
+ private liveClock:ReturnType<typeof setInterval>|undefined;
+ private readonly liveRunPanel=viewChild<ElementRef<HTMLElement>>('liveRunPanel');
+ readonly liveStatus=computed(()=>this.liveRunInfo()?.status);
+ readonly liveOpen=computed(()=>!!this.liveRun()&&isLiveRunOpen(this.liveStatus()));
+ /** The overlay belongs to the flow the run was started from. */
+ readonly liveOverlay=computed(()=>{const live=this.liveRun();return !!live&&live.flowId===this.selectedId()});
+ readonly liveNodeStatus=computed(()=>nodeStatuses(this.liveSteps()));
+ readonly liveProgress=computed(()=>liveRunProgress(this.liveRun()?.nodeIds??[],this.liveSteps()));
+ readonly liveElapsed=computed(()=>{
+   const info=this.liveRunInfo();
+   if(info&&!isLiveRunOpen(info.status)&&info.duration_ms!=null)return this.displayStepDuration(info.duration_ms);
+   const start=info?.started_at?Date.parse(info.started_at):NaN;
+   const from=Number.isFinite(start)?start:this.liveRun()?.startedAt??Date.now();
+   return this.displayStepDuration(Math.max(0,this.liveNow()-from));
+ });
+ readonly liveSummary=computed(()=>{
+   const live=this.liveRun();if(!live)return '';
+   const p=this.liveProgress();const status=this.liveStatus();
+   const counts=p.done+' of '+p.total+' nodes finished'+(p.failed?' · '+p.failed+' failed':'')+(p.skipped?' · '+p.skipped+' skipped':'');
+   return 'Run #'+live.runId+' '+runStatusLabel(status||'QUEUED').toLowerCase()+' · '+counts;
+ });
+ toneOf(status:string):string{return toneForStatus(status)}
+ liveNodeTone(id:string):string{
+   if(!this.liveOverlay())return '';
+   const status=this.liveNodeStatus()[id];
+   const tone=status?toneForStatus(status):this.liveNext(id)?'run':'none';
+   return tone==='none'?'':'tone-'+tone;
+ }
+ liveNodeBadge(id:string):string{
+   const status=this.liveNodeStatus()[id];
+   if(!status&&this.liveNext(id))return '… next';
+   const step=[...this.liveSteps()].reverse().find(s=>s.node===id);
+   return nodeRunBadge(status,step?.duration_ms,this.liveOpen());
+ }
+ /** A node that has not run while every node before it has: the likely next one while the run is going. */
+ private liveNext(id:string):boolean{
+   if(this.liveStatus()!=='RUNNING'||this.liveNodeStatus()[id]||!this.liveRun()?.nodeIds.includes(id))return false;
+   const done=this.liveNodeStatus();
+   return this.graph().edges.filter(e=>e.to===id).every(e=>!!done[e.from]);
+ }
+ private startLiveRun(scope:number,flowId:number,runId:number,label:string,graph:{nodes:{id:string}[]}){
+   this.stopLivePolling();
+   this.liveRun.set({scope,flowId,runId,label,nodeIds:graph.nodes.map(n=>n.id),startedAt:Date.now()});
+   this.liveRunInfo.set(null);this.liveSteps.set([]);this.liveError.set('');this.liveCancelling.set(false);this.liveNow.set(Date.now());
+   this.liveClock=setInterval(()=>{this.liveNow.set(Date.now());if(!this.liveOpen())this.stopLiveClock()},1000);
+   void this.pollLiveRun();
+   setTimeout(()=>this.liveRunPanel()?.nativeElement.scrollIntoView({block:'nearest',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}));
+ }
+ private async pollLiveRun():Promise<void>{
+   const live=this.liveRun();if(!live)return;
+   const base=historyPath(live.scope)+'/runs';
+   try{
+     const [list,trace]=await Promise.all([this.request(base),this.request(base+'/'+live.runId+'/steps')]);
+     if(this.liveRun()!==live)return;
+     const run=(list.runs as FlowRun[]|undefined)?.find(r=>r.id===live.runId)??null;
+     if(run)this.liveRunInfo.set(run);
+     this.liveSteps.set(trace.steps||[]);
+     this.liveError.set('');
+   }catch(e){
+     if(this.liveRun()!==live)return;
+     this.liveError.set('Could not update the run: '+String(e)+'. Trying again.');
+   }
+   if(this.liveRun()!==live)return;
+   if(isLiveRunOpen(this.liveStatus())){this.liveTimer=setTimeout(()=>void this.pollLiveRun(),liveRunPollMs(this.liveStatus()))}
+   else{this.stopLiveClock();this.liveNow.set(Date.now())}
+ }
+ private stopLiveClock(){if(this.liveClock){clearInterval(this.liveClock);this.liveClock=undefined}}
+ private stopLivePolling(){if(this.liveTimer){clearTimeout(this.liveTimer);this.liveTimer=undefined}this.stopLiveClock()}
+ async cancelLiveRun(){
+   const live=this.liveRun();if(!live||this.liveCancelling())return;
+   this.liveCancelling.set(true);
+   try{await this.request(historyPath(live.scope)+'/runs/'+live.runId+'/cancel',{method:'POST'});if(this.liveTimer)clearTimeout(this.liveTimer);await this.pollLiveRun()}
+   catch(e){this.liveError.set('Cannot cancel the run: '+String(e))}
+   finally{this.liveCancelling.set(false)}
+ }
+ openLiveRunInHistory(){
+   const live=this.liveRun();if(!live)return;
+   this.selectHistoryFlow(live.scope);this.studioTab.set('runs');void this.showRunSteps(live.runId);
+ }
+ closeLiveRun(){this.stopLivePolling();this.liveRun.set(null);this.liveRunInfo.set(null);this.liveSteps.set([]);this.liveError.set('')}
  async run(target:'active'|'draft'='active'){
    const issues=this.graphIssues();
    if(issues.length){this.message.set('Resolve '+issues.length+' graph issue(s) before running.');return}
@@ -1699,8 +1844,14 @@ export class FlowStudioComponent {
    this.busy.set(true);try{
      const url=unsaved&&!id?'/api/admin/flows/draft/run':'/api/admin/flows/'+id+'/run';
      const queued=await this.request(url,{method:'POST',body:JSON.stringify(unsaved?draftRunBody({graph,liveSideEffects:live}):{target})});
-     this.historyFlowId.set(unsaved&&!id?DRAFT_HISTORY_SCOPE:id);
-     this.message.set(unsaved?'Draft test queued from your unsaved editor graph (snapshot '+shortHash(queued.graph_hash)+'); '+(live?'confirmed side effects run for real; ':'side effects are simulated; ')+'nothing was saved. Open Run history to see its progress':'Saved version run queued ('+runRevisionLabel(queued.flow_revision)+'); open Run history to see its progress');
+     const scope=unsaved&&!id?DRAFT_HISTORY_SCOPE:id;
+     this.historyFlowId.set(scope);
+     this.message.set(unsaved?'Draft test queued from your unsaved editor graph (snapshot '+shortHash(queued.graph_hash)+'); '+(live?'confirmed side effects run for real; ':'side effects are simulated; ')+'nothing was saved. Follow it in the run panel':'Saved version run queued ('+runRevisionLabel(queued.flow_revision)+'); follow it in the run panel');
+     if(typeof queued.run_id==='number'&&queued.run_id>0){
+       const label=unsaved?(live?'Draft test, real side effects':'Draft test, simulated side effects'):(target==='draft'?'Saved draft':runRevisionLabel(queued.flow_revision));
+       // Saved runs use the stored graph; for the overlay the editor graph is the closest match.
+       this.startLiveRun(scope,id,queued.run_id,label,unsaved?graph:this.graph());
+     }
      setTimeout(()=>void this.refreshRuns(),3000)}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
  async emitEvent(){this.busy.set(true);try{const definition=this.triggers().find(t=>t.event_key===this.eventKey());if(!definition)throw Error('Create the custom trigger first');let value:string|number|boolean=this.triggerValue();if(definition.payload_type==='number'){value=Number(value);if(!Number.isFinite(value))throw Error('Event requires a finite number')}if(definition.payload_type==='boolean'){if(value!=='true'&&value!=='false')throw Error('Use true or false for a boolean event');value=value==='true'}const data=await this.request('/api/admin/flow-events/'+encodeURIComponent(this.eventKey()),{method:'POST',body:JSON.stringify({value})});this.message.set(data.started+' flow(s) triggered');}catch(e){this.message.set(String(e))}finally{this.busy.set(false)}}
 }
