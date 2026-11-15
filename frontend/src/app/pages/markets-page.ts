@@ -15,6 +15,7 @@ import { LeaderboardComponent } from '../components/leaderboard';
 import { TradingChartComponent } from '../components/chart';
 import { LedgerComponent } from '../components/ledger';
 import { WatchlistComponent } from '../components/watchlist';
+import { MarketGroups } from '../components/market-groups';
 import { SymbolSearchComponent } from '../shell/symbol-search';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import { INDICATOR_KEYS } from '../indicators';
@@ -42,7 +43,7 @@ interface Kpi { label: string; value: string; sub?: string; tone?: 'pos' | 'neg'
 @Component({
   selector: 'fs-markets-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PaneComponent, HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, LedgerComponent, WatchlistComponent, SymbolSearchComponent, ProgressStatusComponent],
+  imports: [PaneComponent, HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, LedgerComponent, WatchlistComponent, MarketGroups, SymbolSearchComponent, ProgressStatusComponent],
   templateUrl: './markets-page.html',
   styleUrl: './markets-page.scss',
 })

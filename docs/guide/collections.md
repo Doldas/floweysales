@@ -59,6 +59,8 @@ An open collection shows:
 
 Below the composition a coverage line says how many instruments the chosen dimension is known for. Instruments where it was not stored are shown as **Unknown**, not guessed.
 
+On the Markets page your collections are **groups**: pick one to browse its instruments, add the instrument on screen to it, and see a group dashboard with the group index, volatility, drawdown, breadth, a composition donut, returns, risk and return, and correlation. See [Markets](markets.md#groups).
+
 ## Profiles and classification
 
 The **Classification** card groups the collection by **Asset class**, **Sector**, **Region** or **Theme**, with the same counts or weights as the composition. Instruments without a value are shown as **Unclassified**. One instrument can have several themes, so theme shares can add up to more than 100%, and themes are always counted, never weighted.
