@@ -91,7 +91,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish versioned application container
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -109,7 +109,7 @@ jobs:
       - name: Verify or fetch MySQL Connector/J
         run: bash scripts/fetch-liquibase-jdbc.sh
       - name: Publish matching Liquibase migration container
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/liquibase.Dockerfile
