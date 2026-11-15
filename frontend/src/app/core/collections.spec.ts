@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   composition, coverageText, exportFileName, facets, filterParams, importSummary, instrumentFrom, normalizeType, parseTags,
-  weightProblem, weightSummary, type Collection, type CollectionMember,
+  watchlistImport, weightProblem, weightSummary, type Collection, type CollectionMember,
 } from './collections.ts';
 
 let nextId = 1;
@@ -106,4 +106,19 @@ test('export names use the UTC date and import results read as sentences', () =>
     { name: 'Med', status: 'renamed', id: 2, saved_as: 'Med (2)', members: 3 },
     { name: 'Old', status: 'skipped', members: 0 },
   ]), ['Tech created with 1 instrument.', 'Med saved as Med (2) with 3 instruments.', 'Old skipped: the name is taken.']);
+});
+
+test('the research watchlist becomes one watch collection, without duplicates or weights', () => {
+  const doc = watchlistImport([
+    { symbol: 'AAPL', provider: 'YAHOO' }, { symbol: 'aapl', provider: 'yahoo' }, { symbol: 'AAPL', provider: 'FINN' }, { symbol: '', provider: 'YAHOO' },
+  ], new Date('2026-11-15T09:30:12Z'));
+  assert.equal(doc.format, 'floweysales.collections');
+  assert.equal(doc.collections.length, 1);
+  const c = doc.collections[0];
+  assert.equal(c.kind, 'watch');
+  assert.match(c.description, /on 2026-11-15 09:30 UTC/);
+  assert.deepEqual(c.members, [
+    { instrument: { provider: 'YAHOO', symbol: 'AAPL' } },
+    { instrument: { provider: 'FINN', symbol: 'AAPL' } },
+  ]);
 });

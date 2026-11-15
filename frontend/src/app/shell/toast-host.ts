@@ -53,7 +53,8 @@ import { NotifyService } from '../core/notify.service';
     .is-success .toast-icon { color: var(--fs-pos); }
     .toast-text { display: grid; gap: .1rem; flex: 1; min-width: 0; font-size: .875rem; overflow-wrap: anywhere; }
     .toast-text strong { font-size: .875rem; }
-    .btn-close { flex: 0 0 auto; font-size: .7rem; margin-top: 4px; }
+    /* A 24 px target (WCAG 2.5.8) around the small cross. */
+    .btn-close { flex: 0 0 auto; font-size: .7rem; width: 12px; height: 12px; padding: 6px; margin: -4px -4px 0 0; }
     .fs-dialog {
       width: min(460px, calc(100vw - 2rem)); padding: 0; border: 1px solid var(--fs-border); border-radius: var(--bs-border-radius-xl);
       background: var(--fs-surface); color: var(--fs-text); box-shadow: var(--fs-shadow-lg);

@@ -102,4 +102,9 @@ export class CollectionsService {
     return this.http.post<{ results: ImportResult[] | null }>(`${this.base}/import`, document, { params: { on_conflict: onConflict } })
       .pipe(map(r => r.results ?? []));
   }
+
+  /** Copies the system tracker list into a new watch collection (SYS_ADMIN). */
+  fromTrackers(name = ''): Observable<{ collection: Collection; added: number; skipped: string[] | null }> {
+    return this.http.post<{ collection: Collection; added: number; skipped: string[] | null }>(`${this.base}/from-trackers`, { name });
+  }
 }

@@ -53,7 +53,7 @@ const MAX_ROUNDS = 10;
         Classes come from your own classification first, then from each instrument's own provider profile.
       </p>
       @if (comp().rows.length) {
-        <table class="table comp-table" aria-describedby="intel-note">
+        <div class="comp-scroll" tabindex="0" role="group" [attr.aria-label]="dimensionLabels[dimension()] + ' table'"><table class="table comp-table" aria-describedby="intel-note">
           <caption class="visually-hidden">{{ comp().mode === 'count' ? 'Instruments' : 'Weight' }} by {{ dimensionLabels[dimension()] }}</caption>
           <thead><tr><th scope="col">{{ dimensionLabels[dimension()] }}</th><th scope="col" class="bar-col"><span class="visually-hidden">Bar</span></th><th scope="col" class="num">{{ comp().mode === 'count' ? 'Instruments' : 'Weight' }}</th></tr></thead>
           <tbody>
@@ -75,7 +75,7 @@ const MAX_ROUNDS = 10;
               </tr>
             }
           </tbody>
-        </table>
+        </table></div>
       } @else if (dimension() === 'theme' && i.members.length) {
         <p class="muted">No themes yet. Open an instrument's details to add your own.</p>
       }
@@ -237,6 +237,13 @@ const MAX_ROUNDS = 10;
     .comp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
     .comp-note { font-size: 0.8rem; color: var(--fs-muted); margin: 0 0 0.6rem; }
     .comp-table { th[scope='row'] { font-weight: 500; white-space: nowrap; } .num { text-align: right; white-space: nowrap; } }
+    /* Large text on a phone: the table scrolls inside its card (WCAG 1.4.10 allows it for data tables). */
+    .comp-scroll { overflow-x: auto; }
+    .comp-scroll:focus-visible { outline: 2px solid var(--fs-accent); outline-offset: 2px; }
+    /* Narrow screens and large text: labels wrap and the share moves under the value. */
+    @media (max-width: 30rem) {
+      .comp-table { th[scope='row'], th.num, .num { white-space: normal; overflow-wrap: anywhere; } .num .muted { display: block; } .bar-col { width: 20%; } }
+    }
     .bar-col { width: 55%; }
     .bar { display: block; height: 0.6rem; min-width: 2px; border-radius: 0 4px 4px 0; background: var(--fs-accent); }
     .unknown .bar { background: var(--fs-border-strong); }

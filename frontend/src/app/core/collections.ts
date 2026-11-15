@@ -285,3 +285,34 @@ export function importSummary(results: ImportResult[]): string[] {
     return `${r.name} created with ${n}.`;
   });
 }
+
+/** Default name of a collection copied from the research watchlist. */
+export const WATCHLIST_COPY_NAME = 'Research watchlist';
+
+/**
+ * An import document that copies this browser's research watchlist into a
+ * new watch collection. The server validates it like any import and renames
+ * the copy when the name is taken; the watchlist itself is left unchanged.
+ */
+export function watchlistImport(list: readonly { symbol: string; provider: string }[], now: Date) {
+  const stamp = now.toISOString().slice(0, 16).replace('T', ' ');
+  const seen = new Set<string>();
+  const members = [];
+  for (const t of list) {
+    const key = `${t.provider}:${t.symbol}`.toUpperCase();
+    if (!t.symbol || !t.provider || seen.has(key)) continue;
+    seen.add(key);
+    members.push({ instrument: { provider: t.provider, symbol: t.symbol } });
+  }
+  return {
+    format: 'floweysales.collections',
+    version: 1,
+    exported_at: now.toISOString(),
+    collections: [{
+      name: WATCHLIST_COPY_NAME,
+      kind: 'watch' as const,
+      description: `Copied from the research watchlist in this browser on ${stamp} UTC. The watchlist itself is unchanged.`,
+      members,
+    }],
+  };
+}
