@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"floweysales/internal/collections"
 	"floweysales/internal/market"
 	"floweysales/internal/sec"
 	"floweysales/internal/storage"
@@ -31,13 +32,32 @@ var investorNodeTypes = map[string]bool{
 	"watchlist_quotes": true, "technical_scan": true, "fundamentals": true, "sec_filings": true,
 	"news": true, "leaderboard": true, "screen": true, "only_new": true, "report_table": true, "notify": true,
 	"insider_activity": true, "macro_regime": true, "portfolio_check": true, "corporate_events": true, "wealth_plan": true, "backtest": true,
+	"collection": true, "collection_news": true,
+}
+
+// flowTarget is one symbol a data node reads, with the provider its input row
+// named; Provider is empty when the row named none or the watchlist gave it.
+type flowTarget struct {
+	Symbol   string
+	Provider string
 }
 
 // flowSymbols reads the node's watchlist, or, when it has none, the symbols
 // in its input: a JSON array of tickers, rows with a "symbol" field, an
 // object with a "symbols" array, or comma/space separated text.
 func flowSymbols(configured, input string) ([]string, error) {
-	var raw []string
+	targets, err := flowTargets(configured, input)
+	if err != nil {
+		return nil, err
+	}
+	return targetSymbols(targets), nil
+}
+
+// flowTargets is flowSymbols keeping the provider of input rows that name
+// one, such as the rows of a collection node. The same ticker from two
+// providers is two targets: they are different listings.
+func flowTargets(configured, input string) ([]flowTarget, error) {
+	var raw []flowTarget
 	source := strings.TrimSpace(configured)
 	if source == "" {
 		source = strings.TrimSpace(input)
@@ -50,10 +70,11 @@ func flowSymbols(configured, input string) ([]string, error) {
 				for _, item := range list {
 					switch v := item.(type) {
 					case string:
-						raw = append(raw, v)
+						raw = append(raw, flowTarget{Symbol: v})
 					case map[string]any:
 						if s, ok := v["symbol"].(string); ok {
-							raw = append(raw, s)
+							provider, _ := v["provider"].(string)
+							raw = append(raw, flowTarget{Symbol: s, Provider: strings.TrimSpace(provider)})
 						}
 					}
 				}
@@ -62,28 +83,61 @@ func flowSymbols(configured, input string) ([]string, error) {
 		}
 	}
 	if source != "" {
-		raw = strings.FieldsFunc(source, func(r rune) bool { return r == ',' || r == ';' || r == '\n' || r == '\t' || r == ' ' })
-	}
-	seen := map[string]bool{}
-	symbols := []string{}
-	for _, s := range raw {
-		symbol, err := market.CanonicalSymbol(s)
-		if err != nil {
-			return nil, fmt.Errorf("watchlist symbol %q: %w", s, err)
+		for _, s := range strings.FieldsFunc(source, func(r rune) bool { return r == ',' || r == ';' || r == '\n' || r == '\t' || r == ' ' }) {
+			raw = append(raw, flowTarget{Symbol: s})
 		}
-		if seen[symbol] {
+	}
+	seen := map[flowTarget]bool{}
+	targets := []flowTarget{}
+	for _, t := range raw {
+		symbol, err := market.CanonicalSymbol(t.Symbol)
+		if err != nil {
+			return nil, fmt.Errorf("watchlist symbol %q: %w", t.Symbol, err)
+		}
+		if t.Provider != "" {
+			p := market.ParseProvider(t.Provider)
+			if !p.Valid() {
+				return nil, fmt.Errorf("symbol %s: invalid provider %q", symbol, t.Provider)
+			}
+			t.Provider = p.String()
+		}
+		t.Symbol = symbol
+		if seen[t] {
 			continue
 		}
-		seen[symbol] = true
-		symbols = append(symbols, symbol)
+		seen[t] = true
+		targets = append(targets, t)
 	}
-	if len(symbols) == 0 {
+	if len(targets) == 0 {
 		return nil, errors.New("no symbols: set a watchlist on the node or connect a node that outputs symbols")
 	}
-	if len(symbols) > flowMaxSymbols {
+	if len(targets) > flowMaxSymbols {
 		return nil, fmt.Errorf("at most %d symbols per node", flowMaxSymbols)
 	}
-	return symbols, nil
+	return targets, nil
+}
+
+// targetSymbols is the distinct tickers of targets, for sources that know a
+// ticker but no provider, such as SEC EDGAR.
+func targetSymbols(targets []flowTarget) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, t := range targets {
+		if !seen[t.Symbol] {
+			seen[t.Symbol] = true
+			out = append(out, t.Symbol)
+		}
+	}
+	return out
+}
+
+// markTarget marks a row with the provider its input row named, so the row
+// and its source say which listing it is.
+func markTarget(row map[string]any, t flowTarget) map[string]any {
+	if row != nil && t.Provider != "" {
+		row["provider"] = t.Provider
+	}
+	return row
 }
 
 // flowEachSymbol runs fetch for every symbol with bounded concurrency and
@@ -91,23 +145,40 @@ func flowSymbols(configured, input string) ([]string, error) {
 // than failing the node, so one delisted ticker never hides the rest; the
 // node fails only when every symbol fails.
 func flowEachSymbol(ctx context.Context, symbols []string, fetch func(ctx context.Context, symbol string) (map[string]any, error)) ([]map[string]any, error) {
-	rows := make([]map[string]any, len(symbols))
+	targets := make([]flowTarget, len(symbols))
+	for i, s := range symbols {
+		targets[i] = flowTarget{Symbol: s}
+	}
+	return flowEachTarget(ctx, targets, func(ctx context.Context, t flowTarget) (map[string]any, error) { return fetch(ctx, t.Symbol) })
+}
+
+// flowEachTarget is flowEachSymbol for targets; an error row names the
+// target's provider when it has one.
+func flowEachTarget(ctx context.Context, targets []flowTarget, fetch func(ctx context.Context, t flowTarget) (map[string]any, error)) ([]map[string]any, error) {
+	rows := make([]map[string]any, len(targets))
 	slots := make(chan struct{}, flowSymbolFetches)
 	var wg sync.WaitGroup
-	for i, symbol := range symbols {
+	for i, t := range targets {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			failed := func(err error) map[string]any {
+				row := map[string]any{"symbol": t.Symbol, "error": trimSearchField(err.Error(), 160)}
+				if t.Provider != "" {
+					row["provider"] = t.Provider
+				}
+				return row
+			}
 			select {
 			case slots <- struct{}{}:
 			case <-ctx.Done():
-				rows[i] = map[string]any{"symbol": symbol, "error": ctx.Err().Error()}
+				rows[i] = failed(ctx.Err())
 				return
 			}
 			defer func() { <-slots }()
-			row, err := fetch(ctx, symbol)
+			row, err := fetch(ctx, t)
 			if err != nil {
-				rows[i] = map[string]any{"symbol": symbol, "error": trimSearchField(err.Error(), 160)}
+				rows[i] = failed(err)
 				return
 			}
 			rows[i] = row
@@ -462,32 +533,44 @@ func (e *Engine) secFilingList(ctx context.Context, ticker string, limit int) (s
 
 // runInvestorDataNode executes the read-only investor nodes that fetch data.
 func (e *Engine) runInvestorDataNode(ctx context.Context, n flowNode, input string) (string, error) {
-	symbols, err := flowSymbols(n.Symbols, input)
+	targets, err := flowTargets(n.Symbols, input)
 	if err != nil {
 		return "", err
 	}
+	symbols := targetSymbols(targets)
 	provider := e.parseProvider(n.Provider)
+	// providerOf is the node's provider when one is chosen, else the provider
+	// the input row named (a collection member's own), else the default.
+	providerOf := func(t flowTarget) market.Provider {
+		if n.Provider == "" && t.Provider != "" {
+			return market.ParseProvider(t.Provider)
+		}
+		return provider
+	}
 	now := time.Now().UTC()
 	var rows []map[string]any
 	switch n.Type {
 	case "watchlist_quotes":
-		rows, err = flowEachSymbol(ctx, symbols, func(ctx context.Context, symbol string) (map[string]any, error) {
-			series, err := e.flowHistory(ctx, symbol, provider, market.Range1Y)
+		rows, err = flowEachTarget(ctx, targets, func(ctx context.Context, t flowTarget) (map[string]any, error) {
+			series, err := e.flowHistory(ctx, t.Symbol, providerOf(t), market.Range1Y)
 			if err != nil {
 				return nil, err
 			}
-			return quoteRow(symbol, series, now)
+			row, err := quoteRow(t.Symbol, series, now)
+			return markTarget(row, t), err
 		})
 	case "technical_scan":
-		rows, err = flowEachSymbol(ctx, symbols, func(ctx context.Context, symbol string) (map[string]any, error) {
-			series, err := e.flowHistory(ctx, symbol, provider, market.Range1Y)
+		rows, err = flowEachTarget(ctx, targets, func(ctx context.Context, t flowTarget) (map[string]any, error) {
+			series, err := e.flowHistory(ctx, t.Symbol, providerOf(t), market.Range1Y)
 			if err != nil {
 				return nil, err
 			}
-			return technicalRow(symbol, series)
+			row, err := technicalRow(t.Symbol, series)
+			return markTarget(row, t), err
 		})
 	case "fundamentals":
-		rows, err = flowEachSymbol(ctx, symbols, func(ctx context.Context, symbol string) (map[string]any, error) {
+		rows, err = flowEachTarget(ctx, targets, func(ctx context.Context, t flowTarget) (map[string]any, error) {
+			symbol, provider := t.Symbol, providerOf(t)
 			res, err := e.GetFinancials(ctx, symbol, provider)
 			if err != nil {
 				return nil, err
@@ -502,7 +585,7 @@ func (e *Engine) runInvestorDataNode(ctx context.Context, n flowNode, input stri
 			if err == nil && price > 0 {
 				row["price"] = round2f(price)
 			}
-			return row, err
+			return markTarget(row, t), err
 		})
 	case "sec_filings":
 		lookback := n.LookbackDays
@@ -529,11 +612,11 @@ func (e *Engine) runInvestorDataNode(ctx context.Context, n flowNode, input stri
 		sort.SliceStable(filings, func(i, j int) bool { return fmt.Sprint(filings[i]["filed"]) > fmt.Sprint(filings[j]["filed"]) })
 		return flowRowsJSON(filings)
 	case "news":
-		return e.runNewsNode(ctx, n, symbols, provider, now)
+		return e.runNewsNode(ctx, n, targets, provider, now)
 	case "insider_activity":
 		return e.runInsiderNode(ctx, n, symbols, now)
 	case "corporate_events":
-		return e.runEventsNode(ctx, n, symbols, now)
+		return e.runEventsNode(ctx, n, targets, now)
 	default:
 		return "", fmt.Errorf("unknown investor node %s", n.Type)
 	}
@@ -557,7 +640,7 @@ func sortNewsRows(items []map[string]any) {
 	sort.SliceStable(items, func(i, j int) bool { return published(items[i]).After(published(items[j])) })
 }
 
-func (e *Engine) runNewsNode(ctx context.Context, n flowNode, symbols []string, provider market.Provider, now time.Time) (string, error) {
+func (e *Engine) runNewsNode(ctx context.Context, n flowNode, targets []flowTarget, provider market.Provider, now time.Time) (string, error) {
 	limit := n.Limit
 	if limit == 0 {
 		limit = 5
@@ -572,7 +655,11 @@ func (e *Engine) runNewsNode(ctx context.Context, n flowNode, symbols []string, 
 	}
 	var mu sync.Mutex
 	items := []map[string]any{}
-	_, err := flowEachSymbol(ctx, symbols, func(ctx context.Context, symbol string) (map[string]any, error) {
+	_, err := flowEachTarget(ctx, targets, func(ctx context.Context, t flowTarget) (map[string]any, error) {
+		symbol, provider := t.Symbol, provider
+		if n.Provider == "" && t.Provider != "" {
+			provider = market.ParseProvider(t.Provider) // the member's own provider, never the first with news
+		}
 		news, err := e.newsFor(ctx, 0, provider, symbol, limit)
 		if err != nil {
 			return nil, err
@@ -879,6 +966,21 @@ func validateInvestorNode(n flowNode, version int) error {
 	if n.Years != 0 && n.Type != "backtest" {
 		return fmt.Errorf("node %s: years is a backtest setting", n.ID)
 	}
+	isCollection := n.Type == "collection" || n.Type == "collection_news"
+	if n.Collection != "" && !isCollection {
+		return fmt.Errorf("node %s: collection is a setting of the collection nodes", n.ID)
+	}
+	if isCollection {
+		if strings.TrimSpace(n.Collection) == "" || len([]rune(n.Collection)) > collections.MaxNameLen {
+			return fmt.Errorf("node %s: choose a collection (by name or id)", n.ID)
+		}
+		if n.Symbols != "" || n.Provider != "" || n.LookbackDays != 0 {
+			return fmt.Errorf("node %s: a collection node reads its instruments and their providers from the collection", n.ID)
+		}
+		if n.Type == "collection_news" && n.Limit > collectionNewsMax {
+			return fmt.Errorf("node %s: at most %d headlines", n.ID, collectionNewsMax)
+		}
+	}
 	if (n.Universe != "" || n.Strategy != "") && n.Type != "leaderboard" && n.Type != "backtest" {
 		return fmt.Errorf("node %s: universe and strategy are leaderboard settings", n.ID)
 	}
@@ -977,6 +1079,10 @@ func (e *Engine) runInvestorNodeRows(ctx context.Context, f storage.AgentFlow, n
 		return output, "", err
 	case "wealth_plan":
 		return e.runWealthPlanNode(ctx, f)
+	case "collection":
+		return e.runCollectionNode(ctx, f, n)
+	case "collection_news":
+		return e.runCollectionNewsNode(ctx, f, n)
 	case "backtest":
 		output, err = e.runBacktestNode(ctx, n, input)
 		return output, "", err

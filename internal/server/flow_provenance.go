@@ -20,6 +20,7 @@ var flowNodeProvenance = map[string]string{
 	"watchlist_quotes": "stamped", "technical_scan": "stamped", "fundamentals": "stamped", "sec_filings": "stamped",
 	"news": "stamped", "leaderboard": "stamped", "insider_activity": "stamped", "macro_regime": "stamped",
 	"portfolio_check": "stamped", "corporate_events": "stamped", "wealth_plan": "stamped", "backtest": "stamped",
+	"collection": "stamped", "collection_news": "stamped",
 	"screen": "passthrough", "only_new": "passthrough", "report_table": "passthrough", "notify": "passthrough",
 }
 
@@ -64,7 +65,7 @@ func flowRowFact(n flowNode, provider string, row map[string]any, now time.Time)
 		f = providerFact(provider, symbol, derefTime(rowDate(row, "as_of", "ttm_through")), now, "Reported quarters and the last price as the provider returned them; ratios are calculated from them.")
 	case "corporate_events":
 		f = providerFact(provider, symbol, derefTime(rowDate(row, "date")), now, "A date the provider listed; dates can move.")
-	case "news":
+	case "news", "collection_news":
 		f = providerFact(provider, symbol, time.Time{}, now, "Found by the provider's news feed; the article itself was not read.")
 		if u := rowString(row, "url"); u != "" {
 			f.URL, f.Status = u, provenance.Known
@@ -87,6 +88,9 @@ func flowRowFact(n flowNode, provider string, row map[string]any, now time.Time)
 		f = calculatedRowFact("portfolio.check", "Checks computed from the simulated paper account and the provider's daily closes.", provider, symbol, nil, now)
 		f.Inputs = append(f.Inputs, "paper_account")
 		f.Note = "The paper account is simulated, not a brokerage record."
+	case "collection":
+		f = provenance.Fact{Kind: provenance.Assumed, Status: provenance.Known, Provider: provider, RetrievedAt: &now, Inputs: []string{"user_collection"},
+			Note: "An instrument you put in your collection. Classes are your classification or the provider profile FloweySales stored; a model portfolio's weights are hypothetical."}
 	case "wealth_plan":
 		f = calculatedRowFact("wealth_plan", "Computed from the plan you saved.", "", "", nil, now)
 		f.Inputs = []string{"user_plan"}

@@ -110,6 +110,10 @@ A load asks for at most 25 instruments. The line under the list says how many in
 
 The Research Agent can read the same news; see [Agents](agents.md#collections).
 
+## Collections in flows
+
+Flow Studio has two nodes for collections: **Collection members** passes on the instruments of a collection, and **Collection news** passes on its headlines. A flow always reads the collections of the person who owns the flow. See [Flows](flows.md#collections).
+
 ## Export and import
 
 **Export** downloads all your collections as a JSON file named with today's UTC date. **Import** reads such a file. An import always creates new collections: when a name is taken the collection is saved under a new name, for example "Energy (2)", and the result lists what was created. Nothing is merged into an existing collection, and the whole file is checked before anything is saved.
@@ -119,7 +123,7 @@ The Research Agent can read the same news; see [Agents](agents.md#collections).
 - At most 200 collections, 1,000 instruments per collection and 20 tags per collection or instrument.
 - Profiles depend on the installed data provider plugins. A provider without the profile capability has no profiles.
 - At most 25 instruments are asked for news per load, and only providers with the news capability give headlines.
-- Collections are not yet a scope for Flow Studio. This is planned.
+- A flow reads at most 100 instruments of a collection, and a data node after it at most 25.
 - Linked portfolio views, derived from real positions, are not available.
 
 The technical design is in [Market Collections](../market-collections.md).

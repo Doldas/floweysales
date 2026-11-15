@@ -19,6 +19,9 @@ import (
 
 var _ ai.CollectionSource = engineSource{}
 
+// errNoCollection is wrapped by resolveCollection when nothing matches.
+var errNoCollection = errors.New("no collection")
+
 const collectionToolNotice = "The user's own collection. A model portfolio is hypothetical: not a holding and not advice. These tools only read; they cannot change collections or trade."
 
 func (s engineSource) collectionCaller(ctx context.Context) (identity.User, collections.Service, error) {
@@ -33,14 +36,15 @@ func (s engineSource) collectionCaller(ctx context.Context) (identity.User, coll
 	return u, svc, nil
 }
 
-// resolveCollection finds one of the caller's collections by id or by name
-// (ignoring case). Another user's collection is not found, like a missing one.
+// resolveCollection finds one of the user's collections by id or by name
+// (ignoring case). Another user's collection is not found, like a missing one;
+// the error wraps errNoCollection, so callers can say whose.
 func resolveCollection(ctx context.Context, svc collections.Service, userID int64, ref string) (collections.Collection, error) {
 	ref = strings.TrimSpace(ref)
 	if id, err := strconv.ParseInt(ref, 10, 64); err == nil && id > 0 {
 		c, err := svc.Get(ctx, userID, id)
 		if errors.Is(err, collections.ErrNotFound) {
-			return c, fmt.Errorf("you have no collection with id %d; list_collections shows yours", id)
+			return c, fmt.Errorf("%w with id %d", errNoCollection, id)
 		}
 		return c, err
 	}
@@ -53,7 +57,7 @@ func resolveCollection(ctx context.Context, svc collections.Service, userID int6
 			return c, nil
 		}
 	}
-	return collections.Collection{}, fmt.Errorf("you have no collection named %q; list_collections shows yours", ref)
+	return collections.Collection{}, fmt.Errorf("%w named %q", errNoCollection, ref)
 }
 
 func (s engineSource) Collections(ctx context.Context, includeArchived bool) (any, error) {
@@ -102,6 +106,9 @@ func (s engineSource) collectionToolMembers(ctx context.Context, ref string) (in
 	}
 	c, err := resolveCollection(ctx, svc, u.ID, ref)
 	if err != nil {
+		if errors.Is(err, errNoCollection) {
+			err = fmt.Errorf("you have %w; list_collections shows yours", err)
+		}
 		return 0, c, nil, nil, err
 	}
 	members, err := svc.Store.AllMembers(ctx, u.ID, c.ID)

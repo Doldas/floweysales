@@ -102,3 +102,14 @@ test('the new playbooks use the new nodes and exist for the wealth plan', () => 
     assert.ok(buildPlaybook(id, { admin: true }), id);
   }
 });
+
+test('collection nodes are open to every role and suggest their row fields', () => {
+  for (const type of ['collection', 'collection_news']) {
+    assert.ok(isInvestorNode(type), type);
+    assert.equal(investorNode(type)!.admin, false, type);
+  }
+  assert.ok(SCREEN_FIELDS.collection.includes('provider'), 'members name their provider');
+  assert.ok(SCREEN_FIELDS.collection.includes('weight_pct'));
+  assert.ok(SCREEN_FIELDS.collection_news.includes('relevance'));
+  assert.equal(investorNode('collection')!.defaults.limit, 25, 'one data node reads at most 25 symbols');
+});
