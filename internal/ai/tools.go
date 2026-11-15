@@ -85,6 +85,22 @@ type DomainSource interface {
 	CallDomainProvider(ctx context.Context, provider, operation string, input map[string]any) (any, error)
 }
 
+// CollectionSource is the optional part of a DataSource behind the collection
+// tools: the signed-in user's own Market Collections, read only. ref is a
+// collection id or its name. A data source without it, such as the MCP
+// server's HTTP client, answers those tools with a clear error.
+type CollectionSource interface {
+	Collections(ctx context.Context, includeArchived bool) (any, error)
+	Collection(ctx context.Context, ref string, limit int) (any, error)
+	CollectionNews(ctx context.Context, ref string, limit int) (any, error)
+}
+
+// ErrCollectionToolsUnavailable is returned when the data source has no collections.
+var ErrCollectionToolsUnavailable = fmt.Errorf("collection tools are unavailable for this data source; they need a signed-in chat session")
+
+// CollectionToolNames are the tools that read the signed-in user's collections.
+var CollectionToolNames = []string{"list_collections", "get_collection", "get_collection_news"}
+
 // ErrDomainToolsUnavailable is returned when the data source has no domain providers.
 var ErrDomainToolsUnavailable = fmt.Errorf("domain provider tools are unavailable for this data source")
 
@@ -157,6 +173,27 @@ func ToolDefs() []Tool {
 			Name:        "get_wealth_plan",
 			Description: "The signed-in user's saved wealth plan: phase, target allocation, probability of reaching the goal, years to goal and the next checklist item, or a note that no plan is saved.",
 			Parameters:  obj(map[string]any{}),
+		}},
+		{Type: "function", Function: ToolFunction{
+			Name:        "list_collections",
+			Description: "The signed-in user's own Market Collections: watch collections and hypothetical model portfolios, with id, name, kind, category, tags and number of instruments. Read only; a model portfolio is not a holding.",
+			Parameters:  obj(map[string]any{"include_archived": map[string]any{"type": "boolean", "description": "Also list archived collections. Defaults to false."}}),
+		}},
+		{Type: "function", Function: ToolFunction{
+			Name:        "get_collection",
+			Description: "One of the signed-in user's collections: its instruments (provider, symbol, name, hypothetical weight in a model portfolio, the user's note and tags), each instrument's classification with its source (the user's own or the provider profile), profile coverage, composition by asset class, sector, region and theme, and identity links between instruments that share an ISIN. Read only; never asks a provider.",
+			Parameters: obj(map[string]any{
+				"collection": str("Collection id or exact name, from list_collections."),
+				"limit":      map[string]any{"type": "integer", "description": "Instruments to return, 1-200 (default 100)."},
+			}, "collection"),
+		}},
+		{Type: "function", Function: ToolFunction{
+			Name:        "get_collection_news",
+			Description: "Recent headlines for one of the signed-in user's collections, each from the instrument's own provider, with relevance and reasons: direct (names an instrument), thematic (mentions a theme or industry of one) or listed (only filed under it by the provider). Instruments whose provider offers no news get none. Relevance is a text match, not a judgment.",
+			Parameters: obj(map[string]any{
+				"collection": str("Collection id or exact name, from list_collections."),
+				"limit":      map[string]any{"type": "integer", "description": "Headlines to return, 1-50 (default 20)."},
+			}, "collection"),
 		}},
 		{Type: "function", Function: ToolFunction{
 			Name:        "get_portfolio_analytics",
@@ -452,6 +489,36 @@ func Execute(ctx context.Context, src DataSource, name, argsJSON string) (string
 		if list := strArg(args, "symbols"); list != "" {
 			cover, matched := ref.Overlap(strings.FieldsFunc(list, func(r rune) bool { return r == ',' || r == ' ' || r == ';' }))
 			out["overlap"] = map[string]any{"matched": matched, "covered_weight_pct": cover}
+		}
+		return toJSON(out)
+	case "list_collections", "get_collection", "get_collection_news":
+		cs, ok := src.(CollectionSource)
+		if !ok {
+			return "", ErrCollectionToolsUnavailable
+		}
+		var out any
+		var err error
+		switch name {
+		case "list_collections":
+			archived, _ := args["include_archived"].(bool)
+			out, err = cs.Collections(ctx, archived)
+		default:
+			// A model may pass the id as a number.
+			ref := strArg(args, "collection")
+			if n, ok := args["collection"].(float64); ok && n == math.Trunc(n) {
+				ref = fmt.Sprintf("%d", int64(n))
+			}
+			if ref == "" {
+				return "", fmt.Errorf("collection required")
+			}
+			if name == "get_collection" {
+				out, err = cs.Collection(ctx, ref, intArg(args, "limit", 100))
+			} else {
+				out, err = cs.CollectionNews(ctx, ref, intArg(args, "limit", 20))
+			}
+		}
+		if err != nil {
+			return "", err
 		}
 		return toJSON(out)
 	case "list_domain_providers", "call_domain_provider":

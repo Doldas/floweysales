@@ -2,7 +2,7 @@
 title: What's new
 order: 13
 summary: What changed in the November 2026 release, and what is still not available.
-last-reviewed: 2026-11-14
+last-reviewed: 2026-11-15
 ---
 
 # What's new
@@ -12,6 +12,7 @@ last-reviewed: 2026-11-14
 **Collections**
 - Keep your own sets of instruments on the server: watch collections, and model portfolios with hypothetical weights. Add from provider search, the selected instrument or by hand, filter by category and tag, copy or move between collections, export and import. Each collection shows its composition by asset type, exchange, currency, country or data provider: a count for watch collections, weights and the unallocated rest for model portfolios, with unknown values shown as Unknown. See [Collections](collections.md).
 - Instrument profiles and classification: fetch each instrument's profile from its own data provider and see a collection by asset class, sector, region or theme. Classify instruments yourself, privately, without changing the provider's facts. Instruments that share an ISIN are linked with the reason, never merged. A provider without profiles says so instead of borrowing another provider's data. See [Collections](collections.md#profiles-and-classification).
+- Collection news: load recent headlines for a collection, each from the instrument's own provider, marked direct, thematic or listed with the reason. The Research Agent can read your collections and their news, and only yours; it cannot change them or trade. See [Collections](collections.md#news).
 
 **Sources everywhere**
 - Prices, history, financial statements, SEC filings, valuations, backtests, strategy results, the wealth plan, portfolio risk and the Today briefing now show where they came from: provider, what was calculated and how, and the as-of and retrieval times in UTC. Open the **Source** button next to a figure. When no source was recorded it says "Source unknown" instead of guessing. Flow rows and agent tool results carry the same information. See [Where data comes from](provenance.md).

@@ -2,7 +2,7 @@
 title: Agents, teams and evidence
 order: 7
 summary: The Research Agent, agent teams of fictional investor characters, choosing a model, and the evidence modes that hold an answer until its citations check out.
-last-reviewed: 2026-11-07
+last-reviewed: 2026-11-15
 ---
 
 # Agents, teams and evidence
@@ -24,6 +24,12 @@ The Research Agent answers by calling tools for prices, indicators, financial st
 - **New chat** clears the conversation.
 
 The agent has a tool that hands a goal to one of your saved teams by name (see below). A run may delegate once; a delegated team cannot delegate again. The team's answers come back as data that the agent must attribute to the team and to each member by name.
+
+### Collections
+
+In the chat the agent can read your own [collections](collections.md): `list_collections` lists them, `get_collection` reads one (by name or id) with its instruments, weights, notes, composition and classification, and `get_collection_news` reads its headlines with the relevance and reason of each. Ask, for example, "What is in my Semiconductors collection, and what is the news?".
+
+These tools read only the collections of the person signed in to the chat; another user's collection is reported as not found. They cannot create, change or delete a collection, and they cannot trade. They are not offered to a flow's agent node or to the MCP server, because those runs act for nobody. A model portfolio's weights are hypothetical, and the agent is told so.
 
 ### Sources and the citation check
 

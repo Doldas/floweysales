@@ -250,6 +250,7 @@ const MAX_ROUNDS = 10;
     .user, .user-key { background: var(--fs-accent-soft); }
     .user-key { padding: 0 0.25rem; border-radius: 3px; }
     .active-row { background: var(--fs-accent-soft); }
+    .active-row .btn-link { --bs-btn-color: var(--fs-accent-text); --bs-btn-hover-color: var(--fs-accent-text); --bs-btn-active-color: var(--fs-accent-text); color: var(--fs-accent-text); } /* the accent alone is below 4.5:1 on the soft background */
     .row-actions { white-space: nowrap; text-align: right; }
     .detail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
     .desc { font-size: 0.85rem; color: var(--fs-text-2); max-height: 9rem; overflow-y: auto; white-space: pre-line; }

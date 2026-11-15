@@ -30,6 +30,9 @@ var agentToolClass = map[string]string{
 	"get_reference_portfolio":    toolPublic,
 	"run_rule_strategy":          toolPublic,
 	"get_wealth_plan":            toolOwn,
+	"list_collections":           toolOwn,
+	"get_collection":             toolOwn,
+	"get_collection_news":        toolOwn,
 	"get_portfolio_analytics":    toolServer,
 	"get_insider_activity":       toolPublic,
 	"get_macro_regime":           toolPublic,
@@ -69,6 +72,7 @@ var meteredAgentTools = map[string]bool{
 	"get_sec_section": true, "get_sec_filings": true, "get_sec_facts": true,
 	"get_quarterly_financials": true, "get_price_history": true, "get_technical_analysis": true,
 	"run_strategy_backtest": true, "get_leaderboard": true, "run_rule_strategy": true,
+	"get_collection_news": true,
 }
 
 // userToolCallsPerMinute is the shared-resource budget of one ordinary user.

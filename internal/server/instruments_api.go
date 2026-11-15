@@ -427,73 +427,12 @@ func (e *Engine) registerInstrumentRoutes() {
 		if !ok {
 			return
 		}
-		keys := memberKeys(members)
-		cached, err := store.GetProfiles(r.Context(), keys)
+		out, _, err := e.collectionIntelligence(r.Context(), userID, c, members, store)
 		if err != nil {
 			writeInstrumentError(w, err)
 			return
 		}
-		overrides, err := store.GetOverrides(r.Context(), userID, keys)
-		if err != nil {
-			writeInstrumentError(w, err)
-			return
-		}
-		offered := e.profileProviders()
-		now := time.Now().UTC()
-		profiles := map[instruments.Key]*instruments.Profile{}
-		coverage := map[string]int{profileOK: 0, profileNotFound: 0, profileMissing: 0, profileNoSource: 0, "stale": 0, "overridden": 0}
-		out := make([]memberIntelligence, 0, len(members))
-		for _, m := range members {
-			k := instruments.KeyOf(m.Instrument)
-			mi := memberIntelligence{MemberID: m.ID, Key: k, Name: m.Instrument.Name, Weight: m.Weight}
-			var p *instruments.Profile
-			if entry, ok := cached[k]; ok {
-				// A cached profile stays useful after its provider is removed or it expires.
-				mi.ProfileStatus, mi.Stale, p = entry.Status, !entry.Fresh(now), entry.Profile
-				retrieved := entry.RetrievedAt
-				mi.RetrievedAt = &retrieved
-				f := profileProvenance(entry)
-				mi.Provenance = &f
-				profiles[k] = p
-			} else if offered[k.Provider] {
-				mi.ProfileStatus = profileMissing
-			} else {
-				mi.ProfileStatus = profileNoSource
-			}
-			if mi.Name == "" && p != nil {
-				mi.Name = p.Name
-			}
-			var o *instruments.Override
-			if v, ok := overrides[k]; ok {
-				o, mi.Overridden = &v, true
-				coverage["overridden"]++
-			}
-			mi.Classification = instruments.Classify(m.Instrument, p, o)
-			coverage[mi.ProfileStatus]++
-			if mi.Stale {
-				coverage["stale"]++
-			}
-			out = append(out, mi)
-		}
-		one := func(f func(instruments.Classification) instruments.Fact) func(memberIntelligence) []string {
-			return func(m memberIntelligence) []string {
-				if v := f(m.Classification).Value; v != "" {
-					return []string{v}
-				}
-				return nil
-			}
-		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"collection_id": c.ID, "kind": c.Kind, "members": out, "coverage": coverage,
-			"links": instruments.Links(members, profiles),
-			"composition": map[string]any{
-				"asset_class": composition(out, one(func(c instruments.Classification) instruments.Fact { return c.AssetClass })),
-				"sector":      composition(out, one(func(c instruments.Classification) instruments.Fact { return c.Sector })),
-				"region":      composition(out, one(func(c instruments.Classification) instruments.Fact { return c.Region })),
-				"theme":       composition(out, func(m memberIntelligence) []string { return m.Classification.Themes }),
-			},
-			"profile_providers": sortedKeys(offered),
-		})
+		writeJSON(w, http.StatusOK, out)
 	})
 
 	// Fetches the profiles that are missing or expired, a bounded batch at a time.
@@ -602,4 +541,74 @@ func isInstrumentRoute(method, path string) bool {
 		return method == http.MethodPut || method == http.MethodDelete
 	}
 	return false
+}
+
+// collectionIntelligence reads the cached profiles and the user's
+// classifications of a collection's members. It never asks a provider.
+func (e *Engine) collectionIntelligence(ctx context.Context, userID int64, c collections.Collection, members []collections.Member, store instruments.Store) (map[string]any, []memberIntelligence, error) {
+	keys := memberKeys(members)
+	cached, err := store.GetProfiles(ctx, keys)
+	if err != nil {
+		return nil, nil, err
+	}
+	overrides, err := store.GetOverrides(ctx, userID, keys)
+	if err != nil {
+		return nil, nil, err
+	}
+	offered := e.profileProviders()
+	now := time.Now().UTC()
+	profiles := map[instruments.Key]*instruments.Profile{}
+	coverage := map[string]int{profileOK: 0, profileNotFound: 0, profileMissing: 0, profileNoSource: 0, "stale": 0, "overridden": 0}
+	out := make([]memberIntelligence, 0, len(members))
+	for _, m := range members {
+		k := instruments.KeyOf(m.Instrument)
+		mi := memberIntelligence{MemberID: m.ID, Key: k, Name: m.Instrument.Name, Weight: m.Weight}
+		var p *instruments.Profile
+		if entry, ok := cached[k]; ok {
+			// A cached profile stays useful after its provider is removed or it expires.
+			mi.ProfileStatus, mi.Stale, p = entry.Status, !entry.Fresh(now), entry.Profile
+			retrieved := entry.RetrievedAt
+			mi.RetrievedAt = &retrieved
+			f := profileProvenance(entry)
+			mi.Provenance = &f
+			profiles[k] = p
+		} else if offered[k.Provider] {
+			mi.ProfileStatus = profileMissing
+		} else {
+			mi.ProfileStatus = profileNoSource
+		}
+		if mi.Name == "" && p != nil {
+			mi.Name = p.Name
+		}
+		var o *instruments.Override
+		if v, ok := overrides[k]; ok {
+			o, mi.Overridden = &v, true
+			coverage["overridden"]++
+		}
+		mi.Classification = instruments.Classify(m.Instrument, p, o)
+		coverage[mi.ProfileStatus]++
+		if mi.Stale {
+			coverage["stale"]++
+		}
+		out = append(out, mi)
+	}
+	one := func(f func(instruments.Classification) instruments.Fact) func(memberIntelligence) []string {
+		return func(m memberIntelligence) []string {
+			if v := f(m.Classification).Value; v != "" {
+				return []string{v}
+			}
+			return nil
+		}
+	}
+	return map[string]any{
+		"collection_id": c.ID, "kind": c.Kind, "members": out, "coverage": coverage,
+		"links": instruments.Links(members, profiles),
+		"composition": map[string]any{
+			"asset_class": composition(out, one(func(c instruments.Classification) instruments.Fact { return c.AssetClass })),
+			"sector":      composition(out, one(func(c instruments.Classification) instruments.Fact { return c.Sector })),
+			"region":      composition(out, one(func(c instruments.Classification) instruments.Fact { return c.Region })),
+			"theme":       composition(out, func(m memberIntelligence) []string { return m.Classification.Themes }),
+		},
+		"profile_providers": sortedKeys(offered),
+	}, out, nil
 }
