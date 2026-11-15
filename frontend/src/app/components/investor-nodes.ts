@@ -6,7 +6,8 @@
 
 export type InvestorNodeType =
   'watchlist_quotes' | 'technical_scan' | 'fundamentals' | 'sec_filings' | 'news' | 'leaderboard' |
-  'screen' | 'only_new' | 'report_table' | 'notify' | 'insider_activity' | 'macro_regime' | 'portfolio_check' | 'corporate_events' | 'wealth_plan' | 'backtest';
+  'screen' | 'only_new' | 'report_table' | 'notify' | 'insider_activity' | 'macro_regime' | 'portfolio_check' | 'corporate_events' | 'wealth_plan' | 'backtest' |
+  'collection' | 'collection_news';
 
 export interface InvestorNodeSpec {
   type: InvestorNodeType;
@@ -42,6 +43,10 @@ export const INVESTOR_NODES: readonly InvestorNodeSpec[] = [
     description: 'Upcoming dividends, splits and earnings dates from an installed provider plugin with the events capability.' },
   { type: 'wealth_plan', label: 'Wealth plan', tag: '◈ PLAN', admin: false, defaults: {},
     description: 'Your saved wealth plan as one row: phase, target allocation, probability of reaching the goal, years to goal and the next checklist item.' },
+  { type: 'collection', label: 'Collection members', tag: '▤ COLLECTION', admin: false, defaults: { limit: 25 },
+    description: 'The instruments of one of your collections as rows, each with its provider, name, classification, note, tags and, in a model portfolio, its hypothetical weight. Feed them to quotes, technical, fundamentals, news or events nodes.' },
+  { type: 'collection_news', label: 'Collection news', tag: '✎ COLLECTION NEWS', admin: false, defaults: { limit: 20 },
+    description: 'Recent headlines for one of your collections, each from the instrument\'s own provider, marked direct, thematic or listed with the reasons.' },
   { type: 'backtest', label: 'Strategy backtest', tag: '⏱ BACKTEST', admin: false, defaults: { universe: 'us_mega', strategy: 'best', limit: 10, years: 3 },
     description: 'Replays a leaderboard strategy month by month over past prices and published quarters. One row per strategy, with the bias warnings. Slow on a cold cache; one per flow.' },
   { type: 'screen', label: 'Screen (filter rows)', tag: '⧩ SCREEN', admin: false, defaults: { rule: 'change_1d_pct <= -3' },
@@ -103,6 +108,8 @@ export const SCREEN_FIELDS: Record<string, string[]> = {
   portfolio_check: ['kind', 'drawdown_from_peak_pct', 'total_value', 'top_weight_pct', 'volatility_pct', 'beta', 'max_drawdown_1y_pct', 'effective_holdings', 'side', 'amount', 'symbol', 'reason'],
   corporate_events: ['kind', 'date', 'days_until', 'amount', 'currency', 'ratio', 'confirmed'],
   wealth_plan: ['phase', 'probability_goal_pct', 'years_to_goal_p50', 'required_contribution_75', 'fi_ratio_pct', 'invested', 'monthly_contribution', 'core_equity_pct', 'bonds_pct', 'cash_pct', 'satellite_pct'],
+  collection: ['symbol', 'provider', 'name', 'type', 'exchange', 'currency', 'asset_class', 'sector', 'industry', 'country', 'region', 'themes', 'tags', 'note', 'weight_pct', 'profile_status'],
+  collection_news: ['relevance', 'reasons', 'title', 'source', 'published', 'symbol', 'provider', 'summary'],
   backtest: ['strategy', 'cagr_pct', 'excess_cagr_pct', 'volatility_pct', 'sharpe', 'sortino', 'max_drawdown_pct', 'calmar', 'hit_rate_pct', 'avg_turnover_pct', 'rebalances'],
   leaderboard: ['rank', 'score', 'grade', ...LEADERBOARD_FACTORS, 'coverage_pct', 'flags', 'pe_ttm', 'peg', 'earnings_yield_pct', 'revenue_growth_pct', 'eps_growth_pct',
     'net_margin_pct', 'fcf_margin_pct', 'change_3m_pct', 'momentum_12_1_pct', 'from_high_pct', 'rsi14', 'above_sma200', 'volatility_pct', 'max_drawdown_pct'],

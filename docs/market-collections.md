@@ -9,10 +9,10 @@ Studio. The design decisions are in
 
 **Status:** Phase 1 (domain, storage, API), the collection manager and
 dashboard of Phase 3 and Phase 2 (profiles, taxonomy, classification,
-identity links, with their screens) and Phase 4 (collection news and
-read-only Research Agent tools) are implemented. Profiles come from
-provider plugins that offer the `profile` capability, headlines from those
-that offer `news`. Flow Studio integration is planned.
+identity links, with their screens), Phase 4 (collection news and
+read-only Research Agent tools) and Phase 5 (Flow Studio nodes) are
+implemented. Profiles come from provider plugins that offer the `profile`
+capability, headlines from those that offer `news`.
 The user guide page is [Collections](guide/collections.md).
 
 ## What exists today
@@ -27,6 +27,7 @@ The user guide page is [Collections](guide/collections.md).
 | Profiles, taxonomy, classification, identity links | `internal/instruments`, `internal/storage/instrument_intelligence.go`, changeset `047-instrument-intelligence.xml`, `internal/server/instruments_api.go` |
 | Collection news and relevance | `instruments.RelateNews`, `internal/server/collection_news.go`, `frontend/src/app/pages/collection-news.ts` |
 | Research Agent collection tools | `ai.CollectionSource`, `internal/server/ai_collection_tools.go` |
+| Flow Studio collection nodes | `internal/server/flow_collections.go`, `frontend/src/app/components/investor-nodes.ts` |
 
 ### Kinds
 
@@ -194,6 +195,44 @@ agent node, the tools refuse, and they are left out of the flow tool
 catalog and the MCP server. There is no tool that writes a collection or
 places an order.
 
+## Flow Studio nodes
+
+Two investor nodes read a collection: `collection` (Collection members) and
+`collection_news` (Collection news). They take a `collection` field, an id
+or a name, and resolve it among the collections of the flow's owner, the
+same owner the wealth plan node reads. Another user's collection is "not
+found", by id and by name. Neither node writes a collection, and both are
+allowed for every role that may build flows.
+
+- **Collection members** reads stored data only: the members, the owner's
+  classification and the cached profiles. It contacts no provider. Each
+  row has `symbol`, `provider`, `collection` and `profile_status`, and
+  when known `name`, `type`, `exchange`, `currency`, `isin`, `note`,
+  `tags`, `asset_class`, `sector`, `industry`, `country`, `region`,
+  `themes` and, for a model collection only, `weight_pct`. The provenance
+  is *assumed*: a member is the user's choice and a model weight is
+  hypothetical. `limit` (default 25, at most 100) caps the rows; index and
+  futures symbols (`^GSPC`, `CL=F`) are left out with a note because flow
+  data nodes cannot read them.
+- **Collection news** runs the [collection news](#collection-news) query:
+  at most 25 instruments asked, each at its own provider, with the shared
+  10-minute cache and the same relevance and reasons. `limit` (default 20,
+  at most 50) caps the headlines. The trace note says how many instruments
+  had no news source, failed or were not asked.
+
+Both nodes refuse `symbols`, `provider` and `lookback_days`; the collection
+decides the instruments and each instrument's provider.
+
+**Per-row provider.** The quotes, technical, fundamentals, news and
+corporate events nodes read a `provider` field on input rows. When the
+node's own provider is left at the default, each row is read from the
+provider it names, so a collection member is never looked up at another
+provider under the same ticker. A provider chosen on the node still wins,
+as the user's explicit choice. The same ticker from two providers stays two
+targets. A row with a provider that is not valid fails the node instead of
+falling back to the default. The existing budgets still apply: a data node
+reads at most 25 targets.
+
 ## Plan
 
 Each phase is a separate, reviewable change with tests.
@@ -224,7 +263,8 @@ Each phase is a separate, reviewable change with tests.
    per match; read-only Research Agent tools for the caller's own
    collections. See [Collection news](#collection-news) and
    [Research Agent tools](#research-agent-tools).
-5. **Automation (planned):** Flow Studio nodes that read collection members,
-   reusing existing node contracts and budgets.
+5. **Automation (done):** Flow Studio nodes that read collection members
+   and collection news, reusing existing node contracts and budgets. See
+   [Flow Studio nodes](#flow-studio-nodes).
 6. **Quality (planned):** Playwright journeys, caching, mobile layouts and
    the user guide page.

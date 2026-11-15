@@ -86,7 +86,10 @@ type flowNode struct {
 	Universe      string `json:"universe,omitempty"`
 	Strategy      string `json:"strategy,omitempty"`
 	Kinds         string `json:"kinds,omitempty"` // corporate_events: dividend, split, earnings
-	Years         int    `json:"years,omitempty"` // backtest: 3 or 5
+	// Collection names one of the flow owner's collections, by id or name
+	// (collection and collection_news nodes).
+	Collection string `json:"collection,omitempty"`
+	Years      int    `json:"years,omitempty"` // backtest: 3 or 5
 	// SkipEmpty skips the node, and so everything that depends on it, when
 	// its input is empty ("", [] or {}), e.g. no new filings or no alerts.
 	SkipEmpty bool    `json:"skip_empty,omitempty"`
@@ -212,7 +215,7 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 					return g, nil, fmt.Errorf("a flow can have at most one backtest node")
 				}
 			}
-		} else if n.Symbols != "" || n.Provider != "" || n.Rule != "" || n.SortBy != "" || n.Limit != 0 || n.Columns != "" || n.Title != "" || n.KeyFields != "" || n.CooldownHours != 0 || n.LookbackDays != 0 || n.Forms != "" || n.Channel != "" || n.Subject != "" || n.Universe != "" || n.Strategy != "" || n.Kinds != "" || n.Years != 0 {
+		} else if n.Symbols != "" || n.Provider != "" || n.Rule != "" || n.SortBy != "" || n.Limit != 0 || n.Columns != "" || n.Title != "" || n.KeyFields != "" || n.CooldownHours != 0 || n.LookbackDays != 0 || n.Forms != "" || n.Channel != "" || n.Subject != "" || n.Universe != "" || n.Strategy != "" || n.Kinds != "" || n.Years != 0 || n.Collection != "" {
 			return g, nil, fmt.Errorf("node %s: investor settings are only valid on investor nodes", n.ID)
 		}
 		if g.Version == 2 && (n.Type == "condition" || n.Type == "merge" || n.Type == "json_get") {
@@ -648,7 +651,7 @@ func flowAllowedForNonAdmin(graph flowGraph) bool {
 		switch node.Type {
 		case "trigger", "agent", "constant", "condition", "merge", "json_get", "transform", "loop", "output", "http_get", "web_crawl", "web_search",
 			"watchlist_quotes", "technical_scan", "fundamentals", "sec_filings", "news", "leaderboard", "screen", "only_new", "report_table",
-			"insider_activity", "macro_regime", "corporate_events", "wealth_plan", "backtest":
+			"insider_activity", "macro_regime", "corporate_events", "wealth_plan", "backtest", "collection", "collection_news":
 		default:
 			return false
 		}

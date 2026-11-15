@@ -152,11 +152,11 @@ func TestEventsNodeFollowsThePolicyUnlessItNamesAProvider(t *testing.T) {
 	e, _ := newsEngine(t)
 	putPolicy(e, "events", map[string]any{"primary": "BBB"})
 	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
-	out, err := e.runEventsNode(context.Background(), flowNode{}, []string{"NVDA"}, now)
+	out, err := e.runEventsNode(context.Background(), flowNode{}, []flowTarget{{Symbol: "NVDA"}}, now)
 	if err != nil || !strings.Contains(out, `"provider":"BBB"`) {
 		t.Errorf("policy: %v %s", err, out)
 	}
-	out, err = e.runEventsNode(context.Background(), flowNode{Provider: "AAA"}, []string{"NVDA"}, now)
+	out, err = e.runEventsNode(context.Background(), flowNode{Provider: "AAA"}, []flowTarget{{Symbol: "NVDA"}}, now)
 	if err != nil || !strings.Contains(out, `"provider":"AAA"`) {
 		t.Errorf("a node that names a provider is pinned to it: %v %s", err, out)
 	}
@@ -166,7 +166,7 @@ func TestNewsNodeFallsBackThroughThePolicy(t *testing.T) {
 	e, b := newsEngine(t)
 	putPolicy(e, "news", map[string]any{"primary": "AAA", "fallback": []string{"BBB"}})
 	b.Inject(markettest.OpNews, markettest.Fault{Err: errors.New("HTTP 503")})
-	out, err := e.runNewsNode(context.Background(), flowNode{}, []string{"NVDA"}, "", time.Now())
+	out, err := e.runNewsNode(context.Background(), flowNode{}, []flowTarget{{Symbol: "NVDA"}}, "", time.Now())
 	if err != nil || !strings.Contains(out, `"provider":"BBB"`) {
 		t.Errorf("%v %s", err, out)
 	}
@@ -175,7 +175,7 @@ func TestNewsNodeFallsBackThroughThePolicy(t *testing.T) {
 func TestNewsWithoutPolicyKeepsItsOwnBehavior(t *testing.T) {
 	e, b := newsEngine(t)
 	b.Inject(markettest.OpNews, markettest.Fault{Err: errors.New("HTTP 503")})
-	if _, err := e.runNewsNode(context.Background(), flowNode{}, []string{"NVDA"}, "", time.Now()); err == nil {
+	if _, err := e.runNewsNode(context.Background(), flowNode{}, []flowTarget{{Symbol: "NVDA"}}, "", time.Now()); err == nil {
 		t.Error("without a policy nothing falls back")
 	}
 	if b.Calls(markettest.OpNews) != 1 {

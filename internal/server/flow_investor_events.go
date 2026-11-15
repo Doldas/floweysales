@@ -47,7 +47,7 @@ func eventRow(ev market.CorporateEvent, today time.Time) map[string]any {
 // runEventsNode lists corporate events for the symbols from the first
 // installed provider that offers them. For this node limit means days ahead
 // (default 30, at most 90) and lookback_days reaches into the past.
-func (e *Engine) runEventsNode(ctx context.Context, n flowNode, symbols []string, now time.Time) (string, error) {
+func (e *Engine) runEventsNode(ctx context.Context, n flowNode, targets []flowTarget, now time.Time) (string, error) {
 	ahead := n.Limit
 	if ahead == 0 {
 		ahead = eventsDefaultAhead
@@ -64,7 +64,11 @@ func (e *Engine) runEventsNode(ctx context.Context, n flowNode, symbols []string
 	}
 	var mu sync.Mutex
 	rows := []map[string]any{}
-	_, err := flowEachSymbol(ctx, symbols, func(ctx context.Context, symbol string) (map[string]any, error) {
+	_, err := flowEachTarget(ctx, targets, func(ctx context.Context, t flowTarget) (map[string]any, error) {
+		symbol, provider := t.Symbol, provider
+		if n.Provider == "" && t.Provider != "" {
+			provider = market.ParseProvider(t.Provider) // the member's own provider
+		}
 		events, _, err := e.eventsFor(ctx, 0, provider, symbol, from, to)
 		if err != nil {
 			return nil, err

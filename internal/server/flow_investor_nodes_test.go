@@ -223,7 +223,7 @@ func TestCorporateEventsNode(t *testing.T) {
 	e := investorEngine(t)
 	e.providers = &eventBackend{investorBackend: investorBackend{now: time.Now().UTC()}}
 	now := time.Date(2026, 11, 10, 0, 0, 0, 0, time.UTC)
-	out, err := e.runEventsNode(context.Background(), flowNode{Type: "corporate_events", Limit: 30}, []string{"AAA", "BBB"}, now)
+	out, err := e.runEventsNode(context.Background(), flowNode{Type: "corporate_events", Limit: 30}, []flowTarget{{Symbol: "AAA"}, {Symbol: "BBB"}}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestCorporateEventsNode(t *testing.T) {
 	if len(rows) != 4 || rows[0]["id"] != "AAA|dividend|2026-11-14" || rows[0]["days_until"] != 4.0 || rows[0]["amount"] != 0.25 {
 		t.Fatalf("%s", out)
 	}
-	out, _ = e.runEventsNode(context.Background(), flowNode{Type: "corporate_events", Kinds: "earnings"}, []string{"AAA"}, now)
+	out, _ = e.runEventsNode(context.Background(), flowNode{Type: "corporate_events", Kinds: "earnings"}, []flowTarget{{Symbol: "AAA"}}, now)
 	rows = nil
 	_ = json.Unmarshal([]byte(out), &rows)
 	if len(rows) != 1 || rows[0]["kind"] != "earnings" {
@@ -254,7 +254,7 @@ func TestCorporateEventsNode(t *testing.T) {
 		}
 	}
 	e.providers = investorBackend{now: time.Now().UTC()}
-	if _, err := e.runEventsNode(context.Background(), flowNode{Type: "corporate_events"}, []string{"AAA"}, now); err == nil || !strings.Contains(err.Error(), "events capability") {
+	if _, err := e.runEventsNode(context.Background(), flowNode{Type: "corporate_events"}, []flowTarget{{Symbol: "AAA"}}, now); err == nil || !strings.Contains(err.Error(), "events capability") {
 		t.Fatalf("no provider: %v", err)
 	}
 }
