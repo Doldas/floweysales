@@ -11,8 +11,14 @@ test.describe('research agent', () => {
     await dock.getByRole('textbox', { name: 'Message the research agent' }).fill('How is NVDA doing?');
     await page.keyboard.press('Enter');
 
-    await expect(dock.locator('fs-tool-call').first()).toBeVisible();
-    await dock.locator('fs-tool-call summary').first().click();
+    const trace = dock.locator('details.trace').first();
+    await expect(trace).toBeVisible();
+    await expect(trace).not.toHaveAttribute('open', '');
+    const toolCall = trace.locator('fs-tool-call').first();
+    await expect(toolCall).toBeHidden();
+    await trace.locator(':scope > summary').click();
+    await expect(toolCall).toBeVisible();
+    await toolCall.locator('summary').click();
     await expect(dock.locator('.step-pre').first()).not.toBeEmpty();
 
     const answer = dock.locator('.msg-agent .bubble.chat-markdown').first();
@@ -73,7 +79,13 @@ test.describe('tool call inspection', () => {
     const dock = page.locator('#fs-agent-dock');
     await dock.getByRole('textbox', { name: 'Message the research agent' }).fill('How is NVDA doing?');
     await page.keyboard.press('Enter');
-    const call = dock.locator('fs-tool-call').first();
+    const trace = dock.locator('details.trace').first();
+    await expect(trace).toBeVisible();
+    await expect(trace).not.toHaveAttribute('open', '');
+    const call = trace.locator('fs-tool-call').first();
+    await expect(call).toBeHidden();
+    await trace.locator(':scope > summary').click();
+    await expect(call).toBeVisible();
     await call.locator('summary').click();
     await expect(call.getByRole('heading', { name: 'Input' })).toBeVisible();
     await expect(call.getByRole('heading', { name: 'Output' })).toBeVisible();
