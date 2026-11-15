@@ -272,6 +272,42 @@ func TestMySQLAuthGate(t *testing.T) {
 	if hash, _ := draftRun["graph_hash"].(string); len(hash) != 64 || draftRun["simulated"] != true {
 		t.Fatalf("draft test should report its snapshot hash and simulation: %v", draftRun)
 	}
+	// A draft that acts outside the run needs explicit confirmation before its
+	// effects are real; a USER, who may not run such nodes, is refused instead of asked.
+	effectGraph := map[string]any{
+		"nodes": []map[string]any{{"id": "start", "type": "trigger", "label": "Start", "x": 20, "y": 20}, {"id": "write", "type": "workspace_write", "label": "Write", "value": "/Reports/draft-test.md", "content_type": "text/markdown", "x": 200, "y": 20}},
+		"edges": []map[string]string{{"from": "start", "to": "write"}},
+	}
+	liveDraft := map[string]any{"target": "draft", "graph": effectGraph, "simulate_side_effects": false}
+	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/run", flowID), liveDraft, userCookie, ""), http.StatusForbidden)
+	unconfirmed := request("POST", fmt.Sprintf("/api/admin/flows/%d/run", flowID), liveDraft, cookies[0], "")
+	var confirmation map[string]any
+	if err := json.NewDecoder(unconfirmed.Body).Decode(&confirmation); err != nil {
+		t.Fatal(err)
+	}
+	unconfirmed.Body.Close()
+	effects, _ := confirmation["side_effects"].([]any)
+	if unconfirmed.StatusCode != http.StatusConflict || confirmation["requires_confirmation"] != true || len(effects) != 1 {
+		t.Fatalf("real side effects should need confirmation: %d %v", unconfirmed.StatusCode, confirmation)
+	}
+	liveDraft["confirm_live_side_effects"] = true
+	confirmed := request("POST", fmt.Sprintf("/api/admin/flows/%d/run", flowID), liveDraft, cookies[0], "")
+	var liveRun map[string]any
+	if err := json.NewDecoder(confirmed.Body).Decode(&liveRun); err != nil {
+		t.Fatal(err)
+	}
+	confirmed.Body.Close()
+	liveRunID, _ := liveRun["run_id"].(float64)
+	if confirmed.StatusCode != http.StatusAccepted || liveRun["simulated"] != false || liveRunID <= 0 {
+		t.Fatalf("confirmed side effects should be queued for real: %d %v", confirmed.StatusCode, liveRun)
+	}
+	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/runs/%d/cancel", flowID, int64(liveRunID)), nil, cookies[0], ""), http.StatusOK)
+	liveFlows := request("GET", "/api/admin/flows", nil, userCookie, "")
+	liveFlowsBody, _ := io.ReadAll(liveFlows.Body)
+	liveFlows.Body.Close()
+	if strings.Contains(string(liveFlowsBody), "draft-test.md") {
+		t.Fatalf("a confirmed draft test must not save the flow: %s", liveFlowsBody)
+	}
 	// A flow that was never saved is tested without creating any flow: its run lives in
 	// the tester's own "draft" history and is invisible to other users.
 	scratchResponse := request("POST", "/api/admin/flows/draft/run", map[string]any{"graph": editedGraph}, userCookie, "")

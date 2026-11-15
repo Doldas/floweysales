@@ -163,6 +163,11 @@ func (e *Engine) runFlowRequest(w http.ResponseWriter, r *http.Request, scratch 
 			writeReferenceError(w, err)
 			return
 		}
+		// Refuse a graph the tester may not run before asking them to confirm its effects.
+		if tester.Role != identity.RoleSysAdmin && !flowAllowedForNonAdmin(graph) {
+			writeJSON(w, 403, map[string]string{"error": "Flow is not permitted for user execution"})
+			return
+		}
 		simulated = request.SimulateSideEffects == nil || *request.SimulateSideEffects
 		effects := flowSideEffectNodes(graph)
 		switch {
