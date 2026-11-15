@@ -118,6 +118,14 @@ Flow Studio has two nodes for collections: **Collection members** passes on the 
 
 **Export** downloads all your collections as a JSON file named with today's UTC date. **Import** reads such a file. An import always creates new collections: when a name is taken the collection is saved under a new name, for example "Energy (2)", and the result lists what was created. Nothing is merged into an existing collection, and the whole file is checked before anything is saved.
 
+## Copy your watchlist
+
+When you have tracked instruments, the Collections page offers a copy button next to **Import**. **Copy my watchlist** saves the research watchlist kept in this browser as a new watch collection named "Research watchlist", without duplicates or weights; copying again creates "Research watchlist (2)". An administrator sees **Copy tracker list**, which copies the server tracker list into "Tracked instruments" and names any instrument that could not be copied. The description records when the copy was made (UTC). The watchlist and the tracker list themselves are not changed.
+
+## Phones and large text
+
+Collections, the dashboard and news work on phone widths and in landscape, and with text enlarged to 200%. Wide composition tables scroll sideways inside their card instead of moving the page; the table can be scrolled with the keyboard once focused.
+
 ## Limits
 
 - At most 200 collections, 1,000 instruments per collection and 20 tags per collection or instrument.

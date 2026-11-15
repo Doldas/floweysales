@@ -155,7 +155,11 @@ missing, from its profile:
 
 The tracker list stays as it is. A SYS_ADMIN can copy it into a new watch
 collection with `POST /api/collections/from-trackers`; the description
-records when the copy was made (UTC).
+records when the copy was made (UTC). The Collections page offers this as
+**Copy tracker list**. A USER's research watchlist lives in the browser, so
+**Copy my watchlist** sends it through the regular import
+(`on_conflict=rename`) as one watch collection without weights; the copy
+never changes the watchlist.
 
 ## Collection news
 
@@ -256,8 +260,8 @@ Each phase is a separate, reviewable change with tests.
    labeled. Deferred: the active collection scope moves to phase 4 with news;
    composition by asset class, sector, region and theme, profile
    details with provenance and the classification form are in
-   `frontend/src/app/pages/collection-intelligence.ts`; importing the browser-local
-   research watchlist into a collection is still open.
+   `frontend/src/app/pages/collection-intelligence.ts`; copying the browser-local
+   research watchlist into a collection landed in phase 6.
 4. **News and AI (done):** collection news through the provider-neutral
    news interface, with direct, thematic and listed relevance and a reason
    per match; read-only Research Agent tools for the caller's own
@@ -266,5 +270,10 @@ Each phase is a separate, reviewable change with tests.
 5. **Automation (done):** Flow Studio nodes that read collection members
    and collection news, reusing existing node contracts and budgets. See
    [Flow Studio nodes](#flow-studio-nodes).
-6. **Quality (planned):** Playwright journeys, caching, mobile layouts and
-   the user guide page.
+6. **Quality (done):** Playwright journeys (`frontend/e2e/collections.spec.ts`:
+   select an instrument, add it to a collection, load news, use the
+   collection in a flow; copy the watchlist or tracker list), phone and
+   200% text checks with the shared `frontend/e2e/layout-audit.ts`, and
+   the user guide page. Caching was reviewed: profiles have a TTL cache,
+   news a 10-minute cache, and profiles and overrides are read in batches,
+   so no new cache was added.

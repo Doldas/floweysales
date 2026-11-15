@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
-import { expect, open, test } from './fixtures';
+import { expect, navLink, open, test } from './fixtures';
+import { audit } from './layout-audit';
 
 // #441 Phase 3: the collection manager against an in-memory backend that keeps
 // the server's rules (unique names ignoring case, no weights in watch
@@ -29,6 +30,10 @@ const TAXONOMY = {
 };
 const REGION: Record<string, string> = { US: 'north_america', CH: 'europe', SE: 'europe' };
 // Headlines FINNHUB lists under NVDA, related as the server would relate them.
+// The server tracker list (administrators) and a browser research watchlist (users).
+const TRACKERS = [{ provider: 'YAHOO', symbol: 'AAPL' }, { provider: 'FINNHUB', symbol: 'NVDA' }];
+const WATCHLIST = [{ provider: 'YAHOO', symbol: 'VOLV-B.ST' }, { provider: 'FINNHUB', symbol: 'ABB' }, { provider: 'YAHOO', symbol: 'VOLV-B.ST' }];
+
 const NEWS = [
   { title: 'Nvidia beats estimates', url: 'https://news.example/nvda-beats', source: 'Reuters', published: 1794645600, provider: 'FINNHUB', symbol: 'NVDA', relevance: 'direct',
     matches: [{ relevance: 'direct', members: [0], term: 'NVIDIA', reason: 'Names "NVIDIA" (FINNHUB NVDA)' }] },
@@ -169,6 +174,12 @@ async function backend(page: Page) {
         return taken ? { name: ic.name, status: 'renamed', id: c.id, saved_as: name, members: ic.members.length } : { name, status: 'created', id: c.id, members: ic.members.length };
       });
       return route.fulfill(json(200, { results }));
+    }
+    if (parts[0] === 'from-trackers' && method === 'POST') {
+      const c: Col = { id: ++seq, name: 'Tracked instruments', description: 'Copied from the tracker list on 2026-11-14 12:00 UTC. The tracker list itself is unchanged.', kind: 'watch', category: '', tags: [], archived: false, member_count: 0, created_at: NOW, updated_at: NOW };
+      cols.push(c);
+      for (const t of TRACKERS) mems.push({ id: ++seq, collection_id: c.id, instrument: t, note: '', tags: [], added_at: NOW });
+      return route.fulfill(json(201, { collection: count(c), added: TRACKERS.length, skipped: [] }));
     }
     if (parts[0] === 'export' && method === 'GET') {
       return route.fulfill(json(200, { format: 'floweysales.collections', version: 1, exported_at: NOW,
@@ -521,6 +532,119 @@ test.describe('Markets → Collections', () => {
       });
       expect(found, `axe in ${theme} theme`).toEqual([]);
     }
+  });
+
+  test.describe('on phones', () => {
+    test.skip(({ isMobile }) => isMobile, 'Sets its own viewports.');
+
+    /** A model portfolio with weights, profiles and news loaded: the fullest the page gets. */
+    async function fullCollection(page: Page) {
+      await backend(page);
+      await open(page, 'collections');
+      await createCollection(page, 'Semiconductors and industrial automation leaders', 'model', { category: 'Models', tags: 'core, long-term' });
+      await addByHand(page, 'FINNHUB', 'NVDA');
+      await addByHand(page, 'FINNHUB', 'ABB');
+      await addByHand(page, 'YAHOO', 'VOLV-B.ST');
+      await page.getByRole('button', { name: 'Edit NVDA' }).click();
+      await page.getByLabel(/Hypothetical weight/).fill('40');
+      await page.getByRole('region', { name: /NVDA/ }).getByRole('button', { name: 'Save' }).click();
+      await expect(page.locator('.fs-kpi', { hasText: 'Weighted' }).locator('.fs-kpi-value')).toHaveText('40%');
+      await page.getByRole('button', { name: 'Load news' }).click();
+      await expect(page.getByTestId('news-coverage')).toBeVisible();
+      await page.mouse.move(0, 0);
+    }
+
+    for (const [width, height] of [[320, 800], [390, 844], [844, 390]]) {
+      test(`an open model portfolio with news fits ${width}x${height}`, async ({ page }, testInfo) => {
+        await page.setViewportSize({ width, height });
+        await fullCollection(page);
+        if (width === 320) await testInfo.attach('collection-320.png', { body: await page.screenshot({ fullPage: true, animations: 'disabled' }), contentType: 'image/png' });
+        expect(await audit(page, { touch: true })).toEqual([]);
+      });
+    }
+
+    test('an open model portfolio holds at 200% text on 360px', async ({ page }) => {
+      await page.setViewportSize({ width: 360, height: 800 });
+      await fullCollection(page);
+      await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+      await page.waitForTimeout(300);
+      expect((await audit(page, { touch: false })).filter(f => f.kind !== 'clipped-text')).toEqual([]);
+    });
+  });
+
+  test('journey: from the selected instrument to a collection, its news and a flow that reads it', async ({ page }) => {
+    const db = await backend(page);
+    await page.route('**/api/config', route => route.fulfill({ json: { symbol: 'NVDA', provider: 'FINNHUB', trackers: [{ symbol: 'NVDA', provider: 'FINNHUB' }] } }));
+    const drafts: any[] = [];
+    await page.route('**/api/admin/flows/draft/run', route => {
+      drafts.push(route.request().postDataJSON());
+      return route.fulfill({ json: { status: 'queued', run_id: 401, draft_test: true, scratch: true, simulated: true, graph_hash: 'c'.repeat(64) } });
+    });
+
+    // Markets has NVIDIA selected; Collections offers to add it.
+    await open(page, 'markets');
+    await (await navLink(page, 'Collections')).click();
+    await createCollection(page, 'AI leaders', 'watch', { tags: 'AI' });
+    await page.getByRole('button', { name: 'Add selected instrument' }).click();
+    await expect(page.getByText('Already in this collection')).toBeVisible();
+    await addByHand(page, 'YAHOO', 'VOLV-B.ST');
+    expect(db.mems.map(m => `${m.instrument.provider}:${m.instrument.symbol}`)).toEqual(['FINNHUB:NVDA', 'YAHOO:VOLV-B.ST']);
+
+    // News comes only from the provider that offers it; Volvo on YAHOO gets none.
+    await page.getByRole('button', { name: 'Load news' }).click();
+    await expect(page.getByRole('link', { name: 'Nvidia beats estimates' })).toBeVisible();
+    await expect(page.getByTestId('news-coverage')).toContainText('1 on a provider that offers no news');
+    expect(db.newsCalls.every(c => c.startsWith('FINNHUB'))).toBe(true);
+
+    // Flow Studio reads the same collection.
+    await (await navLink(page, 'Flows')).click();
+    const studio = page.locator('fse-flow-studio');
+    await studio.getByRole('tab', { name: 'Flow editor', exact: true }).click();
+    await studio.getByLabel('Flow name').fill('AI leaders digest');
+    await studio.getByRole('button', { name: '+ Add node' }).click();
+    await studio.getByLabel('Search nodes').fill('collection');
+    await studio.locator('#node-picker').getByRole('button', { name: 'Collection members' }).click();
+    await page.keyboard.press('Escape');
+    await studio.getByRole('button', { name: 'Start connection from Start' }).click();
+    await studio.getByRole('button', { name: 'Connect into Collection members' }).click();
+    const validation = studio.locator('[aria-label="Flow graph validation"]');
+    await validation.getByRole('button', { name: 'Choose a collection: Collection members · Edit node' }).click();
+    const settings = studio.locator('[aria-label="Complete node settings"]');
+    await settings.getByRole('combobox', { name: /^Collection\b/ }).selectOption({ label: 'AI leaders' });
+    await settings.getByRole('button', { name: 'Close node settings' }).click();
+    await studio.getByRole('button', { name: 'Test unsaved draft', exact: true }).click();
+    await expect.poll(() => drafts.length).toBe(1);
+    expect(drafts[0].graph.nodes.find((n: any) => n.type === 'collection')).toMatchObject({ collection: String(db.cols[0].id) });
+  });
+
+  test('an administrator copies the tracker list into a watch collection, leaving it unchanged', async ({ page }) => {
+    const db = await backend(page);
+    await page.route('**/api/config', route => route.fulfill({ json: { symbol: 'AAPL', provider: 'YAHOO', trackers: TRACKERS } }));
+    await open(page, 'collections');
+    await page.getByRole('button', { name: 'Copy tracker list' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Copy finished.' })).toContainText('Tracked instruments created with 2 instruments.');
+    expect(db.mems.map(m => `${m.instrument.provider}:${m.instrument.symbol}`)).toEqual(['YAHOO:AAPL', 'FINNHUB:NVDA']);
+  });
+
+  test.describe('as a user with a research watchlist', () => {
+    test.use({ role: 'USER', grants: [] });
+
+    test('the browser watchlist is copied once per listing, as a watch collection without weights', async ({ page }) => {
+      const db = await backend(page);
+      await page.addInitScript(list => localStorage.setItem('fs.research.watchlist', JSON.stringify(list)), WATCHLIST);
+      await open(page, 'collections');
+      await expect(page.getByRole('button', { name: 'Copy tracker list' })).toHaveCount(0);
+      await page.getByRole('button', { name: 'Copy my watchlist' }).click();
+      await expect(page.getByRole('status').filter({ hasText: 'Copy finished.' })).toContainText('Research watchlist created with 2 instruments.');
+      expect(db.cols.map(c => [c.name, c.kind])).toEqual([['Research watchlist', 'watch']]);
+      expect(db.mems.map(m => m.instrument)).toEqual([{ provider: 'YAHOO', symbol: 'VOLV-B.ST' }, { provider: 'FINNHUB', symbol: 'ABB' }]);
+      expect(db.mems.every(m => m.weight === undefined)).toBe(true);
+
+      // A second copy never merges: it is saved under a new name.
+      await page.getByRole('button', { name: 'Copy my watchlist' }).click();
+      await expect(page.getByRole('status').filter({ hasText: 'Copy finished.' })).toContainText('Research watchlist saved as Research watchlist (2)');
+      expect(JSON.parse(await page.evaluate(() => localStorage.getItem('fs.research.watchlist') ?? '[]'))).toHaveLength(3);
+    });
   });
 
   test('the page is reachable from the navigation', async ({ page }) => {

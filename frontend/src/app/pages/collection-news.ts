@@ -95,6 +95,7 @@ import { formatUtcDateTime } from '../ui/datetime';
     .news > li { border-top: 1px solid var(--fs-border); padding-top: 0.6rem; min-width: 0; }
     .news > li:first-child { border-top: 0; padding-top: 0; }
     .news-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.6rem; font-weight: 600; overflow-wrap: anywhere; }
+    .news-title a { display: inline-block; min-height: 24px; }
     .reasons { margin: 0.2rem 0 0; padding-left: 1.1rem; color: var(--fs-text-2); overflow-wrap: anywhere; }
   `],
 })

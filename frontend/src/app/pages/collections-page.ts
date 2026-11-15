@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { Observable, Subject, catchError, debounceTime, distinctUntilChanged, forkJoin, of, switchMap } from 'rxjs';
 
 import {
-  COLLECTION_LIMITS, CREATABLE_KINDS, DIMENSION_LABELS, KIND_LABELS, composition, coverageText, exportFileName, facets, importSummary,
+  COLLECTION_LIMITS, CREATABLE_KINDS, DIMENSION_LABELS, KIND_LABELS, composition, coverageText, exportFileName, facets, importSummary, watchlistImport,
   instrumentFrom, parseTags, weightProblem, weightSummary,
   type ArchiveFilter, type Collection, type CollectionKind, type CollectionMember, type CollectionSort, type Dimension,
 } from '../core/collections';
@@ -45,6 +45,11 @@ const DIMENSIONS: Dimension[] = ['type', 'exchange', 'currency', 'country', 'pro
       <button type="button" class="btn btn-outline-secondary btn-sm" (click)="importInput.click()">
         <i class="bi bi-upload" aria-hidden="true"></i> Import
       </button>
+      @if (market.trackedAssets().length) {
+        <button type="button" class="btn btn-outline-secondary btn-sm" (click)="copyWatchlist()" [disabled]="busy()">
+          <i class="bi bi-copy" aria-hidden="true"></i> {{ market.mode() === 'live' ? 'Copy tracker list' : 'Copy my watchlist' }}
+        </button>
+      }
       <input #importInput type="file" hidden accept="application/json,.json" aria-label="Collections file to import" (change)="importFile($event)">
       <button type="button" class="btn btn-primary btn-sm" (click)="creating.set(!creating())" [attr.aria-expanded]="creating()" aria-controls="col-create">
         <i class="bi bi-plus-lg" aria-hidden="true"></i> New collection
@@ -55,7 +60,7 @@ const DIMENSIONS: Dimension[] = ['type', 'exchange', 'currency', 'country', 'pro
   @if (loadError(); as err) { <div class="alert alert-danger" role="alert">{{ err }}</div> }
   @if (importLines().length) {
     <div class="alert alert-info" role="status">
-      <strong>Import finished.</strong>
+      <strong>{{ importTitle() }}</strong>
       <ul class="mb-0">@for (l of importLines(); track $index) { <li>{{ l }}</li> }</ul>
     </div>
   }
@@ -266,7 +271,7 @@ const DIMENSIONS: Dimension[] = ['type', 'exchange', 'currency', 'country', 'pro
               }
             </p>
             @if (comp().total) {
-              <table class="table comp-table" aria-describedby="comp-note">
+              <div class="comp-scroll" tabindex="0" role="group" [attr.aria-label]="dimensionLabels[dimension()] + ' table'"><table class="table comp-table" aria-describedby="comp-note">
                 <caption class="visually-hidden">{{ comp().mode === 'count' ? 'Instruments' : 'Weight' }} by {{ dimensionLabels[dimension()] }}</caption>
                 <thead><tr><th scope="col">{{ dimensionLabels[dimension()] }}</th><th scope="col" class="bar-col"><span class="visually-hidden">Bar</span></th><th scope="col" class="num">{{ comp().mode === 'count' ? 'Instruments' : 'Weight' }}</th></tr></thead>
                 <tbody>
@@ -288,7 +293,7 @@ const DIMENSIONS: Dimension[] = ['type', 'exchange', 'currency', 'country', 'pro
                     </tr>
                   }
                 </tbody>
-              </table>
+              </table></div>
               <p class="muted small mb-0">{{ coverage() }}@if (comp().unweighted) { {{ comp().unweighted }} instrument{{ comp().unweighted === 1 ? ' has' : 's have' }} no weight. }</p>
             } @else {
               <p class="muted mb-0">Add instruments to see the composition.</p>
@@ -483,6 +488,13 @@ const DIMENSIONS: Dimension[] = ['type', 'exchange', 'currency', 'country', 'pro
     .comp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
     .comp-note { font-size: 0.8rem; color: var(--fs-muted); margin: 0 0 0.6rem; }
     .comp-table { th[scope='row'] { font-weight: 500; white-space: nowrap; } .num { text-align: right; white-space: nowrap; } }
+    /* Large text on a phone: the table scrolls inside its card (WCAG 1.4.10 allows it for data tables). */
+    .comp-scroll { overflow-x: auto; }
+    .comp-scroll:focus-visible { outline: 2px solid var(--fs-accent); outline-offset: 2px; }
+    /* Narrow screens and large text: labels wrap and the share moves under the value. */
+    @media (max-width: 30rem) {
+      .comp-table { th[scope='row'], th.num, .num { white-space: normal; overflow-wrap: anywhere; } .num .muted { display: block; } .bar-col { width: 20%; } }
+    }
     .bar-col { width: 55%; }
     .bar { display: block; height: 0.6rem; min-width: 2px; border-radius: 0 4px 4px 0; background: var(--fs-accent); }
     .unknown .bar { background: var(--fs-border-strong); }
@@ -534,6 +546,7 @@ export class CollectionsPage {
   readonly loadError = signal('');
   readonly busy = signal(false);
   readonly importLines = signal<string[]>([]);
+  readonly importTitle = signal('Import finished.');
 
   readonly query = signal('');
   readonly kindFilter = signal<CollectionKind | ''>('');
@@ -876,9 +889,32 @@ export class CollectionsPage {
       return;
     }
     this.run(this.api.import(doc, 'rename'), results => {
+      this.importTitle.set('Import finished.');
       this.importLines.set(importSummary(results));
       this.reload$.next();
     }, 'Import failed');
+  }
+
+  /**
+   * Copies the instruments the Markets page follows into a new watch
+   * collection: the server tracker list for an administrator, this browser's
+   * research watchlist for everyone else. The list itself is unchanged.
+   */
+  copyWatchlist(): void {
+    if (this.market.mode() === 'live') {
+      this.run(this.api.fromTrackers(), r => {
+        this.importTitle.set('Copy finished.');
+        const skipped = r.skipped?.length ? ` Not copied: ${r.skipped.join(', ')}.` : '';
+        this.importLines.set([`${r.collection.name} created with ${r.added} instrument${r.added === 1 ? '' : 's'}.${skipped}`]);
+        this.reload$.next();
+      }, 'Copy failed');
+      return;
+    }
+    this.run(this.api.import(watchlistImport(this.market.trackedAssets(), new Date()), 'rename'), results => {
+      this.importTitle.set('Copy finished.');
+      this.importLines.set(importSummary(results));
+      this.reload$.next();
+    }, 'Copy failed');
   }
 
   private refreshSelected(): void {

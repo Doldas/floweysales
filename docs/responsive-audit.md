@@ -19,7 +19,8 @@ document covers every other page.
 
 Run it with `npm run build && npx playwright test e2e/responsive-audit.spec.ts` in `frontend/`. Each run attaches
 a full-page screenshot per page at 360 px and at 360 px with 200% text to the HTML report (the "after" evidence in CI).
-Set `AUDIT_DUMP=1` to print each page's findings.
+Set `AUDIT_DUMP=1` to print each page's findings. The checks live in `frontend/e2e/layout-audit.ts`, so
+other specs can audit a page in a state they set up first (the collections spec audits a filled collection).
 
 ## Matrix
 
