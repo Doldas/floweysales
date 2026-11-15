@@ -237,6 +237,27 @@ targets. A row with a provider that is not valid fails the node instead of
 falling back to the default. The existing budgets still apply: a data node
 reads at most 25 targets.
 
+## Groups on the Markets page
+
+The Markets page shows the caller's collections as groups
+(`frontend/src/app/components/market-groups.ts`): pick a group, open a
+member in the chart, and add the selected instrument to a group or to a new
+watch collection. It reuses the collections API; nothing new is stored.
+
+The group dashboard (`frontend/src/app/components/group-dashboard.ts`) is
+computed in the browser by `frontend/src/app/core/group-stats.ts` from
+`GET /api/history` of each member at its own provider, for at most 25
+members, four requests at a time, cached for five minutes per member and
+range. Intraday bars collapse to the last close per UTC day. The group index
+is buy and hold from the first day every member has a close, forward-filled
+over closed days and rebased to 100: equal weights for watch collections,
+the hypothetical weights for models, with members without a weight left out
+and named. Volatility is the sample deviation of daily log returns times
+the square root of 252; correlation is Pearson on shared daily log returns
+and needs 20 shared days. Prices stay in each member's currency and are
+not converted; the dashboard lists the currencies it mixed. Members without
+history are named, never filled in.
+
 ## Plan
 
 Each phase is a separate, reviewable change with tests.
@@ -277,3 +298,6 @@ Each phase is a separate, reviewable change with tests.
    the user guide page. Caching was reviewed: profiles have a TTL cache,
    news a 10-minute cache, and profiles and overrides are read in batches,
    so no new cache was added.
+7. **Groups in Markets (done):** collections as groups on the Markets
+   page with a group dashboard. See
+   [Groups on the Markets page](#groups-on-the-markets-page).

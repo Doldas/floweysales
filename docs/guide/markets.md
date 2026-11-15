@@ -2,7 +2,7 @@
 title: Markets
 order: 3
 summary: The price chart, indicators, watchlist, feed status badge, fundamentals, quarterly financials and the World view.
-last-reviewed: 2026-11-07
+last-reviewed: 2026-11-15
 ---
 
 # Markets
@@ -29,6 +29,22 @@ What this row is depends on your role:
 If a figure is missing, the screen shows a dash, not zero.
 
 To keep larger sets of instruments, grouped by theme and stored on the server, use [Collections](collections.md).
+
+## Groups
+
+The **Groups** card shows your [collections](collections.md) as groups. Choose a group to list its instruments; select one to open it in the chart. **Add {symbol} to a group** adds the instrument on screen to one of your groups, or to a new watch collection you name there. Groups that already hold it are marked. Adding never changes the watchlist or the trackers. **Manage groups** opens Collections.
+
+### Group dashboard
+
+A group with instruments gets a dashboard, computed in your browser from each instrument's daily price history at its own data provider. Choose 1M, 3M, 1Y or 3Y.
+
+- **Group**: the change of the group index over the range. The index buys every instrument on the first day all of them have a price and holds without rebalancing, rebased to 100. A watch collection weights the instruments equally; a model portfolio uses its hypothetical weights, and instruments without a weight are left out of the index and named.
+- **Volatility** (the annualized deviation of daily returns), **Max drawdown** (the largest fall from a high), **Breadth** (how many instruments rose and fell), and the **best** and **worst** instrument.
+- **Group index** chart with each instrument in gray. Hover, or focus the chart and use the arrow keys, Home and End, to read a day.
+- **Composition** donut by weight, asset type, exchange, currency, country, data provider or another stored dimension. Model portfolios show the unallocated rest as its own slice.
+- **Return per instrument**, **Risk and return** (volatility against return) and a **Correlation** grid of daily returns. A pair with fewer than 20 shared trading days shows a dot instead of a number.
+
+Every chart has a table view or a text equivalent. Instruments without history are named, not filled in. Prices are in each instrument's own currency and are not converted, so a group that mixes currencies says which ones it holds.
 
 ## The price chart
 
@@ -97,4 +113,5 @@ Headlines need a provider plugin with news, or a web-search key saved by an admi
 - Coverage differs by provider and by market. A symbol that one provider knows may not exist at another.
 - Delayed or bar-close data is not live. Read the badge before acting on a price.
 - Indicators are calculated from the history shown. A short history gives less meaningful studies.
+- The group dashboard asks for the history of at most 25 instruments of a group; the rest are named. Its figures are hypothetical, not holdings or advice.
 - None of these screens place orders.
