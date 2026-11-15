@@ -29,7 +29,11 @@ func scriptedServer(t *testing.T, replies []string) (*httptest.Server, *[]string
 		n++
 		w.Header().Set("Content-Type", "text/event-stream")
 		if name, ok := strings.CutPrefix(reply, "tool:"); ok {
-			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"c%d\",\"type\":\"function\",\"function\":{\"name\":%q,\"arguments\":\"{}\"}}]}}]}\n\n", n, name)
+			args := "{}"
+			if name == "get_market_stats" {
+				args = `{"symbol":"ACME"}`
+			}
+			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"c%d\",\"type\":\"function\",\"function\":{\"name\":%q,\"arguments\":%q}}]}}]}\n\n", n, name, args)
 		} else {
 			payload, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"delta": map[string]any{"content": reply}}}})
 			fmt.Fprintf(w, "data: %s\n\n", payload)
@@ -114,5 +118,62 @@ func TestApplyReport(t *testing.T) {
 	ds := ApplyReport(NewDeliverables([]string{"Revenue trend", "DCF"}), "- [done] revenue trend\n[missing] DCF - provider has no cash flow")
 	if ds[0].Status != DeliverableDone || ds[1].Status != DeliverableMissing || ds[1].Note != "provider has no cash flow" {
 		t.Fatalf("ds = %+v", ds)
+	}
+}
+
+func TestReportRequiresExactDeliverableIdentity(t *testing.T) {
+	for _, report := range []string{"[done] Revenue", "[done] Revenue trend and risks", "[done] Rev", "[done] Revenue trend invented"} {
+		ds := ApplyReport(NewDeliverables([]string{"Revenue trend", "Revenue forecast"}), report)
+		if Complete(ds, nil, false) || ds[0].Status != DeliverablePending || ds[1].Status != DeliverablePending {
+			t.Fatalf("abbreviation accepted: %q: %+v", report, ds)
+		}
+	}
+	ds := ApplyReport(NewDeliverables([]string{"Revenue - trend", "Revenue"}), "[missing] Revenue - trend - no filing\n[done] Revenue")
+	if ds[0].Status != DeliverableMissing || ds[0].Note != "no filing" || ds[1].Status != DeliverableDone {
+		t.Fatalf("titles with separators: %+v", ds)
+	}
+}
+
+func TestTaskFailedOrEmptyToolsAreNotEvidence(t *testing.T) {
+	ds := ApplyReport(NewDeliverables([]string{"Price"}), "[done] Price")
+	for _, ledger := range [][]LedgerEntry{nil, {{Tool: "get_market_stats", Preview: "error: unavailable", Error: "unavailable"}}, {{Tool: "get_market_stats", Preview: "  "}}, {{Preview: "10"}}} {
+		if Complete(ds, ledger, true) {
+			t.Fatalf("invalid evidence completed task: %+v", ledger)
+		}
+		if len(noEvidence(ledger, true)) != 1 {
+			t.Fatal("missing evidence explanation")
+		}
+	}
+	if !Complete(ds, []LedgerEntry{{Tool: "get_market_stats", Preview: `{"price":10}`}}, true) {
+		t.Fatal("successful result rejected")
+	}
+}
+
+func TestFailedToolCannotCompleteTaskOnResume(t *testing.T) {
+	cp := &Checkpoint{Deliverables: NewDeliverables([]string{"Latest price"}), Ledger: []LedgerEntry{{Tool: "get_market_stats", Preview: "rate limited", Error: "429"}}, ToolCalls: 1, Steps: 1, Status: TaskFailed}
+	events, _ := runTask(t, []string{"Price 10.\n[done] Latest price"}, AgentOptions{Resume: cp})
+	end := lastCheckpoint(events)
+	if end == nil || end.Status != TaskIncomplete || end.ToolCalls != 1 || len(end.Ledger) != 1 {
+		t.Fatalf("failed evidence accepted on resume: %+v", end)
+	}
+}
+
+func TestStrictTaskCannotCompleteAfterFailedVerification(t *testing.T) {
+	for _, failure := range []string{OnFailureFlag, OnFailureBlock} {
+		t.Run(failure, func(t *testing.T) {
+			events, _ := runTask(t, []string{"tool:get_market_stats", "Revenue is 900 billion [S999].\n[done] Revenue"}, AgentOptions{Deliverables: NewDeliverables([]string{"Revenue"}), EvidenceMode: EvidenceOnly, EvidenceLimits: EvidenceLimits{OnFailure: failure}})
+			cp := lastCheckpoint(events)
+			if cp == nil || cp.Status != TaskIncomplete {
+				t.Fatalf("unverified task completed: %+v", cp)
+			}
+		})
+	}
+}
+
+func TestDeliverableTruncationPreservesUnicodeAndUniqueness(t *testing.T) {
+	title := strings.Repeat("財", 201)
+	ds := NewDeliverables([]string{title, title + "different"})
+	if len(ds) != 1 || len([]rune(ds[0].Title)) != 200 || !json.Valid([]byte(fmt.Sprintf("%q", ds[0].Title))) {
+		t.Fatalf("invalid normalized titles: %+v", ds)
 	}
 }

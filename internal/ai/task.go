@@ -94,8 +94,11 @@ func NewDeliverables(titles []string) []Deliverable {
 		if t == "" || seen[strings.ToLower(t)] || len(out) >= MaxDeliverables {
 			continue
 		}
-		if len(t) > 200 {
-			t = t[:200]
+		if runes := []rune(t); len(runes) > 200 {
+			t = string(runes[:200])
+		}
+		if seen[strings.ToLower(t)] {
+			continue
 		}
 		seen[strings.ToLower(t)] = true
 		out = append(out, Deliverable{Title: t, Status: DeliverablePending})
@@ -123,13 +126,35 @@ func ApplyReport(ds []Deliverable, answer string) []Deliverable {
 	out := append([]Deliverable(nil), ds...)
 	for _, m := range deliverableLine.FindAllStringSubmatch(answer, -1) {
 		status, rest := strings.ToLower(m[1]), m[2]
-		title, note := rest, ""
-		if i := strings.Index(rest, " - "); i >= 0 {
-			title, note = rest[:i], strings.TrimSpace(rest[i+3:])
-		}
+		// Match the full title first: a title may itself contain " - ".
+		// Prefix matching lets a model complete multiple different requirements
+		// with one abbreviated report (for example "Revenue").
+		matched := false
 		for i := range out {
-			if matchesTitle(out[i].Title, title) {
-				out[i].Status, out[i].Note = status, note
+			if matchesTitle(out[i].Title, rest) {
+				out[i].Status, out[i].Note = status, ""
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			// Try separators from right to left so a longer exact title wins.
+			for end := len(rest); end > 0; {
+				sep := strings.LastIndex(rest[:end], " - ")
+				if sep < 0 {
+					break
+				}
+				for i := range out {
+					if matchesTitle(out[i].Title, rest[:sep]) {
+						out[i].Status, out[i].Note = status, strings.TrimSpace(rest[sep+3:])
+						matched = true
+						break
+					}
+				}
+				if matched {
+					break
+				}
+				end = sep
 			}
 		}
 	}
@@ -138,7 +163,7 @@ func ApplyReport(ds []Deliverable, answer string) []Deliverable {
 
 func matchesTitle(want, got string) bool {
 	w, g := strings.ToLower(strings.TrimSpace(want)), strings.ToLower(strings.TrimSpace(got))
-	return w != "" && g != "" && (w == g || strings.HasPrefix(g, w) || strings.HasPrefix(w, g))
+	return w != "" && w == g
 }
 
 // OutstandingDeliverables lists the titles not reported done.
@@ -153,13 +178,23 @@ func OutstandingDeliverables(ds []Deliverable) []string {
 }
 
 // Complete reports whether a task may claim success: every deliverable is
-// done, and, when the run had tools, at least one tool call backs it.
+// done, and, when the run had tools, at least one successful, nonempty tool
+// result backs it. This is a minimum completion gate, not claim verification.
 func Complete(ds []Deliverable, ledger []LedgerEntry, toolsAvailable bool) bool {
 	if len(OutstandingDeliverables(ds)) > 0 {
 		return false
 	}
-	if toolsAvailable && len(ledger) == 0 {
+	if toolsAvailable && !hasTaskEvidence(ledger) {
 		return false
 	}
 	return true
+}
+
+func hasTaskEvidence(ledger []LedgerEntry) bool {
+	for _, entry := range ledger {
+		if entry.Error == "" && strings.TrimSpace(entry.Tool) != "" && strings.TrimSpace(entry.Preview) != "" {
+			return true
+		}
+	}
+	return false
 }

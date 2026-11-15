@@ -362,8 +362,10 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 			}
 		}
 
+		evidenceRejected := false
 		if strict && len(assistant.ToolCalls) == 0 && strings.TrimSpace(assistant.Content) != "" {
 			if found := audit(assistant.Content); len(found) > 0 {
+				evidenceRejected = true
 				if evidenceRetries < maxEvidenceRetries && step < opts.MaxSteps {
 					evidenceRetries++
 					messages = append(messages, assistant, Message{Role: "user", Content: evidenceFix(found)})
@@ -418,8 +420,8 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 			}
 			deliverables = ApplyReport(deliverables, assistant.Content)
 			missing := OutstandingDeliverables(deliverables)
-			complete := Complete(deliverables, ledger, tools != nil)
-			if !complete && nudges < maxCompletionNudges && step < opts.MaxSteps {
+			complete := Complete(deliverables, ledger, tools != nil) && !evidenceRejected
+			if !complete && !evidenceRejected && nudges < maxCompletionNudges && step < opts.MaxSteps {
 				nudges++
 				ask := "Not everything is finished. Use tools and finish, or mark with `[missing] <deliverable> - <reason>`: " + strings.Join(missing, "; ")
 				if len(missing) == 0 {
@@ -432,6 +434,9 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 			status := TaskComplete
 			if !complete {
 				status = TaskIncomplete
+				if evidenceRejected {
+					missing = append(missing, "evidence verification failed")
+				}
 				emit(Event{Type: "notice", Severity: "warning", Code: "task_incomplete", Content: "The task is incomplete. Missing: " + strings.Join(append(missing, noEvidence(ledger, tools != nil)...), "; ")})
 			}
 			reportSources(assistant.Content)
@@ -544,8 +549,8 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 }
 
 func noEvidence(ledger []LedgerEntry, toolsAvailable bool) []string {
-	if toolsAvailable && len(ledger) == 0 {
-		return []string{"no tool results back the answer"}
+	if toolsAvailable && !hasTaskEvidence(ledger) {
+		return []string{"no successful tool results back the answer"}
 	}
 	return nil
 }
