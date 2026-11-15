@@ -153,14 +153,6 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Inspect matching Angular patch metadata for lockfile repair
-        run: |
-          set -e
-          for pkg in @angular/common @angular/compiler @angular/compiler-cli @angular/core @angular/forms @angular/platform-browser; do
-            printf 'ANGULAR_META %s ' "$pkg"
-            npm view "$pkg@22.2.6" dist.integrity --json | tr -d '\n'
-            printf '\n'
-          done
       - name: Install frozen dependencies
         run: npm ci --prefix frontend
       - name: Validate live E2E suite discovery without contacting the deployed instance
