@@ -8,8 +8,8 @@ Under the composer, **Required parts** takes the deliverables, one per line (up 
 
 ## What a task adds
 
-- **Checklist.** The agent ends its answer with `[done] <deliverable>` or `[missing] <deliverable> - <reason>` per line. A deliverable the answer leaves out counts as missing.
-- **No false completion.** Missing deliverables send the model back twice to finish them. If they are still missing the task ends `incomplete`, never `complete`. An answer with tools enabled but no tool call behind it is also `incomplete`.
+- **Checklist.** The agent ends its answer with `[done] <deliverable>` or `[missing] <deliverable> - <reason>` per line. Titles must match in full (case-insensitively); an abbreviation cannot complete a different requirement. Deliverables not yet reported remain pending, including across a resume.
+- **No false completion.** Missing deliverables send the model back twice to finish them. If they are still missing the task ends `incomplete`, never `complete`. An answer with tools enabled needs at least one successful, nonempty tool result; errors and empty results do not count, including after a resume. In strict evidence modes, an answer that still fails verification is incomplete even when its checklist claims success or unsupported sentences were removed. These are minimum completion gates, not a guarantee that every claim is correct.
 - **Evidence ledger.** Every tool call is recorded with its arguments, a preview of the result, any error and a timestamp.
 - **Checkpoints.** After each model round the conversation, ledger, checklist and spent budgets are saved in `agent_tasks`. Failed, cancelled (client disconnect) and incomplete tasks keep their last checkpoint.
 - **Resume.** The saved conversation, ledger and tool-call count are restored. The task continues without dropping evidence.
