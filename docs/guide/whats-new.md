@@ -58,6 +58,7 @@ last-reviewed: 2026-11-15
 - The instrument chip in the top bar has favorites, recent instruments and a full-screen picker on phones that also shows the full instrument identity and holds the favorite button. The phone top bar stays on one row without the page title or a star, with low-frequency actions in a More menu. See [Markets](markets.md).
 
 **Flow Studio**
+- Follow a run in the Flow editor: a run panel shows its status, progress and each node's output and errors, and the canvas marks each node as it finishes, without switching to Run history. Cancel or open the full trace from the panel. See [Flow Studio](flows.md#follow-a-run-in-the-editor).
 - **Test unsaved draft** runs the graph in the editor without saving, including a brand-new flow. Side effects are simulated unless you confirm real ones, and Run history marks each run as a draft test or a saved version with its snapshot hash. See [Flows](flows.md).
 
 **Leaderboard**
