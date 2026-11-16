@@ -976,3 +976,33 @@ export interface OwnKeyVariable { name: string; description: string; required: b
 export interface OwnKeyPlugin { plugin_id: string; provider_id: string; label: string; allowed: boolean; variables: OwnKeyVariable[] }
 /** GET /api/providers/own-keys */
 export interface OwnKeysView { plugins: OwnKeyPlugin[]; can_edit: boolean; signed_in: boolean; notice: string }
+
+/** Broker registry (#444): GET /api/brokers. Paper accounts only; live ones are listed and never traded. */
+export interface BrokerInfo { contract: number; environments: string[]; order_types?: string[]; time_in_force?: string[]; asset_classes?: string[] }
+export interface BrokerConnectionVar { name: string; description: string; required?: boolean; secret?: boolean }
+export interface BrokerEntry {
+  provider_id: string; label: string; plugin_id: string; version: string; contract: number; capabilities: string[];
+  broker?: BrokerInfo; connection_vars?: BrokerConnectionVar[]; notes?: string; usable: boolean; problems?: string[];
+}
+export interface TradingHostEntry { provider_id: string; label: string; version: string; contract: number }
+export interface BrokerConnection { name: string; broker: string; label: string; saved: string[] }
+export interface BrokersView {
+  contract: number; live_execution: boolean; notice: string;
+  builtin: { broker: string; account: string; environment: string; orders_at: string };
+  brokers: BrokerEntry[]; trading_hosts: TradingHostEntry[]; connections: BrokerConnection[];
+}
+export interface BrokerSource { broker: string; connection: string; label: string; error?: string }
+export interface BrokerAccount {
+  id: string; label: string; currency: string; environment: 'paper' | 'live'; cash: number; buying_power: number; equity: number;
+  as_of: number; broker: string; connection: string; tradable: boolean;
+}
+export interface BrokerAccountsView { accounts: BrokerAccount[]; sources: BrokerSource[]; mixed_currencies: string }
+export interface BrokerOrder {
+  id: string; client_order_id: string; account: string; environment: string; symbol: string; side: string; type: string; tif: string;
+  quantity: number; filled_quantity: number; limit_price?: number; stop_price?: number; average_price?: number; status: string; reason?: string;
+}
+export interface BrokerLedgerRow {
+  id: number; connection: string; broker: string; account: string; client_order_id: string; status: string;
+  broker_order_id?: string; order?: BrokerOrder; error?: string; created_at: string; updated_at: string;
+  request: { symbol: string; side: string; type: string; quantity: number };
+}

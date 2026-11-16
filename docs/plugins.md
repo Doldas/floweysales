@@ -235,6 +235,51 @@ declared input that the app and the AI agent call without special code.
 - `GET /api/domain-providers[?type=tax]` lists installed ones with their operations; `POST /api/domain-providers/{provider}/{operation}` with `{"input": {...}}` runs one. Calls are stateless, nothing is stored or logged, and any signed-in user may make them.
 - The AI agent gets `list_domain_providers` and `call_domain_provider`. The agent must not invent input such as transactions, and results are calculations from the data given, not advice. These tools are not grantable to flow agents.
 
+## Trading plugins: brokers and trading hosts
+
+Two more provider types connect FloweySales to brokers (ADR 0005). They are domain providers on the wire
+(one `domain` method, protocol version 1) with a **contract version** of their own, now 1. **FloweySales
+only sends orders to paper accounts.** A broker may reach live accounts; they are listed and never traded.
+
+| Type | Capabilities | Manifest part |
+| --- | --- | --- |
+| `broker` | `broker_accounts` (required), `broker_positions`, `broker_orders`, `broker_submit_order`, `broker_cancel_order` | `provider.broker`: `contract`, `environments` (`paper`, `live`), `order_types`, `time_in_force`, `asset_classes` |
+| `trading_host` | `trading_order_intents` | `provider.trading_host`: `contract` |
+
+- **Fixed inputs.** A trading provider declares exactly the inputs of `pluginsdk.StandardOperation`; build the
+  list with `pluginsdk.StandardOperations(...)`. A manifest with other inputs is rejected.
+- **Results** are typed (`BrokerAccount`, `BrokerPosition`, `BrokerOrder`, `OrderIntent`) and each has a `Validate`
+  method. The backend decodes them strictly: an unknown field, an impossible number or an unknown status makes
+  the whole answer invalid.
+- **Idempotency.** `broker_submit_order` receives a `client_order_id`. Submitting the same id again must return the
+  same order and never place a second one. The backend relies on this to settle a call that got no answer.
+- **The environment is an input.** `broker_submit_order` receives `environment`; reject the order with
+  `invalid_argument` if your account is not in that environment. An account states its real `environment`, and an
+  order that comes back must too.
+- **Contract negotiation.** The backend does not call a broker whose contract is not 1, whose `environments` lack
+  `paper`, or that cannot list accounts. It stays installed and Settings says why.
+- **Connections.** Each user saves connections to a broker: a name and the values of the plugin's `secret`
+  variables. Values are sealed per user and per connection and handed only to a process of that connection.
+  Declare the account credentials as `secret` variables in `env`.
+- **No other route.** Trading providers are not in `GET /api/domain-providers`, cannot be called through
+  `POST /api/domain-providers/...` and are not available to the AI agent.
+- **A host proposes, never trades.** Every intent it returns must name the broker and account it was asked about,
+  and carries a rationale. The app shows each intent with the reason it would be refused, if any.
+
+Routes (a USER needs the `trading.paper` permission; SYS_ADMIN does not):
+
+| Route | Purpose |
+| --- | --- |
+| `GET /api/brokers` | Installed brokers and hosts, whether each is usable and why not, and your connections |
+| `PUT` / `DELETE /api/broker-connections/{name}` | Save or remove a connection; values are never returned |
+| `GET /api/broker-accounts`, `GET /api/broker-positions` | Read-only, per source and currency; `?broker=`, `?connection=`, administrators `?include_system=true` |
+| `POST /api/broker-orders` | Route one paper order; the body names `broker`, `connection`, `account` and a `client_order_id` |
+| `GET /api/broker-orders[/{id}[?refresh=true]]` | Your ledger; refresh asks the broker, which settles an unknown outcome |
+| `POST /api/broker-orders/{id}/cancel` | Cancel a working order |
+| `POST /api/trading/intents` | Ask a trading host for order intents; nothing is sent |
+
+The built-in simulated account is the broker `PAPER` and keeps its own order path, `/api/orders`.
+
 ## Tool plugins: a tab of tools
 
 A plugin can add a **tab of interactive tools** to the app, with or without
