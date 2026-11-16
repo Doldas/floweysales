@@ -51,4 +51,5 @@
   <include file="047-instrument-intelligence.xml" relativeToChangelogFile="true"/>
   <include file="048-broker-orders.xml" relativeToChangelogFile="true"/>
   <include file="049-broker-order-reconciliation.xml" relativeToChangelogFile="true"/>
+  <include file="050-broker-order-events.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

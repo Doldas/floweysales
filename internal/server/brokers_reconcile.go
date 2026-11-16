@@ -77,7 +77,7 @@ func (e *Engine) reconcileBrokerOrder(ctx context.Context, store brokers.Store, 
 		return rec, fmt.Errorf("%w: %s", brokers.ErrBrokerAnswer, outcome.Warning)
 	}
 	if outcome.Status != rec.Status || outcome.Order != nil || outcome.Error != rec.Error {
-		if err := store.FinishBrokerOrder(ctx, rec.UserID, rec.ID, outcome.Status, outcome.Order, outcome.Error); err != nil {
+		if err := e.settleBrokerOrder(ctx, store, rec, outcome.Status, outcome.Order, outcome.Error, brokers.SourceReconcile); err != nil {
 			return rec, err
 		}
 		if outcome.Status != rec.Status || (outcome.Order != nil && (rec.Order == nil || outcome.Order.Status != rec.Order.Status || outcome.Order.FilledQuantity != rec.Order.FilledQuantity)) {

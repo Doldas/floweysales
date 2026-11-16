@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, catchError, map, of } from 'rxjs';
 import {
-  BrokerAccountsView, BrokerConnection, BrokerLedgerRow, BrokersView,
+  BrokerAccountsView, BrokerCancelWorking, BrokerConnection, BrokerLedgerRow, BrokerOrderEvent, BrokersView,
   IndexComparison, IndicesResponse, OwnKeysView, RoutingPolicy, RoutingView,
   AboutInfo,
   ForumPost,
@@ -173,6 +173,15 @@ export class MarketService {
 
   refreshBrokerOrder(id: number): Observable<{ order: BrokerLedgerRow }> {
     return this.http.get<{ order: BrokerLedgerRow }>(`/api/broker-orders/${id}?refresh=true`);
+  }
+
+  getBrokerOrderEvents(id: number): Observable<{ events: BrokerOrderEvent[] }> {
+    return this.http.get<{ events: BrokerOrderEvent[] }>(`/api/broker-orders/${id}/events`);
+  }
+
+  /** Asks each broker to cancel every working order of the caller. Nothing cancels an order on its own. */
+  cancelWorkingBrokerOrders(): Observable<BrokerCancelWorking> {
+    return this.http.post<BrokerCancelWorking>('/api/broker-orders/cancel-working', {});
   }
 
   cancelBrokerOrder(id: number): Observable<{ order: BrokerLedgerRow }> {

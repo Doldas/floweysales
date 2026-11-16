@@ -37,7 +37,7 @@ const accountsView = {
 
 interface Call { method: string; path: string; body: any }
 
-async function mock(page: Page, opts: { view?: unknown; viewStatus?: number; orders?: unknown[]; submit?: (n: number, body: any) => { status: number; body: unknown } } = {}) {
+async function mock(page: Page, opts: { view?: unknown; viewStatus?: number; orders?: unknown[]; events?: unknown[]; cancelAll?: unknown; submit?: (n: number, body: any) => { status: number; body: unknown } } = {}) {
   const calls: Call[] = [];
   let view: any = opts.view ?? brokersView({ connections: [{ name: 'main', broker: 'PAPER_X', label: 'main', saved: ['PAPER_KEY'] }] });
   let submits = 0;
@@ -50,6 +50,11 @@ async function mock(page: Page, opts: { view?: unknown; viewStatus?: number; ord
     if (req.method() === 'DELETE') view = { ...view, connections: [] };
     else view = { ...view, connections: [{ name: path.split('/').pop(), broker: 'PAPER_X', label: '', saved: ['PAPER_KEY'] }] };
     return route.fulfill(json({ connections: view.connections }));
+  });
+  await page.route(/\/api\/broker-orders\/\d+\/events$/, route => route.fulfill(json({ events: opts.events ?? [] })));
+  await page.route('**/api/broker-orders/cancel-working', route => {
+    calls.push({ method: 'POST', path: '/api/broker-orders/cancel-working', body: null });
+    return route.fulfill(json(opts.cancelAll ?? { results: [], cancelled: 0, remaining: 0 }));
   });
   await page.route('**/api/broker-orders', route => {
     const req = route.request();
@@ -191,6 +196,49 @@ test.describe('Settings → Trading → Brokers', () => {
     await expect(orders).toContainText('Outcome unknown');
   });
 
+  test('the history of an order lists each step in UTC', async ({ page }) => {
+    const request = { symbol: 'NVDA', side: 'BUY', type: 'LIMIT', quantity: 2 };
+    await mock(page, {
+      orders: [{ id: 3, connection: 'main', broker: 'PAPER_X', account: 'PA-1', client_order_id: 'a', status: 'SUBMITTED', created_at: '2026-11-16T09:00:00Z', updated_at: '2026-11-16T09:05:00Z', request }],
+      events: [
+        { id: 1, at: '2026-11-16T09:00:01Z', kind: 'routed', status: 'PENDING', detail: 'BUY 2 NVDA, LIMIT, limit 100' },
+        { id: 2, at: '2026-11-16T09:00:02Z', kind: 'acknowledged', status: 'SUBMITTED', order_status: 'OPEN' },
+        { id: 3, at: '2026-11-16T09:04:10Z', kind: 'update', status: 'SUBMITTED', order_status: 'PARTIALLY_FILLED', filled_quantity: 1 },
+      ],
+    });
+    const panel = await openBrokers(page);
+    const toggle = panel.getByRole('button', { name: 'History #3' });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const steps = panel.getByRole('list', { name: 'History of order 3' }).getByRole('listitem');
+    await expect(steps).toHaveCount(3);
+    await expect(steps.nth(0)).toHaveText('2026-11-16 09:00 UTC Routed to the broker · BUY 2 NVDA, LIMIT, limit 100');
+    await expect(steps.nth(2)).toContainText('PARTIALLY_FILLED (1 filled)');
+    await toggle.click();
+    await expect(panel.getByRole('list', { name: 'History of order 3' })).toHaveCount(0);
+  });
+
+  test('a kill switch that is on says working broker orders are not cancelled, and the user can cancel them all', async ({ page }) => {
+    const calls = await mock(page, {
+      view: brokersView({ halted: true, working_orders: 2 }),
+      cancelAll: { results: [{ id: 3, client_order_id: 'a', cancelled: true, status: 'CANCELLED' }, { id: 4, client_order_id: 'b', cancelled: false, error: 'no such order' }], cancelled: 1, remaining: 0 },
+    });
+    const panel = await openBrokers(page);
+    await expect(panel.getByRole('alert').filter({ hasText: 'The kill switch is on' })).toContainText('2 orders are still working at the broker; it does not cancel them.');
+    expect(calls).toEqual([]);
+    await panel.getByRole('button', { name: 'Cancel all working orders' }).click();
+    await expect(panel.getByRole('status')).toContainText('1 order(s) cancelled, 1 could not be cancelled');
+    expect(calls).toEqual([{ method: 'POST', path: '/api/broker-orders/cancel-working', body: null }]);
+  });
+
+  test('without working orders there is nothing to cancel', async ({ page }) => {
+    await mock(page, { view: brokersView({ halted: true, working_orders: 0 }) });
+    const panel = await openBrokers(page);
+    await expect(panel.getByRole('button', { name: 'Cancel all working orders' })).toHaveCount(0);
+    await expect(panel.getByText('The kill switch is on')).toHaveCount(0);
+  });
+
   test('a broker the app cannot use says why and offers no connection', async ({ page }) => {
     await mock(page, { view: brokersView({ brokers: [{ ...paperBroker, usable: false, problems: ['The plugin connects to live accounts only. Live-money execution is not approved, so it is never called.'] }] }) });
     const panel = await openBrokers(page);
@@ -206,10 +254,20 @@ test.describe('Settings → Trading → Brokers', () => {
   });
 
   test('has no WCAG A/AA violations in both themes', async ({ page }) => {
-    await mock(page);
+    const request = { symbol: 'NVDA', side: 'BUY', type: 'LIMIT', quantity: 2 };
+    await mock(page, {
+      view: brokersView({ halted: true, working_orders: 1, connections: [{ name: 'main', broker: 'PAPER_X', label: 'main', saved: ['PAPER_KEY'] }] }),
+      orders: [{ id: 3, connection: 'main', broker: 'PAPER_X', account: 'PA-1', client_order_id: 'a', status: 'SUBMITTED', reconciled_at: '2026-11-16T09:05:44Z',
+        reconcile_error: 'the broker is unavailable', created_at: '2026-11-16T09:00:00Z', updated_at: '2026-11-16T09:05:00Z', request,
+        order: { id: 'B-3', client_order_id: 'a', account: 'PA-1', environment: 'paper', symbol: 'NVDA', side: 'BUY', type: 'LIMIT', tif: 'DAY', quantity: 2, filled_quantity: 1, status: 'PARTIALLY_FILLED' } }],
+      events: [{ id: 1, at: '2026-11-16T09:00:01Z', kind: 'routed', status: 'PENDING', detail: 'BUY 2 NVDA, LIMIT, limit 100' }],
+    });
     const panel = await openBrokers(page);
     await panel.getByRole('button', { name: 'Load accounts' }).click();
     await expect(panel.getByRole('list', { name: 'Broker accounts' })).toBeVisible();
+    await panel.getByRole('button', { name: 'History #3' }).click();
+    await expect(panel.getByRole('list', { name: 'History of order 3' })).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Cancel all working orders' })).toBeVisible();
     await page.addScriptTag({ content: axeSource });
     await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
     for (const theme of ['light', 'dark']) {

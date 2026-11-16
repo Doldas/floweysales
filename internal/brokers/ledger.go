@@ -55,6 +55,7 @@ type Record struct {
 
 // Store is the ledger's storage. Every method works on one user's rows only.
 type Store interface {
+	EventStore
 	// ReserveBrokerOrder stores r as PENDING. When the user already has a row
 	// with the same client order id it returns that row and existing=true, or
 	// ErrConflict if its digest differs.
@@ -81,10 +82,12 @@ type Store interface {
 
 // MemoryStore is a Store for tests and for running without a database.
 type MemoryStore struct {
-	mu   sync.Mutex
-	next int64
-	rows map[int64]*Record
-	now  func() time.Time
+	mu       sync.Mutex
+	next     int64
+	rows     map[int64]*Record
+	events   map[int64][]Event
+	eventSeq int64
+	now      func() time.Time
 }
 
 // NewMemoryStore returns an empty in-memory ledger.

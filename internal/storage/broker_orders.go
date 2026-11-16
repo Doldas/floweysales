@@ -188,4 +188,50 @@ func (d *Database) MarkBrokerOrderChecked(ctx context.Context, userID, id int64,
 	return nil
 }
 
+// AddBrokerOrderEvent appends one step to a routed order's history. Events are
+// only ever added; they are removed with their order (ON DELETE CASCADE).
+func (d *Database) AddBrokerOrderEvent(ctx context.Context, userID, ledgerID int64, ev brokers.Event) error {
+	if len(ev.Detail) > 1000 {
+		ev.Detail = ev.Detail[:1000]
+	}
+	// The insert is conditioned on the row belonging to the user, so one user cannot write into another's history.
+	res, err := d.db.ExecContext(ctx,
+		"INSERT INTO broker_order_events(ledger_id,user_id,created_at,kind,status,order_status,filled_quantity,average_price,detail) "+
+			"SELECT id,user_id,?,?,?,?,?,?,? FROM broker_orders WHERE id=? AND user_id=?",
+		time.Now().UTC(), ev.Kind, ev.Status, ev.OrderStatus, ev.FilledQuantity, ev.AveragePrice, ev.Detail, ledgerID, userID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return brokers.ErrNotFound
+	}
+	return nil
+}
+
+// ListBrokerOrderEvents returns an order's history, oldest first.
+func (d *Database) ListBrokerOrderEvents(ctx context.Context, userID, ledgerID int64) ([]brokers.Event, error) {
+	var owned int
+	if err := d.db.QueryRowContext(ctx, "SELECT 1 FROM broker_orders WHERE id=? AND user_id=?", ledgerID, userID).Scan(&owned); errors.Is(err, sql.ErrNoRows) {
+		return nil, brokers.ErrNotFound
+	} else if err != nil {
+		return nil, err
+	}
+	rows, err := d.db.QueryContext(ctx,
+		"SELECT id,created_at,kind,status,order_status,filled_quantity,average_price,detail FROM broker_order_events WHERE ledger_id=? AND user_id=? ORDER BY id", ledgerID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []brokers.Event{}
+	for rows.Next() {
+		var ev brokers.Event
+		if err := rows.Scan(&ev.ID, &ev.At, &ev.Kind, &ev.Status, &ev.OrderStatus, &ev.FilledQuantity, &ev.AveragePrice, &ev.Detail); err != nil {
+			return nil, err
+		}
+		ev.At = ev.At.UTC()
+		out = append(out, ev)
+	}
+	return out, rows.Err()
+}
+
 var _ brokers.Store = (*Database)(nil)

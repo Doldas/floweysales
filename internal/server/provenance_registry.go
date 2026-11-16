@@ -100,18 +100,19 @@ var provenanceRoutes = map[string]provenanceRoute{
 	"POST /api/ai/tasks/{id}/resume": {State: provPartial, Note: "As the task it resumes."},
 
 	// User records and simulated trading.
-	"GET /api/brokers":               exempt("The installed broker extensions and trading hosts, their declared capabilities and the user's own connection names; no market data."),
-	"GET /api/broker-orders":         exempt("The user's own ledger of orders routed to broker extensions, with the times the app recorded and the broker's reported status."),
-	"GET /api/broker-orders/{id}":    exempt("One routed order from the user's own ledger, optionally refreshed from the broker that holds it."),
-	"GET /api/broker-accounts":       covered(),
-	"GET /api/broker-positions":      covered(),
-	"POST /api/trading/intents":      covered(),
-	"GET /api/orders":                exempt("The user's own simulated paper orders, with the times the app recorded; fills are produced by the app's execution engine, not by a market."),
-	"GET /api/orders/{id}/events":    exempt("The immutable lifecycle trail of a paper order, recorded by the app."),
-	"GET /api/paper-approvals":       exempt("Approval requests the app created, with their own timestamps."),
-	"GET /api/paper-approvals/{key}": exempt("An approval request the app created."),
-	"GET /api/me/transactions":       exempt("File names and sizes of the user's own uploads; no market data."),
-	"GET /api/forum":                 exempt("Posts written by named users, shown with author and time."),
+	"GET /api/brokers":                   exempt("The installed broker extensions and trading hosts, their declared capabilities and the user's own connection names; no market data."),
+	"GET /api/broker-orders":             exempt("The user's own ledger of orders routed to broker extensions, with the times the app recorded and the broker's reported status."),
+	"GET /api/broker-orders/{id}/events": exempt("The step-by-step history of one of the user's own routed orders, with the times the app recorded and the broker's reported status and fills."),
+	"GET /api/broker-orders/{id}":        exempt("One routed order from the user's own ledger, optionally refreshed from the broker that holds it."),
+	"GET /api/broker-accounts":           covered(),
+	"GET /api/broker-positions":          covered(),
+	"POST /api/trading/intents":          covered(),
+	"GET /api/orders":                    exempt("The user's own simulated paper orders, with the times the app recorded; fills are produced by the app's execution engine, not by a market."),
+	"GET /api/orders/{id}/events":        exempt("The immutable lifecycle trail of a paper order, recorded by the app."),
+	"GET /api/paper-approvals":           exempt("Approval requests the app created, with their own timestamps."),
+	"GET /api/paper-approvals/{key}":     exempt("An approval request the app created."),
+	"GET /api/me/transactions":           exempt("File names and sizes of the user's own uploads; no market data."),
+	"GET /api/forum":                     exempt("Posts written by named users, shown with author and time."),
 }
 
 // provenanceRules classify the routes not listed above by prefix. They apply

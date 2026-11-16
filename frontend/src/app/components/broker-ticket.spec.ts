@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  checkedLabel, ledgerStatusLabel, money, needsLimit, needsStop, newClientOrderId, orderBody, outcomeUnknown, splitRoute, ticketIssues, type Ticket,
+  checkedLabel, eventLabel, ledgerStatusLabel, money, needsLimit, needsStop, newClientOrderId, orderBody, outcomeUnknown, splitRoute, ticketIssues, utcStamp, workingNotice, type Ticket,
 } from './broker-ticket.ts';
 
 const ticket = (over: Partial<Ticket> = {}): Ticket => ({
@@ -81,4 +81,24 @@ test('the last check is shown in UTC', () => {
   assert.equal(checkedLabel('2026-11-16T23:59:00+02:00'), 'Checked 2026-11-16 21:59 UTC');
   assert.equal(checkedLabel(undefined), 'Not checked yet');
   assert.equal(checkedLabel('nonsense'), 'Not checked yet');
+});
+
+test('a history step reads as a sentence', () => {
+  assert.equal(eventLabel({ kind: 'routed', detail: 'BUY 2 NVDA, LIMIT, limit 100' }), 'Routed to the broker · BUY 2 NVDA, LIMIT, limit 100');
+  assert.equal(eventLabel({ kind: 'update', order_status: 'PARTIALLY_FILLED', filled_quantity: 1 }), 'Broker reported a change · PARTIALLY_FILLED (1 filled)');
+  assert.equal(eventLabel({ kind: 'acknowledged', order_status: 'OPEN', filled_quantity: 0 }), 'Broker acknowledged the order · OPEN');
+  assert.equal(eventLabel({ kind: 'something_new' }), 'something_new');
+});
+
+test('times are UTC to the minute', () => {
+  assert.equal(utcStamp('2026-11-16T09:05:44.9Z'), '2026-11-16 09:05 UTC');
+  assert.equal(utcStamp('bad'), '');
+});
+
+test('the kill switch notice says the broker orders keep working', () => {
+  assert.equal(workingNotice(true, 0), '');
+  assert.equal(workingNotice(false, 0), '');
+  assert.match(workingNotice(true, 1), /kill switch is on.*1 order is still working.*does not cancel them/);
+  assert.match(workingNotice(true, 3), /3 orders are still working/);
+  assert.equal(workingNotice(false, 2), '2 orders are working at the broker.');
 });
