@@ -70,8 +70,16 @@ func (d *Database) ClaimBrokerOrder(ctx context.Context, userID, id int64, stale
 	if err != nil {
 		return false, err
 	}
-	n, _ := res.RowsAffected()
-	return n == 1, nil
+	if n, _ := res.RowsAffected(); n == 1 {
+		return true, nil
+	}
+	// Not taken over: either the row is settled or being sent, or it is not this user's.
+	var owned int
+	err = d.db.QueryRowContext(ctx, "SELECT 1 FROM broker_orders WHERE id=? AND user_id=?", id, userID).Scan(&owned)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, brokers.ErrNotFound
+	}
+	return false, err
 }
 
 func (d *Database) FinishBrokerOrder(ctx context.Context, userID, id int64, status string, order *brokers.Order, errText string) error {
