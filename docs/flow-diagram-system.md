@@ -8,16 +8,17 @@ Every graph in the app (Flow Editor, Functions, Triggers, typed-function preview
 | --- | --- | --- |
 | Geometry | `frontend/src/app/ui/flow-canvas/flow-canvas-geometry.ts` | Node card size (125 x 70), port placement, the Bezier connector, fit/zoom math, status-to-tone mapping, arrow-key neighbor lookup. Pure, tested with `node --test`. |
 | Styles | `frontend/src/app/ui/flow-canvas/flow-canvas-styles.ts` | `FLOW_CANVAS_STYLES`: node cards, accent bars per node kind, ports, connectors (data, execution, event variants), selection, focus, state tones, navigation toolbar, forced-colors fallback. Uses only the `--fs-*` tokens from `styles/_tokens.scss`, so light and dark follow the theme. |
-| Component | `frontend/src/app/ui/flow-canvas/flow-diagram.ts` (`<fse-flow-diagram>`) | SVG canvas, pan (drag/touch), wheel and pinch zoom, Zoom in/out, Fit and Reset view, keyboard navigation, selection, empty state. It never edits coordinates. |
-| Adapters | `frontend/src/app/ui/flow-canvas/diagram-adapters.ts` | Read-only projections of each surface's own graph model into diagram nodes and edges (`functionDiagram`, `typedFunctionDiagram`, `triggerDiagram`, `runSnapshotDiagram`, `flowNodeTag`). |
+| Component | `frontend/src/app/ui/flow-canvas/flow-diagram.ts` (`<fse-flow-diagram>`) | SVG canvas, pan (drag/touch), wheel and pinch zoom, Zoom in/out, Fit and Reset view, keyboard navigation, selection, empty state. With `editable` it also reports card drags, wires drawn between ports and port activation. It never changes the graph itself. |
+| Adapters | `frontend/src/app/ui/flow-canvas/diagram-adapters.ts` | Read-only projections of each surface's own graph model into diagram nodes and edges (`editorDiagram`, `functionDiagram`, `typedFunctionDiagram`, `triggerDiagram`, `runSnapshotDiagram`, `flowNodeTag`). |
+| Wiring rules | `frontend/src/app/components/wire-drag.ts` | What a wire drawn in the Flow Editor may connect (`wireFromDrag`): output to input, one source per typed pin, matching pin types, no self loops or duplicates. |
 
-The Flow Editor's editable canvas (`flow-studio.ts`) keeps its own template because it owns wiring, dragging and port editing, but it includes `FLOW_CANVAS_STYLES` and the same geometry constants, so it cannot drift visually.
+The Flow Editor (`flow-studio.ts`) draws through the same component. It decides what the canvas reports means (see Editing below); it has no canvas template of its own.
 
 ## Surfaces
 
 | Surface | Renders with | Semantic variant shown |
 | --- | --- | --- |
-| Flow Editor | Own editable template + shared styles | Node type accent and caption, typed pins on function nodes |
+| Flow Editor | `<fse-flow-diagram variant="editor" [editable]="true">` | Node type accent and caption, typed pins on function nodes, live run state |
 | Functions (untyped) | `<fse-flow-diagram variant="function">` | Input, value, operation and output nodes; operation inputs as named ports |
 | Functions (typed pins) | `<fse-flow-diagram variant="typed-function">` | Data wires (solid) and execution wires (dashed) between named typed ports |
 | Triggers | `<fse-flow-diagram variant="trigger">` | Event node feeding a typed payload node over an event connector (dotted); read-only |
@@ -25,18 +26,38 @@ The Flow Editor's editable canvas (`flow-studio.ts`) keeps its own template beca
 
 State is never carried by color alone: tones always add a text line (for example "failed"), and nodes have an accessible name that includes the status.
 
+## Editing
+
+A diagram is read-only unless it sets `editable`. An editable canvas draws the graph it is given and reports what the user did with the pointer; the owner changes its own model and passes the next graph. Nothing in the component writes coordinates or edges.
+
+| Input | Meaning |
+| --- | --- |
+| `editable` | Cards can be dragged (mouse; a touch screen pans instead), output ports start wires, plain ports are focusable buttons. |
+| `autoFit`, `fitPadding`, `fitMinWidth`, `fitLabel` | An editor turns `autoFit` off so the view only changes when the user asks; the Flow Editor fits with a 65 unit margin, no further in than half the default width, and calls the button "Fit flow". |
+| `showPinLabels` | Names typed pins next to them. |
+| `connectingFrom` | The node whose output port was chosen to start a click-to-connect; its port is marked. |
+
+| Output | Meaning |
+| --- | --- |
+| `nodeSelect`, `canvasClick`, `canvasContextMenu` | Selection, a click on empty canvas, a right click. |
+| `nodeDragged` | `{id, x, y, phase}`: where the card would be, in whole canvas units, while it is `start`ed, `move`d and `end`ed. |
+| `wireDrawn` | `{source, target}`: a wire dragged from an output port (or typed pin) and dropped on an input port. The owner applies its own rules. |
+| `portActivate` | `{nodeId, side}`: a plain port was clicked or Enter was pressed on it; a click that ends a wire drag is not one. |
+
+A node opts in to ports through the diagram model: `inPort` and `outPort` (their accessible names) give a node one plain port in the middle of that side; `inputs` and `outputs` give typed pins and replace the plain port. `accessibleName` replaces the generated name (the Flow Editor names a node "Select <label>"). A toolbar addition goes in through `<ng-content select="[canvasToolbar]">`.
+
 ## Rules for new diagram types
 
-1. Render through `<fse-flow-diagram>`. If a feature needs editing, add an output to the component (or an overlay through content projection), not a second canvas.
+1. Render through `<fse-flow-diagram>`. If a feature needs editing, use `editable` and its outputs, or add an output; add an overlay through content projection. Do not write a second canvas.
 2. Write an adapter in `diagram-adapters.ts` from your model to `DiagramNode`/`DiagramEdge`, with a spec. Adapters must not change ids, ports, coordinates or settings of the persisted graph; layout derived for display (as for triggers) is never saved.
 3. Pick a `kind` (accent color), a caption and, where relevant, typed ports. Add a new accent in `flow-canvas-styles.ts` only for a genuinely new semantic kind.
 4. Use `--fs-*` tokens only. No hex colors or fixed fonts in a surface.
 5. Keep the shared interaction contract: nodes are focusable buttons (Enter or Space selects, arrow keys move between nodes), `+`, `-` and `0` zoom and reset, Fit and Reset view are always present, and the canvas works at phone width (it scales to the container; pan and pinch work by touch).
-6. Add the surface to `frontend/e2e/flow-diagrams.spec.ts` (same card geometry as the editor, controls, keyboard, dark mode and no sideways page scroll).
+6. Add the surface to `frontend/e2e/flow-diagrams.spec.ts` (same card geometry as the editor, controls, keyboard, dark mode and no sideways page scroll). An editable surface also needs a spec like `frontend/e2e/flow-canvas-editing.spec.ts`: drag, wire, connect by keyboard, pan, zoom, context menu, through what a user does and what is saved.
 
 ## Persistence and runtime
 
-The diagram layer is presentation only. Saved flows, functions and triggers keep their stored schema (`version`, node ids, `x`/`y`, ports, settings); the graph validators, versioning and execution paths are unchanged. One deliberate change: nodes added to a typed function from the form are now placed on a grid instead of at 0,0, so they are visible in the preview. Existing nodes keep their stored coordinates.
+The diagram layer is presentation only. Saved flows, functions and triggers keep their stored schema (`version`, node ids, `x`/`y`, ports, settings); the graph validators, versioning and execution paths are unchanged. One deliberate change: nodes added to a typed function from the form are now placed on a grid instead of at 0,0, so they are visible in the preview. Existing nodes keep their stored coordinates. Moving the Flow Editor onto the component changed no stored data and, compared pixel by pixel with the old canvas (light and dark, a template with a selected node, typed pins), differs only in four corner pixels of the rounded frame.
 
 ## Contract tests
 
@@ -47,11 +68,11 @@ The saved graphs in `testdata/graphs/` (a flow, an untyped function, a typed fun
 | The real validators accept every fixture | `internal/server/graph_contract_test.go` | A validator change that rejects a graph the editor saves |
 | A fixture survives decode and encode in Go | same | A field the Go model drops or renames |
 | Go and TypeScript models list the same JSON fields (functions, typed functions, triggers; flows are covered by `TestFlowGraphContractMatchesEditor`) | same | A field added on one side only. Intended differences are listed with their reason: `name` on an untyped function node (server only) and the editor coordinates of a typed function node (the server stores the graph as raw JSON and never re-encodes it) |
-| The adapters keep ids, coordinates, edges and ports, never write to their input, and every wire lands on a port the node has | `frontend/src/app/ui/flow-canvas/graph-contract.spec.ts` | An adapter that renames, moves or invents something |
+| The adapters (the Flow Editor's included) keep ids, coordinates, edges and ports, never write to their input, and every wire lands on a port the node has | `frontend/src/app/ui/flow-canvas/graph-contract.spec.ts` | An adapter that renames, moves or invents something |
 | Every fixture is covered by the TypeScript spec | same | A new fixture nobody tests |
 
 A new field of a stored graph goes into a fixture in the same change. Both specs run in CI (`go test ./...` and the Node spec list in `.github/workflows/ci.yml`; add a new spec file to that list).
 
 ## Not covered yet
 
-The issue also asks for a shared backend graph package (common Go validation, serialization and versioning, with generated TypeScript types). The contract tests above guard the models against drift and prove round trips, but flows, untyped functions and typed functions still have their own validators in Go, and the TypeScript types are written by hand. Moving the Flow Editor's editable canvas onto `<fse-flow-diagram>` and pixel-baseline visual diffs are also open. All are tracked on #262.
+The issue also asks for a shared backend graph package (common Go validation, serialization and versioning, with generated TypeScript types). The contract tests above guard the models against drift and prove round trips, but flows, untyped functions and typed functions still have their own validators in Go, and the TypeScript types are written by hand. Pixel-baseline visual diffs are also open. All are tracked on #262.

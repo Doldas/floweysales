@@ -2,7 +2,7 @@
 //   node --test src/app/ui/flow-canvas/diagram-adapters.spec.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { flowNodeTag, functionDiagram, runSnapshotDiagram, triggerDiagram, typedFunctionDiagram } from './diagram-adapters.ts';
+import { editorDiagram, flowNodeTag, functionDiagram, runSnapshotDiagram, triggerDiagram, typedFunctionDiagram } from './diagram-adapters.ts';
 import { inputPorts, newTypedFunctionGraph, outputPorts } from '#app/components/function-pins';
 import { investorNode } from '#app/components/investor-nodes';
 import { edgeBetween } from './flow-canvas-geometry.ts';
@@ -62,4 +62,56 @@ test('trigger diagrams use stable unique ids even when event labels repeat', () 
   const d = triggerDiagram([{ id: 10, event_key: 'same.key', payload_type: 'text' }, { id: 11, event_key: 'same.key', payload_type: 'number' }]);
   assert.equal(new Set(d.nodes.map(n => n.id)).size, 4);
   assert.deepEqual(d.edges.map(e => [e.from, e.to]), [['event:10', 'payload:10'], ['event:11', 'payload:11']]);
+});
+
+const pinned = { inputs: [{ name: 'score', type: 'number' }, { name: 'threshold', type: 'number' }], outputs: [{ name: 'result', type: 'text' }, { name: 'passed', type: 'boolean' }] };
+const editorNodes = [
+  { id: 'start', type: 'trigger', label: 'Start', x: 65, y: 150 },
+  { id: 'fn', type: 'function', label: 'Risk', x: 300, y: 40 },
+  { id: 'agent', type: 'agent', label: 'Research', x: 540, y: 150 },
+  { id: 'out', type: 'output', label: 'Report', x: 780, y: 150 },
+];
+const editorOptions = { tagOf: (t: string) => flowNodeTag(t), pinsOf: (n: { id: string }) => n.id === 'fn' ? pinned : { inputs: [], outputs: [] } };
+
+test('the editor projection names nodes "Select <label>" and gives ports only where a node can be wired', () => {
+  const frozen = Object.freeze(editorNodes.map(n => Object.freeze({ ...n })));
+  const d = editorDiagram(frozen, [], editorOptions);
+  assert.deepEqual(d.nodes.map(n => [n.id, n.x, n.y, n.accessibleName]), editorNodes.map(n => [n.id, n.x, n.y, `Select ${n.label}`]));
+  const by = Object.fromEntries(d.nodes.map(n => [n.id, n]));
+  assert.equal(by.start.inPort, undefined, 'a trigger has no input port');
+  assert.equal(by.start.outPort, 'Start connection from Start');
+  assert.equal(by.out.outPort, undefined, 'an output has no output port');
+  assert.equal(by.out.inPort, 'Connect into Report');
+  assert.deepEqual([by.agent.inPort, by.agent.outPort], ['Connect into Research', 'Start connection from Research']);
+  // A function call shows its pins instead of the plain ports.
+  assert.deepEqual(by.fn.inputs, pinned.inputs);
+  assert.deepEqual(by.fn.outputs, pinned.outputs);
+  assert.equal(by.fn.inPort, undefined);
+  assert.equal(by.fn.outPort, undefined);
+  assert.equal(by.agent.tone, undefined, 'no run is followed: no state');
+});
+
+test('stored pin ports become pin names, and other ports end in the middle of the card', () => {
+  const d = editorDiagram(editorNodes, [
+    { from: 'start', to: 'fn', to_port: 'in:score' },
+    { from: 'fn', to: 'agent', from_port: 'out:passed' },
+    { from: 'agent', to: 'out' },
+    { from: 'start', to: 'agent', to_port: 'input', from_port: 'field:price' },
+  ], editorOptions);
+  assert.deepEqual(d.edges.map(e => [e.from, e.fromPort, e.to, e.toPort]), [
+    ['start', undefined, 'fn', 'score'], ['fn', 'passed', 'agent', undefined], ['agent', undefined, 'out', undefined], ['start', undefined, 'agent', undefined],
+  ]);
+  // The wire to a pin ends at that pin; the others at the middle of the card.
+  const toScore = edgeBetween(d.nodes, d.edges[0]);
+  const toMiddle = edgeBetween(d.nodes, { ...d.edges[0], toPort: undefined });
+  assert.notEqual(toScore, toMiddle);
+});
+
+test('a followed run states each node by tone and text in the badge, and the badge is not repeated', () => {
+  const live = { tone: (id: string) => id === 'start' ? 'ok' as const : id === 'agent' ? 'fail' as const : 'none' as const, badge: (id: string) => id === 'start' ? '✓ 2 ms' : id === 'agent' ? '✕ failed' : '' };
+  const d = editorDiagram(editorNodes, [], { ...editorOptions, live });
+  const by = Object.fromEntries(d.nodes.map(n => [n.id, n]));
+  assert.deepEqual([by.start.tone, by.start.sub, by.start.subClass, by.start.plainSub], ['ok', '✓ 2 ms', 'live-badge', true]);
+  assert.deepEqual([by.agent.tone, by.agent.sub], ['fail', '✕ failed']);
+  assert.equal(by.out.tone, 'none');
 });
