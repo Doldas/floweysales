@@ -1,0 +1,415 @@
+{
+  "theme": "light",
+  "viewBox": "-25 -66.82926829268291 1130 523.6585365853658",
+  "label": "Flow canvas: nodes and directed connections",
+  "surface": {
+    "background-color": "rgb(247, 249, 252)"
+  },
+  "toolbar": [
+    "Zoom in",
+    "Zoom out",
+    "Fit flow",
+    "Reset view"
+  ],
+  "edges": [
+    {
+      "d": "M 165 195 C 210 195, 170 195, 215 195",
+      "classes": "flow-edge",
+      "stroke": "rgb(124, 134, 216)",
+      "stroke-width": "2.2px",
+      "stroke-dasharray": "none"
+    },
+    {
+      "d": "M 340 195 C 385 195, 345 195, 390 195",
+      "classes": "flow-edge",
+      "stroke": "rgb(124, 134, 216)",
+      "stroke-width": "2.2px",
+      "stroke-dasharray": "none"
+    },
+    {
+      "d": "M 515 195 C 560 195, 520 195, 565 195",
+      "classes": "flow-edge",
+      "stroke": "rgb(124, 134, 216)",
+      "stroke-width": "2.2px",
+      "stroke-dasharray": "none"
+    },
+    {
+      "d": "M 690 195 C 735 195, 695 195, 740 195",
+      "classes": "flow-edge",
+      "stroke": "rgb(124, 134, 216)",
+      "stroke-width": "2.2px",
+      "stroke-dasharray": "none"
+    },
+    {
+      "d": "M 865 195 C 910 195, 870 195, 915 195",
+      "classes": "flow-edge",
+      "stroke": "rgb(124, 134, 216)",
+      "stroke-width": "2.2px",
+      "stroke-dasharray": "none"
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Select Start",
+      "role": null,
+      "card": {
+        "x": "40",
+        "y": "160",
+        "width": "125",
+        "height": "70",
+        "rx": "12",
+        "classes": "flow-node tone-none",
+        "fill": "rgb(255, 255, 255)",
+        "stroke": "rgb(184, 196, 214)",
+        "stroke-width": "1.5px",
+        "opacity": "1"
+      },
+      "accent": {
+        "type": "trigger",
+        "fill": "rgb(14, 165, 233)"
+      },
+      "texts": [
+        {
+          "classes": "node-type",
+          "text": "⏱ TRIGGER",
+          "x": "52",
+          "y": "184",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "11px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-label",
+          "text": "Start",
+          "x": "52",
+          "y": "208",
+          "fill": "rgb(15, 23, 42)",
+          "font-size": "13px",
+          "font-weight": "600"
+        }
+      ],
+      "ports": [
+        {
+          "classes": "canvas-port output-port",
+          "cx": "165",
+          "cy": "195",
+          "r": "8",
+          "name": "Start connection from Start",
+          "fill": "rgb(5, 150, 105)",
+          "stroke": "rgb(255, 255, 255)",
+          "stroke-width": "2px"
+        }
+      ]
+    },
+    {
+      "name": "Select Watchlist quotes",
+      "role": null,
+      "card": {
+        "x": "215",
+        "y": "160",
+        "width": "125",
+        "height": "70",
+        "rx": "12",
+        "classes": "flow-node tone-none",
+        "fill": "rgb(255, 255, 255)",
+        "stroke": "rgb(184, 196, 214)",
+        "stroke-width": "1.5px",
+        "opacity": "1"
+      },
+      "accent": {
+        "type": "watchlist_quotes",
+        "fill": "rgb(245, 158, 11)"
+      },
+      "texts": [
+        {
+          "classes": "node-type",
+          "text": "$ QUOTES",
+          "x": "227",
+          "y": "184",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "11px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-label",
+          "text": "Watchlist quotes",
+          "x": "227",
+          "y": "208",
+          "fill": "rgb(15, 23, 42)",
+          "font-size": "13px",
+          "font-weight": "600"
+        }
+      ],
+      "ports": [
+        {
+          "classes": "canvas-port input-port",
+          "cx": "215",
+          "cy": "195",
+          "r": "8",
+          "name": "Connect into Watchlist quotes",
+          "fill": "rgb(2, 132, 199)",
+          "stroke": "rgb(255, 255, 255)",
+          "stroke-width": "2px"
+        },
+        {
+          "classes": "canvas-port output-port",
+          "cx": "340",
+          "cy": "195",
+          "r": "8",
+          "name": "Start connection from Watchlist quotes",
+          "fill": "rgb(5, 150, 105)",
+          "stroke": "rgb(255, 255, 255)",
+          "stroke-width": "2px"
+        }
+      ]
+    },
+    {
+      "name": "Select Big moves",
+      "role": null,
+      "card": {
+        "x": "390",
+        "y": "160",
+        "width": "125",
+        "height": "70",
+        "rx": "12",
+        "classes": "flow-node selected tone-none",
+        "fill": "rgb(238, 240, 255)",
+        "stroke": "rgb(91, 95, 240)",
+        "stroke-width": "2.5px",
+        "opacity": "1"
+      },
+      "accent": {
+        "type": "screen",
+        "fill": "rgb(139, 92, 246)"
+      },
+      "texts": [
+        {
+          "classes": "node-type",
+          "text": "⧩ SCREEN",
+          "x": "402",
+          "y": "184",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "11px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-label",
+          "text": "Big moves",
+          "x": "402",
+          "y": "208",
+          "fill": "rgb(15, 23, 42)",
+          "font-size": "13px",
+          "font-weight": "600"
+        }
+      ],
+      "ports": [
+        {
+          "classes": "canvas-port input-port",
+          "cx": "390",
+          "cy": "195",
+          "r": "8",
+          "name": "Connect into Big moves",
+          "fill": "rgb(2, 132, 199)",
+          "stroke": "rgb(255, 255, 255)",
+          "stroke-width": "2px"
+        },
+        {
+          "classes": "canvas-port output-port",
+          "cx": "515",
+          "cy": "195",
+          "r": "8",
+          "name": "Start connection from Big moves",
+          "fill": "rgb(5, 150, 105)",
+          "stroke": "rgb(255, 255, 255)",
+          "stroke-width": "2px"
+        }
+      ]
+    },
+    {
+      "name": "Select Once a day",
+      "role": null,
+      "card": {
+        "x": "565",
+        "y": "160",
+        "width": "125",
+        "height": "70",
+        "rx": "12",
+        "classes": "flow-node tone-none",
+        "fill": "rgb(255, 255, 255)",
+        "stroke": "rgb(184, 196, 214)",
+        "stroke-width": "1.5px",
+        "opacity": "1"
+      },
+      "accent": {
+        "type": "only_new",
+        "fill": "rgb(139, 92, 246)"
+      },
+      "texts": [
+        {
+          "classes": "node-type",
+          "text": "✓ ONLY NEW",
+          "x": "577",
+          "y": "184",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "11px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-label",
+          "text": "Once a day",
+          "x": "577",
+          "y": "208",
+          "fill": "rgb(15, 23, 42)",
+          "font-size": "13px",
+          "font-weight": "600"
+        }
+      ],
+      "ports": [
+        {
+          "classes": "canvas-port input-port",
+          "cx": "565",
+          "cy": "195",
+          "r": "8",
+          "name": "Connect into Once a day",
+          "fill": "rgb(2, 132, 199)",
+          "stroke": "rgb(255, 255, 255)",
+          "stroke-width": "2px"
+        },
+        {
+          "classes": "canvas-port output-port",
+          "cx": "690",
+          "cy": "195",
+          "r": "8",
+          "name": "Start connection from Once a day",
+          "fill": "rgb(5, 150, 105)",
+          "stroke": "rgb(255, 255, 255)",
+          "stroke-width": "2px"
+        }
+      ]
+    },
+    {
+      "name": "Select Alert table",
+      "role": null,
+      "card": {
+        "x": "740",
+        "y": "160",
+        "width": "125",
+        "height": "70",
+        "rx": "12",
+        "classes": "flow-node tone-none",
+        "fill": "rgb(255, 255, 255)",
+        "stroke": "rgb(184, 196, 214)",
+        "stroke-width": "1.5px",
+        "opacity": "1"
+      },
+      "accent": {
+        "type": "report_table",
+        "fill": "rgb(139, 92, 246)"
+      },
+      "texts": [
+        {
+          "classes": "node-type",
+          "text": "▦ REPORT",
+          "x": "752",
+          "y": "184",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "11px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-label",
+          "text": "Alert table",
+          "x": "752",
+          "y": "208",
+          "fill": "rgb(15, 23, 42)",
+          "font-size": "13px",
+          "font-weight": "600"
+        }
+      ],
+      "ports": [
+        {
+          "classes": "canvas-port input-port",
+          "cx": "740",
+          "cy": "195",
+          "r": "8",
+          "name": "Connect into Alert table",
+          "fill": "rgb(2, 132, 199)",
+          "stroke": "rgb(255, 255, 255)",
+          "stroke-width": "2px"
+        },
+        {
+          "classes": "canvas-port output-port",
+          "cx": "865",
+          "cy": "195",
+          "r": "8",
+          "name": "Start connection from Alert table",
+          "fill": "rgb(5, 150, 105)",
+          "stroke": "rgb(255, 255, 255)",
+          "stroke-width": "2px"
+        }
+      ]
+    },
+    {
+      "name": "Select Email me",
+      "role": null,
+      "card": {
+        "x": "915",
+        "y": "160",
+        "width": "125",
+        "height": "70",
+        "rx": "12",
+        "classes": "flow-node tone-none",
+        "fill": "rgb(255, 255, 255)",
+        "stroke": "rgb(184, 196, 214)",
+        "stroke-width": "1.5px",
+        "opacity": "1"
+      },
+      "accent": {
+        "type": "notify",
+        "fill": "rgb(239, 68, 68)"
+      },
+      "texts": [
+        {
+          "classes": "node-type",
+          "text": "✉ NOTIFY",
+          "x": "927",
+          "y": "184",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "11px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-label",
+          "text": "Email me",
+          "x": "927",
+          "y": "208",
+          "fill": "rgb(15, 23, 42)",
+          "font-size": "13px",
+          "font-weight": "600"
+        }
+      ],
+      "ports": [
+        {
+          "classes": "canvas-port input-port",
+          "cx": "915",
+          "cy": "195",
+          "r": "8",
+          "name": "Connect into Email me",
+          "fill": "rgb(2, 132, 199)",
+          "stroke": "rgb(255, 255, 255)",
+          "stroke-width": "2px"
+        },
+        {
+          "classes": "canvas-port output-port",
+          "cx": "1040",
+          "cy": "195",
+          "r": "8",
+          "name": "Start connection from Email me",
+          "fill": "rgb(5, 150, 105)",
+          "stroke": "rgb(255, 255, 255)",
+          "stroke-width": "2px"
+        }
+      ]
+    }
+  ]
+}

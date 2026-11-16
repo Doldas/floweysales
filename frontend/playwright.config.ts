@@ -18,6 +18,8 @@ export default defineConfig({
   workers: ci ? 2 : undefined,
   reporter: ci ? [['list'], ['github'], ['html', { open: 'never', outputFolder: 'playwright-report' }]] : [['list']],
   outputDir: 'test-results',
+  // Described-canvas snapshots (e2e/flow-canvas-visual.spec.ts) are text and do not depend on the platform.
+  snapshotPathTemplate: '{testDir}/__snapshots__/{testFileName}/{arg}{ext}',
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     // The mocked API must stay in charge, so the service worker is blocked.

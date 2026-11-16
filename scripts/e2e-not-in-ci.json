@@ -1,0 +1,31 @@
+{
+  "note": "Playwright specs that no CI step runs yet. A debt, not a permission: remove a spec from this list when a step of .github/workflows/ci.yml runs it. A new spec is added to a CI step, not to this list. scripts/e2e-specs-in-ci.test.mjs checks the list.",
+  "specs": [
+    "e2e/agent-formula.spec.ts",
+    "e2e/agent.spec.ts",
+    "e2e/chart-drawings.spec.ts",
+    "e2e/chart-intervals.spec.ts",
+    "e2e/chart-repaint.spec.ts",
+    "e2e/chart-studies.spec.ts",
+    "e2e/chart-styles.spec.ts",
+    "e2e/email-render.spec.ts",
+    "e2e/index-universes.spec.ts",
+    "e2e/instrument-switch.spec.ts",
+    "e2e/leaderboard.spec.ts",
+    "e2e/mobile-layout.spec.ts",
+    "e2e/models.spec.ts",
+    "e2e/own-provider-keys.spec.ts",
+    "e2e/plugins.spec.ts",
+    "e2e/provider-routing.spec.ts",
+    "e2e/roles.spec.ts",
+    "e2e/shell.spec.ts",
+    "e2e/strategy-montecarlo-a11y.spec.ts",
+    "e2e/theme.spec.ts",
+    "e2e/trade-rail.spec.ts",
+    "e2e/utc.spec.ts",
+    "e2e/vision-settings.spec.ts",
+    "e2e/web-search.spec.ts",
+    "e2e/workspace-markdown-a11y.spec.ts",
+    "e2e/workspace.spec.ts"
+  ]
+}

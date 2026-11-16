@@ -1,0 +1,147 @@
+{
+  "theme": "light",
+  "viewBox": "-202.5 -135 820 380",
+  "label": "Event triggers: each event feeds a typed payload",
+  "surface": {
+    "background-color": "rgb(247, 249, 252)"
+  },
+  "toolbar": [
+    "Zoom in",
+    "Zoom out",
+    "Fit",
+    "Reset view"
+  ],
+  "edges": [
+    {
+      "d": "M 155 55 C 202.25 55, 212.75 55, 260 55",
+      "classes": "flow-edge kind-event",
+      "stroke": "rgb(124, 134, 216)",
+      "stroke-width": "2.2px",
+      "stroke-dasharray": "2px, 5px"
+    }
+  ],
+  "nodes": [
+    {
+      "name": "⏱ EVENT filing.published custom trigger",
+      "role": "button",
+      "card": {
+        "x": "30",
+        "y": "20",
+        "width": "125",
+        "height": "70",
+        "rx": "12",
+        "classes": "flow-node tone-none",
+        "fill": "rgb(255, 255, 255)",
+        "stroke": "rgb(184, 196, 214)",
+        "stroke-width": "1.5px",
+        "opacity": "1"
+      },
+      "accent": {
+        "type": "trigger",
+        "fill": "rgb(14, 165, 233)"
+      },
+      "texts": [
+        {
+          "classes": "node-type",
+          "text": "⏱ EVENT",
+          "x": "42",
+          "y": "44",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "11px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-label",
+          "text": "filing.published",
+          "x": "42",
+          "y": "68",
+          "fill": "rgb(15, 23, 42)",
+          "font-size": "13px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-sub",
+          "text": "custom trigger",
+          "x": "42",
+          "y": "83",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "10px",
+          "font-weight": "400"
+        }
+      ],
+      "ports": [
+        {
+          "classes": "canvas-port pin-out",
+          "cx": "155",
+          "cy": "55",
+          "r": "6",
+          "name": "Output payload (text)",
+          "fill": "rgb(5, 150, 105)",
+          "stroke": "rgb(255, 255, 255)",
+          "stroke-width": "2px"
+        }
+      ]
+    },
+    {
+      "name": "▤ PAYLOAD text typed value",
+      "role": "button",
+      "card": {
+        "x": "260",
+        "y": "20",
+        "width": "125",
+        "height": "70",
+        "rx": "12",
+        "classes": "flow-node tone-none",
+        "fill": "rgb(255, 255, 255)",
+        "stroke": "rgb(184, 196, 214)",
+        "stroke-width": "1.5px",
+        "opacity": "1"
+      },
+      "accent": {
+        "type": "output",
+        "fill": "rgb(16, 185, 129)"
+      },
+      "texts": [
+        {
+          "classes": "node-type",
+          "text": "▤ PAYLOAD",
+          "x": "272",
+          "y": "44",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "11px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-label",
+          "text": "text",
+          "x": "272",
+          "y": "68",
+          "fill": "rgb(15, 23, 42)",
+          "font-size": "13px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-sub",
+          "text": "typed value",
+          "x": "272",
+          "y": "83",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "10px",
+          "font-weight": "400"
+        }
+      ],
+      "ports": [
+        {
+          "classes": "canvas-port pin-in",
+          "cx": "260",
+          "cy": "55",
+          "r": "6",
+          "name": "Input payload (text)",
+          "fill": "rgb(2, 132, 199)",
+          "stroke": "rgb(255, 255, 255)",
+          "stroke-width": "2px"
+        }
+      ]
+    }
+  ]
+}
