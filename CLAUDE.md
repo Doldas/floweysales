@@ -1,5 +1,7 @@
 # Claude Code navigation — FloweySales
 
+Read [`AGENTS.md`](AGENTS.md) for shared, truthful AI commit co-author attribution. Credit Claude only for commits it actually helped create; preserve the maintainer's author identity and all review requirements.
+
 ## Efficient navigation
 - Go backend and agents: `cmd/`, Go packages and `pluginsdk/`. Angular UI: `frontend/`. Deployment: `compose*.yml`, `Dockerfile`; architecture in `docs/architecture.md`.
 - Prefer relevant `docs/` pages over repeatedly loading the 23 KB README.
