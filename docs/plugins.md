@@ -253,6 +253,11 @@ only sends orders to paper accounts.** A broker may reach live accounts; they ar
   the whole answer invalid.
 - **Idempotency.** `broker_submit_order` receives a `client_order_id`. Submitting the same id again must return the
   same order and never place a second one. The backend relies on this to settle a call that got no answer.
+- **`broker_orders` is how the app learns the truth.** It is called with the account, `status` and the
+  `client_order_id` of one order, in the background and when a user presses Refresh. Return the order for that id
+  (none if you have none), with the broker's real status and `filled_quantity`. Fills must never decrease, an order
+  that ended (`FILLED`, `CANCELLED`, `REJECTED`, `EXPIRED`) must keep its status, `FILLED` means filled in full and
+  `PARTIALLY_FILLED` means some but not all. An answer that breaks this is ignored and shown on the order.
 - **The environment is an input.** `broker_submit_order` receives `environment`; reject the order with
   `invalid_argument` if your account is not in that environment. An account states its real `environment`, and an
   order that comes back must too.

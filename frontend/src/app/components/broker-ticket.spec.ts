@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  ledgerStatusLabel, money, needsLimit, needsStop, newClientOrderId, orderBody, outcomeUnknown, splitRoute, ticketIssues, type Ticket,
+  checkedLabel, ledgerStatusLabel, money, needsLimit, needsStop, newClientOrderId, orderBody, outcomeUnknown, splitRoute, ticketIssues, type Ticket,
 } from './broker-ticket.ts';
 
 const ticket = (over: Partial<Ticket> = {}): Ticket => ({
@@ -74,4 +74,11 @@ test('ledger statuses are plain words', () => {
 test('money keeps its own currency', () => {
   assert.equal(money(1234.5, 'SEK'), '1,234.50 SEK');
   assert.equal(money(0, 'USD'), '0.00 USD');
+});
+
+test('the last check is shown in UTC', () => {
+  assert.equal(checkedLabel('2026-11-16T09:05:44.123Z'), 'Checked 2026-11-16 09:05 UTC');
+  assert.equal(checkedLabel('2026-11-16T23:59:00+02:00'), 'Checked 2026-11-16 21:59 UTC');
+  assert.equal(checkedLabel(undefined), 'Not checked yet');
+  assert.equal(checkedLabel('nonsense'), 'Not checked yet');
 });

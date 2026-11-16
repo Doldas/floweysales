@@ -269,6 +269,13 @@ type brokerRoute struct {
 // may do; a USER always goes through a connection of their own, so their
 // values never mix with another user's.
 func (e *Engine) resolveBroker(ctx context.Context, u identity.User, broker, connection string) (brokerRoute, error) {
+	return e.resolveBrokerFor(ctx, u.ID, u.Role == identity.RoleSysAdmin, broker, connection)
+}
+
+// resolveBrokerFor is resolveBroker for a user known by id: the background
+// reconciler has no session, only the ledger row of an order that was allowed
+// when it was routed. system says whether the system's own settings may be used.
+func (e *Engine) resolveBrokerFor(ctx context.Context, userID int64, system bool, broker, connection string) (brokerRoute, error) {
 	provider, ok := e.findBrokerProvider(broker)
 	if !ok {
 		return brokerRoute{}, fmt.Errorf("%w: broker %q is not installed", errBrokerUnknown, broker)
@@ -278,20 +285,20 @@ func (e *Engine) resolveBroker(ctx context.Context, u identity.User, broker, con
 	}
 	route := brokerRoute{ctx: ctx, provider: provider, connection: connection}
 	if connection == "" {
-		if u.Role != identity.RoleSysAdmin {
+		if !system {
 			return brokerRoute{}, fmt.Errorf("%w: name one of your connections; only an administrator can use the system's own settings", brokers.ErrRoute)
 		}
 		return route, nil
 	}
-	if u.ID <= 0 {
+	if userID <= 0 {
 		return brokerRoute{}, fmt.Errorf("%w: connections need a signed-in account", brokers.ErrRoute)
 	}
-	for _, c := range e.loadConnections(ctx, u.ID) {
+	for _, c := range e.loadConnections(ctx, userID) {
 		if c.Name == connection {
 			if !strings.EqualFold(c.Broker, provider.ProviderID) {
 				return brokerRoute{}, fmt.Errorf("%w: connection %q is for %s, not %s", brokers.ErrRoute, connection, c.Broker, provider.ProviderID)
 			}
-			route.ctx = plugins.WithUserInstanceNamed(ctx, u.ID, connection, e.loadConnectionValues(ctx, u.ID, connection))
+			route.ctx = plugins.WithUserInstanceNamed(ctx, userID, connection, e.loadConnectionValues(ctx, userID, connection))
 			return route, nil
 		}
 	}
@@ -720,7 +727,7 @@ func (e *Engine) registerBrokerRoutes() {
 			return
 		}
 		if r.URL.Query().Get("refresh") == "true" {
-			if rec, err = e.refreshBrokerOrder(r.Context(), u, store, rec); err != nil {
+			if rec, err = e.reconcileBrokerOrder(r.Context(), store, rec); err != nil {
 				writeBrokerError(w, err)
 				return
 			}
@@ -794,37 +801,6 @@ func (e *Engine) ownedBrokerOrder(r *http.Request, u identity.User) (brokers.Rec
 	return rec, store, err
 }
 
-// refreshBrokerOrder asks the broker where the order stands. An order whose
-// outcome was unknown becomes submitted when the broker has it, and stays
-// unknown (not failed) when the broker does not.
-func (e *Engine) refreshBrokerOrder(ctx context.Context, u identity.User, store brokers.Store, rec brokers.Record) (brokers.Record, error) {
-	rt, err := e.resolveBroker(ctx, u, rec.Broker, rec.Connection)
-	if err != nil {
-		return rec, err
-	}
-	raw, err := e.callBroker(rt, plugins.CapBrokerOrders, map[string]any{"account": rec.Account, "status": "all", "client_order_id": rec.ClientOrderID})
-	if err != nil {
-		return rec, err
-	}
-	orders, err := brokers.DecodeOrders(raw)
-	if err != nil {
-		return rec, err
-	}
-	for _, o := range orders {
-		if o.ClientOrderID == rec.ClientOrderID && o.Account == rec.Account {
-			status := rec.Status
-			if status == brokers.StatusUnknown || status == brokers.StatusPending {
-				status = brokers.StatusSubmitted
-			}
-			if err := store.FinishBrokerOrder(ctx, u.ID, rec.ID, status, &o, ""); err != nil {
-				return rec, err
-			}
-			return store.GetBrokerOrder(ctx, u.ID, rec.ID)
-		}
-	}
-	return rec, nil
-}
-
 func (e *Engine) cancelBrokerOrder(ctx context.Context, u identity.User, store brokers.Store, rec brokers.Record) (brokers.Record, error) {
 	if rec.Order == nil || rec.BrokerOrderID == "" {
 		return rec, fmt.Errorf("%w: the broker has not confirmed this order, so there is nothing to cancel yet; refresh it first", brokers.ErrRoute)
@@ -845,6 +821,9 @@ func (e *Engine) cancelBrokerOrder(ctx context.Context, u identity.User, store b
 	}
 	order, err := brokers.DecodeCancelled(raw, *rec.Order)
 	if err != nil {
+		return rec, err
+	}
+	if err := brokers.NextOrderState(rec.Order, order, rec.Request); err != nil {
 		return rec, err
 	}
 	if err := store.FinishBrokerOrder(ctx, u.ID, rec.ID, rec.Status, &order, ""); err != nil {
