@@ -41,6 +41,8 @@ jobs:
         run: node --test scripts/audit-repository-gates.test.mjs
       - name: Every Node spec of the frontend is run by CI
         run: node --test scripts/node-specs-in-ci.test.mjs
+      - name: Every Playwright spec is run by CI or listed as not run yet
+        run: node --test scripts/e2e-specs-in-ci.test.mjs
       - name: Test documentation build and brand sync
         run: node --test scripts/build-docs.test.mjs
       - name: Check the site and API catalog are US English
@@ -192,6 +194,15 @@ jobs:
       - name: Playwright shared Flow diagram interaction regression (desktop and phone)
         working-directory: frontend
         run: npx playwright test --config playwright.config.ts e2e/flow-diagrams.spec.ts
+      - name: Playwright Flow Editor canvas editing and described-canvas regression of every graph surface (desktop and phone)
+        working-directory: frontend
+        run: npx playwright test --config playwright.config.ts e2e/flow-canvas-editing.spec.ts e2e/flow-canvas-visual.spec.ts
+      - name: Playwright draft tests, Run now and collection nodes in Flow Studio (desktop and phone)
+        working-directory: frontend
+        run: npx playwright test --config playwright.config.ts e2e/flow-draft-test.spec.ts e2e/flow-run-now.spec.ts e2e/flow-collections.spec.ts
+      - name: Playwright broker panel (desktop and phone)
+        working-directory: frontend
+        run: npx playwright test --config playwright.config.ts e2e/broker-center.spec.ts
       - name: Playwright visual evidence (desktop and phone)
         working-directory: frontend
         run: npx playwright test --config playwright.config.ts e2e/visual-evidence.spec.ts

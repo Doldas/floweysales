@@ -1,0 +1,182 @@
+{
+  "theme": "light",
+  "viewBox": "-47.5 -15 820 380",
+  "label": "Execution graph for run 41",
+  "surface": {
+    "background-color": "rgb(247, 249, 252)"
+  },
+  "toolbar": [
+    "Zoom in",
+    "Zoom out",
+    "Fit",
+    "Reset view"
+  ],
+  "edges": [
+    {
+      "d": "M 185 175 C 236.75 175, 248.25 175, 300 175",
+      "classes": "flow-edge",
+      "stroke": "rgb(124, 134, 216)",
+      "stroke-width": "2.2px",
+      "stroke-dasharray": "none"
+    },
+    {
+      "d": "M 425 175 C 476.75 175, 488.25 175, 540 175",
+      "classes": "flow-edge",
+      "stroke": "rgb(124, 134, 216)",
+      "stroke-width": "2.2px",
+      "stroke-dasharray": "none"
+    }
+  ],
+  "nodes": [
+    {
+      "name": "⏱ TRIGGER Start success · succeeded, Start SUCCESS",
+      "role": "button",
+      "card": {
+        "x": "60",
+        "y": "140",
+        "width": "125",
+        "height": "70",
+        "rx": "12",
+        "classes": "flow-node tone-ok",
+        "fill": "rgba(22, 163, 74, 0.1)",
+        "stroke": "rgb(17, 107, 49)",
+        "stroke-width": "1.5px",
+        "opacity": "1"
+      },
+      "accent": {
+        "type": "trigger",
+        "fill": "rgb(14, 165, 233)"
+      },
+      "texts": [
+        {
+          "classes": "node-type",
+          "text": "⏱ TRIGGER",
+          "x": "72",
+          "y": "164",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "11px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-label",
+          "text": "Start",
+          "x": "72",
+          "y": "188",
+          "fill": "rgb(15, 23, 42)",
+          "font-size": "13px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-sub",
+          "text": "success · succeeded",
+          "x": "72",
+          "y": "203",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "10px",
+          "font-weight": "400"
+        }
+      ],
+      "ports": []
+    },
+    {
+      "name": "✦ AGENT Analyst success · succeeded, Analyst SUCCESS",
+      "role": "button",
+      "card": {
+        "x": "300",
+        "y": "140",
+        "width": "125",
+        "height": "70",
+        "rx": "12",
+        "classes": "flow-node tone-ok",
+        "fill": "rgba(22, 163, 74, 0.1)",
+        "stroke": "rgb(17, 107, 49)",
+        "stroke-width": "1.5px",
+        "opacity": "1"
+      },
+      "accent": {
+        "type": "agent",
+        "fill": "rgb(91, 95, 240)"
+      },
+      "texts": [
+        {
+          "classes": "node-type",
+          "text": "✦ AGENT",
+          "x": "312",
+          "y": "164",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "11px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-label",
+          "text": "Analyst",
+          "x": "312",
+          "y": "188",
+          "fill": "rgb(15, 23, 42)",
+          "font-size": "13px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-sub",
+          "text": "success · succeeded",
+          "x": "312",
+          "y": "203",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "10px",
+          "font-weight": "400"
+        }
+      ],
+      "ports": []
+    },
+    {
+      "name": "→ OUTPUT Report not recorded, Report NOT RECORDED",
+      "role": "button",
+      "card": {
+        "x": "540",
+        "y": "140",
+        "width": "125",
+        "height": "70",
+        "rx": "12",
+        "classes": "flow-node tone-none",
+        "fill": "rgb(255, 255, 255)",
+        "stroke": "rgb(184, 196, 214)",
+        "stroke-width": "1.5px",
+        "opacity": "1"
+      },
+      "accent": {
+        "type": "output",
+        "fill": "rgb(16, 185, 129)"
+      },
+      "texts": [
+        {
+          "classes": "node-type",
+          "text": "→ OUTPUT",
+          "x": "552",
+          "y": "164",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "11px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-label",
+          "text": "Report",
+          "x": "552",
+          "y": "188",
+          "fill": "rgb(15, 23, 42)",
+          "font-size": "13px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-sub",
+          "text": "not recorded",
+          "x": "552",
+          "y": "203",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "10px",
+          "font-weight": "400"
+        }
+      ],
+      "ports": []
+    }
+  ]
+}

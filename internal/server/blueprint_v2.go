@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"floweysales/internal/graph"
 	"floweysales/internal/storage"
 )
 
@@ -85,13 +86,13 @@ func blueprintV2Schema(g blueprintV2Graph) (map[string]blueprintV2Node, error) {
 		return nil, fmt.Errorf("v2 requires one input and one output interface node")
 	}
 	incoming := map[string]bool{}
-	adjacency := map[string][]string{}
+	links := make([]graph.Edge, 0, len(g.Edges))
+	isNode := func(id string) bool { _, ok := nodes[id]; return ok }
 	for _, e := range g.Edges {
-		from, ok1 := nodes[e.From]
-		to, ok2 := nodes[e.To]
-		if !ok1 || !ok2 || e.From == e.To {
+		if !graph.Joins(isNode, graph.Edge{From: e.From, To: e.To}) {
 			return nil, fmt.Errorf("invalid edge endpoints")
 		}
+		from, to := nodes[e.From], nodes[e.To]
 		if e.Kind != "data" && e.Kind != "exec" {
 			return nil, fmt.Errorf("unknown edge kind")
 		}
@@ -130,30 +131,14 @@ func blueprintV2Schema(g blueprintV2Graph) (map[string]blueprintV2Node, error) {
 			return nil, fmt.Errorf("duplicate input connection %s", key)
 		}
 		incoming[key] = true
-		adjacency[e.From] = append(adjacency[e.From], e.To)
+		links = append(links, graph.Edge{From: e.From, To: e.To})
 	}
-	color := map[string]int{}
-	var visit func(string) error
-	visit = func(id string) error {
-		if color[id] == 1 {
-			return fmt.Errorf("graph cycle detected")
-		}
-		if color[id] == 2 {
-			return nil
-		}
-		color[id] = 1
-		for _, child := range adjacency[id] {
-			if err := visit(child); err != nil {
-				return err
-			}
-		}
-		color[id] = 2
-		return nil
+	ids := make([]string, len(g.Nodes))
+	for i, n := range g.Nodes {
+		ids[i] = n.ID
 	}
-	for id := range nodes {
-		if err := visit(id); err != nil {
-			return nil, err
-		}
+	if !graph.Sort(ids, links).Complete(len(ids)) {
+		return nil, fmt.Errorf("graph cycle detected")
 	}
 	// Static type inference (including operation outputs) is independent of
 	// concrete input values; it must not execute with a fake sample input.

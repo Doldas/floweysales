@@ -169,8 +169,21 @@ func contractGoFields(v any) []string {
 }
 
 // tsInterfaceFields lists the property names of a TypeScript interface found
-// in a source file. Types are skipped by tracking brackets, quotes and generics.
+// in a source file.
 func tsInterfaceFields(t *testing.T, file, name string) []string {
+	t.Helper()
+	fields := tsInterfaceTypes(t, file, name)
+	names := make([]string, 0, len(fields))
+	for n := range fields {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// tsInterfaceTypes reads a TypeScript interface found in a source file: each property name with the
+// text of its type. Types are skipped over by tracking brackets, quotes and generics.
+func tsInterfaceTypes(t *testing.T, file, name string) map[string]string {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("../../frontend/src/app", file))
 	if err != nil {
@@ -181,7 +194,7 @@ func tsInterfaceFields(t *testing.T, file, name string) []string {
 	if m == nil {
 		t.Fatalf("interface %s not found in %s", name, file)
 	}
-	var fields []string
+	fields := map[string]string{}
 	depth, angle := 1, 0
 	var inQuote byte
 	start := m[1]
@@ -190,7 +203,7 @@ func tsInterfaceFields(t *testing.T, file, name string) []string {
 		if i := strings.Index(part, ":"); i > 0 {
 			key := strings.TrimSuffix(strings.TrimSpace(part[:i]), "?")
 			if regexp.MustCompile(`^[a-z_][a-z_0-9]*$`).MatchString(key) {
-				fields = append(fields, key)
+				fields[key] = strings.TrimSpace(part[i+1:])
 			}
 		}
 		start = end + 1
@@ -219,8 +232,56 @@ func tsInterfaceFields(t *testing.T, file, name string) []string {
 			flush(i)
 		}
 	}
-	sort.Strings(fields)
 	return fields
+}
+
+// tsKind says what JSON a TypeScript type is: string (also a union of string literals), number,
+// boolean or array. Anything else, such as a named type or an object, is not judged.
+func tsKind(typeText string) string {
+	t := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(typeText), ";"))
+	switch {
+	case strings.HasSuffix(t, "[]") || strings.HasPrefix(t, "Array<"):
+		return "array"
+	case t == "number":
+		return "number"
+	case t == "boolean":
+		return "boolean"
+	case t == "string" || strings.HasPrefix(t, "'") || strings.HasPrefix(t, `"`):
+		return "string"
+	}
+	return ""
+}
+
+// goKind says what JSON a Go field is, by the same four names; other kinds, such as a struct,
+// a map or raw JSON, are not judged.
+func goKind(f reflect.StructField) string {
+	switch f.Type.Kind() {
+	case reflect.String:
+		return "string"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64:
+		return "number"
+	case reflect.Bool:
+		return "boolean"
+	case reflect.Slice:
+		if f.Type.Elem().Kind() == reflect.Uint8 {
+			return "" // []byte and json.RawMessage hold JSON of any shape
+		}
+		return "array"
+	}
+	return ""
+}
+
+// goFieldKinds maps the JSON name of each field of a Go struct to its kind.
+func goFieldKinds(v any) map[string]string {
+	kinds := map[string]string{}
+	rt := reflect.TypeOf(v)
+	for i := 0; i < rt.NumField(); i++ {
+		name := strings.Split(rt.Field(i).Tag.Get("json"), ",")[0]
+		if name != "" && name != "-" {
+			kinds[name] = goKind(rt.Field(i))
+		}
+	}
+	return kinds
 }
 
 func contractMinus(a, b []string) []string {
@@ -282,5 +343,70 @@ func TestGraphContractGoAndTypeScriptModelsAgree(t *testing.T) {
 				t.Errorf("%s: %q is listed as TypeScript-only but the server has it too", c.name, f)
 			}
 		}
+	}
+}
+
+// TestGraphContractGoAndTypeScriptTypesAgree is the same check for what each field holds: a field
+// that is a number on one side and text on the other is read wrongly or rejected, and the names
+// alone would not show it. It covers flows too. Fields whose type is not one of string, number,
+// boolean or array on either side (a named type, an object, raw JSON) are not judged.
+func TestGraphContractGoAndTypeScriptTypesAgree(t *testing.T) {
+	for _, c := range []struct {
+		name         string
+		goValue      any
+		file, tsName string
+	}{
+		{"flow node", flowNode{}, "components/flow-studio.ts", "FlowNode"},
+		{"flow edge", flowEdge{}, "components/flow-studio.ts", "FlowEdge"},
+		{"function node", functionNode{}, "components/blueprint-library.ts", "Node"},
+		{"function edge", functionEdge{}, "components/blueprint-library.ts", "Edge"},
+		{"typed function node", blueprintV2Node{}, "components/function-pins.ts", "V2Node"},
+		{"typed function wire", blueprintV2Edge{}, "components/function-pins.ts", "V2Edge"},
+		{"typed function pin", blueprintV2Port{}, "components/function-pins.ts", "Pin"},
+		{"typed function graph", blueprintV2Graph{}, "components/function-pins.ts", "V2Graph"},
+		{"trigger", storage.BlueprintTrigger{}, "ui/flow-canvas/diagram-adapters.ts", "TriggerLike"},
+	} {
+		goKinds := goFieldKinds(c.goValue)
+		ts := tsInterfaceTypes(t, c.file, c.tsName)
+		judged := 0
+		for field, tsType := range ts {
+			want, have := goKinds[field], tsKind(tsType)
+			if want == "" || have == "" {
+				continue
+			}
+			judged++
+			if want != have {
+				t.Errorf("%s.%s is %s in Go and %s (%s) in TypeScript %s", c.name, field, want, have, tsType, c.tsName)
+			}
+		}
+		if judged == 0 {
+			t.Errorf("%s: no field could be compared; the reading of %s is broken", c.name, c.tsName)
+		}
+	}
+}
+
+func TestGraphContractTypeKindsAreReadRight(t *testing.T) {
+	for typeText, want := range map[string]string{
+		"string": "string", "number": "number", "boolean": "boolean", "string[]": "array", "Pin[]": "array", "Array<Pin>": "array",
+		"'a'|'b'": "string", "\"x\"": "string", "'input'|'output'|'constant'": "string", "EvidencePolicy": "", "{a:string}": "", "unknown": "",
+	} {
+		if got := tsKind(typeText); got != want {
+			t.Errorf("tsKind(%q) = %q, want %q", typeText, got, want)
+		}
+	}
+	type sample struct {
+		S   string          `json:"s"`
+		N   int             `json:"n"`
+		F   float64         `json:"f"`
+		B   bool            `json:"b"`
+		L   []string        `json:"l"`
+		Raw json.RawMessage `json:"raw"`
+		P   *int            `json:"p"`
+		Z   string          `json:"-"`
+	}
+	got := goFieldKinds(sample{})
+	want := map[string]string{"s": "string", "n": "number", "f": "number", "b": "boolean", "l": "array", "raw": "", "p": ""}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("%v, want %v", got, want)
 	}
 }

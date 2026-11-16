@@ -27,6 +27,8 @@ cd frontend && npm ci && npm run build
 node --test $(grep -rl "from 'node:test'" frontend/src --include='*.spec.ts')
 ```
 
+CI runs the Playwright specs one step at a time, and the Node specs from a list, in `.github/workflows/ci.yml`. A new Playwright spec goes into a step there (`node --test scripts/e2e-specs-in-ci.test.mjs` fails if it is in neither a step nor `scripts/e2e-not-in-ci.json`, the short list of specs not run yet).
+
 CI runs the Node specs from a list in `.github/workflows/ci.yml`. When you add a spec that imports `node:test`, add it to that list: `node --test scripts/node-specs-in-ci.test.mjs` (part of the `policy` job) fails if one is missing or if the list names a file that is gone.
 
 Browser tests: `cd frontend && npm run build && npm run e2e` (Playwright, mock backend; see the README). They run in CI after a merge into `main`.

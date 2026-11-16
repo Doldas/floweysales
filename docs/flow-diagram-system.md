@@ -59,6 +59,19 @@ A node opts in to ports through the diagram model: `inPort` and `outPort` (their
 
 The diagram layer is presentation only. Saved flows, functions and triggers keep their stored schema (`version`, node ids, `x`/`y`, ports, settings); the graph validators, versioning and execution paths are unchanged. One deliberate change: nodes added to a typed function from the form are now placed on a grid instead of at 0,0, so they are visible in the preview. Existing nodes keep their stored coordinates. Moving the Flow Editor onto the component changed no stored data and, compared pixel by pixel with the old canvas (light and dark, a template with a selected node, typed pins), differs only in four corner pixels of the rounded frame.
 
+## The backend: what every graph shares
+
+Flows, untyped functions and typed functions are different graphs with different node types, ports and rules, and each keeps its own validator in `internal/server`. What they share is answered once, in `internal/graph`:
+
+| Question | Where | Used by |
+| --- | --- | --- |
+| Does an edge join two different nodes that exist? | `graph.Joins` | all three validators |
+| In which order do the nodes run, which nodes does nothing lead to, and is there a cycle? | `graph.Sort` (`Order`, `Roots`, `InDegree`, `Complete`) | the flow validator (and with it the run order), the untyped function evaluator, the typed function validator |
+
+`graph.Sort` is Kahn's algorithm with a fixed tie-break: the roots in the order the nodes were saved, then each node once its last input has run, nodes released by one node in the order their edges were saved. The same graph always gets the same order, and a cycle leaves its nodes (and everything behind it) out of the order. Before the move each validator had its own copy (two of Kahn's algorithm, one depth-first search); the error messages did not change. `internal/server/graph_structure_test.go` pins the order and the exact errors of all three, and was written against the old code first.
+
+What stays with the graph kind: node types and their settings, ports and pins, limits, type checking of a typed function, and the semantics of a flow (`checkFlowSemantics`). A new kind of graph calls `graph.Joins` and `graph.Sort` and adds its own rules next to them.
+
 ## Contract tests
 
 The saved graphs in `testdata/graphs/` (a flow, an untyped function, a typed function, triggers and the statuses of a run snapshot) are read by both languages, so neither side can lose or invent anything unnoticed:
@@ -68,11 +81,26 @@ The saved graphs in `testdata/graphs/` (a flow, an untyped function, a typed fun
 | The real validators accept every fixture | `internal/server/graph_contract_test.go` | A validator change that rejects a graph the editor saves |
 | A fixture survives decode and encode in Go | same | A field the Go model drops or renames |
 | Go and TypeScript models list the same JSON fields (functions, typed functions, triggers; flows are covered by `TestFlowGraphContractMatchesEditor`) | same | A field added on one side only. Intended differences are listed with their reason: `name` on an untyped function node (server only) and the editor coordinates of a typed function node (the server stores the graph as raw JSON and never re-encodes it) |
+| The same fields hold the same kind of value (string, number, boolean, array) in Go and in the TypeScript interface, flows included | same (`TestGraphContractGoAndTypeScriptTypesAgree`) | A field that is a number on one side and text on the other. Types that are neither (a named type, an object, raw JSON) are not judged |
 | The adapters (the Flow Editor's included) keep ids, coordinates, edges and ports, never write to their input, and every wire lands on a port the node has | `frontend/src/app/ui/flow-canvas/graph-contract.spec.ts` | An adapter that renames, moves or invents something |
 | Every fixture is covered by the TypeScript spec | same | A new fixture nobody tests |
 
-A new field of a stored graph goes into a fixture in the same change. Both specs run in CI (`go test ./...` and the Node spec list in `.github/workflows/ci.yml`; add a new spec file to that list).
+A new field of a stored graph goes into a fixture in the same change. The TypeScript interfaces are written by hand and checked against the Go structs by the tests above, rather than generated from them: the editor's interfaces carry unions of node types and named types that Go does not have, so a generated file would have to be edited or ignored.
+
+## Visual regression
+
+`frontend/e2e/flow-canvas-visual.spec.ts` describes every graph surface in the light and the dark theme: the Flow Editor (a new flow, a template with a node selected, a function call with typed pins), the untyped and the typed function canvas, the event triggers and the execution graph of a run. The description is, for each card, port and wire, where it is (canvas units), its classes, the colors the theme gives it, its text and its accessible name, and the toolbar buttons. It is compared to a snapshot in `frontend/e2e/__snapshots__/flow-canvas-visual.spec.ts/`.
+
+It does not compare screenshots. A screenshot of a canvas differs between machines (fonts, anti-aliasing), so a pixel baseline made on one machine fails on another for no reason. The description is the same everywhere and a change fails with a readable diff (`- "stroke-width": "2.2px"`, `+ "3px"`). Screenshots are still attached to the report for people to look at (`flow-diagrams.spec.ts`, `visual-evidence.spec.ts`).
+
+A deliberate change to the canvas is accepted by reading the diff and then running `npx playwright test e2e/flow-canvas-visual.spec.ts --update-snapshots` in `frontend/`. Changing a shared primitive changes every surface's snapshot at once, which is the point: the diff shows what each surface gained or lost.
+
+## Which tests run in CI
+
+CI names the Node specs and the Playwright specs it runs one by one in `.github/workflows/ci.yml`, so a spec that is not added there never runs. Two checks in the `policy` job keep that from happening quietly: `scripts/node-specs-in-ci.test.mjs` (every Node spec) and `scripts/e2e-specs-in-ci.test.mjs` (every Playwright spec). For the Playwright specs a short list, `scripts/e2e-not-in-ci.json`, holds those that no CI step runs yet. It is a debt, not a permission: a spec leaves the list when a CI step runs it, and a new spec is added to a step, not to the list.
+
+The graph surfaces are covered by `flow-diagrams.spec.ts` (shared contract), `flow-canvas-editing.spec.ts` (how the Flow Editor is edited), `flow-canvas-visual.spec.ts` (how every surface looks) and the Node specs of the adapters and geometry, so a change to a shared primitive is judged against all of them.
 
 ## Not covered yet
 
-The issue also asks for a shared backend graph package (common Go validation, serialization and versioning, with generated TypeScript types). The contract tests above guard the models against drift and prove round trips, but flows, untyped functions and typed functions still have their own validators in Go, and the TypeScript types are written by hand. Pixel-baseline visual diffs are also open. All are tracked on #262.
+Generating the TypeScript interfaces from the Go structs (see Contract tests for why they are checked instead), and a shared description of node *settings*: the validators of a flow's nodes still live in `validateFlow`, and the editor has its own per-node settings forms. Both are tracked on #262.

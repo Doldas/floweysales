@@ -1,0 +1,139 @@
+{
+  "theme": "light",
+  "viewBox": "0 0 820 380",
+  "label": "Flow canvas: nodes and directed connections",
+  "surface": {
+    "background-color": "rgb(247, 249, 252)"
+  },
+  "toolbar": [
+    "Zoom in",
+    "Zoom out",
+    "Fit flow",
+    "Reset view"
+  ],
+  "edges": [
+    {
+      "d": "M 190 185 C 244 185, 256 185, 310 185",
+      "classes": "flow-edge",
+      "stroke": "rgb(124, 134, 216)",
+      "stroke-width": "2.2px",
+      "stroke-dasharray": "none"
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Select Start",
+      "role": null,
+      "card": {
+        "x": "65",
+        "y": "150",
+        "width": "125",
+        "height": "70",
+        "rx": "12",
+        "classes": "flow-node tone-none",
+        "fill": "rgb(255, 255, 255)",
+        "stroke": "rgb(184, 196, 214)",
+        "stroke-width": "1.5px",
+        "opacity": "1"
+      },
+      "accent": {
+        "type": "trigger",
+        "fill": "rgb(14, 165, 233)"
+      },
+      "texts": [
+        {
+          "classes": "node-type",
+          "text": "⏱ TRIGGER",
+          "x": "77",
+          "y": "174",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "11px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-label",
+          "text": "Start",
+          "x": "77",
+          "y": "198",
+          "fill": "rgb(15, 23, 42)",
+          "font-size": "13px",
+          "font-weight": "600"
+        }
+      ],
+      "ports": [
+        {
+          "classes": "canvas-port output-port",
+          "cx": "190",
+          "cy": "185",
+          "r": "8",
+          "name": "Start connection from Start",
+          "fill": "rgb(5, 150, 105)",
+          "stroke": "rgb(255, 255, 255)",
+          "stroke-width": "2px"
+        }
+      ]
+    },
+    {
+      "name": "Select Research",
+      "role": null,
+      "card": {
+        "x": "310",
+        "y": "150",
+        "width": "125",
+        "height": "70",
+        "rx": "12",
+        "classes": "flow-node tone-none",
+        "fill": "rgb(255, 255, 255)",
+        "stroke": "rgb(184, 196, 214)",
+        "stroke-width": "1.5px",
+        "opacity": "1"
+      },
+      "accent": {
+        "type": "agent",
+        "fill": "rgb(91, 95, 240)"
+      },
+      "texts": [
+        {
+          "classes": "node-type",
+          "text": "✦ AGENT",
+          "x": "322",
+          "y": "174",
+          "fill": "rgb(91, 107, 130)",
+          "font-size": "11px",
+          "font-weight": "600"
+        },
+        {
+          "classes": "node-label",
+          "text": "Research",
+          "x": "322",
+          "y": "198",
+          "fill": "rgb(15, 23, 42)",
+          "font-size": "13px",
+          "font-weight": "600"
+        }
+      ],
+      "ports": [
+        {
+          "classes": "canvas-port input-port",
+          "cx": "310",
+          "cy": "185",
+          "r": "8",
+          "name": "Connect into Research",
+          "fill": "rgb(2, 132, 199)",
+          "stroke": "rgb(255, 255, 255)",
+          "stroke-width": "2px"
+        },
+        {
+          "classes": "canvas-port output-port",
+          "cx": "435",
+          "cy": "185",
+          "r": "8",
+          "name": "Start connection from Research",
+          "fill": "rgb(5, 150, 105)",
+          "stroke": "rgb(255, 255, 255)",
+          "stroke-width": "2px"
+        }
+      ]
+    }
+  ]
+}
