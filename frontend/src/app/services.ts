@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, catchError, map, of } from 'rxjs';
 import {
+  BrokerAccountsView, BrokerConnection, BrokerLedgerRow, BrokersView,
   IndexComparison, IndicesResponse, OwnKeysView, RoutingPolicy, RoutingView,
   AboutInfo,
   ForumPost,
@@ -141,6 +142,41 @@ export class MarketService {
 
   deleteOwnKeys(pluginId: string): Observable<{ deleted: boolean }> {
     return this.http.delete<{ deleted: boolean }>(`/api/providers/own-keys/${encodeURIComponent(pluginId)}`);
+  }
+
+  /** Broker extensions, trading hosts and the user's connections. Paper accounts only. */
+  getBrokers(): Observable<BrokersView> {
+    return this.http.get<BrokersView>('/api/brokers');
+  }
+
+  /** Saves a connection; the values are sealed on the server and never returned. */
+  saveBrokerConnection(name: string, body: { broker: string; label: string; values: Record<string, string> }): Observable<{ connections: BrokerConnection[] }> {
+    return this.http.put<{ connections: BrokerConnection[] }>(`/api/broker-connections/${encodeURIComponent(name)}`, body);
+  }
+
+  deleteBrokerConnection(name: string): Observable<{ connections: BrokerConnection[] }> {
+    return this.http.delete<{ connections: BrokerConnection[] }>(`/api/broker-connections/${encodeURIComponent(name)}`);
+  }
+
+  getBrokerAccounts(): Observable<BrokerAccountsView> {
+    return this.http.get<BrokerAccountsView>('/api/broker-accounts');
+  }
+
+  /** Routes one paper order to the broker and account the body names. The server refuses live accounts. */
+  submitBrokerOrder(body: object): Observable<{ status: string; order: BrokerLedgerRow; replayed: boolean }> {
+    return this.http.post<{ status: string; order: BrokerLedgerRow; replayed: boolean }>('/api/broker-orders', body);
+  }
+
+  getBrokerOrders(): Observable<{ orders: BrokerLedgerRow[] }> {
+    return this.http.get<{ orders: BrokerLedgerRow[] }>('/api/broker-orders');
+  }
+
+  refreshBrokerOrder(id: number): Observable<{ order: BrokerLedgerRow }> {
+    return this.http.get<{ order: BrokerLedgerRow }>(`/api/broker-orders/${id}?refresh=true`);
+  }
+
+  cancelBrokerOrder(id: number): Observable<{ order: BrokerLedgerRow }> {
+    return this.http.post<{ order: BrokerLedgerRow }>(`/api/broker-orders/${id}/cancel`, {});
   }
 
   /** SYS_ADMIN: whether users may add their own key for a provider. */

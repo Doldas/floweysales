@@ -97,6 +97,10 @@ type ProviderInfo struct {
 	// alpha-2 country codes such as "SE" or "US". Empty means not stated, and
 	// the app then never warns that the provider misses a market.
 	Markets []string `json:"markets,omitempty"`
+	// Broker describes a broker extension (Type "broker"); TradingHost a
+	// trading host (Type "trading_host"). See broker.go.
+	Broker      *BrokerInfo      `json:"broker,omitempty"`
+	TradingHost *TradingHostInfo `json:"trading_host,omitempty"`
 }
 
 // EnvVar is a configuration value the backend passes to the plugin process.
@@ -203,6 +207,9 @@ func (m Manifest) validateProvider() error {
 	}
 	if p.Type != "" && p.Type != TypeMarket {
 		return fmt.Errorf("unknown provider type %q", p.Type)
+	}
+	if p.Broker != nil || p.TradingHost != nil {
+		return errors.New("broker and trading_host belong to providers of those types")
 	}
 	if len(p.Operations) > 0 {
 		return errors.New("operations belong to domain providers; a market-data provider declares capabilities")

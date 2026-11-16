@@ -342,6 +342,18 @@ func TestMySQLAuthGate(t *testing.T) {
 	if strings.Contains(string(scratchFlowsBody), flowDraftName) {
 		t.Fatalf("testing a new flow must not create one: %s", scratchFlowsBody)
 	}
+	// Broker routes need the trading.paper permission, which no role has by default; an
+	// administrator needs none. A USER cannot reach any of them, orders and intents included.
+	for _, route := range []struct{ method, path string }{
+		{"GET", "/api/brokers"}, {"GET", "/api/broker-accounts"}, {"GET", "/api/broker-positions"}, {"GET", "/api/broker-orders"},
+		{"POST", "/api/broker-orders"}, {"POST", "/api/trading/intents"}, {"PUT", "/api/broker-connections/main"},
+	} {
+		assert(request(route.method, route.path, map[string]any{}, userCookie, ""), http.StatusForbidden)
+	}
+	assert(request("GET", "/api/brokers", nil, cookies[0], ""), http.StatusOK)
+	assert(request("GET", "/api/broker-orders", nil, cookies[0], ""), http.StatusOK)
+	// An unknown broker is never replaced by another one, even for an administrator.
+	assert(request("POST", "/api/broker-orders", map[string]any{"broker": "NO_SUCH", "account": "x", "client_order_id": "gate-1", "symbol": "NVDA", "side": "BUY", "type": "MARKET", "tif": "DAY", "quantity": 1}, cookies[0], ""), http.StatusNotFound)
 	// Only safe research routes are available to USER. No orders or global changes.
 	assert(request("GET", "/api/ai/tools", nil, userCookie, ""), http.StatusOK)
 	assert(request("GET", "/api/orders", nil, userCookie, ""), http.StatusForbidden)

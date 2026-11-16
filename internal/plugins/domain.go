@@ -29,7 +29,9 @@ const (
 )
 
 var domainTypes = map[string][]string{
-	TypeTax: {CapTaxReport, CapTaxHoldings, CapTaxEstimate},
+	TypeTax:         {CapTaxReport, CapTaxHoldings, CapTaxEstimate},
+	TypeBroker:      {CapBrokerAccounts, CapBrokerPositions, CapBrokerOrders, CapBrokerSubmitOrder, CapBrokerCancelOrder},
+	TypeTradingHost: {CapTradingOrderIntents},
 }
 
 // Limits of domain operations.
@@ -163,7 +165,7 @@ func (p ProviderInfo) validateDomain() error {
 			return fmt.Errorf("capability %q has no operation description", c)
 		}
 	}
-	return nil
+	return p.validateTrading()
 }
 
 // DomainProvider is an installed domain provider as the app and the agent see it.
@@ -181,10 +183,11 @@ type DomainProvider struct {
 }
 
 // DomainProviders lists installed domain providers, optionally of one type.
+// Brokers and trading hosts are not among them (see TradingProviders).
 func (m *Manager) DomainProviders(providerType string) []DomainProvider {
 	out := []DomainProvider{}
 	for _, p := range m.Installed() {
-		if !p.Manifest.ProvidesDomain() || (providerType != "" && p.Manifest.Provider.Type != providerType) {
+		if !p.Manifest.ProvidesDomain() || p.Manifest.Provider.IsTrading() || (providerType != "" && p.Manifest.Provider.Type != providerType) {
 			continue
 		}
 		info := p.Manifest.Provider
@@ -265,7 +268,9 @@ func (m *Manager) CallDomain(ctx context.Context, providerID, operation string, 
 	m.mu.Lock()
 	installed, ok := m.byProviderLocked(strings.ToUpper(strings.TrimSpace(providerID)))
 	m.mu.Unlock()
-	if !ok || !installed.Manifest.ProvidesDomain() {
+	// A broker or trading host is never run from here: orders go through the
+	// trading rules of CallTrading's caller, not a generic domain call.
+	if !ok || !installed.Manifest.ProvidesDomain() || installed.Manifest.Provider.IsTrading() {
 		return nil, fmt.Errorf("%w: provider %q is not installed", ErrNoSuchDomain, providerID)
 	}
 	op, ok := installed.Manifest.Provider.Operation(operation)

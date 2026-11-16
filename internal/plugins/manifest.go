@@ -76,6 +76,10 @@ type ProviderInfo struct {
 	// Markets lists the markets (ISO 3166-1 alpha-2 codes) the provider
 	// covers; empty means not stated.
 	Markets []string `json:"markets,omitempty"`
+	// Broker describes a broker extension and TradingHost a trading host
+	// (see trading.go).
+	Broker      *BrokerInfo      `json:"broker,omitempty"`
+	TradingHost *TradingHostInfo `json:"trading_host,omitempty"`
 }
 
 // EnvVar is a configuration value forwarded to the plugin process.
@@ -154,6 +158,9 @@ func (m Manifest) validateProvider() error {
 	}
 	if p.Type != "" && p.Type != TypeMarket {
 		return fmt.Errorf("unknown provider type %q", p.Type)
+	}
+	if p.Broker != nil || p.TradingHost != nil {
+		return errors.New("broker and trading_host belong to providers of those types")
 	}
 	if len(p.Operations) > 0 {
 		return errors.New("operations belong to domain providers; a market-data provider declares capabilities")

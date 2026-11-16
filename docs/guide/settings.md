@@ -2,7 +2,7 @@
 title: Settings and roles
 order: 9
 summary: What administrators set up on the Settings page, and what each person chooses for themselves.
-last-reviewed: 2026-11-06
+last-reviewed: 2026-11-16
 ---
 
 # Settings and roles
@@ -30,7 +30,7 @@ Flows use three permissions that an administrator can assign through roles: **fl
 | **Role management** | Define roles. |
 | **Permission management** | Assign permissions to roles. |
 | **Mail configuration** | The SMTP server used to send email, such as invitations, tracker alerts and flow emails. Every message uses the same FloweySales design, with a plain-text version for clients that cannot show HTML. See [Email rendering](../email-rendering.md). |
-| **Trading limits** | Limits and costs for the **paper** portfolio only, and a reset of the simulated account. These apply to simulated orders. |
+| **Trading limits** | Limits and costs for the **paper** portfolio only, and a reset of the simulated account. These apply to simulated orders. Below them, **Brokers** (see below). |
 | **Plugins** | Installed market-data providers and the plugin store. Install, update, restore the version an update replaced, uninstall, and check for updates. Each plugin shows whether it is compatible with this FloweySales, and after an app upgrade a report lists which plugins were kept and verified, need attention or are not run. A plugin that does not fit this version is kept with its settings and data but not run, and an incompatible version cannot be installed. Installing a provider that relies on an unofficial interface asks you to accept its terms first. See [Provider plugins](../plugins.md). |
 | **Providers** | Every source FloweySales can get data from, grouped by what it provides (quotes, news, web search, index lists, filings and more), with whether it is ready, needs credentials or is disabled. An administrator chooses a primary source and an ordered fallback per domain. Installing a plugin (Plugins) and deciding which installed source serves a domain (Providers) are separate steps. Today the **Quotes**, **News**, **Corporate events** and **Macro series** policies are used when a request does not name a provider; a Flow Studio node or request that names one keeps that provider. **Web search** is listed with the order its own router will use, and is changed under its own settings. Other domains can be saved but no feature reads them yet, and the screen says so. Domains where another source would change meaning, break a licence or repeat a side effect (index lists, AI, document extraction, notifications) never fall back. A fallback is always disclosed in the result. Sources with their own settings (web search, your own index lists) are listed here and say where they are managed. For quotes, news and corporate events an administrator can also choose, per market, a source to try first (**Tried first per market**): an instrument whose ticker has a market suffix, such as `.ST` for Sweden or `.OL` for Norway, goes to that source before the primary. Instruments without a suffix (most US tickers, crypto pairs, currencies) keep the domain's chain, because their market is not guessed. Under **Your own keys**, a user can save their own key for a provider an administrator opened to own keys (a checkbox per provider; off by default). Your requests (quotes, corporate events, Today) then use your key first, in a process of its own, and fall back to the shared providers with a note when it fails. A saved key is stored encrypted and never shown again; you can replace or remove it. Without user accounts, set keys under **Plugins** instead. |
 | **Updates** | The installed version, whether a newer one is available, what changed, and, when the host updater is installed, install with backup and automatic rollback. See [Automatic updates](../auto-updates.md). |
@@ -63,3 +63,18 @@ A search result is only a title and a snippet. It is not a page the agent has re
 ### Search usage integrity
 
 Web Search Settings shows provider-reported counters and **estimated** USD costs, not invoices. Invalid or negative values display as unknown rather than being represented as free usage. Search calls and LLM token usage are separate, and the actual provider invoice is authoritative.
+
+## Brokers (paper accounts only)
+
+Under **Trading limits**, the **Brokers** panel connects FloweySales to brokers that an administrator installed as plugins. It appears only for accounts that have the **trading.paper** permission; an administrator grants it to a role.
+
+**FloweySales sends orders to paper accounts only.** A broker may also offer live accounts. They are listed, marked *Live account - listed only, never traded*, and cannot be chosen for an order. A broker that connects to live accounts only, or speaks a trading contract this version does not know, is shown with the reason and is never called.
+
+- **Connections.** Name a connection and enter the broker's keys. They are stored encrypted for you alone, are never shown again (only that they are saved) and go only to a process of that connection. You can keep several connections, even to the same broker. Remove a connection to delete its keys.
+- **Accounts.** *Load accounts* reads every connection you have. Each account is shown with its source and in its own currency; amounts from different accounts are never added together or converted.
+- **Paper order ticket.** Choose the account, symbol, side, type, time in force, quantity and prices. The order goes to exactly that broker and account; nothing is sent anywhere else, and there is no fallback to another broker. The kill switch and the order-value limit of **Trading limits** apply, and a buy larger than the account's buying power is refused.
+- **Safe to retry.** Each ticket has one order id. If the broker does not answer, the order may or may not exist: press **Send paper order** again and the same id is used, so it cannot be placed twice. **Refresh** on a routed order asks the broker where it stands.
+- **Routed orders.** Your own list shows each order's status as the broker reports it. You can cancel a working order.
+- **Trading hosts.** A host proposes orders from target weights. It never places one; each proposal shows why it would be refused, if it would.
+
+The built-in simulated account keeps its own trade ticket, approvals and audit trail. The Research Agent cannot place or change broker orders. See [Plugins](../plugins.md#trading-plugins-brokers-and-trading-hosts) for plugin authors.

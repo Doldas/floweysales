@@ -267,6 +267,9 @@ func (e *Engine) allowedUserAPI(r *http.Request, u identity.User) bool {
 		}
 		return e.authService.HasPermission(r.Context(), u.Role, permission)
 	}
+	if isBrokerRoute(path) {
+		return e.authService.HasPermission(r.Context(), u.Role, "trading.paper")
+	}
 	if method == http.MethodGet && (path == "/api/search" || path == "/api/history" || path == "/api/financials" || path == "/api/providers" || path == "/api/providers/routing" || path == "/api/provider/endpoints" || path == "/api/provider/research" || path == "/api/quote" || path == "/api/market/leaderboard" || isBacktestReadPath(path) || path == "/api/events" || path == "/api/sec/filings" || path == "/api/sec/section" || path == "/api/sec/facts" || path == "/api/ai/config" || path == "/api/ai/tools" || path == "/api/ai/personas" || path == "/api/web-search/status" || path == "/api/world" || path == "/api/world/company") {
 		return e.authService.HasPermission(r.Context(), u.Role, "research.read")
 	}

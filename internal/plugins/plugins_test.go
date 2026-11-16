@@ -97,7 +97,7 @@ func runFakePlugin() {
 			reply([]map[string]any{{"id": 1, "title": "hello", "symbol": symbol}})
 		case "domain":
 			input, _ := req.Params["input"].(map[string]any)
-			reply(map[string]any{"operation": req.Params["operation"], "year": input["year"], "stray": input["stray"]})
+			reply(map[string]any{"operation": req.Params["operation"], "year": input["year"], "stray": input["stray"], "input": input, "key": os.Getenv("FAKE_API_KEY")})
 		case "tool":
 			input, _ := req.Params["input"].(map[string]any)
 			if req.Params["tool"] == "broken" {

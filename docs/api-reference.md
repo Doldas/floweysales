@@ -145,6 +145,20 @@ En provider vars plugin inte är installerat ger HTTP 404 på `/api/history`,
 `/api/financials`, `/api/quote` och `/api/provider/research`; saknad
 konfiguration (t.ex. API-nyckel) ger 503.
 
+## Brokers and trading hosts (paper accounts only)
+
+Signed-in users with the `trading.paper` permission; SYS_ADMIN needs none. Orders go only to paper accounts: an order for a live account answers 403, and nothing falls back to another broker. See [Plugins](plugins.md#trading-plugins-brokers-and-trading-hosts) and ADR 0005.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/brokers` | Installed brokers (`usable`, `problems`, declared environments and order vocabulary), trading hosts, the built-in paper account (`orders_at: /api/orders`), `live_execution` (always `false`) and the caller's connections. Values are never returned. |
+| PUT, DELETE | `/api/broker-connections/{name}` | Save (`{"broker","label","values":{"NAME":"value"}}`, merged; an empty value removes that variable) or remove one of the caller's connections. Needs a signed-in account. |
+| GET | `/api/broker-accounts`, `/api/broker-positions` | Read-only, per source (`sources`, each with its own error and provenance) and in each account's own currency; nothing is summed or converted. Filters `broker`, `connection`, `account` (positions); `include_system=true` for SYS_ADMIN. |
+| POST | `/api/broker-orders` | Route one order: `{"connection","broker","account","client_order_id","symbol","side","type","tif","quantity","limit_price","stop_price","reference_price"}`. The route is never defaulted (422 without broker or account). 403 live account, 422 risk control or unroutable, 409 `client_order_id` used for a different order or order in flight, 502 broker answered outside its contract or `status: unknown` (send the same `client_order_id` again). 200 `replayed: true` when the order was already routed. |
+| GET | `/api/broker-orders`, `/api/broker-orders/{id}` | The caller's own ledger. `?refresh=true` asks the broker for the order by client order id. |
+| POST | `/api/broker-orders/{id}/cancel` | Cancel a working order on its broker. |
+| POST | `/api/trading/intents` | `{"host","broker","connection","account","targets":[{"symbol","weight_pct","price"}]}`. A trading host proposes orders; `executed` is always `false`. |
+
 ## Underhåll och tester
 
 - `go test ./internal/mcp`: säkerställer att alla MCP-verktyg finns i

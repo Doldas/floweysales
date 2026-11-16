@@ -10,6 +10,9 @@ var roleNamePattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]{1,39}$`)
 var allowedPermissions = map[string]bool{
 	"research.read": true, "ai.chat": true, "models.use": true,
 	"flows.read": true, "flows.write": true, "flows.run": true,
+	// trading.paper lets a role use broker connections and send paper orders
+	// to brokers. No role has it by default, and it never allows live accounts.
+	"trading.paper": true,
 }
 
 type RoleDefinition struct {
@@ -41,7 +44,7 @@ func (s *Service) ListRoles(ctx context.Context) ([]RoleDefinition, error) {
 func (s *Service) PermissionsForRole(ctx context.Context, role string) ([]string, error) {
 	if role == RoleSysAdmin {
 		// SYS_ADMIN has platform authority; the list below is informative only.
-		return []string{"research.read", "ai.chat", "models.use", "flows.read", "flows.write", "flows.run"}, nil
+		return []string{"research.read", "ai.chat", "models.use", "flows.read", "flows.write", "flows.run", "trading.paper"}, nil
 	}
 	rows, err := s.db.QueryContext(ctx, "SELECT permission FROM auth_role_permissions WHERE role_name=? ORDER BY permission", role)
 	if err != nil {
