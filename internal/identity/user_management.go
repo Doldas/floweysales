@@ -221,6 +221,13 @@ func (s *Service) DeleteUser(ctx context.Context, id int64) error {
 	if _, err = tx.ExecContext(ctx, "DELETE FROM backtest_runs WHERE user_id=?", id); err != nil {
 		return err
 	}
+	// Orders routed to broker extensions, and the sealed connections they went through.
+	if _, err = tx.ExecContext(ctx, "DELETE FROM broker_orders WHERE user_id=?", id); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM api_integration_secrets WHERE integration=? OR integration LIKE ?", "broker_conns:"+strconv.FormatInt(id, 10), "broker_conn:"+strconv.FormatInt(id, 10)+":%"); err != nil {
+		return err
+	}
 	// Members go with their collections (ON DELETE CASCADE).
 	if _, err = tx.ExecContext(ctx, "DELETE FROM market_collections WHERE user_id=?", id); err != nil {
 		return err

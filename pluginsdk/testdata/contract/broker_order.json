@@ -1,0 +1,1 @@
+{"order":{"id":"B-77","client_order_id":"flow-run:42:1","account":"PA-1","environment":"paper","symbol":"NVDA","side":"BUY","type":"LIMIT","tif":"DAY","quantity":10,"filled_quantity":4,"limit_price":121,"average_price":120.9,"currency":"USD","status":"PARTIALLY_FILLED","reason":"working","submitted_at":1794000000,"updated_at":1794000060}}

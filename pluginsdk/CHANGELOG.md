@@ -8,6 +8,25 @@ publishes the section for the tagged version as the release notes. See
 
 ## Unreleased
 
+- Additive: provider types `broker` and `trading_host` (`broker.go`), the
+  contract for trading plugins. A broker extension declares
+  `provider.broker` (`BrokerInfo`: contract version, environments `paper`
+  and/or `live`, order types, time in force, asset classes) and any of the
+  capabilities `broker_accounts` (required), `broker_positions`,
+  `broker_orders`, `broker_submit_order` and `broker_cancel_order`. A trading
+  host declares `provider.trading_host` (`TradingHostInfo`) and
+  `trading_order_intents`. Both answer through the existing `domain` method,
+  so the wire protocol is unchanged. Their operations take fixed inputs:
+  declare them with `StandardOperations`; a manifest with other inputs is
+  rejected. Results are typed (`BrokerAccount`, `BrokerPosition`,
+  `BrokerOrder`, `OrderIntent` and their result envelopes), each with a
+  `Validate` method. `BrokerContractVersion` is 1. FloweySales routes every
+  order to the broker and account the caller names and only ever sends
+  orders to `paper` accounts; a `live` account is listed but refused.
+  Existing plugins keep working. A backend from before these types rejects a
+  plugin that declares them, so declare them together with a
+  `min_app_version` that knows them once a release version is known.
+
 ## v0.5.0
 
 - Additive: capability `profile` (method `profile`, `ProfileParams`,

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="048-broker-orders" author="floweysales" dbms="mysql">
+  <!-- Orders routed to broker extensions (#444), one row per user and client order id.
+       The row is reserved before the plugin is called, so a repeated request never places a second
+       order. No foreign key to auth_users: with authentication disabled the single user is id 0;
+       Service.DeleteUser removes a user's rows. The in-core paper account (orders, paper_order_audit,
+       paper_approvals) is untouched. Broker credentials are not stored here. -->
+  <createTable tableName="broker_orders" remarks="Orders routed to broker extensions; paper accounts only">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_broker_orders"/></column>
+   <column name="user_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="connection_name" type="VARCHAR(40)" defaultValue=""><constraints nullable="false"/></column>
+   <column name="broker" type="VARCHAR(32)"><constraints nullable="false"/></column>
+   <column name="account" type="VARCHAR(64)"><constraints nullable="false"/></column>
+   <column name="environment" type="VARCHAR(8)"><constraints nullable="false"/></column>
+   <column name="client_order_id" type="VARCHAR(128)"><constraints nullable="false"/></column>
+   <column name="request_digest" type="CHAR(64)"><constraints nullable="false"/></column>
+   <column name="request_json" type="TEXT"><constraints nullable="false"/></column>
+   <column name="status" type="VARCHAR(12)"><constraints nullable="false"/></column>
+   <column name="broker_order_id" type="VARCHAR(128)" defaultValue=""><constraints nullable="false"/></column>
+   <column name="order_json" type="TEXT" remarks="The order as the broker last reported it"/>
+   <column name="error_text" type="VARCHAR(1000)" defaultValue=""><constraints nullable="false"/></column>
+   <column name="created_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+   <column name="updated_at" type="DATETIME(6)" defaultValueComputed="CURRENT_TIMESTAMP(6)"><constraints nullable="false"/></column>
+  </createTable>
+  <addUniqueConstraint tableName="broker_orders" columnNames="user_id, client_order_id" constraintName="uq_broker_orders_client"/>
+  <createIndex tableName="broker_orders" indexName="idx_broker_orders_user"><column name="user_id"/><column name="id"/></createIndex>
+  <rollback>
+   <dropTable tableName="broker_orders"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

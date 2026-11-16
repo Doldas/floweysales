@@ -62,7 +62,7 @@ func (e *Engine) registerUserManagementRoutes() {
 			writeJSON(w, 503, map[string]string{"error": "Cannot load roles"})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"roles": roles, "permissions": []string{"research.read", "ai.chat", "models.use", "flows.read", "flows.write", "flows.run"}})
+		writeJSON(w, 200, map[string]any{"roles": roles, "permissions": []string{"research.read", "ai.chat", "models.use", "flows.read", "flows.write", "flows.run", "trading.paper"}})
 	})
 	e.mux.HandleFunc("POST /api/admin/roles", func(w http.ResponseWriter, r *http.Request) {
 		if !e.flowAdmin(w, r) {

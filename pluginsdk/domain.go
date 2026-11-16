@@ -29,11 +29,13 @@ const (
 
 // domainTypes lists the capabilities each domain type defines.
 var domainTypes = map[string][]string{
-	TypeTax: {CapTaxReport, CapTaxHoldings, CapTaxEstimate},
+	TypeTax:         {CapTaxReport, CapTaxHoldings, CapTaxEstimate},
+	TypeBroker:      {CapBrokerAccounts, CapBrokerPositions, CapBrokerOrders, CapBrokerSubmitOrder, CapBrokerCancelOrder},
+	TypeTradingHost: {CapTradingOrderIntents},
 }
 
 // DomainTypes returns the known domain provider types.
-func DomainTypes() []string { return []string{TypeTax} }
+func DomainTypes() []string { return []string{TypeTax, TypeBroker, TypeTradingHost} }
 
 // IsDomain reports whether the provider is a domain provider.
 func (p ProviderInfo) IsDomain() bool {
@@ -159,7 +161,7 @@ func (p ProviderInfo) validateDomain() error {
 			return fmt.Errorf("capability %q has no operation description", c)
 		}
 	}
-	return nil
+	return p.validateTrading()
 }
 
 // Operation finds a declared operation.

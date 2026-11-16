@@ -28,6 +28,9 @@ type userInstanceKey struct{}
 
 type userInstance struct {
 	userID int64
+	// name tells apart several instances of one plugin for one user, such as
+	// two broker connections; it is empty for the user's one own-key instance.
+	name   string
 	values map[string]string
 }
 
@@ -40,6 +43,13 @@ type userUse struct {
 // process with values, the user's settings for the plugin's secret variables.
 func WithUserInstance(ctx context.Context, userID int64, values map[string]string) context.Context {
 	return context.WithValue(ctx, userInstanceKey{}, userInstance{userID: userID, values: values})
+}
+
+// WithUserInstanceNamed is WithUserInstance for one of several instances a
+// user runs of the same plugin. Each name gets a process of its own, so two
+// connections never share their values.
+func WithUserInstanceNamed(ctx context.Context, userID int64, name string, values map[string]string) context.Context {
+	return context.WithValue(ctx, userInstanceKey{}, userInstance{userID: userID, name: name, values: values})
 }
 
 // UserInstanceOf reports whose own instance calls made with ctx use.
@@ -114,6 +124,9 @@ func (m *Manager) userProcess(p InstalledPlugin, inst userInstance) (*process, e
 		return nil, fmt.Errorf("plugin %s is incompatible with this FloweySales and is not run (it stays installed): %s", id, problem)
 	}
 	key := id + userKeySep + strconv.FormatInt(inst.userID, 10)
+	if inst.name != "" {
+		key += "#" + inst.name
+	}
 	env, fingerprint := m.userEnv(&p.Manifest, inst.values)
 	m.mu.Lock()
 	defer m.mu.Unlock()

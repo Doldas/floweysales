@@ -1,0 +1,1 @@
+{"intents":[{"broker":"EXAMPLE_BROKER","account":"PA-1","symbol":"NVDA","side":"SELL","type":"LIMIT","tif":"DAY","quantity":3,"limit_price":131,"rationale":"NVDA is 4 points above its target weight."}],"warnings":["MSFT has no price, so it was left out."]}

@@ -14,6 +14,7 @@ import (
 
 	"floweysales/internal/ai"
 	"floweysales/internal/app"
+	"floweysales/internal/brokers"
 	"floweysales/internal/collections"
 	"floweysales/internal/identity"
 	"floweysales/internal/indexsource"
@@ -146,8 +147,11 @@ type Engine struct {
 	providers        market.Backend
 	plugins          *plugins.Manager
 	userSecrets      func(pluginID string) []plugins.EnvVar // tests; else plugins.UserSecrets
-	defaultProvider  market.Provider
-	trackerCfg       tracker.Config
+	// brokerHostOverride and brokerLedger are test seams of the broker registry; nil uses the plugin manager and the database.
+	brokerHostOverride brokerHost
+	brokerLedger       brokers.Store
+	defaultProvider    market.Provider
+	trackerCfg         tracker.Config
 
 	trackerMutationMu sync.Mutex // serialize MySQL and in-memory tracker lifecycle writes
 
@@ -361,6 +365,7 @@ func NewEngine(db *storage.Database, config *SharedMarketConfig, webFS fs.FS, tr
 	e.registerPluginRoutes()
 	e.registerPluginToolRoutes()
 	e.registerDomainRoutes()
+	e.registerBrokerRoutes()
 	e.registerTransactionRoutes()
 	e.registerUserspaceRoutes()
 	e.registerMCPTrackerRoutes()
