@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"floweysales/internal/graph"
 	"floweysales/internal/storage"
 )
 
@@ -189,8 +190,6 @@ func evaluateBlueprintFunction(f storage.BlueprintFunction, input typedValue) (t
 		return typedValue{}, fmt.Errorf("function graph exceeds limits or lacks input/output")
 	}
 	nodes := map[string]functionNode{}
-	next := map[string][]string{}
-	indegree := map[string]int{}
 	var inputID, outputID string
 	for _, n := range g.Nodes {
 		if len(n.ID) == 0 || len(n.ID) > 48 || nodes[n.ID].ID != "" {
@@ -219,27 +218,25 @@ func evaluateBlueprintFunction(f storage.BlueprintFunction, input typedValue) (t
 	if inputID == "" || outputID == "" {
 		return typedValue{}, fmt.Errorf("function requires input and output nodes")
 	}
-	for _, e := range g.Edges {
-		if nodes[e.From].ID == "" || nodes[e.To].ID == "" || e.From == e.To {
+	isNode := func(id string) bool { return nodes[id].ID != "" }
+	links := make([]graph.Edge, len(g.Edges))
+	for i, e := range g.Edges {
+		if !graph.Joins(isNode, graph.Edge{From: e.From, To: e.To}) {
 			return typedValue{}, fmt.Errorf("invalid function connection")
 		}
 		if e.ToPort != "" && !strings.Contains("|a|b|condition|true|false|", "|"+e.ToPort+"|") {
 			return typedValue{}, fmt.Errorf("unknown data pin")
 		}
-		next[e.From] = append(next[e.From], e.To)
-		indegree[e.To]++
+		links[i] = graph.Edge{From: e.From, To: e.To}
 	}
-	queue := []string{}
-	for _, n := range g.Nodes {
-		if indegree[n.ID] == 0 {
-			queue = append(queue, n.ID)
-		}
+	ids := make([]string, len(g.Nodes))
+	for i, n := range g.Nodes {
+		ids[i] = n.ID
 	}
+	order := graph.Sort(ids, links).Order
 	values := map[string]typedValue{}
 	visited := 0
-	for len(queue) > 0 {
-		id := queue[0]
-		queue = queue[1:]
+	for _, id := range order {
 		visited++
 		n := nodes[id]
 		switch n.Type {
@@ -274,12 +271,6 @@ func evaluateBlueprintFunction(f storage.BlueprintFunction, input typedValue) (t
 				return typedValue{}, fmt.Errorf("output type mismatch")
 			}
 			values[id] = v
-		}
-		for _, to := range next[id] {
-			indegree[to]--
-			if indegree[to] == 0 {
-				queue = append(queue, to)
-			}
 		}
 	}
 	if visited != len(nodes) {

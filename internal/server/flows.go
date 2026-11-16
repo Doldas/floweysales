@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"floweysales/internal/ai"
+	"floweysales/internal/graph"
 	"floweysales/internal/grounding"
 	"floweysales/internal/identity"
 	"floweysales/internal/persona"
@@ -176,8 +177,6 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		return g, nil, fmt.Errorf("flow needs 2–16 nodes and 1–32 edges")
 	}
 	nodes := map[string]flowNode{}
-	degrees := map[string]int{}
-	next := map[string][]string{}
 	starts := 0
 	agents := 0
 	calls := 0
@@ -433,15 +432,12 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 	if starts != 1 || agents+calls+constants+functions+utilities == 0 {
 		return g, nil, fmt.Errorf("flow needs exactly one trigger and at least one executable node")
 	}
+	isNode := func(id string) bool { _, ok := nodes[id]; return ok }
 	for _, edge := range g.Edges {
-		from, okFrom := nodes[edge.From]
-		_, okTo := nodes[edge.To]
-		if !okFrom || !okTo || edge.From == edge.To {
+		if !graph.Joins(isNode, graph.Edge{From: edge.From, To: edge.To}) {
 			return g, nil, fmt.Errorf("invalid graph edge")
 		}
-		if from.Type == "agent" && edge.To == edge.From {
-			return g, nil, fmt.Errorf("cycle")
-		}
+		from := nodes[edge.From]
 		// Typed function pins: in:<pin> binds a function input, out:<pin>
 		// reads one function output. Pin names are checked against the
 		// function definition when the flow is saved or published.
@@ -449,8 +445,6 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 			if err := validateFunctionPinEdge(edge, from, nodes[edge.To]); err != nil {
 				return g, nil, err
 			}
-			degrees[edge.To]++
-			next[edge.From] = append(next[edge.From], edge.To)
 			continue
 		}
 		if g.Version == 2 && strings.HasPrefix(edge.FromPort, "field:") && edge.ToPort == "input" {
@@ -478,14 +472,10 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 					}
 				}
 			}
-			degrees[edge.To]++
-			next[edge.From] = append(next[edge.From], edge.To)
 			continue
 		}
 		if edge.FromPort != "" || edge.ToPort != "" {
 			if g.Version == 2 && from.Type == "condition" && (edge.FromPort == "true" || edge.FromPort == "false") && edge.ToPort == "" {
-				degrees[edge.To]++
-				next[edge.From] = append(next[edge.From], edge.To)
 				continue
 			}
 			if edge.FromPort != "value" || edge.ToPort != "input" {
@@ -501,34 +491,26 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 				return g, nil, fmt.Errorf("agent inputs require text values; use an explicit conversion node")
 			}
 		}
-		degrees[edge.To]++
-		next[edge.From] = append(next[edge.From], edge.To)
 	}
-	queue := []string{}
-	for _, n := range g.Nodes {
-		if degrees[n.ID] == 0 {
-			if n.Type != "trigger" {
-				return g, nil, fmt.Errorf("disconnected agent")
-			}
-			queue = append(queue, n.ID)
+	ids := make([]string, len(g.Nodes))
+	for i, n := range g.Nodes {
+		ids[i] = n.ID
+	}
+	links := make([]graph.Edge, len(g.Edges))
+	for i, edge := range g.Edges {
+		links[i] = graph.Edge{From: edge.From, To: edge.To}
+	}
+	sorted := graph.Sort(ids, links)
+	for _, id := range sorted.Roots {
+		if nodes[id].Type != "trigger" {
+			return g, nil, fmt.Errorf("disconnected agent")
 		}
 	}
-	if len(queue) != 1 {
+	if len(sorted.Roots) != 1 {
 		return g, nil, fmt.Errorf("must have a single trigger root")
 	}
-	order := []string{}
-	for len(queue) > 0 {
-		id := queue[0]
-		queue = queue[1:]
-		order = append(order, id)
-		for _, to := range next[id] {
-			degrees[to]--
-			if degrees[to] == 0 {
-				queue = append(queue, to)
-			}
-		}
-	}
-	if len(order) != len(g.Nodes) {
+	order := sorted.Order
+	if !sorted.Complete(len(g.Nodes)) {
 		return g, nil, fmt.Errorf("graph has a cycle or unreachable nodes")
 	}
 	if err := checkFlowSemantics(g, order); err != nil {
