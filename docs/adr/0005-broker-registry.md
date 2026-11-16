@@ -77,6 +77,20 @@ broker-specific logic may enter the core, and issue #8 states that live-money ex
 16. **Checks of one order never interleave.** A lock per row makes a check re-read the row before it decides,
     so an older report cannot be written over a newer one.
 
+## History and taking orders back (phase 3)
+
+17. **Every step of an order is kept.** The `broker_order_events` table is append-only (nothing updates or
+    deletes an event; they go with their order). A step is written when an order is routed, acknowledged,
+    refused, left without a clear answer, found at the broker after that, given up on, reported changed (new
+    status or more fills) or cancelled. A check that finds nothing new, and a report that cannot be true, add
+    nothing. The ledger row keeps the latest state; the history keeps the path, with the broker's status, fills
+    and average price at each step.
+18. **The kill switch stops new orders, not working ones, and says so.** Orders already at the broker keep
+    working there. The app shows how many are, and offers **Cancel all working orders**. It never cancels on its
+    own: cancelling changes the user's orders at their broker and is their decision. The cancel goes through the
+    same path as a single cancel (paper gate, route, strict decoding, state checks), one order at a time, so
+    one failure does not stop the rest and each result is reported.
+
 ## Consequences
 
 - A broker plugin is a small adapter; a new broker needs no backend release.

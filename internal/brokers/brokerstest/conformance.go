@@ -119,6 +119,7 @@ func Run(t *testing.T, store brokers.Store, alice, bob int64, clientPrefix strin
 	}
 
 	reconcileRules(t, store, alice, bob, clientPrefix)
+	historyRules(t, store, alice, bob, clientPrefix)
 }
 
 // reconcileRules checks which rows the background reconciler is offered and
@@ -225,5 +226,58 @@ func reconcileRules(t *testing.T, store brokers.Store, alice, bob int64, prefix 
 	}
 	if limited, _ := store.ListBrokerOrdersToReconcile(ctx, now, 0, 1); len(limited) != 1 {
 		t.Errorf("limit: %d", len(limited))
+	}
+}
+
+// historyRules checks the append-only history of an order: events keep their
+// order, carry the broker's report, and belong to the owner of the row.
+func historyRules(t *testing.T, store brokers.Store, alice, bob int64, prefix string) {
+	t.Helper()
+	ctx := context.Background()
+	row, _, err := store.ReserveBrokerOrder(ctx, record(alice, prefix+"history", "h1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if events, err := store.ListBrokerOrderEvents(ctx, alice, row.ID); err != nil || len(events) != 0 {
+		t.Fatalf("a new order has no history yet: %+v err=%v", events, err)
+	}
+	steps := []brokers.Event{
+		{Kind: brokers.EventRouted, Status: brokers.StatusPending, Detail: "BUY 2 NVDA LIMIT 100"},
+		{Kind: brokers.EventAcknowledged, Status: brokers.StatusSubmitted, OrderStatus: "OPEN"},
+		{Kind: brokers.EventUpdate, Status: brokers.StatusSubmitted, OrderStatus: "PARTIALLY_FILLED", FilledQuantity: 1, AveragePrice: 99.5},
+		{Kind: brokers.EventUpdate, Status: brokers.StatusSubmitted, OrderStatus: "FILLED", FilledQuantity: 2, AveragePrice: 99.75, Detail: "filled in full"},
+	}
+	for _, ev := range steps {
+		if err := store.AddBrokerOrderEvent(ctx, alice, row.ID, ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := store.ListBrokerOrderEvents(ctx, alice, row.ID)
+	if err != nil || len(got) != len(steps) {
+		t.Fatalf("history: %+v err=%v", got, err)
+	}
+	for i, want := range steps {
+		g := got[i]
+		if g.Kind != want.Kind || g.Status != want.Status || g.OrderStatus != want.OrderStatus || g.FilledQuantity != want.FilledQuantity || g.AveragePrice != want.AveragePrice || g.Detail != want.Detail || g.ID == 0 || g.At.IsZero() {
+			t.Errorf("step %d: %+v, want %+v", i, g, want)
+		}
+		if i > 0 && (g.ID <= got[i-1].ID || g.At.Before(got[i-1].At)) {
+			t.Errorf("step %d is out of order: %+v after %+v", i, g, got[i-1])
+		}
+	}
+	if d := time.Since(got[0].At); d < 0 || d > time.Minute {
+		t.Errorf("the time is when the step happened, in UTC: %v", got[0].At)
+	}
+	if err := store.AddBrokerOrderEvent(ctx, bob, row.ID, steps[0]); !errors.Is(err, brokers.ErrNotFound) {
+		t.Errorf("another user wrote into this history: %v", err)
+	}
+	if _, err := store.ListBrokerOrderEvents(ctx, bob, row.ID); !errors.Is(err, brokers.ErrNotFound) {
+		t.Errorf("another user read this history: %v", err)
+	}
+	if after, _ := store.ListBrokerOrderEvents(ctx, alice, row.ID); len(after) != len(steps) {
+		t.Errorf("history changed by another user's attempt: %d events", len(after))
+	}
+	if _, err := store.ListBrokerOrderEvents(ctx, alice, row.ID+1000000); !errors.Is(err, brokers.ErrNotFound) {
+		t.Errorf("history of an order that does not exist: %v", err)
 	}
 }

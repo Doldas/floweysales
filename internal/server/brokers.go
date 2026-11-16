@@ -428,6 +428,7 @@ func (e *Engine) submitBrokerOrder(ctx context.Context, u identity.User, req bro
 	if err != nil {
 		return brokers.Record{}, false, err
 	}
+	routedNote := fmt.Sprintf("%s %g %s, %s%s", req.Side, req.Quantity, req.Symbol, req.Type, priceNote(req))
 	if existing {
 		switch rec.Status {
 		case brokers.StatusSubmitted, brokers.StatusFailed:
@@ -440,32 +441,66 @@ func (e *Engine) submitBrokerOrder(ctx context.Context, u identity.User, req bro
 		if !claimed {
 			return brokers.Record{}, false, brokers.ErrInFlight
 		}
+		rec.Status = brokers.StatusPending // The claim made it pending again.
+		routedNote += "; sent again under the same client order id"
 	}
+	e.addBrokerEvent(ctx, store, rec, brokers.Event{Kind: brokers.EventRouted, Status: brokers.StatusPending, Detail: routedNote})
 
 	raw, err := e.callBroker(rt, plugins.CapBrokerSubmitOrder, req.Input(account.Environment))
 	if err != nil {
 		var coded *plugins.CallError
 		if errors.As(err, &coded) && coded.Code != plugins.CodeInternal {
 			// The plugin answered that it did not place the order.
-			_ = store.FinishBrokerOrder(ctx, u.ID, rec.ID, brokers.StatusFailed, nil, coded.Message)
+			_ = e.settleBrokerOrder(ctx, store, rec, brokers.StatusFailed, nil, coded.Message, brokers.SourceSubmit)
 			return brokers.Record{}, false, err
 		}
 		// No clear answer: the order may exist. The ledger says so, and sending
 		// the same client order id again is safe.
-		_ = store.FinishBrokerOrder(ctx, u.ID, rec.ID, brokers.StatusUnknown, nil, "no answer from the broker")
+		_ = e.settleBrokerOrder(ctx, store, rec, brokers.StatusUnknown, nil, "no answer from the broker", brokers.SourceSubmit)
 		return brokers.Record{}, false, fmt.Errorf("%w: %v", errOutcomeUnknown, err)
 	}
 	order, err := brokers.DecodeSubmitted(raw, req)
 	if err != nil {
-		_ = store.FinishBrokerOrder(ctx, u.ID, rec.ID, brokers.StatusUnknown, nil, err.Error())
+		_ = e.settleBrokerOrder(ctx, store, rec, brokers.StatusUnknown, nil, err.Error(), brokers.SourceSubmit)
 		return brokers.Record{}, false, err
 	}
-	if err := store.FinishBrokerOrder(ctx, u.ID, rec.ID, brokers.StatusSubmitted, &order, ""); err != nil {
+	if err := e.settleBrokerOrder(ctx, store, rec, brokers.StatusSubmitted, &order, "", brokers.SourceSubmit); err != nil {
 		return brokers.Record{}, false, err
 	}
 	log.Printf("[BROKER] user %d order %d routed to %s/%s: %s %.8g %s (%s)", u.ID, rec.ID, req.Broker, req.Account, req.Side, req.Quantity, req.Symbol, order.Status)
 	rec, err = store.GetBrokerOrder(ctx, u.ID, rec.ID)
 	return rec, false, err
+}
+
+func priceNote(r brokers.OrderRequest) string {
+	var note string
+	if r.LimitPrice > 0 {
+		note += fmt.Sprintf(", limit %g", r.LimitPrice)
+	}
+	if r.StopPrice > 0 {
+		note += fmt.Sprintf(", stop %g", r.StopPrice)
+	}
+	return note
+}
+
+// settleBrokerOrder writes the outcome of a call to the ledger row and records
+// the step in the order's history. before is the row as it was.
+func (e *Engine) settleBrokerOrder(ctx context.Context, store brokers.Store, before brokers.Record, status string, order *brokers.Order, detail, source string) error {
+	if err := store.FinishBrokerOrder(ctx, before.UserID, before.ID, status, order, detail); err != nil {
+		return err
+	}
+	if ev, ok := brokers.ChangeEvent(before, status, order, detail, source); ok {
+		e.addBrokerEvent(ctx, store, before, ev)
+	}
+	return nil
+}
+
+// addBrokerEvent appends a step to an order's history. The order itself was
+// already handled, so a failure to record the step is logged, not returned.
+func (e *Engine) addBrokerEvent(ctx context.Context, store brokers.Store, row brokers.Record, ev brokers.Event) {
+	if err := store.AddBrokerOrderEvent(ctx, row.UserID, row.ID, ev); err != nil {
+		log.Printf("[BROKER] history of order %d: %v", row.ID, err)
+	}
 }
 
 var errOutcomeUnknown = errors.New("the broker gave no clear answer, so the order may or may not exist; send the same client_order_id again to settle it")
@@ -575,6 +610,8 @@ func (e *Engine) registerBrokerRoutes() {
 			connections = []brokerConnection{}
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
+			"halted":         e.tradingConfig().HaltNewOrders,
+			"working_orders": e.countWorkingBrokerOrders(r.Context(), u.ID),
 			"contract":       brokers.ContractVersion,
 			"live_execution": brokers.LiveExecutionApproved,
 			"notice":         "FloweySales sends orders to paper accounts only. Live accounts are listed and never traded.",
@@ -735,6 +772,39 @@ func (e *Engine) registerBrokerRoutes() {
 		writeJSON(w, http.StatusOK, map[string]any{"order": rec})
 	})
 
+	e.mux.HandleFunc("GET /api/broker-orders/{id}/events", func(w http.ResponseWriter, r *http.Request) {
+		u, ok := e.brokerUser(w, r)
+		if !ok {
+			return
+		}
+		rec, store, err := e.ownedBrokerOrder(r, u)
+		if err != nil {
+			writeBrokerError(w, err)
+			return
+		}
+		events, err := store.ListBrokerOrderEvents(r.Context(), u.ID, rec.ID)
+		if err != nil {
+			writeBrokerError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"events": nonNil(events)})
+	})
+
+	// Cancels every working order of the caller, one by one. It is the user's
+	// own request: nothing cancels an order on its own, not even the kill switch.
+	e.mux.HandleFunc("POST /api/broker-orders/cancel-working", func(w http.ResponseWriter, r *http.Request) {
+		u, ok := e.brokerUser(w, r)
+		if !ok {
+			return
+		}
+		store := e.brokerLedgerStore()
+		if store == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "The order ledger is unavailable"})
+			return
+		}
+		writeJSON(w, http.StatusOK, e.cancelWorkingBrokerOrders(r.Context(), u, store))
+	})
+
 	e.mux.HandleFunc("POST /api/broker-orders/{id}/cancel", func(w http.ResponseWriter, r *http.Request) {
 		u, ok := e.brokerUser(w, r)
 		if !ok {
@@ -826,7 +896,7 @@ func (e *Engine) cancelBrokerOrder(ctx context.Context, u identity.User, store b
 	if err := brokers.NextOrderState(rec.Order, order, rec.Request); err != nil {
 		return rec, err
 	}
-	if err := store.FinishBrokerOrder(ctx, u.ID, rec.ID, rec.Status, &order, ""); err != nil {
+	if err := e.settleBrokerOrder(ctx, store, rec, rec.Status, &order, "", brokers.SourceCancel); err != nil {
 		return rec, err
 	}
 	return store.GetBrokerOrder(ctx, u.ID, rec.ID)
@@ -927,4 +997,70 @@ func (e *Engine) proposeIntents(ctx context.Context, u identity.User, hostID, br
 		"note":       "These are proposals. Nothing was sent to the broker; submit the ones you accept as orders.",
 		"provenance": pluginProvenance(hostProvider.PluginID, plugins.CapTradingOrderIntents, time.Now().UTC()),
 	}, nil
+}
+
+// maxCancelBatch bounds one cancel-working request.
+const maxCancelBatch = 100
+
+type cancelResult struct {
+	ID            int64  `json:"id"`
+	ClientOrderID string `json:"client_order_id"`
+	Cancelled     bool   `json:"cancelled"`
+	Status        string `json:"status,omitempty"`
+	Error         string `json:"error,omitempty"`
+}
+
+// workingBrokerOrders lists the caller's orders the broker last reported as working.
+func (e *Engine) workingBrokerOrders(ctx context.Context, store brokers.Store, userID int64) []brokers.Record {
+	rows, err := store.ListBrokerOrders(ctx, userID, 500)
+	if err != nil {
+		return nil
+	}
+	var working []brokers.Record
+	for _, r := range rows {
+		if r.Status == brokers.StatusSubmitted && r.Order != nil && r.Order.Working() {
+			working = append(working, r)
+		}
+	}
+	return working
+}
+
+func (e *Engine) countWorkingBrokerOrders(ctx context.Context, userID int64) int {
+	if store := e.brokerLedgerStore(); store != nil {
+		return len(e.workingBrokerOrders(ctx, store, userID))
+	}
+	return 0
+}
+
+// cancelWorkingBrokerOrders asks each broker to cancel the caller's working
+// orders. A failure on one order does not stop the others, and each result says
+// what happened. Orders the broker no longer lists as working are skipped by
+// the cancel itself.
+func (e *Engine) cancelWorkingBrokerOrders(ctx context.Context, u identity.User, store brokers.Store) map[string]any {
+	working := e.workingBrokerOrders(ctx, store, u.ID)
+	more := 0
+	if len(working) > maxCancelBatch {
+		more, working = len(working)-maxCancelBatch, working[:maxCancelBatch]
+	}
+	results := make([]cancelResult, 0, len(working))
+	cancelled := 0
+	for _, rec := range working {
+		res := cancelResult{ID: rec.ID, ClientOrderID: rec.ClientOrderID}
+		callCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		updated, err := e.cancelBrokerOrder(callCtx, u, store, rec)
+		cancel()
+		if err != nil {
+			_, res.Error = brokerErrorStatus(err)
+		} else {
+			res.Cancelled = updated.Order != nil && updated.Order.Status == "CANCELLED"
+			if updated.Order != nil {
+				res.Status = updated.Order.Status
+			}
+		}
+		if res.Cancelled {
+			cancelled++
+		}
+		results = append(results, res)
+	}
+	return map[string]any{"results": results, "cancelled": cancelled, "remaining": more}
 }

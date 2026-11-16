@@ -3,9 +3,9 @@ import { FormsModule } from '@angular/forms';
 import type { HttpErrorResponse } from '@angular/common/http';
 
 import { MarketService } from '../services';
-import type { BrokerAccount, BrokerAccountsView, BrokerEntry, BrokerLedgerRow, BrokersView } from '../models';
+import type { BrokerAccount, BrokerAccountsView, BrokerEntry, BrokerLedgerRow, BrokerOrderEvent, BrokersView } from '../models';
 import {
-  ORDER_TYPES, checkedLabel, ledgerStatusLabel, money, needsLimit, needsStop, newClientOrderId, orderBody, outcomeUnknown, ticketIssues, type Ticket,
+  ORDER_TYPES, checkedLabel, eventLabel, ledgerStatusLabel, money, needsLimit, needsStop, newClientOrderId, orderBody, outcomeUnknown, ticketIssues, utcStamp, workingNotice, type Ticket,
 } from './broker-ticket';
 
 /**
@@ -122,6 +122,10 @@ import {
 
         <section aria-labelledby="bc-orders-title">
           <h4 id="bc-orders-title">Routed orders</h4>
+          @if (working(); as n) {
+            <p class="bc-working" [attr.role]="v.halted ? 'alert' : 'status'">{{ workingNotice(!!v.halted, n) }}</p>
+            <button type="button" class="btn btn-sm btn-outline-danger" [disabled]="busy()" (click)="cancelAll()">Cancel all working orders</button>
+          }
           <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="busy()" (click)="loadOrders()">Reload</button>
           @if (!orders().length) { <p class="muted">No order has been routed to a broker yet.</p> }
           <ul class="bc-orders" aria-label="Routed orders">
@@ -134,7 +138,14 @@ import {
                 <span class="bc-actions">
                   <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="busy()" (click)="refresh(o)">Refresh #{{ o.id }}</button>
                   @if (canCancel(o)) { <button type="button" class="btn btn-sm btn-outline-danger" [disabled]="busy()" (click)="cancel(o)">Cancel #{{ o.id }}</button> }
+                  <button type="button" class="btn btn-sm btn-outline-secondary" [attr.aria-expanded]="openHistory() === o.id" (click)="toggleHistory(o)">History #{{ o.id }}</button>
                 </span>
+                @if (openHistory() === o.id) {
+                  <ol class="bc-history" [attr.aria-label]="'History of order ' + o.id">
+                    @for (ev of history()[o.id] ?? []; track ev.id) { <li><time [attr.datetime]="ev.at">{{ utcStamp(ev.at) }}</time> {{ eventLabel(ev) }}</li> }
+                    @if (!(history()[o.id] ?? []).length) { <li class="muted">No steps recorded.</li> }
+                  </ol>
+                }
               </li>
             }
           </ul>
@@ -160,6 +171,8 @@ import {
     .bc-problems { padding-left: 1.1rem; }
     .bc-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
     .bc-checked { font-size: 0.75rem; }
+    .bc-working { margin: 0; font-size: 0.85rem; }
+    .bc-history { flex-basis: 100%; margin: 0; padding-left: 1.2rem; display: grid; gap: 0.2rem; font-size: 0.8rem; }
   `],
 })
 export class BrokerCenterComponent {
@@ -169,6 +182,9 @@ export class BrokerCenterComponent {
   readonly money = money;
   readonly ledgerStatusLabel = ledgerStatusLabel;
   readonly checkedLabel = checkedLabel;
+  readonly eventLabel = eventLabel;
+  readonly utcStamp = utcStamp;
+  readonly workingNotice = workingNotice;
 
   readonly view = signal<BrokersView | null>(null);
   readonly accounts = signal<BrokerAccountsView | null>(null);
@@ -182,6 +198,9 @@ export class BrokerCenterComponent {
   readonly issues = computed(() => ticketIssues(this.ticket()));
   readonly showLimit = computed(() => needsLimit(this.ticket().type));
   readonly showStop = computed(() => needsStop(this.ticket().type));
+  readonly working = computed(() => this.view()?.working_orders ?? 0);
+  readonly openHistory = signal<number | null>(null);
+  readonly history = signal<Record<number, BrokerOrderEvent[]>>({});
   readonly tradable = computed(() => (this.accounts()?.accounts ?? []).filter(a => a.tradable));
 
   // Typed values live only here until they are sent, and are cleared after.
@@ -277,6 +296,28 @@ export class BrokerCenterComponent {
         if (!unknown) this.clientOrderId = newClientOrderId();
         else this.loadOrders();
       },
+    });
+  }
+
+  toggleHistory(o: BrokerLedgerRow): void {
+    if (this.openHistory() === o.id) { this.openHistory.set(null); return; }
+    this.openHistory.set(o.id);
+    this.api.getBrokerOrderEvents(o.id).subscribe({
+      next: r => this.history.update(all => ({ ...all, [o.id]: r.events })),
+      error: () => this.message.set('The history could not be loaded.'),
+    });
+  }
+
+  cancelAll(): void {
+    this.busy.set(true);
+    this.api.cancelWorkingBrokerOrders().subscribe({
+      next: r => {
+        this.busy.set(false);
+        const failed = r.results.filter(x => !x.cancelled).length;
+        this.message.set(`${r.cancelled} order(s) cancelled${failed ? `, ${failed} could not be cancelled (see the list)` : ''}${r.remaining ? `, ${r.remaining} more are still working: cancel again` : ''}.`);
+        this.history.set({}); this.reloadView(); this.loadOrders();
+      },
+      error: (e: HttpErrorResponse) => { this.busy.set(false); this.message.set(e?.error?.error ?? 'The orders could not be cancelled.'); },
     });
   }
 

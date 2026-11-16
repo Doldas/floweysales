@@ -987,7 +987,7 @@ export interface BrokerEntry {
 export interface TradingHostEntry { provider_id: string; label: string; version: string; contract: number }
 export interface BrokerConnection { name: string; broker: string; label: string; saved: string[] }
 export interface BrokersView {
-  contract: number; live_execution: boolean; notice: string;
+  contract: number; live_execution: boolean; notice: string; halted?: boolean; working_orders?: number;
   builtin: { broker: string; account: string; environment: string; orders_at: string };
   brokers: BrokerEntry[]; trading_hosts: TradingHostEntry[]; connections: BrokerConnection[];
 }
@@ -1007,3 +1007,10 @@ export interface BrokerLedgerRow {
   reconciled_at?: string; reconcile_error?: string;
   request: { symbol: string; side: string; type: string; quantity: number };
 }
+
+/** One step in a routed order's history (GET /api/broker-orders/{id}/events). */
+export interface BrokerOrderEvent {
+  id: number; at: string; kind: string; status: string; order_status?: string; filled_quantity?: number; average_price?: number; detail?: string;
+}
+export interface BrokerCancelResult { id: number; client_order_id: string; cancelled: boolean; status?: string; error?: string }
+export interface BrokerCancelWorking { results: BrokerCancelResult[]; cancelled: number; remaining: number }

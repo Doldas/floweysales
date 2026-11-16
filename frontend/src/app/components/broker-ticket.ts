@@ -103,3 +103,37 @@ export function checkedLabel(iso: string | undefined): string {
   if (Number.isNaN(d.getTime())) return 'Not checked yet';
   return `Checked ${d.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
+
+/** A moment in UTC, to the minute. */
+export function utcStamp(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : `${d.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+}
+
+const EVENT_LABEL: Record<string, string> = {
+  routed: 'Routed to the broker',
+  acknowledged: 'Broker acknowledged the order',
+  refused: 'Broker refused the order',
+  no_answer: 'No clear answer from the broker',
+  settled: 'Found at the broker',
+  given_up: 'Broker has no such order',
+  update: 'Broker reported a change',
+  cancel: 'Cancellation answered by the broker',
+};
+
+/** A history step in words: what happened, the broker's status and the fills so far. */
+export function eventLabel(ev: { kind: string; order_status?: string; filled_quantity?: number; detail?: string }): string {
+  const parts = [EVENT_LABEL[ev.kind] ?? ev.kind];
+  if (ev.order_status) parts.push(ev.order_status + (ev.filled_quantity ? ` (${ev.filled_quantity} filled)` : ''));
+  if (ev.detail) parts.push(ev.detail);
+  return parts.join(' · ');
+}
+
+/** The sentence under the kill switch notice: how many broker orders still work. */
+export function workingNotice(halted: boolean, working: number): string {
+  if (!working) return '';
+  const orders = working === 1 ? '1 order is' : `${working} orders are`;
+  return halted
+    ? `The kill switch is on, which stops new orders. ${orders} still working at the broker; it does not cancel them.`
+    : `${orders} working at the broker.`;
+}
