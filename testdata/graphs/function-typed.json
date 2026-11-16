@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "inputs": [{ "name": "score", "type": "number" }, { "name": "threshold", "type": "number" }],
+  "outputs": [{ "name": "result", "type": "text" }, { "name": "passed", "type": "boolean" }],
+  "nodes": [
+    { "id": "start", "type": "input", "x": 30, "y": 120 },
+    { "id": "cmp", "type": "operation", "operation": "greater", "x": 260, "y": 60 },
+    { "id": "choice", "type": "branch", "x": 260, "y": 200 },
+    { "id": "review", "type": "constant", "value_type": "text", "value": "Review", "x": 470, "y": 20 },
+    { "id": "skip", "type": "constant", "value_type": "text", "value": "Skip", "x": 470, "y": 300 },
+    { "id": "flag", "type": "constant", "value_type": "boolean", "value": "true", "x": 470, "y": 380 },
+    { "id": "finish", "type": "output", "x": 700, "y": 100 },
+    { "id": "done", "type": "output", "x": 700, "y": 300 }
+  ],
+  "edges": [
+    { "kind": "data", "from": "start", "from_port": "score", "to": "cmp", "to_port": "a" },
+    { "kind": "data", "from": "start", "from_port": "threshold", "to": "cmp", "to_port": "b" },
+    { "kind": "data", "from": "cmp", "from_port": "value", "to": "choice", "to_port": "condition" },
+    { "kind": "data", "from": "cmp", "from_port": "value", "to": "finish", "to_port": "passed" },
+    { "kind": "data", "from": "review", "from_port": "value", "to": "finish", "to_port": "result" },
+    { "kind": "data", "from": "skip", "from_port": "value", "to": "done", "to_port": "result" },
+    { "kind": "data", "from": "cmp", "from_port": "value", "to": "done", "to_port": "passed" },
+    { "kind": "exec", "from": "start", "from_port": "next", "to": "choice", "to_port": "in" },
+    { "kind": "exec", "from": "choice", "from_port": "true", "to": "finish", "to_port": "in" },
+    { "kind": "exec", "from": "choice", "from_port": "false", "to": "done", "to_port": "in" }
+  ]
+}

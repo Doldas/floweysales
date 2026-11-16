@@ -71,8 +71,7 @@ const EMPTY_V2: V2GraphLike = { version: 2, inputs: [], outputs: [], nodes: [], 
 
 /** Function with an untyped (graph version 1) node list. Keeps `to_port` defaults of the runtime ("a"). */
 export function functionDiagram(nodes: readonly V1Node[], edges: readonly V1Edge[], ports: PinPorts): { nodes: DiagramNode[]; edges: DiagramEdge[] } {
-  return {
-    nodes: nodes.map(n => {
+  const drawn = nodes.map(n => {
       const named = n.type === 'operation'
         ? ports.inputPorts({ id: n.id, type: 'operation', operation: n.operation, x: n.x, y: n.y }, EMPTY_V2).filter(p => p.kind === 'data').map(p => ({ name: p.port }))
         : undefined;
@@ -81,8 +80,12 @@ export function functionDiagram(nodes: readonly V1Node[], edges: readonly V1Edge
         sub: n.operation || n.value_type || undefined,
         inputs: named,
       };
-    }),
-    edges: edges.map(e => ({ from: e.from, to: e.to, toPort: e.to_port || 'a', kind: 'data' as const })),
+    });
+  const hasPorts = new Set(drawn.filter(n => n.inputs?.length).map(n => n.id));
+  return {
+    nodes: drawn,
+    // The runtime sends a wire without a port to "a". Only a node with named inputs has that port to draw to.
+    edges: edges.map(e => ({ from: e.from, to: e.to, toPort: e.to_port || (hasPorts.has(e.to) ? 'a' : undefined), kind: 'data' as const })),
   };
 }
 

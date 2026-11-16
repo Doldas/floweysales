@@ -1,0 +1,4 @@
+{
+  "graph": "flow-research.json",
+  "statuses": { "start": "SUCCESS", "analyst": "FAILED", "save": "SKIPPED" }
+}
