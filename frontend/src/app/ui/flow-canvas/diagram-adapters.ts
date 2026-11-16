@@ -4,7 +4,7 @@
  * ids, ports or coordinates (see docs/flow-diagram-system.md). Free of Angular
  * so they run under `node --test`.
  */
-import { toneForStatus, type DiagramEdge, type DiagramNode, type DiagramPort } from '#app/ui/flow-canvas/flow-canvas-geometry';
+import { toneForStatus, type DiagramEdge, type DiagramNode, type DiagramPort, type DiagramTone } from '#app/ui/flow-canvas/flow-canvas-geometry';
 
 /** Caption of a Flow Editor node type; the Flow Editor and run snapshots share it. */
 export function flowNodeTag(type: string, investorTag: (type: string) => string | undefined = () => undefined): string {
@@ -127,4 +127,47 @@ export function triggerDiagram(triggers: readonly TriggerLike[]): { nodes: Diagr
     edges.push({ from: `event:${t.id}`, to: `payload:${t.id}`, kind: 'event' });
   });
   return { nodes, edges };
+}
+
+export interface EditorNodeLike { id: string; type: string; label: string; x: number; y: number }
+export interface EditorEdgeLike { from: string; to: string; from_port?: string; to_port?: string }
+export interface EditorPins { inputs: readonly DiagramPort[]; outputs: readonly DiagramPort[] }
+export interface EditorDiagramOptions {
+  tagOf: (type: string) => string;
+  /** The declared pins of a node (a function call), none for other nodes. */
+  pinsOf: (node: EditorNodeLike) => EditorPins;
+  /** The state of each node while a run is followed in the editor; null when none is. */
+  live?: { tone: (id: string) => DiagramTone; badge: (id: string) => string } | null;
+}
+
+/** The name of a typed pin in a stored port such as "in:score"; other ports name no pin. */
+function pinOfPort(port: string | undefined, prefix: 'in:' | 'out:'): string | undefined {
+  return port?.startsWith(prefix) ? port.slice(prefix.length) : undefined;
+}
+
+/**
+ * The Flow Editor's graph as diagram nodes and edges. A trigger has no input and an output node no
+ * output; a function call shows its declared pins instead of the plain ports. Stored wires name a
+ * pin as "in:<name>" and "out:<name>"; any other port ends in the middle of the card. The graph is
+ * not changed.
+ */
+export function editorDiagram(nodes: readonly EditorNodeLike[], edges: readonly EditorEdgeLike[], opts: EditorDiagramOptions): { nodes: DiagramNode[]; edges: DiagramEdge[] } {
+  const live = opts.live ?? null;
+  return {
+    nodes: nodes.map(n => {
+      const pins = opts.pinsOf(n);
+      const inputs = pins.inputs.map(p => ({ name: p.name, type: p.type }));
+      const outputs = pins.outputs.map(p => ({ name: p.name, type: p.type }));
+      return {
+        id: n.id, x: n.x, y: n.y, kind: n.type, tag: opts.tagOf(n.type), label: n.label,
+        accessibleName: `Select ${n.label}`,
+        inputs: inputs.length ? inputs : undefined,
+        outputs: outputs.length ? outputs : undefined,
+        inPort: n.type !== 'trigger' && !inputs.length ? `Connect into ${n.label}` : undefined,
+        outPort: n.type !== 'output' && !outputs.length ? `Start connection from ${n.label}` : undefined,
+        ...(live ? { tone: live.tone(n.id), sub: live.badge(n.id), subClass: 'live-badge', plainSub: true } : {}),
+      };
+    }),
+    edges: edges.map(e => ({ from: e.from, to: e.to, fromPort: pinOfPort(e.from_port, 'out:'), toPort: pinOfPort(e.to_port, 'in:') })),
+  };
 }

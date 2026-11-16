@@ -1,4 +1,3 @@
-import { CanvasGestures } from './canvas-gestures';
 import { ProgressStatusComponent } from '../ui/progress-status';
 import { HostListener, Component, ChangeDetectionStrategy, DestroyRef, ElementRef, signal, effect, computed, viewChild } from '@angular/core';
 import { MarkdownRunOutputComponent } from './markdown-run-output';
@@ -16,17 +15,17 @@ import { AuthState } from '../auth.service';
 import { byteSizeLabel, canCancelRun, canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, outputPreviewLabel, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history';
 import { listOverviewFlows } from './flow-overview';
 import { semanticIssues } from './flow-semantics';
-import { nearestPort, portPoints, wireFromDrag, edgeKey, wirePath, type PortPoint } from './wire-drag';
-import { bindInputPin, declaredPins, mixesPinAndPlainInputs, pinBindings, pinEdgeProblem, pinOffset, routeOutputPin, unboundInputPins } from './function-pins';
+import { wireFromDrag, type PortPoint } from './wire-drag';
+import { bindInputPin, declaredPins, mixesPinAndPlainInputs, pinBindings, pinEdgeProblem, routeOutputPin, unboundInputPins } from './function-pins';
 import { FlowDiagramComponent } from '../ui/flow-canvas/flow-diagram';
-import { flowNodeTag, runSnapshotDiagram } from '../ui/flow-canvas/diagram-adapters';
+import { editorDiagram, flowNodeTag, runSnapshotDiagram } from '../ui/flow-canvas/diagram-adapters';
 import { FLOW_CANVAS_STYLES } from '../ui/flow-canvas/flow-canvas-styles';
 import { FlowNotifyChannelsComponent } from './flow-notify-channels';
 import { INVESTOR_NODES, INVESTOR_PLAYBOOKS, LEADERBOARD_STRATEGIES, LEADERBOARD_UNIVERSES, SCREEN_FIELDS, buildPlaybook, investorNode, isInvestorNode, watchlistProblem } from './investor-nodes';
 import { PublishState, RevisionSummary, canPublish, pinDescription, publishStatusLabel, revisionOptionLabel, runRevisionLabel } from './flow-versions';
 import { formatUtcDateTime } from '../ui/datetime';
 import { isLiveRunOpen, liveRunPollMs, liveRunProgress, nodeRunBadge, nodeStatuses } from './live-run';
-import { toneForStatus } from '../ui/flow-canvas/flow-canvas-geometry';
+import { toneForStatus, type DiagramTone } from '../ui/flow-canvas/flow-canvas-geometry';
 import { evidenceForOutputMode, findingLabel, jsonCitationLine, patchNodeEvidence, removedSummary, settingsFromPolicy, settingsSummary, type AnswerFinding, type AnswerSource, type EvidencePolicy, type JsonCitation } from '../core/answer-sources';
 
 interface FlowNode { id:string; type:'trigger'|'agent'|'flow'|'constant'|'function'|'save_result'|'load_result'|'transform'|'workspace_read'|'workspace_write'|'output'|'condition'|'merge'|'json_get'|'http_get'|'web_crawl'|'web_search'|'loop'|'emit_event'|'watchlist_quotes'|'technical_scan'|'fundamentals'|'sec_filings'|'news'|'leaderboard'|'screen'|'only_new'|'report_table'|'notify'|'insider_activity'|'macro_regime'|'portfolio_check'|'corporate_events'|'wealth_plan'|'backtest'|'collection'|'collection_news'; label:string; collection?:string; symbols?:string; universe?:string; strategy?:string; provider?:string; rule?:string; sort_by?:string; limit?:number; columns?:string; title?:string; key_fields?:string; cooldown_hours?:number; lookback_days?:number; forms?:string; kinds?:string; years?:number; channel?:'email'|'webhook'; subject?:string; skip_empty?:boolean; event?:string; operator?:string; property?:string; output_mode?:'markdown'|'json'; model?:string; profile_id?:number; team_id?:number; evidence?:EvidencePolicy; json_contract?:string; timeout_seconds?:number; max_retries?:number; tools?:string[]; max_tool_calls?:number;persona?:string;require_grounding?:boolean; variable?:string; transform?:string; loop_mode?:string; loop_limit?:number; loop_condition?:string; content_type?:string; prompt?:string; flow_id?:number; flow_revision?:number; function_id?:number; function_revision?:number; approval?:'required'; value_type?:'text'|'number'|'boolean'|'json'|'xml'; value?:string; x:number; y:number }
@@ -116,37 +115,12 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
    </div>
    <div class="blueprint-layout">
    <div class="canvas-shell">
-    <div class="canvas-navigation" aria-label="Canvas navigation">
-      <button type="button" (click)="zoomCanvas(0.8)" aria-label="Zoom in"><i class="bi bi-zoom-in" aria-hidden="true"></i></button>
-      <span>{{ canvasZoomPercent() }}%</span>
-      <button type="button" (click)="zoomCanvas(1.25)" aria-label="Zoom out"><i class="bi bi-zoom-out" aria-hidden="true"></i></button>
-      <button type="button" (click)="fitCanvas()" title="Fit all nodes in view"><i class="bi bi-fullscreen" aria-hidden="true"></i> Fit flow</button>
-      <button type="button" (click)="resetCanvas()" title="Reset canvas view"><i class="bi bi-bootstrap-reboot" aria-hidden="true"></i> Reset view</button>
-      @if(connectingFrom()){<span class="canvas-connect-hint" role="status">Select an input port <button type="button" (click)="cancelConnecting()">Cancel</button></span>}
-    </div>
-    <div class="flow-workspace" aria-label="Agent flow graph editor">
-    <svg [attr.viewBox]="canvasViewBox()" (wheel)="onCanvasWheel($event)" (pointerdown)="onCanvasPointerDown($event)" (click)="closeQuickNodeOnCanvas($event)" (pointermove)="onCanvasPointerMove($event)" (pointerup)="onCanvasPointerEnd($event)" (pointercancel)="onCanvasPointerEnd($event)" (contextmenu)="onCanvasContextMenu($event)" role="group" aria-label="Flow canvas: nodes and directed connections">
-     <defs><marker id="flow-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" class="edge-arrow"/></marker></defs>
-     @for(edge of graph().edges;track edgeKey(edge)){
-       <path [attr.d]="edgePath(edge)" class="flow-edge" marker-end="url(#flow-arrow)"/>
-     }
-     @if(wireDrag();as w){<path class="wire-ghost" [attr.d]="wireGhostPath()" pointer-events="none"/>@if(w.target;as t){<circle class="wire-target" [attr.cx]="t.x" [attr.cy]="t.y" r="10" pointer-events="none"/>}}
-     @for(n of graph().nodes;track n.id){
-       <g data-canvas-node (click)="$event.stopPropagation();openQuickNode(n.id)" (pointerdown)="dragStart($event,n.id)" style="cursor:move" tabindex="0"
-          (keydown.enter)="openQuickNode(n.id)" [attr.aria-label]="'Select '+n.label">
-         <rect class="flow-node" [class]="liveNodeTone(n.id)" [class.selected]="n.id===selectedNode()?.id" [attr.x]="n.x" [attr.y]="n.y" width="125" height="70" rx="12"/>
-         <rect class="flow-node-accent" [attr.data-type]="n.type" [attr.x]="n.x" [attr.y]="n.y" width="4" height="70" rx="2"/>
-         <text class="node-type" [attr.x]="n.x+12" [attr.y]="n.y+24" font-size="11">{{n.type==='trigger'?'⏱ TRIGGER':n.type==='flow'?'↪ SUBFLOW':n.type==='constant'?'◆ VALUE':n.type==='function'?'ƒ FUNCTION':n.type==='save_result'?'▣ SAVE':n.type==='load_result'?'▤ LOAD':n.type==='transform'?'⇄ TRANSFORM':n.type==='workspace_read'?'▤ READ FILE':n.type==='workspace_write'?'▣ WRITE FILE':n.type==='output'?'→ OUTPUT':n.type==='condition'?'◇ IF / ELSE':n.type==='merge'?'⇉ MERGE':n.type==='json_get'?'{} JSON FIELD':n.type==='emit_event'?'⇢ EMIT EVENT':investorTag(n.type)}}</text>
-         <text class="node-label" [attr.x]="n.x+12" [attr.y]="n.y+48" font-size="13">{{n.label.slice(0,16)}}</text>
-         @if(liveOverlay()){<text class="node-sub live-badge" [attr.x]="n.x+12" [attr.y]="n.y+63" font-size="10">{{liveNodeBadge(n.id)}}</text>}
-          @for(pin of functionPins(n).inputs;track pin.name;let i=$index){<g><circle [attr.cx]="n.x" [attr.cy]="n.y+pinOffset(i,functionPins(n).inputs.length,70)" r="6" class="canvas-port pin-in" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation()"><title>Input {{pin.name}} ({{pin.type}})</title></circle><text [attr.x]="n.x+8" [attr.y]="n.y+pinOffset(i,functionPins(n).inputs.length,70)+3" font-size="8" class="pin-label">{{pin.name.slice(0,8)}}</text></g>}
-          @for(pin of functionPins(n).outputs;track pin.name;let i=$index){<g><circle [attr.cx]="n.x+125" [attr.cy]="n.y+pinOffset(i,functionPins(n).outputs.length,70)" r="6" class="canvas-port pin-out" (pointerdown)="startWire($event,n.id,pin.name)" (click)="$event.stopPropagation()"><title>Output {{pin.name}} ({{pin.type}})</title></circle><text [attr.x]="n.x+117" [attr.y]="n.y+pinOffset(i,functionPins(n).outputs.length,70)+3" font-size="8" class="pin-label" text-anchor="end">{{pin.name.slice(0,8)}}</text></g>}
-          @if(n.type!=='trigger'&&!functionPins(n).inputs.length){<circle class="canvas-port input-port" [attr.cx]="n.x" [attr.cy]="n.y+35" r="8" tabindex="0" role="button" [attr.aria-label]="'Connect into '+n.label" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation();onInputPortClick(n.id)" (keydown.enter)="$event.stopPropagation();chooseInputPort(n.id)"/>}
-          @if(n.type!=='output'&&!functionPins(n).outputs.length){<circle class="canvas-port output-port" [class.port-active]="connectingFrom()===n.id" [attr.cx]="n.x+125" [attr.cy]="n.y+35" r="8" tabindex="0" role="button" [attr.aria-label]="'Start connection from '+n.label" (pointerdown)="startWire($event,n.id)" (click)="$event.stopPropagation();onOutputPortClick(n.id)" (keydown.enter)="$event.stopPropagation();chooseOutputPort(n.id)"/>}
-       </g>
-     }
-    </svg>
-   </div>
+    <fse-flow-diagram variant="editor" ariaLabel="Flow canvas: nodes and directed connections" [editable]="true" [autoFit]="false" [showPinLabels]="true"
+      fitLabel="Fit flow" [fitPadding]="65" [fitMinWidth]="410" [nodes]="editorGraph().nodes" [edges]="editorGraph().edges" [selectedId]="selectedNode()?.id||''" [connectingFrom]="connectingFrom()"
+      (nodeSelect)="openQuickNode($event)" (canvasClick)="closeQuickNode()" (canvasContextMenu)="onCanvasContextMenu($event)"
+      (nodeDragged)="onNodeDragged($event)" (wireDrawn)="onWireDrawn($event)" (portActivate)="onPortActivate($event)">
+      @if(connectingFrom()){<span canvasToolbar class="canvas-connect-hint" role="status">Select an input port <button type="button" (click)="cancelConnecting()">Cancel</button></span>}
+    </fse-flow-diagram>
    @if(quickNode();as n){<section class="node-quick-tooltip node-full-tooltip" role="region" aria-label="Complete node settings" (click)="$event.stopPropagation()"><header class="quick-tooltip-title"><strong>⚙ {{n.label}} · {{n.type}}</strong><button type="button" class="btn-close quick-tooltip-close" (click)="closeQuickNode()" aria-label="Close node settings"></button></header><div class="inspector-fields">
        @if(n.type!=='trigger'){
          <label>Connect output from <select #nodeSource><option value="">Choose upstream node</option>@for(other of graph().nodes;track other.id){@if(other.id!==n.id&&other.type!=='output'){<option [value]="other.id">{{other.label}}</option>}}</select></label>
@@ -895,7 +869,14 @@ export class FlowStudioComponent {
  }
  closeQuickNodeOnCanvas(event:MouseEvent):void {if(!(event.target as Element).closest('[data-canvas-node]'))this.closeQuickNode();}
 
- readonly canvasView = signal({ x: 0, y: 0, width: 820, height: 380 });
+ /** The shared canvas: it owns the view (pan, zoom, fit); the editor asks it to reset when another flow opens. */
+ readonly diagram = viewChild(FlowDiagramComponent);
+ /** The graph as the shared canvas draws it: ports, pins, accessible names and, while a run is followed, node states. */
+ readonly editorGraph = computed(() => editorDiagram(this.graph().nodes, this.graph().edges, {
+   tagOf: type => flowNodeTag(type, t => investorNode(t)?.tag),
+   pinsOf: n => this.functionPins(n as FlowNode),
+   live: this.liveOverlay() ? { tone: id => this.liveTone(id), badge: id => this.liveNodeBadge(id) } : null,
+ }));
  readonly canvasMenu = signal(false);
   readonly connectingFrom=signal('');
   cancelConnecting():void{this.connectingFrom.set('')}
@@ -909,91 +890,13 @@ export class FlowStudioComponent {
   }
   /** Declared pins of the function a node calls (empty for other nodes and legacy functions). */
   functionPins(n:FlowNode){return n.type==='function'?declaredPins(this.functions().find(f=>f.id===n.function_id)?.graph):{inputs:[],outputs:[]}}
-  /** Vertical position of a wire end on a node; typed pins are spread along its edge. */
-  pinY(n:FlowNode,side:'in'|'out',port?:string):number{
-    const prefix=side==='in'?'in:':'out:';
-    if(n.type==='function'&&port?.startsWith(prefix)){
-      const pins=side==='in'?this.functionPins(n).inputs:this.functionPins(n).outputs;
-      const i=pins.findIndex(p=>p.name===port.slice(prefix.length));
-      if(i>=0)return pinOffset(i,pins.length,70);
-    }
-    return 35;
-  }
-  readonly pinOffset=pinOffset;
-  readonly edgeKey=edgeKey;
-  /** Wire being dragged from an output port; `target` is the input port it would snap to. */
-  readonly wireDrag=signal<{source:PortPoint;x:number;y:number;target:PortPoint|null}|null>(null);
-  private suppressPortClick=false;
-  private ports():PortPoint[]{return portPoints(this.graph().nodes,n=>this.functionPins(n as FlowNode))}
-  wireGhostPath():string{const w=this.wireDrag();return w?wirePath(w.source.x,w.source.y,w.target?.x??w.x,w.target?.y??w.y):''}
-  onOutputPortClick(id:string):void{if(this.suppressPortClick)return;this.chooseOutputPort(id)}
-  onInputPortClick(id:string):void{if(this.suppressPortClick)return;this.chooseInputPort(id)}
-  /** Starts dragging a wire from an output port (or a typed output pin); dropping on an input port connects them. */
-  startWire(ev:PointerEvent,nodeId:string,pin?:string):void{
-    ev.stopPropagation();
-    if(ev.button!==0)return;
-    ev.preventDefault();
-    const source=this.ports().find(p=>p.side==='out'&&p.nodeId===nodeId&&p.pin===pin);
-    const svg=(ev.currentTarget as SVGElement).ownerSVGElement;
-    if(!source||!svg)return;
-    const at=(e:PointerEvent)=>{const m=svg.getScreenCTM();if(!m)return {x:source.x,y:source.y};const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(m.inverse());return {x:p.x,y:p.y}};
-    let moved=false;const origin=at(ev);
-    const move=(e:PointerEvent)=>{
-      const p=at(e);if(Math.hypot(p.x-origin.x,p.y-origin.y)>4)moved=true;if(!moved)return;
-      this.wireDrag.set({source,x:p.x,y:p.y,target:nearestPort(this.ports(),p.x,p.y,'in')});
-    };
-    const stop=(e:PointerEvent)=>{
-      svg.removeEventListener('pointermove',move);svg.removeEventListener('pointerup',stop);svg.removeEventListener('pointercancel',stop);
-      const target=e.type==='pointerup'&&moved?this.wireDrag()?.target??null:null;
-      this.wireDrag.set(null);
-      if(!moved)return;
-      this.suppressPortClick=true;setTimeout(()=>this.suppressPortClick=false,0);
-      if(!target)return;
-      const result=wireFromDrag(this.graph().edges,source,target);
-      if('problem' in result){this.message.set(result.problem);return}
-      this.graph.update(g=>({...g,version:source.pin||target.pin?2:g.version,edges:result.edges}));
-      this.chosen.set(target.nodeId);this.cancelConnecting();
-      if(!this.warnAboutInputs(target.nodeId))this.message.set('Connected '+(this.node(source.nodeId)?.label||source.nodeId)+(source.pin?'.'+source.pin:'')+' → '+(this.node(target.nodeId)?.label||target.nodeId)+(target.pin?'.'+target.pin:'')+'; save the flow to persist.');
-    };
-    svg.addEventListener('pointermove',move);svg.addEventListener('pointerup',stop);svg.addEventListener('pointercancel',stop);
-  }
   pinSources(n:FlowNode):Record<string,string>{return pinBindings(this.graph().edges,n.id)}
   bindPin(pin:string,source:string){this.graph.update(g=>({...g,version:2,edges:bindInputPin(g.edges,this.chosen(),pin,source)}))}
   routePin(pin:string,target:string){this.graph.update(g=>({...g,version:2,edges:routeOutputPin(g.edges,this.chosen(),pin,target)}))}
   pinTargets(n:FlowNode,pin:string):string[]{return this.graph().edges.filter(e=>e.from===n.id&&e.from_port==='out:'+pin).map(e=>e.to)}
-  edgePath(e:FlowEdge):string{
-    const a=this.node(e.from),b=this.node(e.to);if(!a||!b)return '';
-    const x1=a.x+125,y1=a.y+this.pinY(a,'out',e.from_port),x2=b.x,y2=b.y+this.pinY(b,'in',e.to_port),d=Math.max(45,Math.abs(x2-x1)*0.45);
-    return 'M '+x1+' '+y1+' C '+(x1+d)+' '+y1+', '+(x2-d)+' '+y2+', '+x2+' '+y2;
-  }
-  fitCanvas():void{
-    const nodes=this.graph().nodes;if(!nodes.length){this.resetCanvas();return}
-    const padding=65,left=Math.min(...nodes.map(n=>n.x)),top=Math.min(...nodes.map(n=>n.y));
-    const right=Math.max(...nodes.map(n=>n.x+125)),bottom=Math.max(...nodes.map(n=>n.y+70));
-    const contentWidth=right-left+2*padding,contentHeight=bottom-top+2*padding;
-    const width=Math.max(contentWidth,contentHeight*820/380,410),height=width*380/820;
-    this.canvasView.set({x:left-padding-(width-contentWidth)/2,y:top-padding-(height-contentHeight)/2,width,height});
-  }
- readonly canvasViewBox = () => {
-   const v = this.canvasView();
-   return `${v.x} ${v.y} ${v.width} ${v.height}`;
- };
- readonly canvasZoomPercent = () => Math.round(820 / this.canvasView().width * 100);
- zoomCanvas(factor: number): void {
-   const v = this.canvasView();
-   const width = Math.max(820 / 3, Math.min(820 * 4, v.width * factor));
-   const height = width * 380 / 820;
-   this.canvasView.set({ x: v.x + (v.width - width) / 2, y: v.y + (v.height - height) / 2, width, height });
- }
- panCanvas(dx: number, dy: number): void {
-   this.canvasView.update(v => ({ ...v, x: v.x + dx * v.width / 820, y: v.y + dy * v.height / 380 }));
- }
- resetCanvas(): void { this.gestures.reset(); this.canvasView.set({ x: 0, y: 0, width: 820, height: 380 }); this.closeCanvasMenu(); }
- readonly gestures = new CanvasGestures(() => this.canvasView(), view => this.canvasView.set(view), 820, 380);
- onCanvasPointerDown(event: PointerEvent): void { this.gestures.pointerDown(event); }
- onCanvasPointerMove(event: PointerEvent): void { this.gestures.pointerMove(event); }
- onCanvasPointerEnd(event: PointerEvent): void { this.gestures.pointerEnd(event); }
- onCanvasWheel(event: WheelEvent): void { this.gestures.wheel(event); }
+ resetCanvas(): void { this.diagram()?.reset(); this.closeCanvasMenu(); }
+ /** Fits the view to the graph as it is now, which the canvas has not been given yet when a flow has just been opened. */
+ fitCanvas(): void { const nodes=this.graph().nodes; if(!nodes.length){this.resetCanvas();return} this.diagram()?.fit(nodes); }
  onCanvasContextMenu(event: MouseEvent): void {
    event.preventDefault();
    this.canvasMenu.set(true);
@@ -1266,7 +1169,6 @@ export class FlowStudioComponent {
  readonly comparedSteps=signal<FlowRunStep[]>([]);
  readonly busy=signal(false);
  readonly message=signal('');
- private dragging:{id:string;startX:number;startY:number;x:number;y:number}|null=null;
  constructor(){
    inject(DestroyRef).onDestroy(()=>this.stopLivePolling());
   // Load the revision list of the selected call node's target for its pin selector.
@@ -1610,19 +1512,26 @@ export class FlowStudioComponent {
     if(this.chosen()===id)this.chosen.set('');
     this.closeQuickNode();this.message.set('Node removed; save the flow to persist.');
   }
- dragStart(ev:PointerEvent,id:string){if(ev.button!==0||ev.pointerType==='touch')return;const n=this.node(id);if(!n)return;this.chosen.set(id);this.dragHistoryStart=JSON.stringify(this.graph());this.dragging={id,startX:ev.clientX,startY:ev.clientY,x:n.x,y:n.y};
-  const svg=(ev.currentTarget as SVGGElement).ownerSVGElement;if(!svg)return;
-  const move=(event:PointerEvent)=>{const box=svg.getBoundingClientRect();if(!this.dragging)return;
-   const view=this.canvasView();const dx=(event.clientX-this.dragging.startX)*view.width/box.width,dy=(event.clientY-this.dragging.startY)*view.height/box.height;
-   this.graph.update(g=>({...g,nodes:g.nodes.map(node=>node.id===id?{...node,x:Math.round(this.dragging!.x+dx),y:Math.round(this.dragging!.y+dy)}:node)}))}
-  const stop=()=>{
-   svg.removeEventListener('pointermove',move);svg.removeEventListener('pointerup',stop);svg.removeEventListener('pointercancel',stop);
-   const before=this.dragHistoryStart,after=JSON.stringify(this.graph());
-   if(before!==null&&before!==after){this.undoHistory.update(items=>pushHistorySnapshot(items,before));this.redoHistory.set([]);}
-   this.lastGraphVersion=after;this.dragHistoryStart=null;this.dragging=null;
-  }
-  svg.addEventListener('pointermove',move);svg.addEventListener('pointerup',stop);svg.addEventListener('pointercancel',stop);
+
+ /** A card dragged on the canvas: the first event selects it and starts one undo step, the last one closes it. */
+ onNodeDragged(ev:{id:string;x:number;y:number;phase:'start'|'move'|'end'}):void{
+  if(ev.phase==='start'){if(!this.node(ev.id))return;this.chosen.set(ev.id);this.dragHistoryStart=JSON.stringify(this.graph());return}
+  if(ev.phase==='move'){this.graph.update(g=>({...g,nodes:g.nodes.map(node=>node.id===ev.id?{...node,x:ev.x,y:ev.y}:node)}));return}
+  const before=this.dragHistoryStart,after=JSON.stringify(this.graph());
+  if(before!==null&&before!==after){this.undoHistory.update(items=>pushHistorySnapshot(items,before));this.redoHistory.set([]);}
+  this.lastGraphVersion=after;this.dragHistoryStart=null;
  }
+ /** A wire dragged from an output port and dropped on an input port; the rules for what may connect are wireFromDrag's. */
+ onWireDrawn(ev:{source:PortPoint;target:PortPoint}):void{
+  const {source,target}=ev;
+  const result=wireFromDrag(this.graph().edges,source,target);
+  if('problem' in result){this.message.set(result.problem);return}
+  this.graph.update(g=>({...g,version:source.pin||target.pin?2:g.version,edges:result.edges}));
+  this.chosen.set(target.nodeId);this.cancelConnecting();
+  if(!this.warnAboutInputs(target.nodeId))this.message.set('Connected '+(this.node(source.nodeId)?.label||source.nodeId)+(source.pin?'.'+source.pin:'')+' → '+(this.node(target.nodeId)?.label||target.nodeId)+(target.pin?'.'+target.pin:'')+'; save the flow to persist.');
+ }
+ /** A plain port clicked, or Enter pressed on it: connect by choosing an output port, then an input port. */
+ onPortActivate(ev:{nodeId:string;side:'in'|'out'}):void{ev.side==='out'?this.chooseOutputPort(ev.nodeId):this.chooseInputPort(ev.nodeId)}
  private async request(url:string,options?:RequestInit):Promise<any>{const r=await fetch(url,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...options?.headers}});
   const j=await r.json();if(!r.ok)throw new Error(j.error||('HTTP '+r.status));return j}
  async refresh(){
@@ -1769,11 +1678,10 @@ export class FlowStudioComponent {
    return 'Run #'+live.runId+' '+runStatusLabel(status||'QUEUED').toLowerCase()+' · '+counts;
  });
  toneOf(status:string):string{return toneForStatus(status)}
- liveNodeTone(id:string):string{
-   if(!this.liveOverlay())return '';
+ /** The state of a node while a run is followed: its recorded step status, or "run" for the node that is likely next. */
+ liveTone(id:string):DiagramTone{
    const status=this.liveNodeStatus()[id];
-   const tone=status?toneForStatus(status):this.liveNext(id)?'run':'none';
-   return tone==='none'?'':'tone-'+tone;
+   return status?toneForStatus(status):this.liveNext(id)?'run':'none';
  }
  liveNodeBadge(id:string):string{
    const status=this.liveNodeStatus()[id];

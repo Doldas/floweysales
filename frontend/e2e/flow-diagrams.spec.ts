@@ -98,6 +98,58 @@ test.describe('shared flow diagram system', () => {
     await expect(zoom).toHaveText('100%');
   });
 
+  test('the Flow Editor is drawn by the same component as every other diagram, with its own controls', async ({ page }) => {
+    await open(page, 'flows');
+    const studio = page.locator('fse-flow-studio');
+    await studio.getByRole('tab', { name: 'Flow editor', exact: true }).click();
+    const editor = studio.locator('fse-flow-diagram').filter({ has: page.locator('[aria-label^="Flow canvas"]') });
+    await expect(editor).toHaveCount(1);
+    await expect(editor.locator('.diagram-shell[data-diagram="editor"]')).toBeVisible();
+    // No second canvas: the editor's svg is the shared component's svg.
+    await expect(studio.locator('svg[aria-label^="Flow canvas"]')).toHaveCount(1);
+    await expect(editor.locator('svg[aria-label^="Flow canvas"]')).toHaveCount(1);
+    for (const name of ['Zoom in', 'Zoom out']) await expect(editor.getByRole('button', { name })).toBeVisible();
+    await expect(editor.getByRole('button', { name: 'Fit flow' })).toBeVisible();
+    await expect(editor.getByRole('button', { name: /Reset view/ })).toBeVisible();
+    // The card is the one every other surface copies.
+    expect(await editor.locator('.flow-node').first().evaluate(el => [el.getAttribute('width'), el.getAttribute('height'), el.getAttribute('rx')])).toEqual(['125', '70', '12']);
+  });
+
+  test('Flow Editor nodes are keyboard operable like the other diagrams, and zoom is announced', async ({ page }) => {
+    await open(page, 'flows');
+    const studio = page.locator('fse-flow-studio');
+    await studio.getByRole('tab', { name: 'Flow editor', exact: true }).click();
+    const editor = studio.locator('fse-flow-diagram').filter({ has: page.locator('[aria-label^="Flow canvas"]') });
+    const start = editor.getByLabel('Select Start', { exact: true });
+    await start.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(editor.getByLabel('Select Research', { exact: true })).toBeFocused();
+    await page.keyboard.press('ArrowLeft');
+    await expect(start).toBeFocused();
+
+    const zoom = editor.locator('.canvas-navigation span').first();
+    await page.keyboard.press('+');
+    await expect(zoom).not.toHaveText('100%');
+    await page.keyboard.press('0');
+    await expect(zoom).toHaveText('100%');
+    // An editable node is not a toggle button: its ports are the buttons, and buttons do not nest.
+    await expect(start).not.toHaveAttribute('role', 'button');
+    await expect(editor.getByRole('button', { name: 'Start connection from Start', exact: true })).toBeVisible();
+  });
+
+  test('the Flow Editor canvas follows the theme', async ({ page, isMobile }) => {
+    await open(page, 'flows');
+    const studio = page.locator('fse-flow-studio');
+    await studio.getByRole('tab', { name: 'Flow editor', exact: true }).click();
+    const editor = studio.locator('fse-flow-diagram').filter({ has: page.locator('[aria-label^="Flow canvas"]') });
+    const fill = () => editor.locator('.flow-node').first().evaluate(el => getComputedStyle(el).fill);
+    const light = await fill();
+    if (isMobile) await page.getByRole('button', { name: 'More actions', exact: true }).click();
+    await page.getByRole(isMobile ? 'menuitem' : 'button', { name: /Switch to (light|dark) theme/ }).click();
+    await expect.poll(fill).not.toBe(light);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  });
+
   test('a run snapshot shows state with text, not color alone', async ({ page }) => {
     await openRunSnapshot(page);
     const graph = page.locator('svg[aria-label^="Execution graph for run"]');

@@ -8,10 +8,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { flowNodeTag, functionDiagram, runSnapshotDiagram, triggerDiagram, typedFunctionDiagram } from './diagram-adapters.ts';
+import { editorDiagram, flowNodeTag, functionDiagram, runSnapshotDiagram, triggerDiagram, typedFunctionDiagram } from './diagram-adapters.ts';
 import { edgeBetween } from './flow-canvas-geometry.ts';
 import { investorNode } from '#app/components/investor-nodes';
-import { inputPorts, outputPorts, type V2Graph } from '#app/components/function-pins';
+import { declaredPins, inputPorts, outputPorts, type V2Graph } from '#app/components/function-pins';
 
 const dir = new URL('../../../../../testdata/graphs/', import.meta.url);
 const fixture = <T>(name: string): T => JSON.parse(readFileSync(new URL(name, dir), 'utf8')) as T;
@@ -47,6 +47,33 @@ test('a run snapshot keeps every node and edge of the flow and tones each node b
   assert.deepEqual(tone, { start: 'ok', analyst: 'fail', save: 'skip', report: 'none' });
   assert.equal(d.nodes.find(n => n.id === 'analyst')!.ariaLabel, 'Analyst FAILED', 'state is in text, not only color');
   for (const e of d.edges) assert.notEqual(edgeBetween(d.nodes, e), '', `edge ${e.from} -> ${e.to} can be drawn`);
+});
+
+test('the Flow Editor projection keeps every node and edge of a saved flow, and wires land on declared pins', () => {
+  const flow = fixture<FlowJson>('flow-research.json');
+  const fn = fixture<V2Graph>('function-typed.json');
+  // The saved flow with a call to the typed function wired by pin, as the editor stores it.
+  const nodes = deepFreeze([...flow.nodes, { id: 'risk', type: 'function', label: 'Risk', x: 300, y: 300 }]);
+  const edges = deepFreeze([...flow.edges, { from: 'analyst', to: 'risk', to_port: 'in:score' }, { from: 'risk', to: 'report', from_port: 'out:passed' }]);
+  const d = editorDiagram(nodes, edges, {
+    tagOf: type => flowNodeTag(type),
+    pinsOf: n => n.id === 'risk' ? declaredPins(fn) : { inputs: [], outputs: [] },
+  });
+  assert.deepEqual(d.nodes.map(n => [n.id, n.x, n.y, n.label]), nodes.map(n => [n.id, n.x, n.y, n.label]));
+  assert.equal(d.edges.length, edges.length);
+  assert.deepEqual(d.edges.map(e => [e.from, e.to]), edges.map(e => [e.from, e.to]));
+  const byId = new Map(d.nodes.map(n => [n.id, n]));
+  assert.deepEqual(byId.get('risk')!.inputs?.map(p => p.name), ['score', 'threshold']);
+  assert.deepEqual(byId.get('risk')!.outputs?.map(p => p.name), ['result', 'passed']);
+  for (const e of d.edges) {
+    if (e.toPort) assert.ok(byId.get(e.to)!.inputs?.some(p => p.name === e.toPort), `${e.to} has the input ${e.toPort}`);
+    if (e.fromPort) assert.ok(byId.get(e.from)!.outputs?.some(p => p.name === e.fromPort), `${e.from} has the output ${e.fromPort}`);
+    assert.notEqual(edgeBetween(d.nodes, e), '');
+  }
+  // A trigger has no input to wire into and an output node no output to wire from.
+  assert.equal(byId.get('start')!.inPort, undefined);
+  assert.equal(byId.get('report')!.outPort, undefined);
+  assert.equal(byId.get('analyst')!.inPort, 'Connect into Analyst');
 });
 
 test('an untyped function keeps its nodes, wires and ports, and an operation shows its input ports', () => {

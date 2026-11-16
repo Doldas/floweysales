@@ -27,8 +27,21 @@ export interface DiagramNode {
   tone?: DiagramTone;
   inputs?: DiagramPort[];
   outputs?: DiagramPort[];
-  /** Overrides the generated accessible name. */
+  /** Adds to the generated accessible name (for example a run status). */
   ariaLabel?: string;
+  /** Replaces the generated accessible name; the Flow Editor names a node "Select <label>". */
+  accessibleName?: string;
+  /**
+   * One connection port in the middle of the input (or output) side, for nodes that are wired
+   * without typed pins. The text is the port's accessible name. Typed pins in `inputs` and
+   * `outputs` replace it.
+   */
+  inPort?: string;
+  outPort?: string;
+  /** Class of the second text line, for example a live run badge. */
+  subClass?: string;
+  /** The second line already states the state, so the tone label is not added to it. */
+  plainSub?: boolean;
 }
 
 export interface DiagramEdge { from: string; to: string; fromPort?: string; toPort?: string; kind?: DiagramEdgeKind }
@@ -42,8 +55,47 @@ export function portOffset(index: number, count: number, height = NODE_HEIGHT): 
 
 function portY(ports: DiagramPort[] | undefined, name: string | undefined): number {
   if (!ports?.length) return NODE_HEIGHT / 2;
-  const index = Math.max(0, ports.findIndex(p => p.name === name));
-  return portOffset(index, ports.length);
+  const index = ports.findIndex(p => p.name === name);
+  // A wire that names no port of this node ends in the middle of the card, like a wire to a plain port.
+  return index < 0 ? NODE_HEIGHT / 2 : portOffset(index, ports.length);
+}
+
+export const PORT_HIT_RADIUS = 14;
+
+/** A connection point of a node: one side, and a typed pin when it has one. */
+export interface DiagramPortRef { nodeId: string; side: 'in' | 'out'; pin?: string; type?: string }
+export interface DiagramPortPoint extends DiagramPortRef { x: number; y: number }
+
+/**
+ * Every connection point on the canvas with its position. A node's typed pins replace its
+ * plain port; a node with neither has no connection point on that side.
+ */
+export function diagramPorts(nodes: readonly DiagramNode[]): DiagramPortPoint[] {
+  const points: DiagramPortPoint[] = [];
+  for (const n of nodes) {
+    if (n.inputs?.length) n.inputs.forEach((p, i) => points.push({ nodeId: n.id, side: 'in', pin: p.name, type: p.type, x: n.x, y: n.y + portOffset(i, n.inputs!.length) }));
+    else if (n.inPort) points.push({ nodeId: n.id, side: 'in', x: n.x, y: n.y + NODE_HEIGHT / 2 });
+    if (n.outputs?.length) n.outputs.forEach((p, i) => points.push({ nodeId: n.id, side: 'out', pin: p.name, type: p.type, x: n.x + NODE_WIDTH, y: n.y + portOffset(i, n.outputs!.length) }));
+    else if (n.outPort) points.push({ nodeId: n.id, side: 'out', x: n.x + NODE_WIDTH, y: n.y + NODE_HEIGHT / 2 });
+  }
+  return points;
+}
+
+/** The closest connection point of the given side within the hit radius, if any. */
+export function nearestDiagramPort(points: readonly DiagramPortPoint[], x: number, y: number, side: 'in' | 'out', radius = PORT_HIT_RADIUS): DiagramPortPoint | null {
+  let best: DiagramPortPoint | null = null;
+  let bestDistance = radius;
+  for (const p of points) {
+    if (p.side !== side) continue;
+    const d = Math.hypot(p.x - x, p.y - y);
+    if (d <= bestDistance) { best = p; bestDistance = d; }
+  }
+  return best;
+}
+
+/** A node card moved by a pointer drag: the distance in screen pixels scaled to the view box, in whole units. */
+export function draggedPosition(origin: { x: number; y: number }, dxPx: number, dyPx: number, view: { width: number; height: number }, box: { width: number; height: number }): { x: number; y: number } {
+  return { x: Math.round(origin.x + dxPx * view.width / box.width), y: Math.round(origin.y + dyPx * view.height / box.height) };
 }
 
 /** Cubic Bezier connector, the same curve the Flow Editor draws. */
