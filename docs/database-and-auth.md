@@ -2,16 +2,17 @@
 
 ## Decision
 
-**Use a relational database** for users, sessions, future tenant-scoped portfolios,
-holdings, orders and audit history. MySQL 8.4 is selected for the first identity
-service because it provides referential integrity, transactions and mature
-Liquibase support. PostgreSQL is a similarly good alternative; MongoDB is
-not needed for this core relational model.
+**MySQL 8.4 is the only live runtime database** for FloweySales, including
+users, sessions, market/tracker state, flows, paper orders and audit history.
+Schema changes are managed with Liquibase. The Go process refuses to start
+without `MYSQL_DSN` or `AUTH_MYSQL_DSN`; `SQLITE_STORAGE_PATH` is obsolete.
 
-This is an **incremental migration**. The existing SQLite database continues
-to store the current single-account paper-trading/market history. It is NOT
-migrated by this change, and its tables are not altered by Liquibase.
-The new MySQL database stores SYS_ADMIN and USER identities, login sessions, and persisted nonsecret AI model settings.
+Older versions used SQLite for paper trading and history. SQLite files may
+still be imported through an **explicit legacy import** (see `compose.yml`'s
+`import-legacy` profile); they are not used for current application writes.
+This document also contains historical migration notes below. Follow the
+current MySQL setup steps rather than treating those old notes as instructions
+for running SQLite in production.
 
 **USER accounts are research-only.** SYS_ADMIN may provision them through a secured endpoint, but regular users cannot access shared portfolio, order, tick-history, configuration, or mutating endpoints. The AI agent's non-user-scoped tools are also disabled for USER until proper tenant scoping exists. No public self-registration is offered.
 
@@ -116,11 +117,14 @@ isolate all portfolio, forum and research data per account. Sessions are
 single-server compatible via MySQL, but login-attempt throttling is initially
 per process.
 
-## SQLite and backfills
+## Legacy SQLite imports
 
-Existing SQLite DDL and old in-process migrations remain active for existing
-users. A separate future migration project will baseline that schema into
-Liquibase before retiring Go DDL. Do not run MySQL changelogs against SQLite.
+The previous SQLite application database is **not** a supported runtime
+database. Any historical records must be imported through the explicit,
+one-shot legacy importer; preserve and back up the source file, confirm
+the destination MySQL schema has been migrated and verify imported records
+before removing a legacy volume. Never run MySQL Liquibase changelogs
+against SQLite.
 
 ## Configurable AI budgets and sourced search
 
@@ -151,7 +155,9 @@ for P/FCF. All inputs must use matching currency and financial periods.
 Incomplete quarters do not produce invented numbers.
 
 See [automatic Docker/Podman updates](auto-updates.md). The updater preserves
-MySQL identities, sessions, persisted AI settings, local `.env` and SQLite data.
+MySQL runtime records (including identities, paper trading and flows),
+persisted AI settings, local `.env` and the encryption secret volume.
+Legacy SQLite source volumes, if present, are kept for optional import.
 
 
 ## Optional paper-trading order-size guard
