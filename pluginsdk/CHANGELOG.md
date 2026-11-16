@@ -26,6 +26,11 @@ publishes the section for the tagged version as the release notes. See
   Existing plugins keep working. A backend from before these types rejects a
   plugin that declares them, so declare them together with a
   `min_app_version` that knows them once a release version is known.
+- Fix (documentation of the same contract): `broker_orders` is called with a
+  `client_order_id` by FloweySales' background reconciliation and must return
+  the order for that id with the broker's real status. Fills never decrease, an
+  order that ended keeps its status, `FILLED` is filled in full and
+  `PARTIALLY_FILLED` is partial. No wire or API change.
 
 ## v0.5.0
 

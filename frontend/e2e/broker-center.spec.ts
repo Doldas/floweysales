@@ -37,7 +37,7 @@ const accountsView = {
 
 interface Call { method: string; path: string; body: any }
 
-async function mock(page: Page, opts: { view?: unknown; viewStatus?: number; submit?: (n: number, body: any) => { status: number; body: unknown } } = {}) {
+async function mock(page: Page, opts: { view?: unknown; viewStatus?: number; orders?: unknown[]; submit?: (n: number, body: any) => { status: number; body: unknown } } = {}) {
   const calls: Call[] = [];
   let view: any = opts.view ?? brokersView({ connections: [{ name: 'main', broker: 'PAPER_X', label: 'main', saved: ['PAPER_KEY'] }] });
   let submits = 0;
@@ -53,7 +53,7 @@ async function mock(page: Page, opts: { view?: unknown; viewStatus?: number; sub
   });
   await page.route('**/api/broker-orders', route => {
     const req = route.request();
-    if (req.method() === 'GET') return route.fulfill(json({ orders: [] }));
+    if (req.method() === 'GET') return route.fulfill(json({ orders: opts.orders ?? [] }));
     const body = req.postDataJSON();
     calls.push({ method: 'POST', path: '/api/broker-orders', body });
     const reply = opts.submit?.(++submits, body) ?? { status: 200, body: { status: 'success', replayed: false, order: { id: 5 } } };
@@ -172,6 +172,23 @@ test.describe('Settings → Trading → Brokers', () => {
     await panel.getByRole('button', { name: 'Send paper order' }).click();
     await expect(panel.getByRole('status')).toContainText('Order #9');
     expect(calls[1].body.client_order_id).not.toBe(calls[0].body.client_order_id);
+  });
+
+  test('routed orders show the broker\'s status, the last check in UTC and why a check failed', async ({ page }) => {
+    const request = { symbol: 'NVDA', side: 'BUY', type: 'LIMIT', quantity: 2 };
+    const base = { connection: 'main', broker: 'PAPER_X', account: 'PA-1', created_at: '2026-11-16T09:00:00Z', updated_at: '2026-11-16T09:05:00Z', request };
+    await mock(page, { orders: [
+      { ...base, id: 3, client_order_id: 'a', status: 'SUBMITTED', reconciled_at: '2026-11-16T09:05:44Z',
+        order: { id: 'B-3', client_order_id: 'a', account: 'PA-1', environment: 'paper', symbol: 'NVDA', side: 'BUY', type: 'LIMIT', tif: 'DAY', quantity: 2, filled_quantity: 1, status: 'PARTIALLY_FILLED' } },
+      { ...base, id: 2, client_order_id: 'b', status: 'UNKNOWN', error: 'no answer from the broker', reconcile_error: 'the broker is unavailable' },
+    ] });
+    const panel = await openBrokers(page);
+    const orders = panel.getByRole('list', { name: 'Routed orders' });
+    await expect(orders).toContainText('PARTIALLY_FILLED (1/2)');
+    await expect(orders).toContainText('Checked 2026-11-16 09:05 UTC');
+    await expect(orders).toContainText('Not checked yet');
+    await expect(orders).toContainText('The last check could not settle it: the broker is unavailable');
+    await expect(orders).toContainText('Outcome unknown');
   });
 
   test('a broker the app cannot use says why and offers no connection', async ({ page }) => {

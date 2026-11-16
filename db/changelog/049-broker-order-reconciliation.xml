@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+ <changeSet id="049-broker-order-reconciliation" author="floweysales" dbms="mysql">
+  <!-- Background reconciliation of orders routed to broker extensions (#444). order_status mirrors the
+       status inside order_json so the reconciler can find working orders without parsing JSON;
+       reconciled_at and reconcile_error say when the broker was last asked and why that did not settle it. -->
+  <addColumn tableName="broker_orders">
+   <column name="order_status" type="VARCHAR(16)" defaultValue="" remarks="Status of the broker's order as last reported; empty before the first report"><constraints nullable="false"/></column>
+   <column name="reconciled_at" type="DATETIME(6)" remarks="When the broker was last asked about the order"/>
+   <column name="reconcile_error" type="VARCHAR(300)" defaultValue="" remarks="Why the last check could not settle the order"><constraints nullable="false"/></column>
+  </addColumn>
+  <createIndex tableName="broker_orders" indexName="idx_broker_orders_reconcile"><column name="status"/><column name="order_status"/><column name="reconciled_at"/></createIndex>
+  <rollback>
+   <dropIndex tableName="broker_orders" indexName="idx_broker_orders_reconcile"/>
+   <dropColumn tableName="broker_orders" columnName="reconcile_error"/>
+   <dropColumn tableName="broker_orders" columnName="reconciled_at"/>
+   <dropColumn tableName="broker_orders" columnName="order_status"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

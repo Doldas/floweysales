@@ -47,6 +47,10 @@ type Record struct {
 	Error         string       `json:"error,omitempty"`
 	CreatedAt     time.Time    `json:"created_at"`
 	UpdatedAt     time.Time    `json:"updated_at"`
+	// ReconciledAt is when the broker was last asked about the order, and
+	// ReconcileError why the last check could not settle it.
+	ReconciledAt   *time.Time `json:"reconciled_at,omitempty"`
+	ReconcileError string     `json:"reconcile_error,omitempty"`
 }
 
 // Store is the ledger's storage. Every method works on one user's rows only.
@@ -65,6 +69,14 @@ type Store interface {
 	GetBrokerOrder(ctx context.Context, userID, id int64) (Record, error)
 	// ListBrokerOrders returns the user's rows, newest first.
 	ListBrokerOrders(ctx context.Context, userID int64, limit int) ([]Record, error)
+	// ListBrokerOrdersToReconcile returns, across users, rows the broker may
+	// still change, least recently checked first: unknown outcomes, pending
+	// rows that went stale, and confirmed orders that are still working. A
+	// row checked less than minInterval ago is left out.
+	ListBrokerOrdersToReconcile(ctx context.Context, now time.Time, minInterval time.Duration, limit int) ([]Record, error)
+	// MarkBrokerOrderChecked records that the broker was asked at the given
+	// time and why that could not settle the order (empty when it could).
+	MarkBrokerOrderChecked(ctx context.Context, userID, id int64, at time.Time, problem string) error
 }
 
 // MemoryStore is a Store for tests and for running without a database.
@@ -85,6 +97,10 @@ func copyRecord(r *Record) Record {
 	if r.Order != nil {
 		order := *r.Order
 		out.Order = &order
+	}
+	if r.ReconciledAt != nil {
+		at := *r.ReconciledAt
+		out.ReconciledAt = &at
 	}
 	return out
 }
@@ -161,4 +177,61 @@ func (s *MemoryStore) ListBrokerOrders(_ context.Context, userID int64, limit in
 		out = out[:limit]
 	}
 	return out, nil
+}
+
+// needsReconcile reports whether a row may still change at the broker.
+func needsReconcile(r *Record, now time.Time) bool {
+	switch r.Status {
+	case StatusUnknown:
+		return true
+	case StatusPending:
+		return r.UpdatedAt.Before(now.Add(-PendingStaleAfter))
+	case StatusSubmitted:
+		return r.Order == nil || r.Order.Working()
+	}
+	return false
+}
+
+func (s *MemoryStore) ListBrokerOrdersToReconcile(_ context.Context, now time.Time, minInterval time.Duration, limit int) ([]Record, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []Record{}
+	for _, row := range s.rows {
+		if !needsReconcile(row, now) {
+			continue
+		}
+		if row.ReconciledAt != nil && row.ReconciledAt.After(now.Add(-minInterval)) {
+			continue
+		}
+		out = append(out, copyRecord(row))
+	}
+	// Never checked first, then the least recently checked.
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i].ReconciledAt, out[j].ReconciledAt
+		switch {
+		case a == nil && b == nil:
+			return out[i].ID < out[j].ID
+		case a == nil:
+			return true
+		case b == nil:
+			return false
+		}
+		return a.Before(*b)
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (s *MemoryStore) MarkBrokerOrderChecked(_ context.Context, userID, id int64, at time.Time, problem string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	row, ok := s.rows[id]
+	if !ok || row.UserID != userID {
+		return ErrNotFound
+	}
+	t := at.UTC()
+	row.ReconciledAt, row.ReconcileError = &t, problem
+	return nil
 }

@@ -56,11 +56,34 @@ broker-specific logic may enter the core, and issue #8 states that live-money ex
     into a Paper Broker extension is a later step that must preserve those semantics; this ADR only
     adds the contract and the registry.
 
+## Reconciliation (phase 2)
+
+12. **The broker is the source of truth for an order's status.** A background reconciler (every 20 seconds,
+    25 orders per round, 20 seconds per call) asks the broker about every order that may still change:
+    outcomes that are unknown, rows whose call never finished, and confirmed orders that are still working.
+    A row is checked at most every 30 seconds. The same code runs when a user presses Refresh.
+13. **It only reads.** Reconciliation calls `broker_orders` with the client order id and never sends, retries
+    or cancels an order. It uses the route the order was sent on (the user's connection, or the system's
+    settings for an administrator), so each check runs with the right key. An uninstalled broker or a
+    removed connection is recorded on the row, never guessed around.
+14. **A report that cannot be true changes nothing.** The report must be the order that was sent (account,
+    client order id, symbol, side, quantity), fills never go backwards, an order that ended stays as it ended,
+    a filled order is filled in full and a partial one is partial. Otherwise the stored order stays as it was and
+    the problem is kept on the row (`reconcile_error`) with the time of the check.
+15. **Unknown outcomes are settled by the broker's answer.** If the broker has the order the row becomes
+    submitted. If it has none, the row stays unknown for 10 minutes and then fails with that reason; a confirmed
+    order that disappears is never failed silently, it is reported. A pending row whose call never finished
+    becomes unknown first.
+16. **Checks of one order never interleave.** A lock per row makes a check re-read the row before it decides,
+    so an older report cannot be written over a newer one.
+
 ## Consequences
 
 - A broker plugin is a small adapter; a new broker needs no backend release.
 - Live trading cannot be enabled by configuration, a plugin or a request, which is the point.
 - The SDK gains an additive version (pluginsdk v0.6.0): older backends reject plugins that declare these
   types, so such plugins set `min_app_version`.
-- Order status is reported by the broker and refreshed on demand; there is no background reconciliation
-  yet, and no streaming of fills.
+- Order status comes from the broker by polling (every 20 seconds at most); there is no streaming of fills
+  and no automatic cancellation, for example when the kill switch is set.
+- A `broker_orders` implementation must honor the client order id filter and report truthfully; a plugin that
+  lets fills go back is shown as a contract problem on the order.

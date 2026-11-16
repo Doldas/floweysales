@@ -1004,5 +1004,6 @@ export interface BrokerOrder {
 export interface BrokerLedgerRow {
   id: number; connection: string; broker: string; account: string; client_order_id: string; status: string;
   broker_order_id?: string; order?: BrokerOrder; error?: string; created_at: string; updated_at: string;
+  reconciled_at?: string; reconcile_error?: string;
   request: { symbol: string; side: string; type: string; quantity: number };
 }

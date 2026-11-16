@@ -95,3 +95,11 @@ export function ledgerStatusLabel(status: string): string { return ORDER_STATUS[
 export function money(value: number, currency: string): string {
   return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(value)} ${currency}`;
 }
+
+/** When the broker was last asked about an order, in UTC; empty before the first check. */
+export function checkedLabel(iso: string | undefined): string {
+  if (!iso) return 'Not checked yet';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'Not checked yet';
+  return `Checked ${d.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+}

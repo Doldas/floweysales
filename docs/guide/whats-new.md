@@ -18,7 +18,7 @@ last-reviewed: 2026-11-15
 - Copy your research watchlist, or as an administrator the tracker list, into a new watch collection; the original list stays as it is. Collections work on phones and with text enlarged to 200%. See [Collections](collections.md#copy-your-watchlist).
 
 **Brokers**
-- Connect brokers installed as plugins, keep several connections of your own with encrypted keys, read their accounts per source and currency, and send paper orders to the broker and account you choose. Orders are safe to retry, and live accounts are listed but never traded. See [Settings: Brokers](settings.md#brokers-paper-accounts-only).
+- Connect brokers installed as plugins, keep several connections of your own with encrypted keys, read their accounts per source and currency, and send paper orders to the broker and account you choose. Orders are safe to retry, and live accounts are listed but never traded. Order status is kept in step with the broker in the background, partial fills included, and an order of unknown outcome is settled by the broker's answer. See [Settings: Brokers](settings.md#brokers-paper-accounts-only).
 
 **Sources everywhere**
 - Prices, history, financial statements, SEC filings, valuations, backtests, strategy results, the wealth plan, portfolio risk and the Today briefing now show where they came from: provider, what was calculated and how, and the as-of and retrieval times in UTC. Open the **Source** button next to a figure. When no source was recorded it says "Source unknown" instead of guessing. Flow rows and agent tool results carry the same information. See [Where data comes from](provenance.md).

@@ -49,6 +49,7 @@ func runFakePlugin() {
 		fmt.Fprintln(os.Stderr, "LEAKED BACKEND ENV")
 		os.Exit(4)
 	}
+	brokerBook := &fakeBook{orders: map[string]map[string]any{}}
 	out := json.NewEncoder(os.Stdout)
 	var mu sync.Mutex
 	send := func(v any) { mu.Lock(); _ = out.Encode(v); mu.Unlock() }
@@ -97,6 +98,10 @@ func runFakePlugin() {
 			reply([]map[string]any{{"id": 1, "title": "hello", "symbol": symbol}})
 		case "domain":
 			input, _ := req.Params["input"].(map[string]any)
+			if op, _ := req.Params["operation"].(string); strings.HasPrefix(op, "broker_") {
+				fakeBroker(op, input, os.Getenv("FAKE_API_KEY"), brokerBook, reply, fail)
+				continue
+			}
 			reply(map[string]any{"operation": req.Params["operation"], "year": input["year"], "stray": input["stray"], "input": input, "key": os.Getenv("FAKE_API_KEY")})
 		case "tool":
 			input, _ := req.Params["input"].(map[string]any)
@@ -970,5 +975,75 @@ func TestMacroCapabilityNeedsHistory(t *testing.T) {
 	m.Provider.Capabilities = []string{CapMacro}
 	if err := m.Validate(); err == nil {
 		t.Error("macro series are read through history")
+	}
+}
+
+// fakeBook is the orders of the fake broker. Every plugin process has its own,
+// so two connections of one broker never see each other's orders.
+type fakeBook struct {
+	orders map[string]map[string]any // by client order id
+	next   int
+}
+
+// fakeBroker answers the broker operations like a well-behaved paper broker:
+// idempotent on the client order id, strict about the environment, and a
+// working order fills by one share every time it is listed.
+func fakeBroker(op string, in map[string]any, key string, book *fakeBook, reply func(any), fail func(code, msg string)) {
+	// The label shows which key the process was started with, so tests can tell connections apart.
+	account := map[string]any{"id": "PA-1", "label": "Paper " + key, "currency": "USD", "environment": "paper", "cash": 1000.0, "buying_power": 1000.0, "equity": 1000.0, "as_of": 1}
+	switch op {
+	case "broker_accounts":
+		live := map[string]any{"id": "LIVE-1", "label": "Live", "currency": "SEK", "environment": "live", "cash": 5.0, "buying_power": 5.0, "equity": 5.0, "as_of": 1}
+		reply(map[string]any{"accounts": []any{account, live}})
+	case "broker_submit_order":
+		if in["environment"] != "paper" || in["account"] != "PA-1" {
+			fail(CodeInvalidArgument, "this account is a paper account only")
+			return
+		}
+		cid, _ := in["client_order_id"].(string)
+		if existing, ok := book.orders[cid]; ok {
+			reply(map[string]any{"order": existing})
+			return
+		}
+		book.next++
+		order := map[string]any{"id": fmt.Sprintf("B-%d", book.next), "client_order_id": cid, "account": "PA-1", "environment": "paper", "symbol": in["symbol"],
+			"side": in["side"], "type": in["type"], "tif": in["tif"], "quantity": in["quantity"], "filled_quantity": 0.0, "status": "OPEN", "submitted_at": 1, "updated_at": 1}
+		if v, ok := in["limit_price"]; ok {
+			order["limit_price"] = v
+		}
+		book.orders[cid] = order
+		reply(map[string]any{"order": order})
+	case "broker_orders":
+		list := []any{}
+		for cid, order := range book.orders {
+			if want, _ := in["client_order_id"].(string); want != "" && want != cid {
+				continue
+			}
+			if qty, filled := order["quantity"].(float64), order["filled_quantity"].(float64); order["status"] != "CANCELLED" && filled < qty {
+				filled++
+				order["filled_quantity"] = filled
+				order["status"] = "PARTIALLY_FILLED"
+				if filled >= qty {
+					order["status"] = "FILLED"
+				}
+			}
+			list = append(list, order)
+		}
+		reply(map[string]any{"orders": list})
+	case "broker_cancel_order":
+		for _, order := range book.orders {
+			if order["id"] == in["order_id"] {
+				if order["status"] == "FILLED" || order["status"] == "CANCELLED" {
+					fail(CodeInvalidArgument, "the order has ended")
+					return
+				}
+				order["status"] = "CANCELLED"
+				reply(map[string]any{"order": order})
+				return
+			}
+		}
+		fail(CodeInvalidArgument, "no such order")
+	default:
+		fail(CodeUnsupported, "not offered by the fake broker")
 	}
 }

@@ -13,15 +13,20 @@ import (
 // Orders routed to broker extensions (changeset 048) implement brokers.Store.
 // Every query is scoped to the owner's user id.
 
-const brokerOrderColumns = "id,user_id,connection_name,broker,account,environment,client_order_id,request_digest,request_json,status,broker_order_id,order_json,error_text,created_at,updated_at"
+const brokerOrderColumns = "id,user_id,connection_name,broker,account,environment,client_order_id,request_digest,request_json,status,broker_order_id,order_json,error_text,created_at,updated_at,reconciled_at,reconcile_error"
 
 func scanBrokerOrder(r rowScanner) (brokers.Record, error) {
 	var rec brokers.Record
 	var request string
 	var order sql.NullString
+	var reconciled sql.NullTime
 	if err := r.Scan(&rec.ID, &rec.UserID, &rec.Connection, &rec.Broker, &rec.Account, &rec.Environment, &rec.ClientOrderID, &rec.Digest,
-		&request, &rec.Status, &rec.BrokerOrderID, &order, &rec.Error, &rec.CreatedAt, &rec.UpdatedAt); err != nil {
+		&request, &rec.Status, &rec.BrokerOrderID, &order, &rec.Error, &rec.CreatedAt, &rec.UpdatedAt, &reconciled, &rec.ReconcileError); err != nil {
 		return rec, err
+	}
+	if reconciled.Valid {
+		at := reconciled.Time.UTC()
+		rec.ReconciledAt = &at
 	}
 	_ = json.Unmarshal([]byte(request), &rec.Request)
 	if order.Valid && order.String != "" {
@@ -87,17 +92,17 @@ func (d *Database) FinishBrokerOrder(ctx context.Context, userID, id int64, stat
 		errText = errText[:1000]
 	}
 	var orderJSON any
-	brokerID := ""
+	brokerID, orderStatus := "", ""
 	if order != nil {
 		raw, err := json.Marshal(order)
 		if err != nil {
 			return err
 		}
-		orderJSON, brokerID = string(raw), order.ID
+		orderJSON, brokerID, orderStatus = string(raw), order.ID, order.Status
 	}
 	res, err := d.db.ExecContext(ctx,
-		"UPDATE broker_orders SET status=?,order_json=COALESCE(?,order_json),broker_order_id=IF(?<>'',?,broker_order_id),error_text=?,updated_at=? WHERE id=? AND user_id=?",
-		status, orderJSON, brokerID, brokerID, errText, time.Now().UTC(), id, userID)
+		"UPDATE broker_orders SET status=?,order_json=COALESCE(?,order_json),broker_order_id=IF(?<>'',?,broker_order_id),order_status=IF(?<>'',?,order_status),error_text=?,updated_at=? WHERE id=? AND user_id=?",
+		status, orderJSON, brokerID, brokerID, orderStatus, orderStatus, errText, time.Now().UTC(), id, userID)
 	if err != nil {
 		return err
 	}
@@ -133,6 +138,54 @@ func (d *Database) ListBrokerOrders(ctx context.Context, userID int64, limit int
 		out = append(out, rec)
 	}
 	return out, rows.Err()
+}
+
+// ListBrokerOrdersToReconcile offers the rows the broker may still change:
+// unknown outcomes, pending rows that went stale, and confirmed orders that
+// are still working or were never reported. Never-checked rows come first.
+func (d *Database) ListBrokerOrdersToReconcile(ctx context.Context, now time.Time, minInterval time.Duration, limit int) ([]brokers.Record, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := d.db.QueryContext(ctx,
+		"SELECT "+brokerOrderColumns+" FROM broker_orders WHERE "+
+			"(status=? OR (status=? AND updated_at<?) OR (status=? AND (order_status='' OR order_status IN ('ACCEPTED','OPEN','PARTIALLY_FILLED')))) "+
+			"AND (reconciled_at IS NULL OR reconciled_at<=?) ORDER BY reconciled_at IS NOT NULL, reconciled_at, id LIMIT ?",
+		brokers.StatusUnknown, brokers.StatusPending, now.Add(-brokers.PendingStaleAfter).UTC(), brokers.StatusSubmitted, now.Add(-minInterval).UTC(), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []brokers.Record{}
+	for rows.Next() {
+		rec, err := scanBrokerOrder(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, rec)
+	}
+	return out, rows.Err()
+}
+
+// MarkBrokerOrderChecked records that the broker was asked about a row.
+func (d *Database) MarkBrokerOrderChecked(ctx context.Context, userID, id int64, at time.Time, problem string) error {
+	if len(problem) > 300 {
+		problem = problem[:300]
+	}
+	res, err := d.db.ExecContext(ctx, "UPDATE broker_orders SET reconciled_at=?,reconcile_error=? WHERE id=? AND user_id=?", at.UTC(), problem, id, userID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		// An unchanged row reports no affected rows; tell that from a row that is not the caller's.
+		var owned int
+		if err := d.db.QueryRowContext(ctx, "SELECT 1 FROM broker_orders WHERE id=? AND user_id=?", id, userID).Scan(&owned); errors.Is(err, sql.ErrNoRows) {
+			return brokers.ErrNotFound
+		} else if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 var _ brokers.Store = (*Database)(nil)

@@ -150,6 +150,7 @@ type Engine struct {
 	// brokerHostOverride and brokerLedger are test seams of the broker registry; nil uses the plugin manager and the database.
 	brokerHostOverride brokerHost
 	brokerLedger       brokers.Store
+	brokerRowLocks     sync.Map // ledger row id -> *sync.Mutex, so two checks of one order never interleave
 	defaultProvider    market.Provider
 	trackerCfg         tracker.Config
 
@@ -457,6 +458,7 @@ func (e *Engine) Start(host, port string) error {
 	flowCtx, flowCancel := context.WithCancel(context.Background())
 	e.flowStop = flowCancel
 	go e.runFlowScheduler(flowCtx)
+	go e.runBrokerReconciler(flowCtx)
 	for i := 0; i < flowWorkerCount; i++ {
 		go e.runFlowWorker(flowCtx)
 	}

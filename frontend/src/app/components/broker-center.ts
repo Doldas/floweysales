@@ -5,7 +5,7 @@ import type { HttpErrorResponse } from '@angular/common/http';
 import { MarketService } from '../services';
 import type { BrokerAccount, BrokerAccountsView, BrokerEntry, BrokerLedgerRow, BrokersView } from '../models';
 import {
-  ORDER_TYPES, ledgerStatusLabel, money, needsLimit, needsStop, newClientOrderId, orderBody, outcomeUnknown, ticketIssues, type Ticket,
+  ORDER_TYPES, checkedLabel, ledgerStatusLabel, money, needsLimit, needsStop, newClientOrderId, orderBody, outcomeUnknown, ticketIssues, type Ticket,
 } from './broker-ticket';
 
 /**
@@ -129,6 +129,8 @@ import {
               <li>
                 <span><strong>#{{ o.id }}</strong> {{ o.request.side }} {{ o.request.quantity }} {{ o.request.symbol }} <span class="muted">{{ o.broker }} · {{ o.connection || 'system' }} · {{ o.account }}</span></span>
                 <span>{{ ledgerStatusLabel(o.status) }}@if (o.order) { · {{ o.order.status }} ({{ o.order.filled_quantity }}/{{ o.order.quantity }}) }@if (o.error) { · {{ o.error }} }</span>
+                <span class="muted bc-checked">{{ checkedLabel(o.reconciled_at) }}</span>
+                @if (o.reconcile_error) { <span class="bc-error" role="note">The last check could not settle it: {{ o.reconcile_error }}</span> }
                 <span class="bc-actions">
                   <button type="button" class="btn btn-sm btn-outline-secondary" [disabled]="busy()" (click)="refresh(o)">Refresh #{{ o.id }}</button>
                   @if (canCancel(o)) { <button type="button" class="btn btn-sm btn-outline-danger" [disabled]="busy()" (click)="cancel(o)">Cancel #{{ o.id }}</button> }
@@ -157,6 +159,7 @@ import {
     .bc-problems, .bc-error { margin: 0; color: var(--fs-neg); font-size: 0.85rem; }
     .bc-problems { padding-left: 1.1rem; }
     .bc-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .bc-checked { font-size: 0.75rem; }
   `],
 })
 export class BrokerCenterComponent {
@@ -165,6 +168,7 @@ export class BrokerCenterComponent {
   readonly orderTypes = ORDER_TYPES;
   readonly money = money;
   readonly ledgerStatusLabel = ledgerStatusLabel;
+  readonly checkedLabel = checkedLabel;
 
   readonly view = signal<BrokersView | null>(null);
   readonly accounts = signal<BrokerAccountsView | null>(null);

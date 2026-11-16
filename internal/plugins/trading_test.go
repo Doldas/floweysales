@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"floweysales/internal/brokers"
 )
 
 func brokerOperations(capabilities ...string) []DomainOperation {
@@ -130,8 +132,11 @@ func TestTradingProvidersAreListedApartAndNeverCalledAsDomainProviders(t *testin
 		t.Fatalf("the trading call ran a provider that is not a trading provider: %v", err)
 	}
 	out, err := m.CallTrading(ctx, "paper_x", CapBrokerSubmitOrder, order)
-	if err != nil || !strings.Contains(string(out), `"client_order_id":"k1"`) || !strings.Contains(string(out), `"key":"system-key"`) {
+	if err != nil || !strings.Contains(string(out), `"client_order_id":"k1"`) {
 		t.Fatalf("out=%s err=%v", out, err)
+	}
+	if out, err = m.CallTrading(ctx, "paper_x", CapBrokerAccounts, nil); err != nil || !strings.Contains(string(out), "Paper system-key") {
+		t.Fatalf("without a connection the broker runs with the system's key: out=%s err=%v", out, err)
 	}
 	for name, input := range map[string]map[string]any{
 		"no account":       {"environment": "paper", "client_order_id": "k", "symbol": "NVDA", "side": "BUY", "type": "MARKET", "tif": "DAY", "quantity": float64(1)},
@@ -165,10 +170,11 @@ func TestEachConnectionRunsInItsOwnProcessWithItsOwnKey(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var reply struct {
-			Key string `json:"key"`
+		accounts, err := brokers.DecodeAccounts(out)
+		if err != nil || len(accounts) == 0 {
+			t.Fatalf("%v %v", accounts, err)
 		}
-		_ = json.Unmarshal(out, &reply)
+		reply := struct{ Key string }{strings.TrimPrefix(accounts[0].Label, "Paper ")}
 		return reply.Key
 	}
 	if a, b := keyOf(7, "c1", "key-one"), keyOf(7, "c2", "key-two"); a != "key-one" || b != "key-two" {
@@ -193,5 +199,107 @@ func TestEachConnectionRunsInItsOwnProcessWithItsOwnKey(t *testing.T) {
 	}
 	if _, err := m.CallTrading(WithUserInstanceNamed(ctx, 7, "c3", nil), "PAPER_X", CapBrokerAccounts, nil); !errors.As(err, &coded) || coded.Code != CodeNotConfigured {
 		t.Fatalf("a connection without its key is not configured: %v", err)
+	}
+}
+
+func fullBrokerManifest(version string) Manifest {
+	m := brokerManifest(version)
+	caps := []string{CapBrokerAccounts, CapBrokerPositions, CapBrokerOrders, CapBrokerSubmitOrder, CapBrokerCancelOrder}
+	m.Provider.Capabilities, m.Provider.Operations = caps, brokerOperations(caps...)
+	return m
+}
+
+// The whole broker contract over the real wire protocol, in a real plugin
+// process, read back through the app's strict decoders: accounts, an
+// idempotent order, the paper-only rule, a partial fill that ends in a fill,
+// a cancellation that is refused after the fill, and two connections that
+// never see each other's orders.
+func TestBrokerExtensionEndToEndThroughARealProcess(t *testing.T) {
+	store := newFakeStore(t)
+	manifest := fullBrokerManifest("1.0.0")
+	store.publish(manifest, fakeRelease(t, manifest))
+	m := openManager(t, store, t.TempDir(), nil)
+	ctx := context.Background()
+	if _, err := m.Install(ctx, "paperbroker", "1.0.0", false); err != nil {
+		t.Fatal(err)
+	}
+	conn := func(name string) context.Context {
+		return WithUserInstanceNamed(ctx, 7, name, map[string]string{"FAKE_API_KEY": "key-" + name})
+	}
+
+	raw, err := m.CallTrading(conn("one"), "PAPER_X", CapBrokerAccounts, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accounts, err := brokers.DecodeAccounts(raw)
+	if err != nil || len(accounts) != 2 || accounts[0].Environment != brokers.EnvironmentPaper || accounts[1].Environment != brokers.EnvironmentLive {
+		t.Fatalf("a broker lists its live account too, and says what it is: %+v %v", accounts, err)
+	}
+
+	req := brokers.OrderRequest{Broker: "PAPER_X", Account: "PA-1", ClientOrderID: "e2e-1", Symbol: "nvda", Side: "buy", Type: "limit", TIF: "day", Quantity: 3, LimitPrice: 100}
+	if err := req.Normalize(); err != nil {
+		t.Fatal(err)
+	}
+	submit := func(ctx context.Context) brokers.Order {
+		t.Helper()
+		raw, err := m.CallTrading(ctx, "PAPER_X", CapBrokerSubmitOrder, req.Input(brokers.EnvironmentPaper))
+		if err != nil {
+			t.Fatal(err)
+		}
+		order, err := brokers.DecodeSubmitted(raw, req)
+		if err != nil {
+			t.Fatalf("the answer breaks the contract: %v", err)
+		}
+		return order
+	}
+	first := submit(conn("one"))
+	if first.Status != "OPEN" || first.Environment != brokers.EnvironmentPaper {
+		t.Fatalf("%+v", first)
+	}
+	if again := submit(conn("one")); again.ID != first.ID {
+		t.Fatalf("the same client order id must not place a second order: %s then %s", first.ID, again.ID)
+	}
+
+	// A broker refuses an order whose environment is not its account's.
+	var coded *CallError
+	if _, err := m.CallTrading(conn("one"), "PAPER_X", CapBrokerSubmitOrder, req.Input(brokers.EnvironmentLive)); !errors.As(err, &coded) || coded.Code != CodeInvalidArgument {
+		t.Fatalf("a live order is refused by the plugin as well: %v", err)
+	}
+
+	// Each listing advances the fake broker's fill by one share: 1, 2, then filled.
+	var prev *brokers.Order = &first
+	var states []string
+	for i := 0; i < 3; i++ {
+		raw, err := m.CallTrading(conn("one"), "PAPER_X", CapBrokerOrders, map[string]any{"account": "PA-1", "status": "all", "client_order_id": "e2e-1"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		orders, err := brokers.DecodeOrders(raw)
+		if err != nil || len(orders) != 1 {
+			t.Fatalf("%+v %v", orders, err)
+		}
+		if err := brokers.NextOrderState(prev, orders[0], req); err != nil {
+			t.Fatalf("listing %d: %v", i, err)
+		}
+		states = append(states, orders[0].Status)
+		prev = &orders[0]
+	}
+	if strings.Join(states, ",") != "PARTIALLY_FILLED,PARTIALLY_FILLED,FILLED" || !prev.Terminal() || prev.FilledQuantity != 3 {
+		t.Fatalf("the order is followed to its end: %v %+v", states, prev)
+	}
+	if _, err := m.CallTrading(conn("one"), "PAPER_X", CapBrokerCancelOrder, map[string]any{"account": "PA-1", "order_id": prev.ID}); !errors.As(err, &coded) || coded.Code != CodeInvalidArgument {
+		t.Fatalf("a filled order cannot be cancelled: %v", err)
+	}
+
+	// A second connection runs in a process of its own and sees none of it.
+	raw, err = m.CallTrading(conn("two"), "PAPER_X", CapBrokerOrders, map[string]any{"account": "PA-1", "status": "all", "client_order_id": "e2e-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if orders, err := brokers.DecodeOrders(raw); err != nil || len(orders) != 0 {
+		t.Fatalf("connections do not share orders: %+v %v", orders, err)
+	}
+	if other := submit(conn("two")); other.ID != "B-1" {
+		t.Fatalf("the second connection numbers its own orders: %+v", other)
 	}
 }

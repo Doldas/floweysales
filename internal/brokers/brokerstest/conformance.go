@@ -117,4 +117,113 @@ func Run(t *testing.T, store brokers.Store, alice, bob int64, clientPrefix strin
 	if theirs, _ := store.ListBrokerOrders(ctx, bob, 0); len(theirs) != 1 || theirs[0].ID != other.ID {
 		t.Fatalf("a user lists only their own rows: %+v", theirs)
 	}
+
+	reconcileRules(t, store, alice, bob, clientPrefix)
+}
+
+// reconcileRules checks which rows the background reconciler is offered and
+// that a check is remembered. It adds rows for bob only, so the counts of the
+// caller's own assertions stay what they were.
+func reconcileRules(t *testing.T, store brokers.Store, alice, bob int64, prefix string) {
+	t.Helper()
+	ctx := context.Background()
+	// A little ahead of the rows made so far, so none of them counts as checked in the future.
+	now := time.Now().UTC().Add(time.Second)
+	ids := func(rows []brokers.Record) map[string]bool {
+		out := map[string]bool{}
+		for _, r := range rows {
+			out[r.ClientOrderID] = true
+		}
+		return out
+	}
+	offered := func(minInterval time.Duration) map[string]bool {
+		rows, err := store.ListBrokerOrdersToReconcile(ctx, now, minInterval, 500)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ids(rows)
+	}
+
+	// alice's rows: first (submitted, partly filled, working), unknown (pending after the claim, fresh), failed (settled).
+	// bob's: a confirmed order that is filled (settled) and an unknown outcome.
+	filledRow, _, _ := store.ReserveBrokerOrder(ctx, record(bob, prefix+"filled", "r1"))
+	filled := brokers.Order{ID: "F-1", Status: "FILLED", Quantity: 2, FilledQuantity: 2}
+	if err := store.FinishBrokerOrder(ctx, bob, filledRow.ID, brokers.StatusSubmitted, &filled, ""); err != nil {
+		t.Fatal(err)
+	}
+	unknownRow, _, _ := store.ReserveBrokerOrder(ctx, record(bob, prefix+"lost", "r2"))
+	if err := store.FinishBrokerOrder(ctx, bob, unknownRow.ID, brokers.StatusUnknown, nil, "no answer"); err != nil {
+		t.Fatal(err)
+	}
+
+	got := offered(0)
+	if !got[prefix+"lost"] {
+		t.Error("an unknown outcome is offered for reconciliation")
+	}
+	if got[prefix+"filled"] || got[prefix+"f"] {
+		t.Errorf("settled rows (filled, failed) are never offered: %v", got)
+	}
+	if got[prefix+"a"] {
+		t.Error("the first row ended filled and is settled")
+	}
+	// A row whose order is still working is offered; a fresh pending row is not (its call may still be running).
+	working, _, _ := store.ReserveBrokerOrder(ctx, record(bob, prefix+"working", "r3"))
+	open := brokers.Order{ID: "W-1", Status: "PARTIALLY_FILLED", Quantity: 2, FilledQuantity: 1}
+	if err := store.FinishBrokerOrder(ctx, bob, working.ID, brokers.StatusSubmitted, &open, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.ReserveBrokerOrder(ctx, record(bob, prefix+"fresh", "r4")); err != nil {
+		t.Fatal(err)
+	}
+	got = offered(0)
+	if !got[prefix+"working"] || got[prefix+"fresh"] {
+		t.Errorf("a working order is offered and a fresh pending row is not: %v", got)
+	}
+
+	// A check is remembered, hides the row for the minimum interval and keeps its reason.
+	checked := time.Now().UTC()
+	if err := store.MarkBrokerOrderChecked(ctx, bob, working.ID, checked, "the broker did not answer"); err != nil {
+		t.Fatal(err)
+	}
+	now = checked.Add(time.Second)
+	if got = offered(time.Hour); got[prefix+"working"] {
+		t.Error("a row just checked is left out for the minimum interval")
+	}
+	if got = offered(0); !got[prefix+"working"] {
+		t.Error("with no minimum interval a checked row is offered again")
+	}
+	row, err := store.GetBrokerOrder(ctx, bob, working.ID)
+	if err != nil || row.ReconciledAt == nil || row.ReconcileError != "the broker did not answer" {
+		t.Fatalf("the check is kept with its reason: %+v err=%v", row, err)
+	}
+	if d := row.ReconciledAt.Sub(checked); d > time.Second || d < -time.Second {
+		t.Errorf("the check time is kept: %v vs %v", row.ReconciledAt, checked)
+	}
+	if err := store.MarkBrokerOrderChecked(ctx, bob, working.ID, checked, ""); err != nil {
+		t.Fatal(err)
+	}
+	if row, _ = store.GetBrokerOrder(ctx, bob, working.ID); row.ReconcileError != "" {
+		t.Errorf("a clean check clears the reason: %+v", row)
+	}
+	if err := store.MarkBrokerOrderChecked(ctx, alice, working.ID, checked, "x"); !errors.Is(err, brokers.ErrNotFound) {
+		t.Errorf("one user cannot mark another's row: %v", err)
+	}
+
+	// Least recently checked first: the row never checked comes before the one checked just now.
+	rows, _ := store.ListBrokerOrdersToReconcile(ctx, now, 0, 500)
+	var seenLost, seenWorking = -1, -1
+	for i, r := range rows {
+		switch r.ClientOrderID {
+		case prefix + "lost":
+			seenLost = i
+		case prefix + "working":
+			seenWorking = i
+		}
+	}
+	if seenLost < 0 || seenWorking < 0 || seenLost > seenWorking {
+		t.Errorf("a row never checked comes before one checked just now: lost=%d working=%d", seenLost, seenWorking)
+	}
+	if limited, _ := store.ListBrokerOrdersToReconcile(ctx, now, 0, 1); len(limited) != 1 {
+		t.Errorf("limit: %d", len(limited))
+	}
 }
