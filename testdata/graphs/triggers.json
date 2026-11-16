@@ -1,0 +1,5 @@
+[
+  { "id": 1, "event_key": "filing.published", "payload_type": "text" },
+  { "id": 2, "event_key": "price.alert", "payload_type": "number" },
+  { "id": 3, "event_key": "market.close", "payload_type": "boolean" }
+]

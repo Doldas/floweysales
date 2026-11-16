@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "nodes": [
+    { "id": "start", "type": "trigger", "label": "Start", "x": 60, "y": 140 },
+    { "id": "analyst", "type": "agent", "label": "Analyst", "prompt": "Summarise the filing.", "tools": ["get_sec_facts"], "max_tool_calls": 4, "require_grounding": true, "x": 300, "y": 140 },
+    { "id": "save", "type": "workspace_write", "label": "Save summary", "value": "/Reports/summary.md", "content_type": "text/markdown", "approval": "required", "x": 540, "y": 60 },
+    { "id": "report", "type": "output", "label": "Report", "x": 540, "y": 220 }
+  ],
+  "edges": [
+    { "from": "start", "to": "analyst" },
+    { "from": "analyst", "to": "save" },
+    { "from": "analyst", "to": "report" }
+  ]
+}

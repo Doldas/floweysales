@@ -38,6 +38,20 @@ State is never carried by color alone: tones always add a text line (for example
 
 The diagram layer is presentation only. Saved flows, functions and triggers keep their stored schema (`version`, node ids, `x`/`y`, ports, settings); the graph validators, versioning and execution paths are unchanged. One deliberate change: nodes added to a typed function from the form are now placed on a grid instead of at 0,0, so they are visible in the preview. Existing nodes keep their stored coordinates.
 
+## Contract tests
+
+The saved graphs in `testdata/graphs/` (a flow, an untyped function, a typed function, triggers and the statuses of a run snapshot) are read by both languages, so neither side can lose or invent anything unnoticed:
+
+| Check | Where | What fails |
+| --- | --- | --- |
+| The real validators accept every fixture | `internal/server/graph_contract_test.go` | A validator change that rejects a graph the editor saves |
+| A fixture survives decode and encode in Go | same | A field the Go model drops or renames |
+| Go and TypeScript models list the same JSON fields (functions, typed functions, triggers; flows are covered by `TestFlowGraphContractMatchesEditor`) | same | A field added on one side only. Intended differences are listed with their reason: `name` on an untyped function node (server only) and the editor coordinates of a typed function node (the server stores the graph as raw JSON and never re-encodes it) |
+| The adapters keep ids, coordinates, edges and ports, never write to their input, and every wire lands on a port the node has | `frontend/src/app/ui/flow-canvas/graph-contract.spec.ts` | An adapter that renames, moves or invents something |
+| Every fixture is covered by the TypeScript spec | same | A new fixture nobody tests |
+
+A new field of a stored graph goes into a fixture in the same change. Both specs run in CI (`go test ./...` and the Node spec list in `.github/workflows/ci.yml`; add a new spec file to that list).
+
 ## Not covered yet
 
-The issue also asks for a shared backend graph contract (common Go packages for validation, serialization and versioning, with generated TypeScript types and cross-language round-trip tests). That is a separate, larger change: today flows, untyped functions and typed functions each have their own validators in Go. This PR does not change them. It is tracked on #262.
+The issue also asks for a shared backend graph package (common Go validation, serialization and versioning, with generated TypeScript types). The contract tests above guard the models against drift and prove round trips, but flows, untyped functions and typed functions still have their own validators in Go, and the TypeScript types are written by hand. Moving the Flow Editor's editable canvas onto `<fse-flow-diagram>` and pixel-baseline visual diffs are also open. All are tracked on #262.

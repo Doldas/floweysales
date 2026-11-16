@@ -1,0 +1,13 @@
+{
+  "nodes": [
+    { "id": "input", "type": "input", "value_type": "number", "x": 30, "y": 120 },
+    { "id": "two", "type": "constant", "value_type": "number", "value": "2", "x": 300, "y": 240 },
+    { "id": "double", "type": "operation", "operation": "multiply", "x": 300, "y": 120 },
+    { "id": "output", "type": "output", "x": 600, "y": 120 }
+  ],
+  "edges": [
+    { "from": "input", "to": "double", "to_port": "a" },
+    { "from": "two", "to": "double", "to_port": "b" },
+    { "from": "double", "to": "output" }
+  ]
+}
