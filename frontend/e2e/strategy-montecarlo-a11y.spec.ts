@@ -36,7 +36,13 @@ test.describe('Monte Carlo robustness panel accessibility', () => {
     await open(page, 'strategies');
     await page.getByRole('button', { name: 'Run test' }).click();
     const panel = page.locator('fs-strategy-montecarlo');
-    await panel.getByRole('button', { name: 'Run simulation' }).focus();
+    await expect(panel.getByRole('heading', { name: 'How robust is this result?' })).toBeVisible();
+    // The page replays the strategy again once the tracked market settles, and a new replay clears a simulation by design
+    // (a result belongs to its replay). Start only when no replay is in flight, or the table can vanish under the test.
+    await page.waitForLoadState('networkidle');
+    const run = panel.getByRole('button', { name: 'Run simulation' });
+    await run.focus();
+    await expect(run).toBeFocused();
     await page.keyboard.press('Enter');
     const table = panel.getByRole('table');
     await expect(table).toBeVisible();
