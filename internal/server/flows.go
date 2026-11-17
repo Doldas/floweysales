@@ -194,7 +194,7 @@ func validateFlow(f storage.AgentFlow) (flowGraph, []string, error) {
 		if n.FlowRevision < 0 || n.FunctionRevision < 0 || (n.FlowRevision != 0 && n.Type != "flow") || (n.FunctionRevision != 0 && n.Type != "function") {
 			return g, nil, fmt.Errorf("revision pins are only valid on call flow and function nodes")
 		}
-		if n.Type != "trigger" && n.Type != "agent" && n.Type != "flow" && n.Type != "constant" && n.Type != "function" && n.Type != "save_result" && n.Type != "load_result" && n.Type != "transform" && n.Type != "workspace_read" && n.Type != "workspace_write" && n.Type != "output" && (g.Version != 2 || n.Type != "loop") && n.Type != "http_get" && (g.Version != 2 || n.Type != "web_search") && (g.Version != 2 || n.Type != "web_crawl") && (g.Version != 2 || (n.Type != "condition" && n.Type != "merge" && n.Type != "json_get")) && (g.Version != 2 || n.Type != "emit_event") && !investorNodeTypes[n.Type] {
+		if !flowNodeAllowed(n.Type, g.Version) {
 			return g, nil, fmt.Errorf("only trigger, research agent, constant and subflow nodes are allowed")
 		}
 		if n.SkipEmpty && (g.Version != 2 || n.Type == "trigger" || n.Type == "merge" || n.Type == "constant") {
