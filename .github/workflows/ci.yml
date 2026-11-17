@@ -220,7 +220,7 @@ jobs:
         run: npx playwright test --config playwright.config.ts e2e/responsive-audit.spec.ts
       - name: Playwright charts, instruments and the trade rail (desktop and phone)
         working-directory: frontend
-        run: npx playwright test --config playwright.config.ts e2e/chart-drawings.spec.ts e2e/chart-intervals.spec.ts e2e/chart-repaint.spec.ts e2e/chart-studies.spec.ts e2e/index-universes.spec.ts e2e/instrument-switch.spec.ts e2e/trade-rail.spec.ts
+        run: npx playwright test --config playwright.config.ts e2e/chart-drawings.spec.ts e2e/chart-intervals.spec.ts e2e/chart-repaint.spec.ts e2e/chart-studies.spec.ts e2e/chart-styles.spec.ts e2e/index-universes.spec.ts e2e/instrument-switch.spec.ts e2e/trade-rail.spec.ts
       - name: Playwright settings, models, providers, roles, plugins, theme and UTC (desktop and phone)
         working-directory: frontend
         run: npx playwright test --config playwright.config.ts e2e/email-render.spec.ts e2e/models.spec.ts e2e/own-provider-keys.spec.ts e2e/plugins.spec.ts e2e/provider-routing.spec.ts e2e/roles.spec.ts e2e/theme.spec.ts e2e/utc.spec.ts e2e/vision-settings.spec.ts
