@@ -8,6 +8,22 @@ publishes the section for the tagged version as the release notes. See
 
 ## Unreleased
 
+- Additive: `plugintest.Contract(t, plugintest.Behavior{...})`, the behavior
+  contract every provider of a capability must keep, whichever service stands
+  behind it. `Conformance` checks that a plugin is wired correctly; `Contract`
+  checks what it answers, with the plugin built against a local test upstream
+  (no network). For each of `quote`, `history`, `news`, `events` and `profile`
+  that the plugin declares: a healthy upstream gives a result that passes the
+  type's check (`CheckAsset`, `CheckHistory`, `CheckNews`, `CheckEvents`,
+  `CheckProfile`: positive prices, bars in time order and in Unix seconds,
+  https headlines, ISO dates and codes, a profile that states only its own
+  kind); an upstream that fails (HTTP 500) or answers with garbage gives the
+  error code `upstream`, never an empty result; an empty symbol gives
+  `invalid_argument` without a request to the upstream. A capability a plugin
+  cannot exercise is named in `Behavior.Skip` with a reason. Existing plugins
+  keep working; a plugin that fails the contract has a defect, and the four
+  official plugins that answered an empty symbol with a request upstream
+  (Yahoo, Finnhub, Binance, Avanza) were fixed with it.
 - Additive: provider types `broker` and `trading_host` (`broker.go`), the
   contract for trading plugins. A broker extension declares
   `provider.broker` (`BrokerInfo`: contract version, environments `paper`

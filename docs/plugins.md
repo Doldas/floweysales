@@ -430,10 +430,12 @@ known tickers (suffix such as `.ST`, `.L`, `.T`, or a US exchange code in `data.
 | `pluginsdk` | Protocol types, `ParseManifest`, `Main` (serves the protocol, adds `--manifest` and `--version`), `Errorf` with protocol error codes, `FilterFinancialYears` |
 | `pluginsdk/httpx` | Provider HTTP client: response cap, optional request spacing per process, retries only for 429/502/503/504 (never auth failures) |
 | `pluginsdk/research` | The `research` method done right: only operations declared in `plugin.json`, validated symbols and dates, redirect-free bounded fetches that never echo tokens, the standard result envelope |
-| `pluginsdk/plugintest` | `plugintest.Conformance(t, plugin)` checks over the real wire protocol that `describe` returns the manifest, every declared capability has a handler (and no undeclared one does), and undeclared methods and research operations answer `unsupported`. `plugintest.Start` drives a plugin in-process for your own tests |
+| `pluginsdk/plugintest` | `plugintest.Conformance(t, plugin)` checks over the real wire protocol that `describe` returns the manifest, every declared capability has a handler (and no undeclared one does), and undeclared methods and research operations answer `unsupported`. `plugintest.Contract(t, plugintest.Behavior{...})` then checks what the plugin answers, against a local test upstream: a healthy upstream gives a valid quote, series, headlines, events or profile (`CheckAsset`, `CheckHistory`, `CheckNews`, `CheckEvents`, `CheckProfile`), an upstream that fails or sends garbage gives the error `upstream` and never an empty result, and an empty symbol gives `invalid_argument` without reaching the upstream. `plugintest.Start` drives a plugin in-process for your own tests |
 
-Every plugin should run `plugintest.Conformance` in its tests; the official
-plugins do.
+Every plugin should run `plugintest.Conformance` in its tests, and every
+provider of quotes, history, news, events or profiles `plugintest.Contract` as
+well, so a second provider of a domain is held to what the first one is; the
+official plugins do.
 
 ### SDK versions
 
