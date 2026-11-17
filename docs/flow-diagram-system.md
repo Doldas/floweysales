@@ -70,7 +70,9 @@ Flows, untyped functions and typed functions are different graphs with different
 
 `graph.Sort` is Kahn's algorithm with a fixed tie-break: the roots in the order the nodes were saved, then each node once its last input has run, nodes released by one node in the order their edges were saved. The same graph always gets the same order, and a cycle leaves its nodes (and everything behind it) out of the order. Before the move each validator had its own copy (two of Kahn's algorithm, one depth-first search); the error messages did not change. `internal/server/graph_structure_test.go` pins the order and the exact errors of all three, and was written against the old code first.
 
-What stays with the graph kind: node types and their settings, ports and pins, limits, type checking of a typed function, and the semantics of a flow (`checkFlowSemantics`). A new kind of graph calls `graph.Joins` and `graph.Sort` and adds its own rules next to them.
+The node types a flow can hold, and the graph version each is valid in, are one table (`flowNodeMinVersion` in `internal/server/flow_node_catalog.go`, plus the investor data nodes); `validateFlow` asks `flowNodeAllowed`. `TestFlowNodeTypeGateByVersion` pins what each version accepts through the real validator and `TestFlowNodeTypesMatchEditor` checks that the editor's `FlowNode` type union lists exactly the same types.
+
+What stays with the graph kind: node types' settings, ports and pins, limits, type checking of a typed function, and the semantics of a flow (`checkFlowSemantics`). A new kind of graph calls `graph.Joins` and `graph.Sort` and adds its own rules next to them.
 
 ## Contract tests
 
@@ -103,4 +105,4 @@ The graph surfaces are covered by `flow-diagrams.spec.ts` (shared contract), `fl
 
 ## Not covered yet
 
-Generating the TypeScript interfaces from the Go structs (see Contract tests for why they are checked instead), and a shared description of node *settings*: the validators of a flow's nodes still live in `validateFlow`, and the editor has its own per-node settings forms. Both are tracked on #262.
+Generating the TypeScript interfaces from the Go structs (see Contract tests for why they are checked instead), and a shared description of node *settings*: the types are shared now (see above), but each type's settings rules still live in `validateFlow`, and the editor has its own per-node settings forms. Both are tracked on #262.
