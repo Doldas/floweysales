@@ -1,6 +1,4 @@
 {
-  "note": "Playwright specs that no CI step runs yet. A debt, not a permission: remove a spec from this list when a step of .github/workflows/ci.yml runs it. A new spec is added to a CI step, not to this list. scripts/e2e-specs-in-ci.test.mjs checks the list.",
-  "specs": [
-    "e2e/web-search.spec.ts"
-  ]
+  "note": "Playwright specs that no CI step runs yet. The list is empty now: a new spec goes into a step of .github/workflows/ci.yml, not onto this list. A spec may only be listed when it cannot be run reliably yet, with the reason in the pull request that lists it. scripts/e2e-specs-in-ci.test.mjs checks the list.",
+  "specs": []
 }

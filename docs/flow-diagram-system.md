@@ -97,7 +97,7 @@ A deliberate change to the canvas is accepted by reading the diff and then runni
 
 ## Which tests run in CI
 
-CI names the Node specs and the Playwright specs it runs one by one in `.github/workflows/ci.yml`, so a spec that is not added there never runs. Two checks in the `policy` job keep that from happening quietly: `scripts/node-specs-in-ci.test.mjs` (every Node spec) and `scripts/e2e-specs-in-ci.test.mjs` (every Playwright spec). For the Playwright specs a short list, `scripts/e2e-not-in-ci.json`, holds those that no CI step runs yet. It is a debt, not a permission: a spec leaves the list when a CI step runs it, and a new spec is added to a step, not to the list.
+CI names the Node specs and the Playwright specs it runs one by one in `.github/workflows/ci.yml`, so a spec that is not added there never runs. Two checks in the `policy` job keep that from happening quietly: `scripts/node-specs-in-ci.test.mjs` (every Node spec) and `scripts/e2e-specs-in-ci.test.mjs` (every Playwright spec). For the Playwright specs a short list, `scripts/e2e-not-in-ci.json`, holds those that no CI step runs yet (it is empty now: every spec runs). It is a debt, not a permission: a spec leaves the list when a CI step runs it, and a new spec is added to a step, not to the list.
 
 The graph surfaces are covered by `flow-diagrams.spec.ts` (shared contract), `flow-canvas-editing.spec.ts` (how the Flow Editor is edited), `flow-canvas-visual.spec.ts` (how every surface looks) and the Node specs of the adapters and geometry, so a change to a shared primitive is judged against all of them.
 
