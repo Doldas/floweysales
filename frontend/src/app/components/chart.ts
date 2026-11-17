@@ -455,6 +455,8 @@ export class TradingChartComponent implements AfterViewInit {
 
     effect(() => {
       this.chartStyle();
+      // An animation still running (a resize starts one) would write the old style back on its next frame.
+      this.chart?.stop();
       this.applyStyle();
     });
 

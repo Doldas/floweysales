@@ -1,7 +1,6 @@
 {
   "note": "Playwright specs that no CI step runs yet. A debt, not a permission: remove a spec from this list when a step of .github/workflows/ci.yml runs it. A new spec is added to a CI step, not to this list. scripts/e2e-specs-in-ci.test.mjs checks the list.",
   "specs": [
-    "e2e/chart-styles.spec.ts",
     "e2e/web-search.spec.ts"
   ]
 }
