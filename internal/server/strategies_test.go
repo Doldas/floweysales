@@ -108,7 +108,7 @@ func strategyEngine() *Engine {
 	e := NewEngine(nil, &SharedMarketConfig{}, nil, tracker.DefaultConfig())
 	e.strategies = newMemoryStrategies()
 	e.strategyHistory = func(_ context.Context, symbol string, _ market.Provider, rng string) (market.HistorySeries, error) {
-		return market.HistorySeries{Symbol: symbol, Provider: "test", Range: rng, Points: swingBars(14)}, nil
+		return market.HistorySeries{Symbol: symbol, Provider: "test", Currency: "SEK", Range: rng, Points: swingBars(14)}, nil
 	}
 	return e
 }

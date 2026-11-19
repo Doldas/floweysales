@@ -223,7 +223,7 @@ func isStrategyRoute(method, path string) bool {
 	switch {
 	case path == "/api/strategies":
 		return method == http.MethodGet || method == http.MethodPost
-	case path == "/api/strategies/backtest", path == "/api/strategies/walkforward":
+	case path == "/api/strategies/backtest", path == "/api/strategies/walkforward", path == "/api/strategies/montecarlo":
 		return method == http.MethodPost
 	case strings.HasPrefix(path, "/api/strategies/"):
 		return method == http.MethodPut || method == http.MethodDelete

@@ -11,7 +11,7 @@ const frequent = `{"name":"Dip buyer","direction":"long","entry":[{"left":{"type
 
 func TestStrategyMonteCarloIsReproducibleAndKeepsObservedApart(t *testing.T) {
 	e := strategyEngine()
-	body := `{"definition":` + frequent + `,"symbol":"TEST","range":"5Y","method":"trade_bootstrap","runs":200,"seed":11,"drawdown_limit":-10}`
+	body := `{"definition":` + frequent + `,"symbol":"TEST","range":"5Y","method":"trade_bootstrap","runs":200,"seed":11,"drawdown_limit":-10,"cost_bps":4,"slippage_bps":2,"spread_bps":6}`
 	code, a := callStrategies(e, http.MethodPost, "/api/strategies/montecarlo", body)
 	if code != http.StatusOK {
 		t.Fatalf("status %d %v", code, a)
@@ -26,6 +26,17 @@ func TestStrategyMonteCarloIsReproducibleAndKeepsObservedApart(t *testing.T) {
 	}
 	if cfg := sa["config"].(map[string]any); cfg["seed"] != float64(11) || cfg["runs"] != float64(200) {
 		t.Fatalf("settings not echoed: %v", cfg)
+	}
+	if a["currency"] != "SEK" || a["strategy_definition"].(map[string]any)["max_bars"] != float64(3) {
+		t.Fatalf("market currency or resolved strategy missing: %v", a)
+	}
+	if cfg := a["replay_config"].(map[string]any); cfg["cost_bps"] != float64(4) || cfg["slippage_bps"] != float64(2) || cfg["spread_bps"] != float64(6) {
+		t.Fatalf("replay costs not echoed: %v", cfg)
+	}
+	replayCode, replay := callStrategies(e, http.MethodPost, "/api/strategies/backtest", `{"definition":`+frequent+`,"symbol":"TEST","range":"5Y","cost_bps":4,"slippage_bps":2,"spread_bps":6}`)
+	observed := a["observed"].(map[string]any)
+	if replayCode != http.StatusOK || observed["total_return_pct"] != replay["total_return_pct"] || observed["buy_hold_return_pct"] != replay["buy_hold_return_pct"] {
+		t.Fatalf("simulation changed the observed replay: %v; replay status %d", observed, replayCode)
 	}
 }
 
