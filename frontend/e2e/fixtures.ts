@@ -40,6 +40,13 @@ export async function open(page: Page, route = ''): Promise<void> {
   await page.locator('#main-content > *:not(router-outlet)').first().waitFor({ timeout: 20_000 });
 }
 
+/** Opens a Market panel that is folded on narrow screens and already open on desktop. */
+export async function expandPhonePanel(page: Page, name: string): Promise<void> {
+  if (await page.evaluate(() => matchMedia('(max-width: 700px)').matches)) {
+    await page.getByRole('button', { name, exact: true, expanded: false }).click();
+  }
+}
+
 /** The navigation link, opening the drawer first on small screens. */
 export async function navLink(page: Page, name: string | RegExp): Promise<Locator> {
   const toggle = page.getByRole('button', { name: 'Open navigation' });

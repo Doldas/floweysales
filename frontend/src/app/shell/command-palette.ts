@@ -101,6 +101,10 @@ function score(haystack: string, needle: string): number {
     .hint { font-size: .75rem; color: var(--fs-muted); white-space: nowrap; }
     .palette-empty { padding: 1.5rem; text-align: center; color: var(--fs-muted); }
     .palette-foot { display: flex; gap: 1rem; padding: .55rem 1rem; border-top: 1px solid var(--fs-border); font-size: .72rem; color: var(--fs-muted); flex-wrap: wrap; }
+    @media (max-width: 767.98px) {
+      .palette-foot { display: none; }
+      .palette-list li[role=option] { min-height: 44px; }
+    }
   `],
 })
 export class CommandPaletteComponent {
@@ -125,9 +129,13 @@ export class CommandPaletteComponent {
     const pages: [string, string, string, boolean][] = [
       ['/', 'Command Center', 'bi-grid-1x2', true],
       ['/agent', 'Research Agent', 'bi-stars', true],
+      ['/team', 'Agent team', 'bi-people', true],
       ['/flows', 'Flows', 'bi-diagram-3', this.access.flowsRead()],
       ['/inbox', 'Inbox · approvals', 'bi-inbox', this.access.inbox()],
       ['/markets', 'Markets', 'bi-graph-up-arrow', true],
+      ['/collections', 'Collections', 'bi-collection', true],
+      ['/strategies', 'Strategies', 'bi-diagram-2', true],
+      ['/world', 'World', 'bi-globe2', true],
       ['/plan', 'Wealth plan', 'bi-bullseye', true],
       ['/financials', 'Financials', 'bi-bank', true],
       ['/portfolio', 'Paper portfolio', 'bi-wallet2', this.access.liveMarkets()],

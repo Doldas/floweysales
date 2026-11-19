@@ -1,4 +1,4 @@
-import { expect, open, test } from './fixtures';
+import { expect, expandPhonePanel, open, test } from './fixtures';
 
 async function pixels(page: import('@playwright/test').Page, rgb: number[]): Promise<number> {
   return page.locator('fse-trading-chart canvas').first().evaluate((el, t) => {
@@ -13,6 +13,7 @@ async function pixels(page: import('@playwright/test').Page, rgb: number[]): Pro
 test.describe('chart studies', () => {
   test('Stochastic and ATR get their own panels and Ichimoku draws on the price chart', async ({ page }) => {
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Chart options');
     const studies = page.getByRole('group', { name: 'Chart analysis studies' });
     const canvases = page.locator('fse-trading-chart canvas');
     const before = await canvases.count();
@@ -35,6 +36,7 @@ test.describe('chart studies', () => {
 
   test('periods can be changed, are checked, remembered and reset', async ({ page }) => {
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Chart options');
     const studies = page.getByRole('group', { name: 'Chart analysis studies' });
     await studies.getByRole('button', { name: 'Periods' }).click();
     const panel = page.getByRole('group', { name: 'Study periods' });
@@ -54,6 +56,7 @@ test.describe('chart studies', () => {
     await expect(studies.getByRole('button', { name: 'EMA 12' })).toBeVisible();
 
     await page.reload();
+    await expandPhonePanel(page, 'Chart options');
     const again = page.getByRole('group', { name: 'Chart analysis studies' });
     await expect(again.getByRole('button', { name: 'RSI 21' })).toBeVisible();
     await expect(again.getByRole('button', { name: 'EMA 12' })).toBeVisible();
@@ -67,6 +70,7 @@ test.describe('chart studies', () => {
   test('stored periods that cannot be used are replaced by the defaults', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('fse.indicatorSettings', '{"rsiPeriod":0,"macdFast":99}'));
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Chart options');
     const studies = page.getByRole('group', { name: 'Chart analysis studies' });
     await expect(studies.getByRole('button', { name: 'RSI 14' })).toBeVisible();
     await expect(studies.getByRole('button', { name: 'MACD 12,26,9' })).toBeVisible();

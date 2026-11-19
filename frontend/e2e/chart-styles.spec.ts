@@ -1,4 +1,4 @@
-import { expect, open, test } from './fixtures';
+import { expect, expandPhonePanel, open, test } from './fixtures';
 
 const STYLES = ['candles', 'hollow', 'ohlc', 'heikin', 'line', 'area', 'step', 'baseline'];
 
@@ -32,6 +32,7 @@ async function tealPixels(page: import('@playwright/test').Page): Promise<number
 test.describe('chart styles', () => {
   test('the user can switch the market chart between all eight styles', async ({ page }) => {
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Chart options');
     // The chart sits below the fold on a normal window and is not painted until it is on screen and has data.
     await page.locator('fse-trading-chart canvas').first().scrollIntoViewIfNeeded();
     await expect.poll(async () => (await barPixels(page)).up + (await barPixels(page)).down + (await tealPixels(page)), { message: 'the chart has painted' }).toBeGreaterThan(30);
@@ -56,12 +57,15 @@ test.describe('chart styles', () => {
 
   test('the chosen style is remembered and an unknown stored one is ignored', async ({ page }) => {
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Chart options');
     const group = page.getByRole('radiogroup', { name: 'Chart style' });
     await group.locator('[data-style="candles"]').click();
     await page.reload();
+    await expandPhonePanel(page, 'Chart options');
     await expect(page.getByRole('radiogroup', { name: 'Chart style' }).locator('[data-style="candles"]')).toHaveAttribute('aria-checked', 'true');
     await page.evaluate(() => localStorage.setItem('fs.chartStyle', 'pie'));
     await page.reload();
+    await expandPhonePanel(page, 'Chart options');
     await expect(page.getByRole('radiogroup', { name: 'Chart style' }).locator('[data-style="area"]')).toHaveAttribute('aria-checked', 'true');
   });
 });

@@ -1,4 +1,4 @@
-import { expect, open, test } from './fixtures';
+import { expect, expandPhonePanel, open, test } from './fixtures';
 
 /** A fingerprint of what the price canvas shows right now. */
 const pixels = (page: import('@playwright/test').Page) =>
@@ -7,6 +7,7 @@ const pixels = (page: import('@playwright/test').Page) =>
 test.describe('chart repaint and feedback', () => {
   test('the chosen style and bar length are marked and redraw the chart at once', async ({ page }) => {
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Chart options');
     await expect(page.getByTestId('chart-meta')).toContainText('daily bars');
 
     const bars = page.locator('[data-style="ohlc"]');
@@ -28,6 +29,7 @@ test.describe('chart repaint and feedback', () => {
 
   test('a new bar length shows the whole series even after zooming', async ({ page }) => {
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Chart options');
     await page.getByRole('button', { name: '1Y', exact: true }).click();
     await expect(page.getByTestId('chart-meta')).toContainText('1Y');
     const canvas = page.locator('canvas').first();

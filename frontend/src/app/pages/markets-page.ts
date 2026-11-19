@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { HelpButtonComponent } from '../ui/help-button';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
@@ -9,6 +9,7 @@ import { MarketState } from '../core/market-state';
 import { NotifyService } from '../core/notify.service';
 import { AssetInfoComponent } from '../components/asset-info';
 import { PaneComponent } from '../ui/pane';
+import { PhoneDisclosureComponent } from '../ui/phone-disclosure';
 import { chartMeta, chartSummary, type ChartMetaInput } from '../core/chart-meta';
 import { formatUtcDateTime } from '../ui/datetime';
 import { LeaderboardComponent } from '../components/leaderboard';
@@ -43,7 +44,7 @@ interface Kpi { label: string; value: string; sub?: string; tone?: 'pos' | 'neg'
 @Component({
   selector: 'fs-markets-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PaneComponent, HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, LedgerComponent, WatchlistComponent, MarketGroups, SymbolSearchComponent, ProgressStatusComponent],
+  imports: [PaneComponent, PhoneDisclosureComponent, HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, LedgerComponent, WatchlistComponent, MarketGroups, SymbolSearchComponent, ProgressStatusComponent],
   templateUrl: './markets-page.html',
   styleUrl: './markets-page.scss',
 })
@@ -53,6 +54,19 @@ export class MarketsPage {
   private readonly agent = inject(AgentSession);
   private readonly notify = inject(NotifyService);
   private readonly chart = viewChild(TradingChartComponent);
+  private readonly quoteHead = viewChild<ElementRef<HTMLElement>>('quoteHead');
+  readonly chartOptionsOpen = signal(false);
+  readonly trackerLabel = computed(() => {
+    const label = this.market.mode() === 'live' ? 'Active trackers' : 'Watchlist';
+    return `${label} (${this.market.trackedAssets().length}/${this.market.maxTrackers})`;
+  });
+
+  showSelectedInstrument(): void {
+    const heading = this.quoteHead()?.nativeElement;
+    if (heading && heading.getBoundingClientRect().top < 64) {
+      heading.scrollIntoView({ block: 'start' });
+    }
+  }
 
   /** The tracked instrument on screen, as the watchlist marks it. */
   readonly selectedAsset = computed<TrackedAsset | null>(() => {
@@ -116,7 +130,8 @@ export class MarketsPage {
   readonly chartSummary = computed(() => chartSummary(this.chartInput()));
 
   /** Phones start with the shorter chart they always had; the user can still resize it. */
-  readonly chartHeight = typeof window !== 'undefined' && window.innerWidth <= 700 ? 270 : 380;
+  readonly phoneLayout = typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches;
+  readonly chartHeight = this.phoneLayout ? 270 : 380;
 
   readonly kpis = computed<Kpi[]>(() => {
     const cur = this.market.currency();
