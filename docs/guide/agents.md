@@ -29,7 +29,15 @@ The agent has a tool that hands a goal to one of your saved teams by name (see b
 
 In the chat the agent can read your own [collections](collections.md): `list_collections` lists them, `get_collection` reads one (by name or id) with its instruments, weights, notes, composition and classification, and `get_collection_news` reads its headlines with the relevance and reason of each. Ask, for example, "What is in my Semiconductors collection, and what is the news?".
 
-These tools read only the collections of the person signed in to the chat; another user's collection is reported as not found. They cannot create, change or delete a collection, and they cannot trade. They are not offered to a flow's agent node or to the MCP server, because those runs act for nobody. A model portfolio's weights are hypothetical, and the agent is told so.
+Collection tools work with the current user's collections. A model portfolio's weights are hypothetical.
+
+### App actions and Workspace files
+
+Ask the Research Agent to create a collection, add markets to it, start a tracker, or save a flow draft. For example, “Create a Semiconductors watch collection and add NVIDIA and AMD using my market data provider.” The chat shows each action and its result.
+
+Ask it to save its work to a path such as `/Reports/earnings.md`. Open **Workspace** to view, edit, download, move, or delete the saved file. You can also ask the agent to work with existing files in your Workspace.
+
+The agent uses your account's existing permissions. Trackers require system administrator access in signed-in deployments. Flows use your Flow Studio permissions, and Workspace files require a signed-in account. The chat can also discover supported actions for strategies, saved backtests, plans, teams, and other research features.
 
 ### Sources and the citation check
 

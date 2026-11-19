@@ -217,9 +217,10 @@ func (e *Engine) registerAIRoutes() {
 		baseURL, apiKey, model := e.aiDefaults()
 		maxSteps, maxCalls := e.agentLimits()
 		role := identity.RoleSysAdmin
+		user := identity.User{Role: role}
 		if e.authService != nil {
-			u, _ := e.currentUser(r)
-			role = u.Role
+			user, _ = e.currentUser(r)
+			role = user.Role
 		}
 		// Report server readiness separately from the admin-only endpoint.
 		// Redacting base_url must not disable Research Agent for other roles.
@@ -235,10 +236,14 @@ func (e *Engine) registerAIRoutes() {
 			"max_tool_calls": maxCalls,
 			"has_server_key": apiKey != "" && role == identity.RoleSysAdmin,
 			"tools": func() []string {
+				names := userAgentTools()
 				if role == identity.RoleSysAdmin {
-					return ai.ToolNames()
+					names = ai.ToolNames()
 				}
-				return userAgentTools()
+				for _, tool := range e.researchActionDefinitions(r.Context(), user) {
+					names = append(names, tool.Function.Name)
+				}
+				return names
 			}(),
 			"presets": func() []map[string]any {
 				if role == identity.RoleSysAdmin {
@@ -305,11 +310,24 @@ func (e *Engine) registerAIRoutes() {
 		writeJSON(w, 200, map[string]any{"configured": true, "base_url": body.BaseURL, "model": body.Model, "max_steps": body.MaxSteps, "max_tool_calls": body.MaxToolCalls})
 	})
 
-	// GET /api/ai/tools returns the tool catalogue (names + schemas) for
-	// transparency in the UI and for MCP clients that want to introspect it.
+	// GET /api/ai/tools returns the Research Agent's tool catalogue.
 	e.mux.HandleFunc("GET /api/ai/tools", func(w http.ResponseWriter, r *http.Request) {
 		corsHeader(w)
-		writeJSON(w, http.StatusOK, ai.ToolDefs())
+		user, ok := e.planUser(w, r)
+		if !ok {
+			return
+		}
+		defs := ai.ToolDefs()
+		if user.Role != identity.RoleSysAdmin {
+			kept := defs[:0]
+			for _, def := range defs {
+				if agentToolClass[def.Function.Name] != toolServer {
+					kept = append(kept, def)
+				}
+			}
+			defs = kept
+		}
+		writeJSON(w, http.StatusOK, append(defs, e.researchActionDefinitions(r.Context(), user)...))
 	})
 
 	// POST /api/ai/chat proxies a chat to any OpenAI-compatible endpoint and
@@ -418,15 +436,18 @@ func (e *Engine) chatAgentOptions(r *http.Request, systemPrompt, personaID strin
 	if tools != nil && !*tools {
 		opts.DisableTools = true
 	}
+	user := identity.User{Role: identity.RoleSysAdmin}
 	if e.authService != nil {
-		u, ok := e.currentUser(r)
+		var ok bool
+		user, ok = e.currentUser(r)
 		if !ok {
 			opts.DisableTools = true
-		} else {
-			// Engine config, ticks and the paper book are shared, so ordinary
-			// users get only the tools in userAgentTools.
-			e.scopeAgentTools(&opts, u, true)
+			return opts
 		}
+	}
+	e.scopeAgentTools(&opts, user, e.authService != nil)
+	if !opts.DisableTools {
+		e.configureResearchActions(&opts, r, user)
 	}
 	return opts
 }

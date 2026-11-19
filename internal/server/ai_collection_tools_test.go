@@ -36,7 +36,7 @@ func TestCollectionToolsReadOnlyTheCallersCollections(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows := list["collections"].([]any)
-	if len(rows) != 1 || rows[0].(map[string]any)["name"] != "Chips" || !strings.Contains(list["notice"].(string), "cannot change collections or trade") {
+	if len(rows) != 1 || rows[0].(map[string]any)["name"] != "Chips" || !strings.Contains(list["notice"].(string), "hypothetical") {
 		t.Fatalf("only the caller's collections: %v", list)
 	}
 
