@@ -228,7 +228,8 @@ function strategyReplay() {
 }
 function strategyMonteCarlo() {
   const d = (a, b, c, e, f) => ({ p5: a, p25: b, p50: c, p75: e, p95: f });
-  return { symbol: 'NVDA', provider: 'YAHOO', range: '5Y', generated_at: '2026-10-28T15:30:00Z', strategy: 'Dip buyer', cost_bps: 5, from: '2021-10-28', to: '2026-10-28',
+  return { symbol: 'NVDA', provider: 'YAHOO', currency: 'USD', range: '5Y', generated_at: '2026-10-28T15:30:00Z', strategy: 'Dip buyer', cost_bps: 5, from: '2021-10-28', to: '2026-10-28',
+    strategy_definition: mockStrategy, replay_config: { cost_bps: 5, slippage_bps: 3, spread_bps: 8 },
     data_start: '2021-10-28', data_end: '2026-10-28', observed: { total_return_pct: 12.3, buy_hold_return_pct: 40.1, closed_trades: 24, warnings: [] },
     simulation: { model_version: 'mc-1', config: { method: 'trade_bootstrap', runs: 2000, trades: 24, seed: 42, dispersion_scale: 1, delay_bars: 2, position_scale: 1.5 },
       observed_trades: 24, observed: { days: 24, total_return_pct: 12.3, max_drawdown_pct: -4.1 }, concentration: { best_trades_removed: 3, return_without_best_pct: 7.1, largest_loss_pct: -0.8 },

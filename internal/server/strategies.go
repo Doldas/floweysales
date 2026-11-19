@@ -121,6 +121,7 @@ type strategyBacktestRequest struct {
 type strategyBacktestResponse struct {
 	Symbol      string `json:"symbol"`
 	Provider    string `json:"provider"`
+	Currency    string `json:"currency,omitempty"`
 	Range       string `json:"range"`
 	GeneratedAt string `json:"generated_at"`
 	// From and To are the dates tested (UTC); DataStart and DataEnd are what the provider returned.
@@ -411,7 +412,7 @@ func (e *Engine) runStrategyBacktest(ctx context.Context, u identity.User, req s
 	if err != nil {
 		return zero, http.StatusUnprocessableEntity, err
 	}
-	resp := strategyBacktestResponse{Symbol: symbol, Provider: series.Provider, Range: rng,
+	resp := strategyBacktestResponse{Symbol: symbol, Provider: series.Provider, Currency: series.Currency, Range: rng,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339), Result: result, Parameters: strategy.Parameters(def)}
 	if n := len(result.Curve); n > 0 {
 		resp.From, resp.To = result.Curve[0].Date, result.Curve[n-1].Date

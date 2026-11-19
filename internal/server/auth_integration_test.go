@@ -127,6 +127,9 @@ func TestMySQLAuthGate(t *testing.T) {
 		t.Fatal("user session cookie missing")
 	}
 	userCookie := userCookies[0]
+	// The regular user reaches the research simulation handler. Its validation
+	// refuses the empty request before accessing a provider.
+	assert(request(http.MethodPost, "/api/strategies/montecarlo", map[string]any{}, userCookie, ""), http.StatusBadRequest)
 	// Research Agent must remain configured for an ordinary signed-in user.
 	// Server endpoint credentials are redacted, but readiness is not.
 	for _, tc := range []struct {

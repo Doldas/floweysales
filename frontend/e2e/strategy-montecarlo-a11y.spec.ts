@@ -51,3 +51,46 @@ test.describe('Monte Carlo robustness panel accessibility', () => {
     for (const button of await panel.getByRole('button').all()) await expect(button).toHaveAccessibleName(/\S/);
   });
 });
+
+test.describe('Monte Carlo as a research user', () => {
+  test.use({ role: 'USER' });
+
+  test('exports the market, replay assumptions, seed and observed and simulated figures', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('lastTrackedSymbol', 'NVDA');
+      localStorage.setItem('lastProvider', 'YAHOO');
+    });
+    await open(page, 'strategies');
+    await page.getByRole('button', { name: 'Run test' }).click();
+    const panel = page.locator('fs-strategy-montecarlo');
+    await expect(panel.getByRole('heading', { name: 'How robust is this result?' })).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    const request = page.waitForRequest(req => req.method() === 'POST' && req.url().endsWith('/api/strategies/montecarlo'));
+    await panel.getByRole('button', { name: 'Run simulation' }).click();
+    expect((await request).postDataJSON()).toMatchObject({ seed: 42, method: 'trade_bootstrap' });
+    await expect(panel.locator('#smc-evidence-notice')).toContainText('NVDA (USD)');
+    await expect(panel.getByText(/Replay costs per side/)).toContainText('3 bps slippage');
+    const table = panel.getByRole('table');
+    await expect(table.getByRole('columnheader', { name: 'Happened' })).toBeVisible();
+    await expect(table.getByRole('row', { name: /Total return/ })).toContainText('+12.3%');
+    await expect(table.getByRole('row', { name: /Total return/ })).toContainText('+30.0%');
+
+    const downloadJson = page.waitForEvent('download');
+    await panel.getByRole('button', { name: 'Export JSON' }).click();
+    const json = JSON.parse(readFileSync(await (await downloadJson).path(), 'utf8'));
+    expect(json).toMatchObject({
+      symbol: 'NVDA', provider: 'YAHOO', currency: 'USD',
+      strategy_definition: { id: 'dip_buyer', name: 'Dip buyer' },
+      replay_config: { cost_bps: 5, slippage_bps: 3, spread_bps: 8 },
+      simulation: { model_version: 'mc-1', config: { seed: 42 }, terminal_return_pct: { p95: 30 } },
+    });
+
+    const downloadCsv = page.waitForEvent('download');
+    await panel.getByRole('button', { name: 'Export CSV' }).click();
+    const csv = readFileSync(await (await downloadCsv).path(), 'utf8');
+    expect(csv).toContain('currency,USD\n');
+    expect(csv).toContain('slippage_bps_per_side,3\n');
+    expect(csv).toContain('spread_bps,8\n');
+    expect(csv).toContain('seed,42\n');
+  });
+});
