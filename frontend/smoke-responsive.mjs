@@ -48,8 +48,8 @@ async function testViewport(name, width, height, role = 'SYS_ADMIN') {
     await page.waitForSelector('#main-content > *:not(router-outlet)', { timeout: 20000 });
     await page.waitForTimeout(150);
   };
-  const fits = async (selector, label = selector) => {
-    const box = await page.locator(selector).first().boundingBox();
+  const fits = async (locator, label) => {
+    const box = await locator.first().boundingBox();
     check(`${label} fits horizontally`, !!box && box.x >= -2 && box.x + box.width <= width + 2, box ? `x=${box.x} w=${box.width}` : 'missing');
   };
   const noOverflow = async label => {
@@ -77,33 +77,47 @@ async function testViewport(name, width, height, role = 'SYS_ADMIN') {
 
       // Shell: the topbar always fits; the sidebar is a drawer below 992px.
       await go('');
-      await fits('.fs-topbar', 'topbar');
-      const sidebar = await page.locator('.fs-sidebar').boundingBox();
+      await fits(page.locator('.fs-topbar'), 'topbar');
+      const sidebar = page.locator('.fs-sidebar');
       if (width < 992) {
-        check('sidebar starts off-canvas', !!sidebar && sidebar.x + sidebar.width <= 1, JSON.stringify(sidebar));
+        check('navigation drawer starts hidden', !(await sidebar.isVisible()));
         await page.getByRole('button', { name: 'Open navigation' }).click();
         await page.waitForTimeout(300);
-        const open = await page.locator('.fs-sidebar').boundingBox();
+        const open = await sidebar.boundingBox();
         check('navigation drawer opens within viewport', !!open && open.x >= -1 && open.x + open.width <= width + 1, JSON.stringify(open));
-        await page.locator('.fs-sidebar').getByRole('link', { name: 'Markets', exact: true }).click();
-        await page.waitForTimeout(300);
-        check('drawer closes after navigating', ((await page.locator('.fs-sidebar').boundingBox())?.x ?? 0) < 0);
+        await sidebar.getByRole('link', { name: 'Markets', exact: true }).click();
+        await sidebar.waitFor({ state: 'hidden', timeout: 5000 });
+        check('drawer closes after navigating', !(await sidebar.isVisible()));
       } else {
-        check('sidebar visible', !!sidebar && sidebar.x >= 0 && sidebar.width > 200, JSON.stringify(sidebar));
+        const box = await sidebar.boundingBox();
+        check('sidebar visible', !!box && box.x >= 0 && box.width > 200, JSON.stringify(box));
       }
 
-      // Markets keeps the instrument controls, key figures and chart.
+      // Markets prioritizes the instrument chart. Key figures open on demand on phones.
       await go('markets');
-      for (const selector of ['.control-card', '.grid', '.chart-card']) {
-        check(`${selector} displayed`, await page.locator(selector).isVisible());
-        await fits(selector);
+      const controls = page.getByRole('region', { name: 'Instrument and trackers' });
+      const priceChart = page.getByRole('region', { name: 'Price chart', exact: true });
+      await priceChart.waitFor({ state: 'visible', timeout: 5000 });
+      for (const [locator, label] of [[controls, 'instrument controls'], [priceChart, 'price chart']]) {
+        check(`${label} displayed`, await locator.isVisible());
+        await fits(locator, label);
       }
-      const chart = await page.locator('.chart-container').boundingBox();
-      if (width <= 700) check('mobile chart height fits', !!chart && chart.height <= 280, JSON.stringify(chart));
+      const figures = page.getByRole('region', { name: 'Key figures', exact: true });
+      if (width <= 700) {
+        const chart = await priceChart.locator('.chart-container').boundingBox();
+        check('mobile chart fits and is visible without scrolling', !!chart && chart.height <= 280 && chart.y < height && chart.y + chart.height > 0, JSON.stringify(chart));
+        const toggle = page.getByRole('button', { name: 'Key figures', exact: true });
+        check('mobile key figures start folded', (await toggle.getAttribute('aria-expanded')) === 'false' && !(await figures.isVisible()));
+        await toggle.click();
+      }
+      await figures.waitFor({ state: 'visible', timeout: 5000 });
+      check('key figures displayed', await figures.isVisible());
+      await fits(figures, 'key figures');
 
       await go('portfolio');
-      check('.ledger-card displayed', await page.locator('.ledger-card').isVisible());
-      await fits('.ledger-card');
+      const ledger = page.locator('.ledger-card');
+      check('ledger card displayed', await ledger.isVisible());
+      await fits(ledger, 'ledger card');
 
       // The agent dock stays inside the viewport and is full screen on phones.
       await page.getByRole('button', { name: 'Toggle research agent' }).click();
@@ -118,7 +132,7 @@ async function testViewport(name, width, height, role = 'SYS_ADMIN') {
     } else {
       // USER: public-market research only.
       await go('');
-      check('no paper portfolio for research accounts', await page.locator('.fs-sidebar').getByRole('link', { name: 'Paper portfolio' }).count() === 0);
+      check('no paper portfolio for research accounts', await page.locator('.fs-sidebar a[href="#/portfolio"]').count() === 0);
       await go('portfolio');
       check('portfolio route redirects home', page.url().endsWith('#/'), page.url());
       check('no trading desk rendered', await page.locator('.ledger-card').count() === 0);
@@ -126,8 +140,10 @@ async function testViewport(name, width, height, role = 'SYS_ADMIN') {
       await go('markets');
       await page.locator('.control-card input[role="combobox"]').fill('NVDA');
       await page.locator('.control-card [role="option"]').first().click();
-      await page.locator('.chart-card').waitFor({ state: 'visible' });
-      check('research chart loads from history', await page.locator('.chart-card').isVisible());
+      const priceChart = page.getByRole('region', { name: 'Price chart', exact: true });
+      const newestBar = priceChart.getByTestId('chart-meta').getByText(/UTC/);
+      await newestBar.waitFor({ state: 'visible', timeout: 5000 });
+      check('research chart loads from history', await newestBar.isVisible());
       await noOverflow('research markets');
 
       await go('financials');

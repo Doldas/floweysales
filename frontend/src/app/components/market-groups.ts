@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, output, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { Subject, catchError, of, switchMap } from 'rxjs';
@@ -108,6 +108,7 @@ function readGroup(): number {
 })
 export class MarketGroups {
   readonly market = inject(MarketState);
+  readonly instrumentOpened = output<void>();
   private readonly api = inject(CollectionsService);
   private readonly notify = inject(NotifyService);
   private readonly destroyRef = inject(DestroyRef);
@@ -188,6 +189,7 @@ export class MarketGroups {
 
   open(m: CollectionMember): void {
     this.market.view({ symbol: m.instrument.symbol, provider: m.instrument.provider });
+    this.instrumentOpened.emit();
   }
 
   private selectedInstrument() {

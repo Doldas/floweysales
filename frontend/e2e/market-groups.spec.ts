@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, open, test } from './fixtures';
+import { expect, expandPhonePanel, open, test } from './fixtures';
 import { audit } from './layout-audit';
 
 // Collections as groups on the Markets page: pick a group, open its
@@ -85,18 +85,38 @@ test.describe('Groups on the Markets page', () => {
   test('a group lists its instruments and opens them in the chart', async ({ page }) => {
     await backend(page);
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Groups');
     const groups = page.getByRole('region', { name: 'Groups' });
     await groups.getByLabel('Group', { exact: true }).selectOption({ label: 'Chips · 4' });
     const list = groups.getByRole('list', { name: 'Chips instruments' });
     await expect(list.getByRole('button')).toHaveText([/NVDA/, /AMD/, /ASML/, /SOXX/]);
     await list.getByRole('button', { name: /AMD/ }).click();
     await expect(page.getByRole('heading', { level: 1 })).toContainText('AMD');
+    await expect(page.getByRole('heading', { level: 1 })).toBeInViewport();
     await expect(list.getByRole('button', { name: /AMD/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('a ticker selected by search has its chart above an already selected group dashboard', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('fs.markets.group', '1'));
+    await backend(page);
+    await open(page, 'markets');
+    const field = page.getByRole('region', { name: 'Instrument and trackers' }).getByRole('combobox', { name: /Search tickers/ });
+    await field.fill('NVDL');
+    await page.getByRole('option', { name: /NVDL/ }).click();
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('NVDL');
+    const chart = page.locator('fse-trading-chart canvas').first();
+    await expect(chart).toBeInViewport();
+    await expandPhonePanel(page, 'Groups');
+    const dashboard = page.getByRole('region', { name: /Group dashboard · Chips/ });
+    await expect(dashboard).toBeVisible();
+    const chartBox = (await chart.boundingBox())!;
+    expect(chartBox.y + chartBox.height).toBeLessThan((await dashboard.boundingBox())!.y);
   });
 
   test('the dashboard computes figures from each instrument\'s history', async ({ page }) => {
     const { historyCalls } = await backend(page);
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Groups');
     await page.getByRole('region', { name: 'Groups' }).getByLabel('Group', { exact: true }).selectOption({ label: 'Chips · 4' });
     const dash = page.getByRole('region', { name: /Group dashboard · Chips/ });
     const figures = dash.getByRole('list', { name: 'Group figures' });
@@ -115,24 +135,54 @@ test.describe('Groups on the Markets page', () => {
     await expect(dash.getByRole('img', { name: /^Composition by currency: USD 89%, EUR 11%|^Composition by currency: USD/ })).toBeVisible();
     // Keyboard reads the index day by day.
     const index = dash.getByRole('img', { name: /Group index from 100/ });
+    const legend = dash.getByRole('list', { name: 'Group chart series' });
+    const amd = legend.getByRole('button', { name: 'AMD', exact: true });
+    const member = (label: string) => index.locator('.member-line').filter({ has: page.locator('title', { hasText: label }) });
+    const amdColor = (await member('AMD').getAttribute('stroke'))!;
+    const nvdaColor = (await member('NVDA').getAttribute('stroke'))!;
+    expect(amdColor).not.toBe(nvdaColor);
+    expect(await member('AMD').getAttribute('stroke-dasharray')).not.toBe(await member('NVDA').getAttribute('stroke-dasharray'));
+    await expect(amd.locator('line')).toHaveAttribute('stroke', amdColor);
+    await expect(legend.getByRole('button')).toHaveText(['NVDA', 'AMD']);
+    await amd.click();
+    await expect(amd).toHaveAttribute('aria-pressed', 'true');
+    await expect(member('AMD')).toHaveClass(/highlighted/);
+    await expect(member('NVDA')).toHaveClass(/dimmed/);
     await index.focus();
     await page.keyboard.press('Home');
-    await expect(dash.getByRole('status').filter({ hasText: 'Group 100.0' })).toBeVisible();
+    const tooltip = dash.getByRole('status').filter({ hasText: 'Group 100.0' });
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip.locator('line')).toHaveAttribute('stroke', amdColor);
+    await amd.click();
+    await expect(member('NVDA')).not.toHaveClass(/dimmed/);
     // The chart above asks for its own range; the group asks for 1Y.
     expect(historyCalls.filter(c => /:(AMD|ASML|SOXX):/.test(c)).sort()).toEqual(['YAHOO:AMD:1Y', 'YAHOO:ASML:1Y', 'YAHOO:SOXX:1Y']);
 
     // Another range asks again; going back uses what was loaded.
     await dash.getByRole('button', { name: '3M', exact: true }).click();
     await expect(dash.getByRole('list', { name: 'Group figures' })).toContainText('Group · 3M');
+    await expect(member('AMD')).toHaveAttribute('stroke', amdColor);
     const asked = historyCalls.length;
     await dash.getByRole('button', { name: '1Y', exact: true }).click();
     await expect(dash.getByRole('list', { name: 'Group figures' })).toContainText('Group · 1Y');
     expect(historyCalls.length).toBe(asked);
+
+    const more = page.getByRole('button', { name: 'More actions' });
+    const themeAction = { name: /Switch to (light|dark) theme/ };
+    if (await more.isVisible()) {
+      await more.click();
+      await page.getByRole('menuitem', themeAction).click();
+    } else {
+      await page.getByRole('button', themeAction).click();
+    }
+    await expect(member('AMD')).not.toHaveAttribute('stroke', amdColor);
+    await expect(member('AMD')).not.toHaveAttribute('stroke', (await member('NVDA').getAttribute('stroke'))!);
   });
 
   test('the instrument on screen is added to a group, or to a new one', async ({ page }) => {
     const { added, cols } = await backend(page);
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Groups');
     const groups = page.getByRole('region', { name: 'Groups' });
     await groups.getByRole('button', { name: 'Add NVDA to a group' }).click();
     const add = groups.getByRole('group', { name: 'Add NVDA to a group' });
@@ -156,6 +206,7 @@ test.describe('Groups on the Markets page', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await backend(page);
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Groups');
     await page.getByRole('region', { name: 'Groups' }).getByLabel('Group', { exact: true }).selectOption({ label: 'Chips · 4' });
     await expect(page.getByRole('list', { name: 'Group figures' })).toBeVisible();
     expect(await audit(page, { touch: true })).toEqual([]);

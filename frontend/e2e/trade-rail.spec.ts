@@ -1,8 +1,9 @@
-import { expect, open, test } from './fixtures';
+import { expect, expandPhonePanel, open, test } from './fixtures';
 
 test.describe('trade rail beside the chart', () => {
   test('the watchlist shows each tracked instrument with its price and how fresh it is, and a row opens it', async ({ page }) => {
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Watchlist and paper order');
     const list = page.getByRole('list', { name: 'Watchlist prices' });
     const row = (symbol: string) => list.locator(`[data-symbol="${symbol}"]`);
     await expect(list.locator('button')).toHaveCount(3);
@@ -21,6 +22,7 @@ test.describe('trade rail beside the chart', () => {
 
   test('a paper order can be composed and reviewed from the chart page without leaving it', async ({ page }) => {
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Watchlist and paper order');
     const ticket = page.getByRole('region', { name: 'Paper order ticket' });
     await expect(ticket.getByText('Order ticket')).toBeVisible();
     await expect(ticket.getByLabel('Account summary')).toContainText('Buying power');
@@ -33,6 +35,7 @@ test.describe('trade rail beside the chart', () => {
 
   test('the rail ticket has no positions or blotter', async ({ page }) => {
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Watchlist and paper order');
     await expect(page.getByRole('region', { name: 'Paper order ticket' }).getByRole('tab', { name: /Positions/ })).toHaveCount(0);
   });
 });
@@ -51,6 +54,7 @@ test.describe('without live-market access', () => {
     // Without live markets the page opens on the instrument last viewed.
     await page.addInitScript(() => { localStorage.setItem('lastTrackedSymbol', 'NVDA'); localStorage.setItem('lastProvider', 'YAHOO'); });
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Watchlist prices');
     await expect(page.getByRole('region', { name: 'Watchlist' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Paper order ticket' })).toHaveCount(0);
   });

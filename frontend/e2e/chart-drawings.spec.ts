@@ -1,4 +1,4 @@
-import { expect, open, test } from './fixtures';
+import { expect, expandPhonePanel, open, test } from './fixtures';
 
 /** Counts opaque pixels near a color on the main chart canvas. */
 async function colorPixels(page: import('@playwright/test').Page, rgb: number[], slack = 8, minAlpha = 240): Promise<number> {
@@ -29,6 +29,7 @@ test.describe('chart drawings', () => {
   test.slow();
   test('a level, a trend line and a Fibonacci retracement can be drawn, selected, deleted and survive a reload', async ({ page }) => {
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Chart options');
     const canvas = page.locator('fse-trading-chart canvas').first();
     await canvas.scrollIntoViewIfNeeded();
     await waitForSeries(page);
@@ -56,6 +57,7 @@ test.describe('chart drawings', () => {
     await expect.poll(() => colorPixels(page, VIOLET)).toBeGreaterThan(100);
 
     await page.reload();
+    await expandPhonePanel(page, 'Chart options');
     await expect(page.getByRole('toolbar', { name: 'Drawing tools' }).getByRole('button', { name: /Clear drawings \(3\)/ })).toBeEnabled();
     // Select the level (once the history has loaded). A drawing is anchored to its price, and the
     // price axis can differ a little after the reload (it follows the loaded history and the
@@ -80,11 +82,13 @@ test.describe('chart drawings', () => {
 
   test('Escape cancels a half-placed line and stored garbage is ignored', async ({ page }) => {
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Chart options');
     await page.evaluate(() => {
       const key = Object.keys(localStorage).find(k => k.startsWith('fs.drawings.')) ?? 'fs.drawings.YAHOO:NVDA';
       localStorage.setItem(key, '[{"id":1},"x",{"id":"a","kind":"level","a":{"t":"no","p":1}}]');
     });
     await page.reload();
+    await expandPhonePanel(page, 'Chart options');
     const bar = page.getByRole('toolbar', { name: 'Drawing tools' });
     await expect(bar.getByRole('button', { name: /Clear drawings \(0\)/ })).toBeDisabled();
     await page.locator('fse-trading-chart canvas').first().scrollIntoViewIfNeeded();
