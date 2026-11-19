@@ -11,6 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { inject } from '@angular/core';
 import { BlueprintLibraryComponent } from './blueprint-library';
 import { NotifyService } from '../core/notify.service';
+import { Access } from '../core/access';
 import { AuthState } from '../auth.service';
 import { byteSizeLabel, canCancelRun, canRetryRun, compareRunSteps, executedNodeOrder, filterFlowRuns, isActiveRun, outputPreviewLabel, pushHistorySnapshot, runAttemptLabel, runStatusLabel } from './flow-history';
 import { listOverviewFlows } from './flow-overview';
@@ -70,7 +71,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
         <div class="overview-flow-top"><span class="flow-glyph" aria-hidden="true"><i class="bi bi-diagram-3"></i></span><div class="flex-grow-1 min-w-0"><h3>{{flow.name}}</h3><p class="muted">{{flow.graph.nodes.length}} nodes · {{flow.graph.edges.length}} links</p></div><span class="fs-status" [class.is-success]="flow.enabled">{{flow.enabled?'Enabled':'Disabled'}}</span></div>
         <p class="overview-flow-trigger"><i class="bi" [class.bi-clock]="flow.interval_minutes>0" [class.bi-lightning-charge]="!(flow.interval_minutes>0)&&!!flow.event_key" [class.bi-hand-index]="!(flow.interval_minutes>0)&&!flow.event_key" aria-hidden="true"></i> @if(flow.interval_minutes>0){Every {{flow.interval_minutes}} min}@else if(flow.event_key){Event: {{flow.event_key}}}@else{Manual execution}</p>
         <p class="muted">{{publishStatusLabel(flow)}}</p>
-        <div class="overview-actions"><button class="btn btn-sm btn-primary" (click)="openFlowFromOverview(flow.id)">Edit</button><button class="btn btn-sm btn-outline-secondary" (click)="openHistoryForFlow(flow.id)">History</button><button class="btn btn-sm btn-outline-secondary" (click)="runSavedFlow(flow.id)" [disabled]="busy()"><i class="bi bi-play-fill" aria-hidden="true"></i>Run now</button></div>
+        <div class="overview-actions"><button class="btn btn-sm btn-primary" (click)="openFlowFromOverview(flow.id)">Edit</button><button class="btn btn-sm btn-outline-secondary" (click)="openHistoryForFlow(flow.id)">History</button><button class="btn btn-sm btn-outline-secondary" (click)="runSavedFlow(flow.id)" [disabled]="busy()||!access.flowsRun()"><i class="bi bi-play-fill" aria-hidden="true"></i>Run now</button></div>
        </article>}
       </div>}
       @if(message()){<p class="flow-message" role="status">{{message()}}</p>}
@@ -458,10 +459,10 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
      <button class="btn btn-sm btn-outline-secondary" type="button" (click)="redoGraph()" [disabled]="!canRedo()||busy()" aria-label="Redo graph change" title="Redo (Ctrl/Cmd+Shift+Z or Ctrl+Y)">↷ Redo</button>
      <button class="btn btn-sm btn-primary" (click)="save()" [disabled]="busy()">Save flow</button>
       <span class="muted" role="status">{{hasUnsavedChanges()?'Unsaved changes':'All changes saved'}}</span>
-     <button class="btn btn-sm btn-outline-secondary" (click)="run()" [disabled]="busy()" [title]="runButtonHint(selectedId(),hasUnsavedChanges(),!!currentFlow()?.active_revision)">{{runButtonLabel(selectedId(),hasUnsavedChanges())}}</button>
-     @if((hasUnsavedChanges()||!selectedId())&&sideEffects().length){<label class="live-effects"><input type="checkbox" [ngModel]="liveEffects()" (ngModelChange)="liveEffects.set($event)" [disabled]="!selectedId()||busy()"> Allow real side effects in this test{{selectedId()?'':' (save the flow first)'}}</label>}
-     <span class="muted draft-help" id="run-help">Test runs the graph shown here, even unsaved, and never saves it. Save keeps your changes. Publish revision changes what scheduled runs use.</span>
-     @if(currentFlow()?.active_revision&&currentFlow()?.has_unpublished_changes){<button class="btn btn-sm btn-outline-secondary" (click)="run('draft')" [disabled]="busy()||hasUnsavedChanges()" title="Run the saved draft without publishing it. Unsaved edits use Test unsaved draft.">Run draft</button>}
+     <button class="btn btn-sm btn-outline-secondary" (click)="run()" [disabled]="busy()||!access.flowsRun()" [title]="runButtonHint(selectedId(),hasUnsavedChanges(),!!currentFlow()?.active_revision)" aria-describedby="run-help">{{runButtonLabel(selectedId(),hasUnsavedChanges())}}</button>
+     @if(access.flowsRun()&&access.isAdmin()&&(hasUnsavedChanges()||!selectedId())&&sideEffects().length){<label class="live-effects"><input type="checkbox" [ngModel]="liveEffects()" (ngModelChange)="liveEffects.set($event)" [disabled]="!selectedId()||busy()"> Allow real side effects in this test{{selectedId()?'':' (save the flow first)'}}</label>}
+     <span class="muted draft-help" id="run-help">@if(access.flowsRun()){Test runs the graph shown here, even unsaved, and never saves it. Save keeps your changes. Publish revision changes what scheduled runs use.} @else {Running flows requires the Run flows permission.}</span>
+     @if(currentFlow()?.active_revision&&currentFlow()?.has_unpublished_changes){<button class="btn btn-sm btn-outline-secondary" (click)="run('draft')" [disabled]="busy()||hasUnsavedChanges()||!access.flowsRun()" title="Run the saved draft without publishing it. Unsaved edits use Test unsaved draft.">Run draft</button>}
      @if(busy()){<fs-progress-status stage="Sending the request to the server"/>}
      <label>Event value <input [ngModel]="triggerValue()" (ngModelChange)="triggerValue.set($event)" placeholder="Value matching trigger type"></label>
      <button class="btn btn-sm btn-outline-secondary" (click)="emitEvent()" [disabled]="busy()||!eventKey()">Trigger event</button>
@@ -842,6 +843,7 @@ interface TriggerDefinition {event_key:string;payload_type:'text'|'number'|'bool
 })
 export class FlowStudioComponent {
  readonly auth=inject(AuthState);
+ readonly access=inject(Access);
  private readonly notify = inject(NotifyService);
  readonly hoveredNode=signal<string>('');
  readonly quickNode=()=>this.node(this.hoveredNode());
@@ -939,7 +941,7 @@ export class FlowStudioComponent {
     if(tab&&(tab!=='library'||this.auth.user()?.role==='SYS_ADMIN'))this.studioTab.set(tab);
   }
   async runSavedFlow(id:number){
-    if(this.busy()||!this.flows().some(f=>f.id===id))return;
+    if(this.busy()||!this.access.flowsRun()||!this.flows().some(f=>f.id===id))return;
     this.busy.set(true);
     try{await this.request('/api/admin/flows/'+id+'/run',{method:'POST'});this.openHistoryForFlow(id);this.message.set('Run queued; check History for results.');setTimeout(()=>{if(this.historyFlowId()===id)void this.refreshRuns()},3000)}
     catch(e){this.message.set('Could not start run: '+String(e))}finally{this.busy.set(false)}
@@ -1621,7 +1623,7 @@ export class FlowStudioComponent {
         this.runs.set(d.runs||[]);
         const runId=this.traceRunId();
         if(runId&&(d.runs||[]).some((run:FlowRun)=>run.id===runId)){
-          const trace=await this.request('/api/admin/flows/'+id+'/runs/'+runId+'/steps');
+          const trace=await this.request(historyPath(id)+'/runs/'+runId+'/steps');
           if(this.historyFlowId()===id&&this.traceRunId()===runId&&this.historyRequestVersion===version)this.traceSteps.set(trace.steps||[]);
         }
       }
@@ -1649,7 +1651,7 @@ export class FlowStudioComponent {
    this.selectedId.set(flow.id);this.historyFlowId.set(flow.id);this.savedSnapshot.set(this.currentSnapshot());this.message.set(flow.active_revision?'Draft saved; publish it to change what runs.':'Flow saved');await this.refresh();await this.loadRevisions()}catch(e){this.message.set(String(e));void this.loadReadiness()}finally{this.busy.set(false)}}
 
  // A run started from the editor is followed here, next to the graph.
- readonly liveRun=signal<{scope:number;flowId:number;runId:number;label:string;nodeIds:string[];startedAt:number}|null>(null);
+ readonly liveRun=signal<{scope:number;flowId:number;runId:number;label:string;nodeIds:string[];edges:FlowEdge[];startedAt:number}|null>(null);
  readonly liveRunInfo=signal<FlowRun|null>(null);
  readonly liveSteps=signal<FlowRunStep[]>([]);
  readonly liveError=signal('');
@@ -1691,13 +1693,14 @@ export class FlowStudioComponent {
  }
  /** A node that has not run while every node before it has: the likely next one while the run is going. */
  private liveNext(id:string):boolean{
-   if(this.liveStatus()!=='RUNNING'||this.liveNodeStatus()[id]||!this.liveRun()?.nodeIds.includes(id))return false;
+   const live=this.liveRun();
+   if(this.liveStatus()!=='RUNNING'||this.liveNodeStatus()[id]||!live?.nodeIds.includes(id))return false;
    const done=this.liveNodeStatus();
-   return this.graph().edges.filter(e=>e.to===id).every(e=>!!done[e.from]);
+   return live.edges.filter(e=>e.to===id).every(e=>!!done[e.from]);
  }
- private startLiveRun(scope:number,flowId:number,runId:number,label:string,graph:{nodes:{id:string}[]}){
+ private startLiveRun(scope:number,flowId:number,runId:number,label:string,graph:FlowGraph){
    this.stopLivePolling();
-   this.liveRun.set({scope,flowId,runId,label,nodeIds:graph.nodes.map(n=>n.id),startedAt:Date.now()});
+   this.liveRun.set({scope,flowId,runId,label,nodeIds:graph.nodes.map(n=>n.id),edges:graph.edges.map(edge=>({...edge})),startedAt:Date.now()});
    this.liveRunInfo.set(null);this.liveSteps.set([]);this.liveError.set('');this.liveCancelling.set(false);this.liveNow.set(Date.now());
    this.liveClock=setInterval(()=>{this.liveNow.set(Date.now());if(!this.liveOpen())this.stopLiveClock()},1000);
    void this.pollLiveRun();
@@ -1736,6 +1739,7 @@ export class FlowStudioComponent {
  }
  closeLiveRun(){this.stopLivePolling();this.liveRun.set(null);this.liveRunInfo.set(null);this.liveSteps.set([]);this.liveError.set('')}
  async run(target:'active'|'draft'='active'){
+   if(this.busy()||!this.access.flowsRun())return;
    const issues=this.graphIssues();
    if(issues.length){this.message.set('Resolve '+issues.length+' graph issue(s) before running.');return}
    // Unsaved edits, and flows that were never saved, run as a draft test of exactly
@@ -1746,7 +1750,7 @@ export class FlowStudioComponent {
    let live=false;
    if(unsaved){
      const effects=capabilityManifest(graph.nodes);
-     live=!!id&&effects.length>0&&this.liveEffects();
+     live=this.access.isAdmin()&&!!id&&effects.length>0&&this.liveEffects();
      if(live&&!confirm('This test will perform REAL side effects ('+effects.map(e=>e.label||e.capability).join(', ')+'). Approval-gated actions still pause for approval. Run them for real?'))return;
    }
    this.busy.set(true);try{

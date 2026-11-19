@@ -60,13 +60,13 @@ A flow always reads the collections of the person who owns the flow, even when s
 
 When you press **Run now**, **Run draft** or **Test unsaved draft** in the Flow editor, a run panel opens under the run buttons and follows the run while you stay in the editor. It shows the status, the elapsed time and how many nodes have finished, with a progress bar. Each node that has run is listed with its status, duration, output preview and any error; a failed node opens on its own. When the run ends, the panel shows the final output or the run error.
 
-The canvas follows along: each node states its status in text (`✓ 8.0 s`, `✕ failed`, `– skipped`, `… waiting`) and is toned to match. While the run is going, a node whose inputs have all finished is marked `… next`. You can keep editing; the run uses the graph as it was when you pressed run, so for a saved run the canvas shows the editor's graph, which can differ from the saved version.
+The canvas follows along. Each node shows its status, such as `✓ 8.0 s`, `✕ failed`, or `– skipped`. For a draft test, the `… next` indicator follows the connections captured when you pressed run, even as you keep editing. Open **Run history** to see the graph snapshot the server executed. For a saved run, the editor and saved version may show different graphs.
 
 From the panel you can cancel the run or remove it from the queue, open **Review in Approvals & audit** when a side effect waits for approval, or **Open in Run history** for the full trace. Close the panel to clear the canvas. The panel asks the server every 1.5 seconds while the run is going, and every 5 seconds while it waits for approval.
 - **Scheduled:** an enabled flow with an interval (5 minutes to 30 days) runs on that schedule.
 - **On an event:** an enabled flow with an event key runs when that event arrives, either from another flow or from a signed webhook.
 
-Scheduled and event triggers are set up by administrators. Everyone with the permission can run their own flows by hand.
+Administrators set up scheduled and event triggers. The **Run flows** permission lets you run your own flows by hand and test unsaved drafts.
 
 A run that is interrupted resumes from its last checkpoint, so completed steps are not repeated. A run that cannot finish is marked as failed or dead, and you can retry it from the checkpoint.
 
