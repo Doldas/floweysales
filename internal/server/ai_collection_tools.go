@@ -13,16 +13,14 @@ import (
 	"floweysales/internal/instruments"
 )
 
-// The Research Agent's collection tools read the collections of the user the
-// run acts for (agentUser) and nobody else's. They only read: there is no
-// tool that changes a collection, and nothing here can place an order.
+// These research tools read the collections of the user the run acts for.
 
 var _ ai.CollectionSource = engineSource{}
 
 // errNoCollection is wrapped by resolveCollection when nothing matches.
 var errNoCollection = errors.New("no collection")
 
-const collectionToolNotice = "The user's own collection. A model portfolio is hypothetical: not a holding and not advice. These tools only read; they cannot change collections or trade."
+const collectionToolNotice = "The user's own collection. A model portfolio represents hypothetical allocations."
 
 func (s engineSource) collectionCaller(ctx context.Context) (identity.User, collections.Service, error) {
 	u, ok := s.e.agentUser(ctx)

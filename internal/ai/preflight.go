@@ -38,6 +38,10 @@ func ValidateToolArgs(name, argsJSON string) error {
 	if !ok {
 		return fmt.Errorf("there is no tool called %q; use one of the tools you were given", name)
 	}
+	return validateToolSchema(name, argsJSON, schema)
+}
+
+func validateToolSchema(name, argsJSON string, schema map[string]any) error {
 	args := map[string]any{}
 	if a := strings.TrimSpace(argsJSON); a != "" && a != "null" {
 		if err := json.Unmarshal([]byte(a), &args); err != nil {
