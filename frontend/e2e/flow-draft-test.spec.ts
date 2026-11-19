@@ -20,7 +20,7 @@ async function newFlow(page: Page, name: string | null = 'Draft under test') {
 
 function draftRun(overrides: Partial<{ status: number; body: unknown }> = {}) {
   return (route: Route) => route.fulfill({
-    status: overrides.status ?? 200,
+    status: overrides.status ?? 202,
     contentType: 'application/json',
     body: JSON.stringify(overrides.body ?? { status: 'queued', run_id: 301, draft_test: true, scratch: true, simulated: true, graph_hash: 'a'.repeat(64) }),
   });
@@ -29,6 +29,7 @@ function draftRun(overrides: Partial<{ status: number; body: unknown }> = {}) {
 test.describe('Draft tests of unsaved flows', () => {
   test('editing the graph while a draft test is in flight does not change what runs', async ({ page }) => {
     const sent: any[] = [];
+    let runStatus = 'RUNNING';
     let release!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
     await page.route(DRAFT_RUN, async route => {
@@ -36,6 +37,11 @@ test.describe('Draft tests of unsaved flows', () => {
       await gate;
       await draftRun()(route);
     });
+    await page.route('**/api/admin/flows/draft/runs', route => route.fulfill({
+      json: { runs: [{ id: 301, status: runStatus, trigger: 'draft test', output: '', error: '', graph_hash: 'a'.repeat(64) }] },
+    }));
+    await page.route('**/api/admin/flows/draft/runs/301/steps', route => route.fulfill({ json: { steps: [] } }));
+    await page.route('**/api/admin/flows/draft/runs/301/snapshot', route => route.fulfill({ json: { graph: sent[0].graph } }));
 
     const studio = await newFlow(page, null);
     await studio.getByLabel('Starter templates').selectOption('price-alerts');
@@ -63,6 +69,21 @@ test.describe('Draft tests of unsaved flows', () => {
     await expect(studio.getByText('Unsaved changes')).toBeVisible();
     await studio.locator('[aria-label="Select Big moves"]').click();
     await expect(settings.getByLabel('Rule')).toHaveValue('change_1d_pct <= -9');
+    await settings.getByRole('button', { name: 'Close node settings' }).click();
+
+    await expect(studio.getByRole('region', { name: 'Run 301' })).toContainText('Running');
+    await studio.locator('[aria-label="Select Watchlist quotes"]').click();
+    await settings.getByRole('button', { name: 'Delete node' }).click();
+    await expect(studio.locator('[data-node-id="quotes"]')).toHaveCount(0);
+    await expect(studio.locator('[data-node-id="moves"]')).not.toContainText('next');
+
+    runStatus = 'SUCCESS';
+    await expect(studio.getByRole('region', { name: 'Run 301' })).toContainText('Success');
+    await studio.getByRole('button', { name: 'Open in Run history' }).click();
+    await expect(studio.getByRole('group', { name: 'Execution graph for run 301' }).locator('[data-node-id="quotes"]')).toBeVisible();
+    const refreshTrace = page.waitForRequest(request => /\/api\/admin\/flows\/draft\/runs\/301\/steps$/.test(request.url()));
+    await studio.getByRole('button', { name: 'Refresh history' }).click();
+    await refreshTrace;
   });
 
   test('an invalid graph is reported per node and is never sent', async ({ page }) => {
@@ -179,6 +200,16 @@ test.describe('Draft tests of unsaved flows', () => {
 
   test.describe('without permission to run flows', () => {
     test.use({ role: 'USER', grants: ['flows.read'] });
+
+    test('a read-only user can see the editor without being offered a run', async ({ page }) => {
+      const studio = await newFlow(page);
+      await expect(studio.getByRole('button', { name: 'Test unsaved draft', exact: true })).toBeDisabled();
+      await expect(studio.getByText('Running flows requires the Run flows permission.')).toBeVisible();
+    });
+  });
+
+  test.describe('when the server revokes permission after the editor loads', () => {
+    test.use({ role: 'USER', grants: ['flows.read', 'flows.run'] });
 
     test('a refused draft test is reported and nothing is queued or saved', async ({ page }) => {
       await page.route(DRAFT_RUN, draftRun({ status: 403, body: { error: 'forbidden: flows.run required' } }));
