@@ -1,7 +1,9 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 
 import type { Message, ModelProfile, Persona } from '../models';
 import { MarketState } from './market-state';
+import { chatPage } from './chat-page';
 import { defaultTypes, delegationProgress, parseEvidenceMode, policyFromSettings, settingsFromPolicy, settingsProblem, type AnswerClaim, type AnswerFinding, type AnswerSource, type EvidenceMode, type EvidencePolicy, type EvidenceSettings, type ClaimStats } from './answer-sources';
 import { MAX_DELIVERABLES, parseChecklist, parseDeliverables, type SavedTask, type TaskDeliverable } from './task-view';
 import { EMPTY_NOTICES, applyNotice, dismissNotice, finishNotices, recoveryLine, type NoticeState } from './agent-notices';
@@ -90,6 +92,7 @@ export interface AgentContext {
 @Injectable({ providedIn: 'root' })
 export class AgentSession {
   private readonly market = inject(MarketState);
+  private readonly router = inject(Router);
 
   readonly entries = signal<ChatEntry[]>([]);
   readonly streaming = signal(false);
@@ -366,6 +369,8 @@ export class AgentSession {
       // Always sent, so a choice of Standard is not replaced by the saved default.
       evidence: policyFromSettings(this.evidenceSettings()),
       deliverables: required.length ? required : undefined,
+      // The page decides which tools the server offers by default.
+      page: chatPage(this.router.url),
       symbol: ctx.symbol,
       provider: ctx.provider,
       range: ctx.range,

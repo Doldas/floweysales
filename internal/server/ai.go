@@ -130,6 +130,9 @@ type chatRequestBody struct {
 	Provider string `json:"provider,omitempty"`
 	Range    string `json:"range,omitempty"`
 	Price    string `json:"price,omitempty"`
+	// Page is the app page the chat is on (first route segment, "home" for the
+	// root). A page with default tools gets only those plus more_tools.
+	Page string `json:"page,omitempty"`
 	// Deliverables turns the chat into a saved task: the answer must report
 	// each one done, and the run can be resumed from its last checkpoint.
 	Deliverables []string `json:"deliverables,omitempty"`
@@ -398,6 +401,7 @@ func (e *Engine) registerAIRoutes() {
 		client.IdleTimeout = 15 * time.Minute
 		client.HTTP.Timeout = 45 * time.Minute
 		opts := e.chatAgentOptions(r, req.SystemPrompt, req.Persona, req.Tools)
+		opts.Page = req.Page
 		evidence.Apply(&opts)
 		if profile != nil {
 			client.Model, client.FallbackModel = profile.Model, profile.FallbackModel

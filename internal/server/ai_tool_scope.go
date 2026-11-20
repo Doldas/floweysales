@@ -33,6 +33,8 @@ var agentToolClass = map[string]string{
 	"list_collections":           toolOwn,
 	"get_collection":             toolOwn,
 	"get_collection_news":        toolOwn,
+	"use_skill":                  toolOwn,
+	"save_skill":                 toolOwn,
 	"get_portfolio_analytics":    toolServer,
 	"get_insider_activity":       toolPublic,
 	"get_macro_regime":           toolPublic,
@@ -69,7 +71,7 @@ var agentToolClass = map[string]string{
 // one account cannot use up what everyone shares.
 var meteredAgentTools = map[string]bool{
 	"search_web": true, "read_source": true, "delegate_to_team": true, "get_provider_research": true, "get_provider_quote": true,
-	"get_sec_section": true, "get_sec_filings": true, "get_sec_facts": true,
+	"save_skill": true, "get_sec_section": true, "get_sec_filings": true, "get_sec_facts": true,
 	"get_quarterly_financials": true, "get_price_history": true, "get_technical_analysis": true,
 	"run_strategy_backtest": true, "get_leaderboard": true, "run_rule_strategy": true,
 	"get_collection_news": true,

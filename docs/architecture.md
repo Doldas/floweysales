@@ -16,6 +16,8 @@ External MCP client → MCP transport → HTTPDataSource → Go REST API
 
 The built-in chat calls the Go AI agent directly; the standalone MCP server exposes the same tool catalog through JSON-RPC/HTTP. They share backend logic but are separate orchestration paths.
 
+The agent does not send the whole tool catalog on every request. `internal/ai/toolcat.go` groups the tools into a category tree (`collections`, `research/filings`, `valuation`, ...). The chat sends the page the user is on; for a known page the model gets that page's tools, `search_symbols`, and `more_tools(category)`, which opens another group for the following steps. A call to a tool that was not offered is refused. A chat with no page, or a page not in the table, gets every granted tool as before. This keeps the tool schemas small for local models with a 32k context window. Design: `docs/superpowers/specs/2026-11-20-tool-tree-design.md`.
+
 ## Data contracts
 
 `get_market_stats` reads **locally recorded** ticks and does not provide a real-time quote. `get_latest_close` uses the latest provider OHLC close and explicitly declares `is_realtime=false`. Yahoo fiscal-period metadata is not verified: financial period labels use `CY#### Q#` and `period_basis=calendar`. Finnhub labels use source-supplied fiscal year and quarter. Verify filings before treating mixed-provider reports as comparable.

@@ -44,6 +44,8 @@ var ToolOrigins = map[string]ToolOrigin{
 	"list_collections":           {Kind: provenance.Assumed, Note: "Collections the user put together; not holdings."},
 	"get_collection":             {Kind: provenance.Assumed, Note: "The user's own collection; classifications name their source, the user or the provider profile."},
 	"get_collection_news":        {Kind: provenance.Observed, Note: "Headlines as each instrument's provider listed them; relevance is a text match."},
+	"use_skill":                  {Kind: OriginExempt, Note: "The user's saved instructions or reference text; not data about markets."},
+	"save_skill":                 {Kind: OriginExempt, Note: "Writes a draft into the user's own files; not data about markets."},
 	"get_portfolio_analytics":    {Kind: provenance.Calculated, Method: "portfolio.analytics", Note: "Computed from the simulated paper account and provider closes."},
 	"get_insider_activity":       {Kind: provenance.Observed, Provider: "SEC EDGAR Form 4", Note: "Insider transactions from Form 4 filings."},
 	"get_macro_regime":           {Kind: provenance.Calculated, Method: "macro.regime", Note: "A regime label derived from market proxies."},
