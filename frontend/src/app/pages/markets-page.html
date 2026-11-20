@@ -9,13 +9,37 @@
       </h1>
       @if (market.trackedSymbol()) {
         <div class="quote-price">
-          <span class="price tabular">{{ market.livePrice() > 0 ? (market.livePrice() | number: '1.2-4') : '—' }}</span>
+          <span class="price tabular" [class]="priceFlash()">{{ market.livePrice() > 0 ? (market.livePrice() | number: '1.2-4') : '—' }}</span>
           <span class="cur">{{ market.currency() }}</span>
           @if (change() !== null) {
             <span class="chg" [class.up]="change()! >= 0" [class.down]="change()! < 0">
               <i class="bi" [class.bi-caret-up-fill]="change()! >= 0" [class.bi-caret-down-fill]="change()! < 0" aria-hidden="true"></i>
               {{ change()! >= 0 ? '+' : '' }}{{ change()! | number: '1.2-2' }}% <small>{{ changeLabel() }}</small>
             </span>
+          }
+          @if (session()) {
+            <span class="session-pill" [class.open]="session() === 'open'" title="From the provider or the exchange's regular hours; holidays are not known">
+              <span class="session-dot" aria-hidden="true"></span>{{ session() === 'open' ? 'Market open' : 'Market closed' }}
+            </span>
+          }
+          @if (day(); as d) {
+            <dl class="quote-day" aria-label="Day statistics" [title]="'Trading day ' + d.date">
+              <div><dt>Prev. close</dt><dd class="tabular">{{ d.previous_close | number: '1.2-4' }}</dd></div>
+              <div><dt>Open</dt><dd class="tabular">{{ d.open | number: '1.2-4' }}</dd></div>
+              @if (dayRange(); as r) {
+                <div class="day-range">
+                  <dt>Day range</dt>
+                  <dd>
+                    <span class="tabular">{{ r.low | number: '1.2-4' }}</span>
+                    <span class="range-bar" role="img" [attr.aria-label]="'Price at ' + (r.position * 100).toFixed(0) + '% of the day range'">
+                      <span class="range-fill fs-grow-x" [style.width.%]="r.position * 100"></span>
+                      <span class="range-dot" [style.left.%]="r.position * 100"></span>
+                    </span>
+                    <span class="tabular">{{ r.high | number: '1.2-4' }}</span>
+                  </dd>
+                </div>
+              }
+            </dl>
           }
         </div>
       } @else {

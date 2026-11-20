@@ -37,6 +37,8 @@ function readChartStyle(): ChartStyleId {
   try { return parseChartStyle(localStorage.getItem(CHART_STYLE_KEY)); } catch { return DEFAULT_CHART_STYLE; }
 }
 import type { TrackedAsset } from '../services';
+import { flashClass, rangePosition } from '../core/quote-board';
+import { QuoteBoardService } from '../core/quote-board.service';
 
 interface Kpi { label: string; value: string; sub?: string; tone?: 'pos' | 'neg' | ''; icon: string }
 
@@ -51,6 +53,7 @@ interface Kpi { label: string; value: string; sub?: string; tone?: 'pos' | 'neg'
 export class MarketsPage {
   readonly market = inject(MarketState);
   readonly access = inject(Access);
+  private readonly board = inject(QuoteBoardService);
   private readonly agent = inject(AgentSession);
   private readonly notify = inject(NotifyService);
   private readonly chart = viewChild(TradingChartComponent);
@@ -109,8 +112,28 @@ export class MarketsPage {
   }
   readonly confirmClear = signal(false);
 
-  readonly change = computed(() => this.market.dayChange() ?? this.market.rangeChange());
-  readonly changeLabel = computed(() => (this.market.dayChange() !== null ? 'today' : this.market.historyRange()));
+  /** The latest quote of the instrument on screen: the day's statistics and the session state. */
+  readonly quoteRow = this.board.focusRow;
+  readonly day = computed(() => this.quoteRow()?.quote?.day ?? null);
+  private readonly dayFromQuote = computed(() => this.quoteRow()?.dayPct ?? null);
+  readonly change = computed(() => this.market.dayChange() ?? this.dayFromQuote() ?? this.market.rangeChange());
+  readonly changeLabel = computed(() => (this.market.dayChange() !== null || this.dayFromQuote() !== null ? 'today' : this.market.historyRange()));
+  readonly priceFlash = computed(() => flashClass(this.quoteRow()?.entry));
+  readonly session = computed(() => {
+    const s = this.quoteRow()?.quote?.market_session;
+    return s === 'open' || s === 'closed' ? s : '';
+  });
+  /** The day's range, widened to the price when a newer tick lies outside it, and where the price sits in it. */
+  readonly dayRange = computed(() => {
+    const d = this.day();
+    // The quote's own price, so the dot and the range come from the same moment (a live tick when tracked).
+    const price = this.quoteRow()?.price || this.market.livePrice();
+    if (!d || !(d.high > 0) || !(d.low > 0) || !(price > 0)) return null;
+    const low = Math.min(d.low, price);
+    const high = Math.max(d.high, price);
+    const position = rangePosition(price, low, high);
+    return position === null ? null : { low, high, position };
+  });
 
   private readonly chartInput = computed<ChartMetaInput>(() => {
     const s = this.shownSeries();

@@ -34,18 +34,20 @@ export class QuoteBoardService {
   /** When the last full refresh started, in ms since the epoch. */
   readonly refreshedAt = signal(0);
 
-  readonly rows = computed<BoardRow[]>(() => {
-    const entries = this.entries();
-    const symbol = this.market.trackedSymbol();
-    const provider = this.market.trackedProvider();
-    const tick = this.market.selectedTracked() ? this.market.livePrice() : 0;
-    return this.instruments().map(i => {
-      const key = boardKey(i);
-      const entry = entries[key];
-      const live = tick > 0 && i.symbol === symbol.toUpperCase() && i.provider === provider.toUpperCase();
-      const price = live ? tick : entry?.quote?.price ?? 0;
-      return { ...i, key, entry, quote: entry?.quote, price, live, dayPct: dayPercent(entry?.quote, price) };
-    });
+  /** The instrument on screen in Markets; its quote is fetched with the board even when it is neither tracked nor starred. */
+  readonly focus = computed<BoardInstrument | null>(() => {
+    const symbol = this.market.trackedSymbol().trim().toUpperCase();
+    const provider = this.market.trackedProvider().trim().toUpperCase();
+    return symbol && provider ? { symbol, provider, tracked: false, favorite: false } : null;
+  }, { equal: (a, b) => (a && b ? boardKey(a) === boardKey(b) : a === b) });
+
+  readonly rows = computed<BoardRow[]>(() => this.instruments().map(i => this.toRow(i)));
+
+  /** The board row of the instrument on screen, with the live tick when it is tracked. */
+  readonly focusRow = computed<BoardRow | null>(() => {
+    const focus = this.focus();
+    if (!focus) return null;
+    return this.rows().find(r => r.key === boardKey(focus)) ?? this.toRow(focus);
   });
 
   /** Rows with a price, for widgets that show nothing until the first quote arrives. */
@@ -56,7 +58,7 @@ export class QuoteBoardService {
   constructor() {
     // A new instrument is fetched at once; the timer refreshes the whole board.
     effect(() => {
-      const list = this.instruments();
+      const list = this.watched();
       untracked(() => {
         if (!this.refreshedAt()) this.refreshedAt.set(Date.now());
         this.load(list.filter(i => !this.entries()[boardKey(i)]));
@@ -78,10 +80,29 @@ export class QuoteBoardService {
     return this.rows().find(r => r.key === key);
   }
 
-  /** Fetches every price on the board again now. */
+  /** Fetches every price on the board, and the one on screen, again now. */
   refresh(): void {
     this.refreshedAt.set(Date.now());
-    this.load(this.instruments());
+    this.load(this.watched());
+  }
+
+  /** The board and the instrument on screen, each once. */
+  private readonly watched = computed(() => {
+    const list = this.instruments();
+    const focus = this.focus();
+    return focus && !list.some(i => boardKey(i) === boardKey(focus)) ? [...list, focus] : list;
+  });
+
+  private toRow(i: BoardInstrument): BoardRow {
+    const key = boardKey(i);
+    const entry = this.entries()[key];
+    // Only a tick from the live stream is newer than the quote; the history fallback of livePrice is not.
+    const t = this.market.selectedTracked() ? this.market.latestTick() : null;
+    const tick = t?.marketData?.price ?? t?.price ?? 0;
+    const focus = this.focus();
+    const live = tick > 0 && !!focus && boardKey(focus) === key;
+    const price = live ? tick : entry?.quote?.price ?? 0;
+    return { ...i, key, entry, quote: entry?.quote, price, live, dayPct: dayPercent(entry?.quote, price) };
   }
 
   private load(list: readonly BoardInstrument[]): void {

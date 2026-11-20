@@ -226,7 +226,7 @@ jobs:
         run: npx playwright test --config playwright.config.ts e2e/email-render.spec.ts e2e/models.spec.ts e2e/own-provider-keys.spec.ts e2e/plugins.spec.ts e2e/provider-routing.spec.ts e2e/roles.spec.ts e2e/theme.spec.ts e2e/utc.spec.ts e2e/vision-settings.spec.ts e2e/web-search.spec.ts
       - name: Playwright agents, workspace, shell, leaderboard and mobile layout (desktop and phone)
         working-directory: frontend
-        run: npx playwright test --config playwright.config.ts e2e/agent-formula.spec.ts e2e/agent.spec.ts e2e/workspace.spec.ts e2e/workspace-markdown-a11y.spec.ts e2e/strategy-montecarlo-a11y.spec.ts e2e/shell.spec.ts e2e/ticker-tape.spec.ts e2e/market-clock.spec.ts e2e/market-pulse.spec.ts e2e/leaderboard.spec.ts e2e/mobile-layout.spec.ts
+        run: npx playwright test --config playwright.config.ts e2e/agent-formula.spec.ts e2e/agent.spec.ts e2e/workspace.spec.ts e2e/workspace-markdown-a11y.spec.ts e2e/strategy-montecarlo-a11y.spec.ts e2e/shell.spec.ts e2e/ticker-tape.spec.ts e2e/market-clock.spec.ts e2e/market-pulse.spec.ts e2e/markets-quote.spec.ts e2e/leaderboard.spec.ts e2e/mobile-layout.spec.ts
       - name: Upload Playwright HTML report, screenshots, video and traces
         if: always()
         uses: actions/upload-artifact@v7
