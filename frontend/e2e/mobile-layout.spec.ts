@@ -13,6 +13,33 @@ test.describe('small screens', () => {
     await expect(page.getByRole('button', { name: 'Open navigation' })).toBeVisible();
   });
 
+  test('pages can be found by name from the drawer', async ({ page }) => {
+    await open(page);
+    await page.getByRole('button', { name: 'Open navigation' }).click();
+    await page.getByRole('button', { name: 'Find a page' }).click();
+    await page.getByRole('combobox', { name: 'Command' }).fill('Collections');
+    await page.getByRole('option', { name: 'Collections', exact: true }).click();
+    await expect(page).toHaveTitle('Collections · FloweySales');
+    await expect(page.getByRole('navigation', { name: 'Workspace sections' })).toBeHidden();
+  });
+
+  test('Markets keeps the price chart in view while secondary controls are folded', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await open(page, 'markets');
+    const chart = page.locator('fse-trading-chart canvas').first();
+    const options = page.getByRole('button', { name: 'Chart options' });
+    await expect(chart).toBeInViewport();
+    await expect(options).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByRole('radiogroup', { name: 'Chart style' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Groups', exact: true })).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByRole('button', { name: /Active trackers/ })).toHaveAttribute('aria-expanded', 'false');
+    await options.click();
+    await expect(page.getByRole('radiogroup', { name: 'Chart style' })).toBeVisible();
+    await expect(page.getByRole('toolbar', { name: 'Drawing tools' })).toBeVisible();
+    await options.click();
+    await expect(chart).toBeInViewport();
+  });
+
   for (const route of ['', 'markets', 'strategies', 'world', 'agent', 'flows']) {
     test(`/${route || 'home'} does not scroll sideways`, async ({ page }) => {
       await open(page, route);

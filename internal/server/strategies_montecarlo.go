@@ -42,13 +42,16 @@ type strategyObserved struct {
 }
 
 type strategyMonteCarloResponse struct {
-	Symbol      string  `json:"symbol"`
-	Provider    string  `json:"provider"`
-	Range       string  `json:"range"`
-	GeneratedAt string  `json:"generated_at"`
-	Strategy    string  `json:"strategy"`
-	StrategyID  string  `json:"strategy_id,omitempty"`
-	CostBps     float64 `json:"cost_bps"`
+	Symbol             string            `json:"symbol"`
+	Provider           string            `json:"provider"`
+	Currency           string            `json:"currency,omitempty"`
+	Range              string            `json:"range"`
+	GeneratedAt        string            `json:"generated_at"`
+	Strategy           string            `json:"strategy"`
+	StrategyID         string            `json:"strategy_id,omitempty"`
+	CostBps            float64           `json:"cost_bps"`
+	StrategyDefinition strategy.Strategy `json:"strategy_definition"`
+	ReplayConfig       strategy.Config   `json:"replay_config"`
 	// From and To are the dates tested (UTC); DataStart and DataEnd are what the provider returned.
 	From      string `json:"from"`
 	To        string `json:"to"`
@@ -120,8 +123,9 @@ func buildStrategyMonteCarlo(bt strategyBacktestResponse, strategyID string, cfg
 	}
 	sim.Limitations = append(sim.Limitations, "Partial fills, liquidity and the market impact of larger positions are not modeled. The delay, spread-regime and position-size settings are blunt stresses on the trade results, not a re-run of the rules on other prices.")
 	return strategyMonteCarloResponse{
-		Symbol: bt.Symbol, Provider: bt.Provider, Range: bt.Range, GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+		Symbol: bt.Symbol, Provider: bt.Provider, Currency: bt.Currency, Range: bt.Range, GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Strategy: bt.Result.Strategy.Name, StrategyID: strategyID, CostBps: bt.Config.CostBps,
+		StrategyDefinition: bt.Result.Strategy, ReplayConfig: bt.Config,
 		From: bt.From, To: bt.To, DataStart: bt.DataStart, DataEnd: bt.DataEnd, Notice: bt.Notice,
 		Observed: strategyObserved{TotalReturnPct: bt.TotalPct, BuyHoldReturnPct: bt.BuyHoldPct, Stats: bt.Stats,
 			ClosedTrades: len(pcts), OpenTradeExcluded: openExcluded, Warnings: bt.Warnings},

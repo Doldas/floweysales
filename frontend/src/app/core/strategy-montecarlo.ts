@@ -130,12 +130,15 @@ export function tradeMonteCarloCsv(r: StrategyMonteCarloResult): string {
   const f = (v: number): string => v.toFixed(2);
   const rows: (string | number)[][] = [
     ['setting', 'value'],
-    ['strategy', r.strategy], ['symbol', r.symbol], ['provider', r.provider], ['range', r.range], ['tested_from_utc', r.from], ['tested_to_utc', r.to],
+    ['strategy', r.strategy], ['strategy_id', r.strategy_id ?? ''], ['strategy_definition', r.strategy_definition ? JSON.stringify(r.strategy_definition) : ''],
+    ['symbol', r.symbol], ['provider', r.provider], ['currency', r.currency ?? ''], ['range', r.range], ['tested_from_utc', r.from], ['tested_to_utc', r.to],
     ['data_start_utc', r.data_start], ['data_end_utc', r.data_end], ['generated_at_utc', r.generated_at], ['cost_bps', r.cost_bps],
+    ['slippage_bps_per_side', r.replay_config?.slippage_bps ?? ''], ['spread_bps', r.replay_config?.spread_bps ?? ''],
     ['model_version', s.model_version], ['method', s.config.method], ['runs', s.config.runs], ['trades_per_path', s.config.trades], ['seed', s.config.seed],
     ['observed_trades', s.observed_trades], ['drawdown_limit_pct', s.config.drawdown_limit_pct ?? ''], ['extra_cost_bps_per_trade', s.config.extra_cost_bps_per_trade ?? ''],
     ['dispersion_scale', s.config.dispersion_scale], ['delay_bars', s.config.delay_bars ?? ''], ['regime_share_pct', s.config.regime_share_pct ?? ''],
     ['regime_scale', s.config.regime_scale ?? ''], ['position_scale', s.config.position_scale ?? ''],
+    ['instrument_daily_vol_pct', s.config.instrument_daily_vol_pct ?? ''], ['exposure', s.config.exposure ?? ''],
     [],
     ['figure', 'observed', 'p5', 'p25', 'p50', 'p75', 'p95'],
     ['total_return_pct', f(s.observed.total_return_pct), f(s.terminal_return_pct.p5), f(s.terminal_return_pct.p25), f(s.terminal_return_pct.p50), f(s.terminal_return_pct.p75), f(s.terminal_return_pct.p95)],

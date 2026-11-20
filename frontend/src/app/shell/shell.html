@@ -21,6 +21,10 @@
       </span>
     </button>
 
+    <button type="button" class="sidebar-find" (click)="navOpen.set(false); palette.open()">
+      <i class="bi bi-search" aria-hidden="true"></i> Find a page
+    </button>
+
     <nav class="sidebar-nav" aria-label="Workspace sections">
       @for (section of sections; track section.label) {
         @if (section.items.some(i => i.visible())) {

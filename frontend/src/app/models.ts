@@ -869,7 +869,9 @@ export interface StrategyMonteCarloRequest extends StrategyRunRequest {
   delay_bars?: number; regime_share_pct?: number; regime_scale?: number; position_scale?: number;
 }
 export interface StrategyMonteCarloResult {
-  symbol: string; provider: string; range: string; generated_at: string; strategy: string; strategy_id?: string; cost_bps: number;
+  symbol: string; provider: string; currency?: string; range: string; generated_at: string; strategy: string; strategy_id?: string; cost_bps: number;
+  strategy_definition?: StrategyDef;
+  replay_config?: { cost_bps: number; slippage_bps: number; spread_bps: number };
   from: string; to: string; data_start: string; data_end: string; notice?: string;
   observed: { total_return_pct: number; buy_hold_return_pct: number; closed_trades: number; open_trade_excluded?: boolean; warnings: string[] };
   simulation: {

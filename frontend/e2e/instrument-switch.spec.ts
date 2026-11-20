@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, open, test } from './fixtures';
+import { expect, expandPhonePanel, open, test } from './fixtures';
 
 // #256: after the shared instrument changes, a late answer for the previous one must never be shown.
 const NOW = Date.UTC(2026, 9, 28, 15, 30) / 1000;
@@ -29,6 +29,7 @@ test.describe('switching the shared instrument', () => {
   test('a slow answer for the previous instrument does not replace the new one', async ({ page }) => {
     // Registered first so the initial NVDA load uses the shared mock; the later route wins for the symbols below.
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Watchlist and paper order');
     const releases = await serveHistory(page, { 'VOLV-B': 285, BTCUSDT: 67000 }, ['VOLV-B']);
     const list = page.getByRole('list', { name: 'Watchlist prices' });
 
@@ -37,6 +38,7 @@ test.describe('switching the shared instrument', () => {
     // The user moves on before VOLV-B has answered.
     await list.locator('[data-symbol="BTCUSDT"]').click();
     await expect(page.getByRole('heading', { level: 1 })).toContainText('BTCUSDT');
+    await expandPhonePanel(page, 'Key figures');
     const figures = page.getByRole('region', { name: 'Key figures' });
     await expect(figures).toContainText(/Latest price\s*6\d{4}\.\d\d/);
 
@@ -50,10 +52,12 @@ test.describe('switching the shared instrument', () => {
 
   test('the previous instrument\'s figures are not shown while the new one loads', async ({ page }) => {
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Watchlist and paper order');
     const releases = await serveHistory(page, { BTCUSDT: 67000 }, ['BTCUSDT']);
     await page.getByRole('list', { name: 'Watchlist prices' }).locator('[data-symbol="BTCUSDT"]').click();
     await expect(page.getByRole('heading', { level: 1 })).toContainText('BTCUSDT');
     // NVDA's price (about 120) must not be presented under the BTCUSDT heading.
+    await expandPhonePanel(page, 'Key figures');
     const figures = page.getByRole('region', { name: 'Key figures' });
     await expect(figures).not.toContainText(/Latest price\s*\d{1,3}\.\d\d/);
     releases['BTCUSDT']();

@@ -375,6 +375,9 @@ interface PointMeta {
       .chart-container { height: var(--fs-pane-h, 380px); position: relative; min-width: 0; width: 100%; }
       .subchart-container { height: 96px; position: relative; min-width: 0; width: 100%; margin-top: 8px; }
       @media (max-width: 700px) {
+        :host(:not(.phone-options-open)) .draw-bar,
+        :host(:not(.phone-options-open)) .legend-hint { display: none; }
+        .draw-bar .fs-chip { min-height: 36px; }
         .chart-container { height: var(--fs-pane-h, 270px); }
         .subchart-container { height: 92px; }
         .legend-hint { font-size: 0.7rem; }

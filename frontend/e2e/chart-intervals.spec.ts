@@ -1,8 +1,9 @@
-import { expect, open, test } from './fixtures';
+import { expect, expandPhonePanel, open, test } from './fixtures';
 
 test.describe('chart bar length', () => {
   test('bars can be merged to a longer length, finer ones are off, and the choice is remembered', async ({ page }) => {
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Chart options');
     const group = page.getByRole('radiogroup', { name: 'Bar length' });
     const meta = page.getByTestId('chart-meta');
 
@@ -28,6 +29,7 @@ test.describe('chart bar length', () => {
     await expect(meta).toContainText("4-hour bars merged from the provider's 30-minute bars, 5D");
 
     await page.reload();
+    await expandPhonePanel(page, 'Chart options');
     await expect(page.getByRole('radiogroup', { name: 'Bar length' }).locator('[data-interval="4h"]')).toHaveAttribute('aria-checked', 'false');
     // Back on 1M (daily bars) 4h is impossible, so the chart falls back to the provider's own bars.
     await expect(page.getByTestId('chart-meta')).toContainText('daily bars, 1M');
@@ -37,6 +39,7 @@ test.describe('chart bar length', () => {
   test('a stored length that does not exist is ignored', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('fs.chartInterval', '7h'));
     await open(page, 'markets');
+    await expandPhonePanel(page, 'Chart options');
     await expect(page.getByRole('radiogroup', { name: 'Bar length' }).locator('[data-interval="auto"]')).toHaveAttribute('aria-checked', 'true');
   });
 });

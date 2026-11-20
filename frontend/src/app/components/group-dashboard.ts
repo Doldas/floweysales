@@ -10,6 +10,7 @@ import {
 import { instrumentKey } from '../core/instrument-ref';
 import type { HistorySeries } from '../models';
 import { MarketService } from '../services';
+import { ThemeService } from '../theme.service';
 import { formatUtcDate, formatUtcDateTime } from '../ui/datetime';
 import { PaneComponent } from '../ui/pane';
 
@@ -21,6 +22,18 @@ const RANGE_KEY = 'fs.markets.groupRange';
 export const GROUP_HISTORY_MEMBERS = 25;
 /** The correlation grid stays readable up to this many instruments. */
 const CORRELATION_MEMBERS = 12;
+// Each color and line pattern combination is unique across the 25 plotted instruments.
+const SERIES_COLORS = [
+  { light: '#b44316', dark: '#ff986b' },
+  { light: '#007a56', dark: '#5ee5b1' },
+  { light: '#783cca', dark: '#bd9aff' },
+  { light: '#956300', dark: '#f6cd64' },
+  { light: '#b12563', dark: '#f785b3' },
+  { light: '#007685', dark: '#59d9e9' },
+  { light: '#be292d', dark: '#ff7c83' },
+  { light: '#537415', dark: '#b9da70' },
+] as const;
+const SERIES_DASHES = [null, '8 4', '2 4', '8 3 2 3'] as const;
 
 /** Histories already loaded this visit, by provider, symbol and range. */
 const historyCache = new Map<string, { at: number; series: HistorySeries | null }>();
@@ -136,14 +149,13 @@ export class WidthDirective {
             </div>
 
             <div class="charts">
-              <!-- Index over time: the group line, its instruments in gray behind it -->
               <figure class="chart wide">
-                <figcaption><strong>Group index</strong> <span class="muted">100 = {{ indexStart() }}; instruments in gray</span></figcaption>
+                <figcaption><strong>Group index</strong> <span class="muted">100 = {{ indexStart() }}</span></figcaption>
                 @if (line(); as L) {
                   <div class="plot" (fsWidth)="LW.set($event)" (mouseleave)="hover.set(null)">
                     <svg [attr.viewBox]="'0 0 ' + LW() + ' ' + LH" [attr.width]="LW()" [attr.height]="LH" class="svg" role="img" tabindex="0"
                          [attr.aria-label]="'Group index from 100 to ' + (s.index.at(-1)?.value ?? 100).toFixed(1) + ' over ' + range() + '. Use the arrow keys to read each day.'"
-                         (mousemove)="move($event)" (keydown)="key($event)" (blur)="hover.set(null)">
+                         (mousemove)="move($event)" (click)="move($event)" (keydown)="key($event)" (blur)="hover.set(null)">
                       @for (t of L.ticks; track t) {
                         <line class="grid" [class.base]="t === 100" [attr.x1]="LP.l" [attr.x2]="LW() - LP.r" [attr.y1]="L.y(t)" [attr.y2]="L.y(t)" />
                         <text class="axis" [attr.x]="LP.l - 6" [attr.y]="L.y(t) + 4" text-anchor="end">{{ t }}</text>
@@ -151,11 +163,15 @@ export class WidthDirective {
                       @for (d of L.xTicks; track d.x) {
                         <text class="axis" [attr.x]="d.x" [attr.y]="LH - 6" text-anchor="middle">{{ d.label }}</text>
                       }
-                      @for (m of L.members; track m.key) {
-                        <path class="member-line" [attr.d]="m.d" />
-                      }
                       <path class="area" [attr.d]="L.area" />
                       <path class="group-line" [attr.d]="L.d" />
+                      @for (m of L.members; track m.key) {
+                        <path class="member-line" [class.dimmed]="activeLine() && activeLine() !== m.key"
+                              [class.highlighted]="activeLine() === m.key" [attr.stroke]="m.color"
+                              [attr.stroke-dasharray]="m.dash" [attr.d]="m.d">
+                          <title>{{ m.label }}</title>
+                        </path>
+                      }
                       @if (hover(); as h) {
                         <line class="cross" [attr.x1]="h.x" [attr.x2]="h.x" [attr.y1]="LP.t" [attr.y2]="LH - LP.b" />
                         <circle class="dot" [attr.cx]="h.x" [attr.cy]="L.y(s.index[h.i].value)" r="4.5" />
@@ -165,12 +181,30 @@ export class WidthDirective {
                       <div class="tip" role="status" [style.left.px]="h.x" [class.flip]="h.x > LW() * 0.6">
                         <div class="tip-day">{{ day(s.index[h.i].day) }}</div>
                         <div class="tip-row"><span class="sw sw-accent"></span>Group <b>{{ s.index[h.i].value.toFixed(1) }}</b> <span class="muted">{{ pct(s.index[h.i].value - 100) }}</span></div>
-                        @for (m of hoverMembers(); track m.symbol) {
-                          <div class="tip-row"><span class="sw sw-gray"></span>{{ m.symbol }} <b>{{ m.value.toFixed(1) }}</b></div>
+                        @for (m of hoverMembers(); track m.key) {
+                          <div class="tip-row">
+                            <svg class="line-swatch" viewBox="0 0 24 8" aria-hidden="true">
+                              <line x1="0" x2="24" y1="4" y2="4" [attr.stroke]="m.color" [attr.stroke-dasharray]="m.dash" />
+                            </svg>
+                            {{ m.label }} <b>{{ m.value.toFixed(1) }}</b>
+                          </div>
                         }
                       </div>
                     }
                   </div>
+                  <ul class="line-legend" aria-label="Group chart series">
+                    <li class="index-key"><span class="group-swatch" aria-hidden="true"></span>Group index</li>
+                    @for (m of L.members; track m.key) {
+                      <li>
+                        <button type="button" [attr.aria-pressed]="activeLine() === m.key" (click)="toggleLine(m.key)">
+                          <svg class="line-swatch" viewBox="0 0 24 8" aria-hidden="true">
+                            <line x1="0" x2="24" y1="4" y2="4" [attr.stroke]="m.color" [attr.stroke-dasharray]="m.dash" />
+                          </svg>
+                          {{ m.label }}
+                        </button>
+                      </li>
+                    }
+                  </ul>
                 } @else {
                   <p class="muted small">Not enough shared days to draw an index.</p>
                 }
@@ -374,8 +408,10 @@ export class WidthDirective {
     .grid { stroke: var(--v-grid); stroke-width: 1; vector-effect: non-scaling-stroke; }
     .grid.base { stroke: var(--v-base); }
     .axis { fill: var(--fs-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-    .member-line { fill: none; stroke: var(--v-gray); stroke-width: 1; opacity: .7; vector-effect: non-scaling-stroke; }
-    .group-line { fill: none; stroke: var(--v-accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; animation: draw 1s ease-out both; }
+    .member-line { fill: none; stroke-width: 1.75; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+    .member-line.dimmed { opacity: .15; }
+    .member-line.highlighted { stroke-width: 3; }
+    .group-line { fill: none; stroke: var(--v-accent); stroke-width: 3.25; stroke-linejoin: round; stroke-linecap: round; animation: draw 1s ease-out both; }
     @keyframes draw { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
     .area { fill: var(--v-accent-area); stroke: none; animation: fade .8s ease-out both; }
     @keyframes fade { from { opacity: 0; } }
@@ -386,7 +422,17 @@ export class WidthDirective {
     .tip-day { font-weight: 600; margin-bottom: .15rem; }
     .tip-row { display: flex; align-items: center; gap: .35rem; }
     .sw { display: inline-block; width: .7rem; height: .7rem; border-radius: 3px; flex: 0 0 auto; }
-    .sw-accent { background: var(--v-accent); } .sw-gray { background: var(--v-gray); }
+    .sw-accent { background: var(--v-accent); }
+    .line-legend { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; list-style: none; margin: .45rem 0 .6rem; padding: .15rem; max-height: 9rem; overflow: auto; }
+    .line-legend button, .index-key { display: inline-flex; align-items: center; gap: .4rem; font-size: .8rem; }
+    .index-key { padding: .3rem .45rem .3rem 0; font-weight: 600; }
+    .line-legend button { padding: .3rem .5rem; border: 1px solid var(--fs-border); border-radius: 6px; background: var(--v-surface); color: var(--fs-text); text-align: left; }
+    .line-legend button[aria-pressed='true'] { border-color: var(--fs-accent); background: var(--fs-accent-soft); }
+    .line-swatch, .group-swatch { width: 24px; flex: 0 0 24px; }
+    .line-swatch { height: 8px; }
+    .line-swatch line { stroke-width: 2; }
+    .group-swatch { height: 3px; border-radius: 2px; background: var(--v-accent); }
+    @media (max-width: 700px) { .line-legend button { min-height: 36px; } }
     .s1 { fill: var(--v-1); background: var(--v-1); } .s2 { fill: var(--v-2); background: var(--v-2); } .s3 { fill: var(--v-3); background: var(--v-3); }
     .s4 { fill: var(--v-4); background: var(--v-4); } .s5 { fill: var(--v-5); background: var(--v-5); } .s6 { fill: var(--v-6); background: var(--v-6); }
     .so { fill: var(--v-other); background: var(--v-other); }
@@ -439,6 +485,7 @@ export class WidthDirective {
 export class GroupDashboard {
   private readonly api = inject(MarketService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly theme = inject(ThemeService);
 
   readonly collection = input.required<Collection>();
   readonly members = input.required<CollectionMember[]>();
@@ -460,6 +507,7 @@ export class GroupDashboard {
   readonly loadedAt = signal('');
   private readonly closes = signal<Map<string, DailyClose[]>>(new Map());
   readonly hover = signal<Hover | null>(null);
+  private readonly highlighted = signal<string | null>(null);
   readonly donutHover = signal<number | null>(null);
   readonly scatterHover = signal<string | null>(null);
   /** The composition the user picked; a model portfolio starts with its weights. */
@@ -552,6 +600,20 @@ export class GroupDashboard {
   });
   readonly indexTable = computed(() => [...(this.stats()?.index ?? [])].reverse());
 
+  private readonly seriesStyles = computed(() => {
+    const targets = this.targets().slice(0, GROUP_HISTORY_MEMBERS);
+    const theme = this.theme.theme();
+    return new Map(targets.map(({ instrument }, i) => {
+      const { symbol, provider } = instrument;
+      const duplicate = targets.some(({ instrument: other }, j) => i !== j && other.symbol.toUpperCase() === symbol.toUpperCase());
+      return [instrumentKey(instrument), {
+        label: duplicate ? `${symbol} · ${provider}` : symbol,
+        color: SERIES_COLORS[i % SERIES_COLORS.length][theme],
+        dash: SERIES_DASHES[(i + Math.floor(i / SERIES_COLORS.length)) % SERIES_DASHES.length],
+      }];
+    }));
+  });
+
   readonly line = computed(() => {
     const s = this.stats();
     if (!s || s.index.length < 2) return null;
@@ -582,15 +644,26 @@ export class GroupDashboard {
       const t = t0 + f * (t1 - t0);
       return { x: x(t), label: formatUtcDate(t).replace(/,? \d{4}$/, m => (t1 - t0 > 300 * 864e5 ? m : '')) };
     });
-    return { d, area, y, xs: times.map(x), ticks: niceTicks(lo, hi), xTicks, members: members.map(m => ({ key: m.key, d: path(m.values), values: m.values })) };
+    const styles = this.seriesStyles();
+    const lines = members.flatMap(({ key, values }) => {
+      const style = styles.get(key);
+      return style ? [{ key, d: path(values), values, ...style }] : [];
+    });
+    return { d, area, y, xs: times.map(x), ticks: niceTicks(lo, hi), xTicks, members: lines };
   });
 
+  readonly activeLine = computed(() => this.line()?.members.find(m => m.key === this.highlighted())?.key ?? null);
+
+  toggleLine(key: string): void {
+    this.highlighted.update(current => current === key ? null : key);
+  }
+
   readonly hoverMembers = computed(() => {
-    const h = this.hover(), L = this.line(), s = this.stats();
-    if (!h || !L || !s) return [];
-    const bySymbol = new Map(s.members.map(m => [m.key, m.symbol]));
+    const h = this.hover(), L = this.line(), active = this.activeLine();
+    if (!h || !L) return [];
     return L.members
-      .map(m => ({ symbol: bySymbol.get(m.key) ?? m.key, value: m.values[h.i] }))
+      .filter(m => !active || m.key === active)
+      .map(m => ({ key: m.key, label: m.label, color: m.color, dash: m.dash, value: m.values[h.i] }))
       .filter(m => Number.isFinite(m.value))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);

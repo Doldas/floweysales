@@ -1,6 +1,6 @@
 <div class="fs-page">
   <!-- Quote header -->
-  <header class="quote-head">
+  <header #quoteHead class="quote-head">
     <div class="quote-id">
       <div class="fs-eyebrow">{{ market.provider() }}@if (market.mode() === 'research') { · research mode }</div>
       <h1>
@@ -34,136 +34,144 @@
   <section class="card control-card" aria-label="Instrument and trackers">
     <div class="card-body">
       <div class="control-row">
-        <fs-symbol-search class="control-search" [navigate]="false" placeholder="Search & track a ticker, e.g. VOLV-B or BTCUSDT" />
-        @if (access.liveMarkets()) {
-          <button type="button" class="btn btn-sm" [class.btn-outline-secondary]="!confirmClear()" [class.btn-outline-danger]="confirmClear()" (click)="clearHistory()"
-                  title="Delete all stored tick history (click twice to confirm)">
-            <i class="bi bi-trash3" aria-hidden="true"></i>{{ confirmClear() ? 'Confirm clear' : 'Clear history' }}
-          </button>
-        }
+        <fs-symbol-search class="control-search" [navigate]="false" placeholder="Search ticker or company" (chosen)="showSelectedInstrument()" />
       </div>
-      <div class="trackers" [attr.aria-label]="(market.mode() === 'live' ? 'Active market trackers' : 'Watchlist')">
-        <span class="trackers-label">{{ market.mode() === 'live' ? 'Active trackers' : 'Watchlist' }} <span class="tabular">({{ market.trackedAssets().length }}/{{ market.maxTrackers }})</span></span>
-        @for (asset of market.trackedAssets(); track asset.symbol + '|' + asset.provider) {
-          <span class="tracker-chip" [class.selected]="isActive(asset)">
-            <button type="button" class="tracker-select" (click)="market.view(asset)" [title]="'View ' + asset.symbol + ' on ' + asset.provider" [attr.aria-pressed]="isActive(asset)">
-              {{ asset.symbol }} <small>{{ asset.provider }}</small>
+      <fs-phone-disclosure class="tracker-disclosure" [label]="trackerLabel()" panelId="market-trackers">
+        <div class="trackers" [attr.aria-label]="(market.mode() === 'live' ? 'Active market trackers' : 'Watchlist')">
+          <span class="trackers-label">{{ market.mode() === 'live' ? 'Active trackers' : 'Watchlist' }} <span class="tabular">({{ market.trackedAssets().length }}/{{ market.maxTrackers }})</span></span>
+          @for (asset of market.trackedAssets(); track asset.symbol + '|' + asset.provider) {
+            <span class="tracker-chip" [class.selected]="isActive(asset)">
+              <button type="button" class="tracker-select" (click)="market.view(asset)" [title]="'View ' + asset.symbol + ' on ' + asset.provider" [attr.aria-pressed]="isActive(asset)">
+                {{ asset.symbol }} <small>{{ asset.provider }}</small>
+              </button>
+              <button type="button" class="tracker-remove" (click)="stop(asset, $event)" [attr.aria-label]="'Stop tracking ' + asset.symbol + ' on ' + asset.provider" title="Remove">
+                <i class="bi bi-x" aria-hidden="true"></i>
+              </button>
+            </span>
+          } @empty {
+            <span class="text-muted small">Nothing tracked yet.</span>
+          }
+          @if (access.liveMarkets()) {
+            <button type="button" class="btn btn-sm clear-history" [class.btn-outline-secondary]="!confirmClear()" [class.btn-outline-danger]="confirmClear()" (click)="clearHistory()"
+                    title="Delete all stored tick history (click twice to confirm)">
+              <i class="bi bi-trash3" aria-hidden="true"></i>{{ confirmClear() ? 'Confirm clear' : 'Clear history' }}
             </button>
-            <button type="button" class="tracker-remove" (click)="stop(asset, $event)" [attr.aria-label]="'Stop tracking ' + asset.symbol + ' on ' + asset.provider" title="Remove">
-              <i class="bi bi-x" aria-hidden="true"></i>
-            </button>
-          </span>
-        } @empty {
-          <span class="text-muted small">Nothing tracked yet.</span>
-        }
-      </div>
+          }
+        </div>
+      </fs-phone-disclosure>
     </div>
   </section>
 
-  <!-- Groups: the user's collections, with a dashboard of the chosen one -->
-  <fs-market-groups />
-
   @if (market.trackedSymbol()) {
-    <!-- KPIs -->
-    <section class="grid" aria-label="Key figures">
-      @for (k of kpis(); track k.label) {
-        <div class="card fs-kpi">
-          <span class="fs-kpi-label"><i class="bi" [class]="k.icon" aria-hidden="true"></i>{{ k.label }}</span>
-          <span class="fs-kpi-value" [class.text-pos]="k.tone === 'pos'" [class.text-neg]="k.tone === 'neg' && k.value !== 'Standby'">{{ k.value }}</span>
-          @if (k.sub) { <span class="fs-kpi-sub">{{ k.sub }}</span> }
-        </div>
-      }
-    </section>
-
     <div class="chart-row">
-    <!-- Chart: a pane the user can fold, resize and open full screen; source, bars, units and newest bar stay visible when folded -->
-    <fs-pane class="chart-card" paneId="markets.chart" heading="Price chart" [resizable]="true" [focusable]="true" mode="var" [defaultHeight]="chartHeight" [min]="200" [max]="900">
-      <span paneSummary>{{ chartSummary() }}</span>
-      <span paneActions style="display: contents">
-        <div class="fs-segmented chart-range" role="group" aria-label="History range">
-          @for (r of market.historyRanges; track r) {
-            <button type="button" [attr.aria-pressed]="market.historyRange() === r" (click)="market.setHistoryRange(r)">{{ r }}</button>
-          }
-        </div>
-        <button type="button" class="btn btn-ghost btn-icon btn-sm" (click)="resetZoom()" aria-label="Reset zoom" title="Reset zoom"><i class="bi bi-arrows-angle-contract"></i></button>
-      </span>
-      <dl paneMeta class="chart-meta" aria-label="Chart data details" data-testid="chart-meta">
-        @for (f of chartFacts(); track f.label) {
-          <div><dt>{{ f.label }}</dt><dd>{{ f.value }}</dd></div>
-        }
-      </dl>
-      <div class="history-load-slot" [attr.aria-busy]="market.loadingHistory()">
-        @if (market.loadingHistory()) { <fs-progress-status stage="Loading price history" /> }
-      </div>
-      <div class="studies chart-intervals" role="radiogroup" aria-label="Bar length">
-        <i class="bi bi-clock-history text-muted" aria-hidden="true"></i>
-        <button type="button" class="fs-chip" role="radio" [attr.aria-checked]="shownInterval() === 'auto'" [title]="'The provider\'s own bars' + (nativeInterval() ? ' (' + nativeInterval() + ')' : '')" data-interval="auto" (click)="chooseInterval('auto')">Auto@if (nativeInterval()) { · {{ nativeInterval() }} }</button>
-        @for (iv of intervals; track iv.id) {
-          <button type="button" class="fs-chip" role="radio" [attr.aria-checked]="shownInterval() === iv.id" [disabled]="!mergeable().includes(iv.id)" [title]="intervalHint(iv.id)" [attr.data-interval]="iv.id" (click)="chooseInterval(iv.id)">{{ iv.label }}</button>
-        }
-      </div>
-      <div class="studies chart-styles" role="radiogroup" aria-label="Chart style">
-        <i class="bi bi-bar-chart-line text-muted" aria-hidden="true"></i>
-        @for (st of chartStyles; track st.id) {
-          <button type="button" class="fs-chip" role="radio" [attr.aria-checked]="chartStyle() === st.id" [title]="st.hint" [attr.data-style]="st.id" (click)="setChartStyle(st.id)"><i class="bi" [class]="st.icon" aria-hidden="true"></i> {{ st.label }}</button>
-        }
-      </div>
-      <div class="studies" role="group" aria-label="Chart analysis studies">
-        <i class="bi bi-sliders2 text-muted" aria-hidden="true"></i>
-        @for (k of indicatorKeys; track k) {
-          <button type="button" class="fs-chip" [attr.aria-pressed]="market.indicators()[k]" (click)="market.toggleIndicator(k)">{{ studyLabel(k) }}</button>
-        }
-        <button type="button" class="fs-chip" [attr.aria-expanded]="settingsOpen()" aria-controls="study-settings" (click)="settingsOpen.set(!settingsOpen())"><i class="bi bi-gear" aria-hidden="true"></i> Periods</button>
-      </div>
-      @if (settingsOpen()) {
-        <div id="study-settings" class="study-settings" role="group" aria-label="Study periods">
-          @for (g of settingGroups; track g.name) {
-            <fieldset>
-              <legend>{{ g.name }}</legend>
-              @for (f of g.fields; track f.key) {
-                <label [for]="'set-' + f.key">{{ f.label }}</label>
-                <input [id]="'set-' + f.key" type="number" inputmode="decimal" class="form-control form-control-sm" [min]="f.min" [max]="f.max" [step]="f.step" [value]="market.indicatorSettings()[f.key]" (change)="setSetting(f.key, $event)">
-              }
-            </fieldset>
-          }
-          <div class="study-settings-foot">
-            <button type="button" class="btn btn-sm btn-outline-secondary" (click)="market.resetIndicatorSettings()">Reset periods</button>
-            @if (market.settingsNote(); as note) { <span class="text-danger small" role="alert">{{ note }}</span> }
-            <span class="text-muted small">The Analysis insights below keep their fixed periods (RSI 14, EMA 9/21/50/200).</span>
-          </div>
-        </div>
-      }
-      <div class="pt-2">
-        <fse-trading-chart [epoch]="market.chartEpoch()" [flags]="market.indicators()" [settings]="market.indicatorSettings()" [chartStyle]="chartStyle()" [drawings]="drawings()" (drawingsChange)="setDrawings($event)" />
-      </div>
-    </fs-pane>
-
-    <!-- Trade rail: prices of the tracked instruments and a paper order ticket, beside the chart on wide screens -->
-    <aside class="trade-rail" aria-label="Watchlist and order ticket">
-      <section class="card rail-card" aria-label="Watchlist">
-        <div class="card-body">
-          <fse-watchlist [assets]="market.trackedAssets()" [selected]="selectedAsset()" [livePrice]="market.selectedTracked() ? market.livePrice() : 0" (view)="market.view($event)" />
-        </div>
-      </section>
-      @if (access.liveMarkets()) {
-        <section class="rail-ticket" aria-label="Paper order ticket">
-          <div>
-            @if (market.needsTracker()) {
-              <p class="small text-muted mb-2" role="status">
-                {{ market.trackedSymbol() }} is not tracked live, so there is no server price to fill an order against.
-                <button type="button" class="btn btn-sm btn-outline-primary ms-1" (click)="market.trackLive()" [disabled]="!market.canTrackSelected()">Track live</button>
-              </p>
+      <!-- Chart: a pane the user can fold, resize and open full screen; source, bars, units and newest bar stay visible when folded -->
+      <fs-pane class="compact-phone-header" paneId="markets.chart" heading="Price chart" [resizable]="true" [focusable]="true" mode="var" [defaultHeight]="chartHeight" [min]="200" [max]="900">
+        <span paneSummary>{{ chartSummary() }}</span>
+        <span paneActions style="display: contents">
+          <div class="fs-segmented chart-range" role="group" aria-label="History range">
+            @for (r of market.historyRanges; track r) {
+              <button type="button" [attr.aria-pressed]="market.historyRange() === r" (click)="market.setHistoryRange(r)">{{ r }}</button>
             }
-            <fse-ledger variant="ticket" [trackedSymbol]="market.trackedSymbol()" [livePrice]="market.orderPrice()" [currency]="market.currency()" />
           </div>
-        </section>
-      }
-    </aside>
+          <button type="button" class="btn btn-ghost btn-icon btn-sm chart-reset" (click)="resetZoom()" aria-label="Reset zoom" title="Reset zoom"><i class="bi bi-arrows-angle-contract"></i></button>
+        </span>
+        <dl paneMeta class="chart-meta" aria-label="Chart data details" data-testid="chart-meta">
+          @for (f of chartFacts(); track f.label) {
+            <div><dt>{{ f.label }}</dt><dd>{{ f.value }}</dd></div>
+          }
+        </dl>
+        <div class="history-load-slot" [attr.aria-busy]="market.loadingHistory()">
+          @if (market.loadingHistory()) { <fs-progress-status stage="Loading price history" /> }
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary chart-options-toggle" [attr.aria-expanded]="chartOptionsOpen()"
+                aria-controls="market-chart-options" (click)="chartOptionsOpen.update(value => !value)">
+          <i class="bi bi-sliders2" aria-hidden="true"></i> Chart options
+        </button>
+        <div id="market-chart-options" class="chart-options" [class.is-open]="chartOptionsOpen()">
+          <div class="studies chart-intervals" role="radiogroup" aria-label="Bar length">
+            <i class="bi bi-clock-history text-muted" aria-hidden="true"></i>
+            <button type="button" class="fs-chip" role="radio" [attr.aria-checked]="shownInterval() === 'auto'" [title]="'The provider\'s own bars' + (nativeInterval() ? ' (' + nativeInterval() + ')' : '')" data-interval="auto" (click)="chooseInterval('auto')">Auto@if (nativeInterval()) { · {{ nativeInterval() }} }</button>
+            @for (iv of intervals; track iv.id) {
+              <button type="button" class="fs-chip" role="radio" [attr.aria-checked]="shownInterval() === iv.id" [disabled]="!mergeable().includes(iv.id)" [title]="intervalHint(iv.id)" [attr.data-interval]="iv.id" (click)="chooseInterval(iv.id)">{{ iv.label }}</button>
+            }
+          </div>
+          <div class="studies chart-styles" role="radiogroup" aria-label="Chart style">
+            <i class="bi bi-bar-chart-line text-muted" aria-hidden="true"></i>
+            @for (st of chartStyles; track st.id) {
+              <button type="button" class="fs-chip" role="radio" [attr.aria-checked]="chartStyle() === st.id" [title]="st.hint" [attr.data-style]="st.id" (click)="setChartStyle(st.id)"><i class="bi" [class]="st.icon" aria-hidden="true"></i> {{ st.label }}</button>
+            }
+          </div>
+          <div class="studies" role="group" aria-label="Chart analysis studies">
+            <i class="bi bi-sliders2 text-muted" aria-hidden="true"></i>
+            @for (k of indicatorKeys; track k) {
+              <button type="button" class="fs-chip" [attr.aria-pressed]="market.indicators()[k]" (click)="market.toggleIndicator(k)">{{ studyLabel(k) }}</button>
+            }
+            <button type="button" class="fs-chip" [attr.aria-expanded]="settingsOpen()" aria-controls="study-settings" (click)="settingsOpen.set(!settingsOpen())"><i class="bi bi-gear" aria-hidden="true"></i> Periods</button>
+          </div>
+          @if (settingsOpen()) {
+            <div id="study-settings" class="study-settings" role="group" aria-label="Study periods">
+              @for (g of settingGroups; track g.name) {
+                <fieldset>
+                  <legend>{{ g.name }}</legend>
+                  @for (f of g.fields; track f.key) {
+                    <label [for]="'set-' + f.key">{{ f.label }}</label>
+                    <input [id]="'set-' + f.key" type="number" inputmode="decimal" class="form-control form-control-sm" [min]="f.min" [max]="f.max" [step]="f.step" [value]="market.indicatorSettings()[f.key]" (change)="setSetting(f.key, $event)">
+                  }
+                </fieldset>
+              }
+              <div class="study-settings-foot">
+                <button type="button" class="btn btn-sm btn-outline-secondary" (click)="market.resetIndicatorSettings()">Reset periods</button>
+                @if (market.settingsNote(); as note) { <span class="text-danger small" role="alert">{{ note }}</span> }
+                <span class="text-muted small">The Analysis insights below keep their fixed periods (RSI 14, EMA 9/21/50/200).</span>
+              </div>
+            </div>
+          }
+        </div>
+        <div class="pt-2">
+          <fse-trading-chart [epoch]="market.chartEpoch()" [flags]="market.indicators()" [settings]="market.indicatorSettings()" [chartStyle]="chartStyle()" [class.phone-options-open]="chartOptionsOpen()" [drawings]="drawings()" (drawingsChange)="setDrawings($event)" />
+        </div>
+      </fs-pane>
+
+      <!-- Trade rail: prices of the tracked instruments and a paper order ticket, beside the chart on wide screens -->
+      <fs-phone-disclosure [label]="access.liveMarkets() ? 'Watchlist and paper order' : 'Watchlist prices'" panelId="market-trade-rail">
+        <aside class="trade-rail" aria-label="Watchlist and order ticket">
+          <section class="card rail-card" aria-label="Watchlist">
+            <div class="card-body">
+              <fse-watchlist [assets]="market.trackedAssets()" [selected]="selectedAsset()" [livePrice]="market.selectedTracked() ? market.livePrice() : 0" (view)="market.view($event); showSelectedInstrument()" />
+            </div>
+          </section>
+          @if (access.liveMarkets()) {
+            <section class="rail-ticket" aria-label="Paper order ticket">
+              <div>
+                @if (market.needsTracker()) {
+                  <p class="small text-muted mb-2" role="status">
+                    {{ market.trackedSymbol() }} is not tracked live, so there is no server price to fill an order against.
+                    <button type="button" class="btn btn-sm btn-outline-primary ms-1" (click)="market.trackLive()" [disabled]="!market.canTrackSelected()">Track live</button>
+                  </p>
+                }
+                <fse-ledger variant="ticket" [trackedSymbol]="market.trackedSymbol()" [livePrice]="market.orderPrice()" [currency]="market.currency()" />
+              </div>
+            </section>
+          }
+        </aside>
+      </fs-phone-disclosure>
     </div>
+
+    <fs-phone-disclosure class="key-figures" label="Key figures" panelId="market-key-figures">
+      <section class="grid" aria-label="Key figures">
+        @for (k of kpis(); track k.label) {
+          <div class="card fs-kpi">
+            <span class="fs-kpi-label"><i class="bi" [class]="k.icon" aria-hidden="true"></i>{{ k.label }}</span>
+            <span class="fs-kpi-value" [class.text-pos]="k.tone === 'pos'" [class.text-neg]="k.tone === 'neg' && k.value !== 'Standby'">{{ k.value }}</span>
+            @if (k.sub) { <span class="fs-kpi-sub">{{ k.sub }}</span> }
+          </div>
+        }
+      </section>
+    </fs-phone-disclosure>
 
     <!-- Insights -->
     @if (market.insights().length) {
-      <fs-pane paneId="markets.insights" heading="Analysis insights">
+      <fs-pane paneId="markets.insights" heading="Analysis insights" [startCollapsed]="phoneLayout">
         <span paneSummary>{{ market.trackedSymbol() }} · {{ market.historyRange() }} · {{ market.insights().length }} figures, calculated from the loaded bars</span>
         <div class="insights-grid">
           @for (ins of market.insights(); track ins.label) {
@@ -178,7 +186,9 @@
     }
 
     @if (market.hasAssetFundamentals()) {
-      <fse-asset-info [data]="market.marketData()" [currentCurrency]="market.currency()" />
+      <fs-phone-disclosure label="Fundamentals" panelId="market-fundamentals">
+        <fse-asset-info [data]="market.marketData()" [currentCurrency]="market.currency()" />
+      </fs-phone-disclosure>
     }
   } @else {
     <div class="fs-empty mt-3">
@@ -187,6 +197,10 @@
       <p class="mb-0">Use the search above to pick a stock, fund or crypto pair, or open a company from the leaderboard below.</p>
     </div>
   }
+
+  <fs-phone-disclosure label="Groups" panelId="market-groups">
+    <fs-market-groups (instrumentOpened)="showSelectedInstrument()" />
+  </fs-phone-disclosure>
 
   <fs-leaderboard />
 </div>

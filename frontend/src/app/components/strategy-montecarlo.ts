@@ -67,7 +67,10 @@ import {
   @if (sim(); as m) {
     <div class="mt-2" aria-live="polite">
       @for (line of headline(); track line) { <p class="mb-1 small">{{ line }}</p> }
-      <p id="smc-evidence-notice" class="smc-note mb-1">Simulated, not observed. The “Happened” column is the replay; the other columns are percentiles of simulated sequences. Data {{ m.data_start }} to {{ m.data_end }} (UTC) from {{ m.provider }}, generated {{ m.generated_at }}.</p>
+      <p id="smc-evidence-notice" class="smc-note mb-1">Simulated, not observed. The “Happened” column is the replay; the other columns are percentiles of simulated sequences. Data for {{ m.symbol }}{{ m.currency ? ' (' + m.currency + ')' : '' }} from {{ m.data_start }} to {{ m.data_end }} (UTC), supplied by {{ m.provider }}, generated {{ m.generated_at }}.</p>
+      @if (m.replay_config; as costs) {
+        <p class="smc-note mb-1">Replay costs per side: {{ costs.cost_bps }} bps transaction cost, {{ costs.slippage_bps }} bps slippage, and half of the {{ costs.spread_bps }} bps bid–ask spread.</p>
+      }
       <div class="fs-scroll-x" tabindex="0" role="region" aria-label="Simulated outcomes table, scrollable">
         <table class="table table-sm align-middle mb-2" aria-describedby="smc-evidence-notice">
           <caption class="visually-hidden">Simulated outcomes with the replay result for comparison</caption>

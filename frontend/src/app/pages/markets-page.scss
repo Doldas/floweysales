@@ -78,3 +78,37 @@
   label { font-size: 0.78rem; margin: 0; }
 }
 .study-settings-foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+
+.quote-head { scroll-margin-top: calc(var(--fs-topbar-height) + .75rem); }
+.chart-options-toggle { display: none; }
+
+@media (min-width: 700.01px) {
+  .quote-head { order: -3; }
+  .control-card { order: -2; }
+  .key-figures { order: -1; }
+}
+
+@media (max-width: 700px) {
+  .fs-page, .chart-row { gap: .75rem; }
+  .quote-head { gap: .55rem; }
+  .quote-id h1 { gap: .35rem; }
+  .quote-actions { gap: .35rem; }
+  .quote-actions .btn { padding: .35rem .55rem; font-size: .8rem; }
+  .control-card .card-body { padding: .65rem; }
+  .tracker-disclosure { margin-top: .5rem; }
+  .trackers-label { display: none; }
+  .trackers { margin-top: 0; }
+  .tracker-chip button { min-height: 40px; }
+  .tracker-remove { min-width: 40px; }
+  .clear-history { min-height: 40px; }
+  .chart-range { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 1.8rem), 1fr)); }
+  .chart-range button { min-height: 34px; padding-inline: .15rem; }
+  .chart-reset { grid-column: 2; grid-row: 1; }
+  .chart-meta dt { flex: 0 0 auto; }
+  .chart-options-toggle { display: inline-flex; align-items: center; gap: .4rem; min-height: 40px; }
+  .chart-options:not(.is-open) { display: none; }
+  .chart-options.is-open { margin-top: .4rem; }
+  .studies .fs-chip { min-height: 36px; }
+  .history-load-slot { min-height: 0; }
+  .history-load-slot[aria-busy='true'] { min-height: 1.75rem; }
+}

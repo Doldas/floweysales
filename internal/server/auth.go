@@ -153,7 +153,7 @@ func isPlanRoute(method, path string) bool {
 		(method == http.MethodPut && path == "/api/plan/profile") ||
 		(method == http.MethodPost && path == "/api/plan/preview") ||
 		(method == http.MethodGet && path == "/api/today") ||
-		isStrategyRoute(method, path) || isCollectionRoute(method, path) || isInstrumentRoute(method, path)
+		isStrategyRoute(method, path) || isCollectionRoute(method, path) || isInstrumentRoute(method, path) || isUserspaceRoute(method, path)
 }
 
 // isOwnSettingsRoute matches the settings a user keeps for themselves: the
@@ -223,7 +223,7 @@ func isStrategyRoute(method, path string) bool {
 	switch {
 	case path == "/api/strategies":
 		return method == http.MethodGet || method == http.MethodPost
-	case path == "/api/strategies/backtest", path == "/api/strategies/walkforward":
+	case path == "/api/strategies/backtest", path == "/api/strategies/walkforward", path == "/api/strategies/montecarlo":
 		return method == http.MethodPost
 	case strings.HasPrefix(path, "/api/strategies/"):
 		return method == http.MethodPut || method == http.MethodDelete

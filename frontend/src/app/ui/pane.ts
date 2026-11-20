@@ -79,6 +79,16 @@ export interface PaneView { top: number; height: number }
     .pane-actions { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .35rem; margin-left: auto; min-width: 0; max-width: 100%; }
     .pane-actions > * { min-width: 0; }
     @media (max-width: 575.98px) { .pane-actions { flex: 1 1 100%; justify-content: space-between; } .pane-summary { flex-basis: 100%; order: 3; } }
+    @media (max-width: 700px) {
+      :host(.compact-phone-header) .pane { display: flex; flex-direction: column; }
+      :host(.compact-phone-header) .pane-head { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; }
+      :host(.compact-phone-header) .pane-heading { grid-column: 1; grid-row: 1; }
+      :host(.compact-phone-header) .pane-actions { display: contents; }
+      :host(.compact-phone-header) .pane-actions > button { grid-column: 3; grid-row: 1; }
+      :host(.compact-phone-header) .pane-summary { grid-column: 1 / -1; grid-row: 3; }
+      :host(.compact-phone-header) .pane-meta { order: 1; }
+      :host(.compact-phone-header) .pane-resizer { order: 2; }
+    }
     .pane-meta { padding: 0 var(--fs-pane-pad-x, 1rem); }
     .pane-meta:empty { display: none; }
     .pane-body { padding: var(--fs-pane-pad-y, .75rem) var(--fs-pane-pad-x, 1rem); min-width: 0; }

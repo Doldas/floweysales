@@ -90,6 +90,8 @@ type AgentOptions struct {
 	// default tools offers only those plus more_tools, which opens other
 	// groups on request; empty or unknown offers every granted tool.
 	Page string
+	// ExtraTools are run-specific tools dispatched by Execute.
+	ExtraTools []Tool
 	// AnswerAfterToolBudget makes an exhausted tool budget withdraw the tools
 	// and ask for a final answer instead of ending the run with an error.
 	AnswerAfterToolBudget bool
@@ -305,7 +307,22 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		}
 		tools = kept
 	}
-	// offered is the set of tools sent so far on a gated page; more_tools grows it.
+	extraSchemas := make(map[string]map[string]any, len(opts.ExtraTools))
+	var extras []Tool
+	if opts.Execute != nil {
+		for _, tool := range opts.ExtraTools {
+			extras = append(extras, tool)
+			extraSchemas[tool.Function.Name] = tool.Function.Parameters
+		}
+	}
+	validateArgs := func(name, args string) error {
+		if schema, ok := extraSchemas[name]; ok {
+			return validateToolSchema(name, args, schema)
+		}
+		return ValidateToolArgs(name, args)
+	}
+	// offered is the set of catalogue tools sent so far on a gated page;
+	// more_tools grows it. Run-specific extra tools are always sent.
 	var offered map[string]bool
 	allTools := tools
 	if pageGated && !opts.DisableTools && len(tools) > 0 {
@@ -315,15 +332,16 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		}
 	}
 	gate := func() {
-		if offered == nil {
-			return
-		}
-		tools = []Tool{MoreToolsDef()}
-		for _, t := range allTools {
-			if offered[t.Function.Name] {
-				tools = append(tools, t)
+		tools = append([]Tool(nil), allTools...)
+		if offered != nil {
+			tools = []Tool{MoreToolsDef()}
+			for _, t := range allTools {
+				if offered[t.Function.Name] {
+					tools = append(tools, t)
+				}
 			}
 		}
+		tools = append(tools, extras...)
 	}
 	gate()
 	if opts.DisableTools || len(tools) == 0 {
@@ -516,17 +534,17 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 			callArgs := tc.Function.Arguments
 			if bad, isBad := badArgs[tc.ID]; isBad {
 				err = fmt.Errorf("the arguments of this call were not valid JSON (%s). Send the call again with one complete, valid JSON object", clip(bad, 160))
-			} else if noTools {
+			} else if len(tools) == 0 {
 				// A model run without tools may still invent a call; it is never executed.
 				err = fmt.Errorf("tool %s is not available: this run has no tools", tc.Function.Name)
 			} else if tc.Function.Name == MoreToolsName && offered != nil {
 				result, err = openCategory(allTools, offered, tc.Function.Arguments)
 				gate()
-			} else if granted != nil && !granted[tc.Function.Name] {
+			} else if _, extra := extraSchemas[tc.Function.Name]; !extra && granted != nil && !granted[tc.Function.Name] {
 				err = fmt.Errorf("tool %s is not granted to this agent", tc.Function.Name)
-			} else if offered != nil && !offered[tc.Function.Name] {
+			} else if _, extra := extraSchemas[tc.Function.Name]; !extra && offered != nil && !offered[tc.Function.Name] {
 				err = fmt.Errorf("tool %s is not offered on this page; call %s with the category that holds it (%s)", tc.Function.Name, MoreToolsName, strings.Join(CategoryIDs(), ", "))
-			} else if perr := ValidateToolArgs(tc.Function.Name, tc.Function.Arguments); perr != nil {
+			} else if perr := validateArgs(tc.Function.Name, tc.Function.Arguments); perr != nil {
 				err = perr
 			} else if callArgs, err = readSourceArgs(registry, tc.Function.Name, callArgs); err != nil {
 				// A read_source call names a search hit; the address comes from the registry.

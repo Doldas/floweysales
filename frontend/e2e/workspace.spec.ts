@@ -97,9 +97,13 @@ test.describe('chart pane: fold, resize, full screen', () => {
     await expect(page.locator('section.pane.is-focus')).toHaveCount(0);
   });
 
-  test('other panes fold too and keep their summary line', async ({ page }) => {
+  test('other panes fold too and keep their summary line', async ({ page, isMobile }) => {
     await openMarkets(page);
     const insights = page.getByRole('button', { name: 'Analysis insights' });
+    if (isMobile) {
+      await expect(insights).toHaveAttribute('aria-expanded', 'false');
+      await insights.click();
+    }
     await expect(insights).toHaveAttribute('aria-expanded', 'true');
     await insights.click();
     await expect(insights).toHaveAttribute('aria-expanded', 'false');

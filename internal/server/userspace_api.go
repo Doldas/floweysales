@@ -12,6 +12,20 @@ import (
 	"floweysales/internal/storage"
 )
 
+func isUserspaceRoute(method, path string) bool {
+	switch path {
+	case "/api/userspace/files":
+		return method == http.MethodGet
+	case "/api/userspace/file":
+		return method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete
+	case "/api/userspace/folder":
+		return method == http.MethodDelete
+	case "/api/userspace/transfer":
+		return method == http.MethodPost
+	}
+	return false
+}
+
 func (e *Engine) registerUserspaceRoutes() {
 	authenticate := func(w http.ResponseWriter, r *http.Request) (int64, bool) {
 		if e.authService == nil {
@@ -21,6 +35,10 @@ func (e *Engine) registerUserspaceRoutes() {
 		u, ok := e.currentUser(r)
 		if !ok {
 			writeJSON(w, 401, map[string]string{"error": "Sign in required"})
+			return 0, false
+		}
+		if e.db == nil {
+			writeJSON(w, 503, map[string]string{"error": "Userspace unavailable"})
 			return 0, false
 		}
 		return u.ID, true

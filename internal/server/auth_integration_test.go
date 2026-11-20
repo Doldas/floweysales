@@ -127,6 +127,9 @@ func TestMySQLAuthGate(t *testing.T) {
 		t.Fatal("user session cookie missing")
 	}
 	userCookie := userCookies[0]
+	// The regular user reaches the research simulation handler. Its validation
+	// refuses the empty request before accessing a provider.
+	assert(request(http.MethodPost, "/api/strategies/montecarlo", map[string]any{}, userCookie, ""), http.StatusBadRequest)
 	// Research Agent must remain configured for an ordinary signed-in user.
 	// Server endpoint credentials are redacted, but readiness is not.
 	for _, tc := range []struct {
@@ -212,6 +215,64 @@ func TestMySQLAuthGate(t *testing.T) {
 		t.Fatal("other user has no session")
 	}
 	assert(request("GET", fmt.Sprintf("/api/admin/flows/%d/runs", flowID), nil, otherCookies[0], ""), http.StatusNotFound)
+	t.Run("research-app-actions", func(t *testing.T) {
+		options := func(cookie *http.Cookie) func(string, string) (string, error) {
+			t.Helper()
+			r := httptest.NewRequest(http.MethodPost, "/api/ai/chat", nil).WithContext(t.Context())
+			r.AddCookie(cookie)
+			opts := engine.chatAgentOptions(r, "", "", nil)
+			if opts.DisableTools || opts.Execute == nil {
+				t.Fatal("signed-in chat has no tools")
+			}
+			return func(name, args string) (string, error) {
+				return opts.Execute(t.Context(), name, args)
+			}
+		}
+		ownerAction, otherAction := options(userCookie), options(otherCookies[0])
+		const fileArgs = `{"path":"/Reports/agent-integration.md","content_type":"text/markdown","content":"# Research\nSaved by the agent."}`
+		if _, err := ownerAction("save_userspace_file", fileArgs); err != nil {
+			t.Fatal(err)
+		}
+		const filePath = "/api/userspace/file?path=%2FReports%2Fagent-integration.md"
+		res := request(http.MethodGet, filePath, nil, userCookie, "")
+		content, err := io.ReadAll(res.Body)
+		res.Body.Close()
+		if res.StatusCode != http.StatusOK || err != nil || string(content) != "# Research\nSaved by the agent." {
+			t.Fatalf("Workspace read: %d, %q, %v", res.StatusCode, content, err)
+		}
+		assert(request(http.MethodGet, filePath, nil, otherCookies[0], ""), http.StatusNotFound)
+		if _, err := otherAction("run_app_action", `{"method":"DELETE","path":"`+filePath+`"}`); err == nil || !strings.Contains(err.Error(), "(404)") {
+			t.Fatalf("other user can access the file through the agent: %v", err)
+		}
+		if _, err := ownerAction("add_tracker", `{"symbol":"MSFT","provider":"YAHOO"}`); err == nil {
+			t.Fatal("ordinary user can modify shared trackers")
+		}
+		providers := engine.providers
+		engine.providers = stubProviders{}
+		defer func() { engine.providers = providers }()
+		adminAction := options(cookies[0])
+		tracked, err := adminAction("add_tracker", `{"symbol":"MSFT","provider":"YAHOO"}`)
+		if err != nil || !strings.Contains(tracked, "MSFT") {
+			t.Fatalf("administrator could not start tracker: %s (%v)", tracked, err)
+		}
+		if _, err := adminAction("run_app_action", `{"method":"DELETE","path":"/api/trackers?symbol=MSFT&provider=YAHOO"}`); err != nil {
+			t.Fatal(err)
+		}
+		graph, err := json.Marshal(map[string]any{"name": "Agent draft", "graph": ownedFlow["graph"]})
+		if err != nil {
+			t.Fatal(err)
+		}
+		saved, err := ownerAction("create_flow", string(graph))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var draft storage.AgentFlow
+		if err := json.Unmarshal([]byte(saved), &draft); err != nil || draft.ID == 0 || draft.Enabled {
+			t.Fatalf("expected a manual draft: %s (%v)", saved, err)
+		}
+		assert(request(http.MethodGet, fmt.Sprintf("/api/admin/flows/%d/runs", draft.ID), nil, userCookie, ""), http.StatusOK)
+		assert(request(http.MethodGet, fmt.Sprintf("/api/admin/flows/%d/runs", draft.ID), nil, otherCookies[0], ""), http.StatusNotFound)
+	})
 	// The owner can publish and roll back their flow; other users cannot see its revisions.
 	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/publish", flowID), map[string]string{"note": "first"}, userCookie, ""), http.StatusOK)
 	assert(request("POST", fmt.Sprintf("/api/admin/flows/%d/publish", flowID), nil, userCookie, ""), http.StatusConflict)

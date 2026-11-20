@@ -15,11 +15,11 @@ Everything on these screens comes from the market-data provider plugins your adm
 
 Use the search box in the top bar or on the page. Results show the symbol, the name where the provider has it, the exchange and the **provider**. Press Enter to try the exact symbol you typed. Recently used instruments are listed when you focus the search box.
 
-The selection is kept in the address of the page, so a copied link opens the same instrument.
+The selection is kept in the address of the page, so a copied link opens the same instrument. The selected instrument's price chart appears above the group dashboard.
 
 ## Watchlist and trackers
 
-The row under the search box lists the instruments you follow, up to 16 (the counter shows `n/16`). Select one to view it; the small cross stops tracking it.
+The row under the search box lists the instruments you follow, up to 16 (the counter shows `n/16`). Select one to view it. The cross stops tracking it. On a phone, tap **Active trackers** or **Watchlist** to open the row. Watchlist prices, the paper order ticket when available, and key figures open from panels below the chart.
 
 What this row is depends on your role:
 
@@ -32,7 +32,7 @@ To keep larger sets of instruments, grouped by theme and stored on the server, u
 
 ## Groups
 
-The **Groups** card shows your [collections](collections.md) as groups. Choose a group to list its instruments; select one to open it in the chart. **Add {symbol} to a group** adds the instrument on screen to one of your groups, or to a new watch collection you name there. Groups that already hold it are marked. Adding never changes the watchlist or the trackers. **Manage groups** opens Collections.
+The **Groups** card below the price chart shows your [collections](collections.md) as groups. On a phone, tap **Groups** to open it. Choose a group to list its instruments, then select one to return to its price chart. **Add {symbol} to a group** adds the instrument on screen to one of your groups, or to a new watch collection you name there. Groups that already hold it are marked. Adding never changes the watchlist or the trackers. **Manage groups** opens Collections.
 
 ### Group dashboard
 
@@ -40,7 +40,7 @@ A group with instruments gets a dashboard, computed in your browser from each in
 
 - **Group**: the change of the group index over the range. The index buys every instrument on the first day all of them have a price and holds without rebalancing, rebased to 100. A watch collection weights the instruments equally; a model portfolio uses its hypothetical weights, and instruments without a weight are left out of the index and named.
 - **Volatility** (the annualized deviation of daily returns), **Max drawdown** (the largest fall from a high), **Breadth** (how many instruments rose and fell), and the **best** and **worst** instrument.
-- **Group index** chart with each instrument in gray. Hover, or focus the chart and use the arrow keys, Home and End, to read a day.
+- **Group index** chart with a labeled color and line pattern for each plotted instrument. Select a ticker in the legend to highlight it, then select it again to show all lines at full strength. Hover or tap the chart to read a day, or focus it and use the arrow keys, Home and End.
 - **Composition** donut by weight, asset type, exchange, currency, country, data provider or another stored dimension. Model portfolios show the unallocated rest as its own slice.
 - **Return per instrument**, **Risk and return** (volatility against return) and a **Correlation** grid of daily returns. A pair with fewer than 20 shared trading days shows a dot instead of a number.
 
@@ -49,7 +49,7 @@ Every chart has a table view or a text equivalent. Instruments without history a
 ## The price chart
 
 - **History range:** 1D, 5D, 1M, 3M, 1Y, 3Y, 5Y, 10Y or MAX. The default is 1M.
-- **Studies** are switched on and off with the chips above the chart: EMA 9, 21, 50, 100 and 200, Bollinger bands, VWAP, volume, RSI 14 and MACD.
+- **Studies** are switched on and off with the chips above the chart. On a phone, tap **Chart options** for studies, bar length, chart style and drawing tools.
 - **Reset zoom** returns the chart to the full range after you zoomed or panned.
 - **Analysis insights** below the chart show RSI (14), MACD (12, 26, 9), the order of the 9, 21, 50 and 200 EMAs and the distance from the 200 EMA, when the history is long enough.
 - **Analyze with agent** sends a prepared question about the instrument, range and studies to the [Research Agent](agents.md). The answer is AI-generated.
@@ -89,7 +89,7 @@ The instrument chip in the top bar follows you across pages. Open the search wit
 
 ## Fundamentals
 
-When the provider has them, a Fundamentals card appears below the insights. For a stock it has an **Overview** (day high and low, last price, spread and performance over several periods) and **Key ratios** (such as P/E, P/S, P/B, EPS, dividend yield and market cap). For a fund the second tab is **Risk & ESG**, and a **Top holdings** tab is added. Each value is as the provider reports it. A missing value shows a dash or "N/A".
+When the provider has them, a Fundamentals card appears below the insights. On a phone, tap **Fundamentals** to open it. For a stock it has an **Overview** (day high and low, last price, spread and performance over several periods) and **Key ratios** (such as P/E, P/S, P/B, EPS, dividend yield and market cap). For a fund the second tab is **Risk & ESG**, and a **Top holdings** tab is added. Each value is as the provider reports it. A missing value shows a dash or "N/A".
 
 ## Financials
 
