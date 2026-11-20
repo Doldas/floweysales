@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal, viewChild } from '@
 
 import { LedgerComponent } from '../components/ledger';
 import { PortfolioRiskComponent } from '../components/portfolio-risk-panel';
+import { PortfolioVisualsComponent } from '../components/portfolio-visuals';
 import type { TicketPrefill } from '../components/portfolio-risk';
 import { MarketState } from '../core/market-state';
 
@@ -9,7 +10,7 @@ import { MarketState } from '../core/market-state';
 @Component({
   selector: 'fs-portfolio-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LedgerComponent, PortfolioRiskComponent],
+  imports: [LedgerComponent, PortfolioRiskComponent, PortfolioVisualsComponent],
   template: `
     <div class="fs-page">
       <header class="fs-page-header">
@@ -31,6 +32,7 @@ import { MarketState } from '../core/market-state';
             <button type="button" class="btn btn-sm btn-outline-primary ms-1" (click)="market.trackLive()" [disabled]="!market.canTrackSelected()">Track live</button>
           </p>
         }
+        <fse-portfolio-visuals class="mb-3" [currency]="market.currency()" />
         <fse-ledger [trackedSymbol]="market.trackedSymbol()" [livePrice]="orderPrice()" [currency]="market.currency()" />
       </div>
       @if (view() === 'risk') { <fs-portfolio-risk (prefill)="prefill($event)" /> }

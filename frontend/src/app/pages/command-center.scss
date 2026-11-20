@@ -59,7 +59,7 @@
 // ------------------------------------------------------------ grid
 
 .cc-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 1.25rem; align-items: start; }
-.cc-main, .cc-side { display: grid; gap: 1.25rem; min-width: 0; }
+.cc-main, .cc-side { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; min-width: 0; }
 
 .activity-list .list-group-item { padding: 0; }
 .activity-row {

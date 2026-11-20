@@ -89,7 +89,7 @@ const LEGEND = [-3, -2, -1, 0, 1, 2, 3];
   styles: [`
     :host { display: block; }
     .pulse-updated { font-variant-numeric: tabular-nums; }
-    .heat-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(7.25rem, 1fr)); gap: 0.5rem; }
+    .heat-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(7.25rem, 100%), 1fr)); gap: 0.5rem; }
     .heat-tile {
       --heat: var(--fs-surface-3);
       display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem; width: 100%; min-height: 4.6rem; padding: 0.55rem 0.7rem;
@@ -114,12 +114,12 @@ const LEGEND = [-3, -2, -1, 0, 1, 2, 3];
       span { margin: 0 0.35rem; font-variant-numeric: tabular-nums; }
       i { width: 1.1rem; height: 0.45rem; border-radius: 2px; background: var(--heat); }
     }
-    .movers { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.5rem 1.5rem; margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--fs-border); }
+    .movers { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr)); gap: 0.5rem 1.5rem; margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--fs-border); }
     .movers-title { display: flex; align-items: center; gap: 0.35rem; margin: 0 0 0.4rem; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fs-muted); }
     .movers-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.2rem; }
     .movers-empty { margin: 0; font-size: 0.8rem; color: var(--fs-muted); }
     .mover {
-      display: grid; grid-template-columns: 5.5rem 1fr 4.2rem; align-items: center; gap: 0.6rem; width: 100%; padding: 0.3rem 0.4rem;
+      display: grid; grid-template-columns: minmax(0, 5.5rem) minmax(1.5rem, 1fr) auto; align-items: center; gap: 0.6rem; width: 100%; padding: 0.3rem 0.4rem;
       border: 0; border-radius: 0.45rem; background: transparent; color: var(--fs-text); font-size: 0.82rem; text-align: left;
       transition: background-color var(--fs-dur-1) ease;
       &:hover, &:focus-visible { background: var(--fs-surface-3); }
