@@ -3,6 +3,7 @@
 @import 'styles/bootstrap';
 @import 'styles/tokens';
 @import 'styles/markdown';
+@import 'styles/motion';
 
 // ---------------------------------------------------------------- base
 
@@ -57,6 +58,10 @@ pre { color: var(--fs-text-2); }
 .min-w-0 { min-width: 0; }
 
 * { scrollbar-width: thin; scrollbar-color: var(--fs-border-strong) transparent; }
+
+/* The ticker tape under the top bar takes this much height when it shows; full-height pages subtract it. */
+:root { --fs-tape-height: 0px; }
+.fs-app:has(fs-ticker-tape:not(:empty)) { --fs-tape-height: 2.1rem; }
 
 // ---------------------------------------------------------------- bootstrap tuning
 

@@ -137,7 +137,7 @@
         <aside class="trade-rail" aria-label="Watchlist and order ticket">
           <section class="card rail-card" aria-label="Watchlist">
             <div class="card-body">
-              <fse-watchlist [assets]="market.trackedAssets()" [selected]="selectedAsset()" [livePrice]="market.selectedTracked() ? market.livePrice() : 0" (view)="market.view($event); showSelectedInstrument()" />
+              <fse-watchlist [assets]="market.trackedAssets()" [selected]="selectedAsset()" (view)="market.view($event); showSelectedInstrument()" />
             </div>
           </section>
           @if (access.liveMarkets()) {

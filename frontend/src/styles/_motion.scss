@@ -1,0 +1,91 @@
+// Motion: durations, easings, keyframes and the few shared animations of the app.
+// Entrance animations fill backwards only, so nothing keeps a transform after it ends (a lasting
+// transform would trap fixed overlays). Under prefers-reduced-motion everything ends at once and
+// moving decorations stop (see the reduced-motion block in styles.scss and the end of this file).
+
+:root {
+  --fs-dur-1: 120ms;
+  --fs-dur-2: 220ms;
+  --fs-dur-3: 360ms;
+  --fs-dur-4: 640ms;
+  --fs-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --fs-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --fs-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --fs-glow: 0 0 0 1px color-mix(in srgb, var(--fs-accent) 35%, transparent), 0 10px 30px -10px color-mix(in srgb, var(--fs-accent) 45%, transparent);
+}
+
+@keyframes fs-rise { from { opacity: 0; transform: translateY(10px); } }
+@keyframes fs-fade { from { opacity: 0; } }
+@keyframes fs-scale-in { from { opacity: 0; transform: scale(0.96); } }
+@keyframes fs-slide-in-right { from { opacity: 0; transform: translateX(16px); } }
+@keyframes fs-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes fs-gradient-pan { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+@keyframes fs-grow-x { from { transform: scaleX(0); } }
+@keyframes fs-grow-y { from { transform: scaleY(0); } }
+@keyframes fs-draw { from { stroke-dashoffset: var(--fs-draw-length, 1000); } }
+@keyframes fs-pop { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes fs-marquee { to { transform: translateX(-50%); } }
+@keyframes fs-breathe { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+// A price that moved: a short wash of green or red. Two copies of each keyframe let the class
+// alternate (a/b) so the animation restarts on every move.
+@mixin flash($name, $color, $soft) {
+  @keyframes #{$name} {
+    0% { background-color: var(#{$soft}); color: var(#{$color}); box-shadow: 0 0 0 2px var(#{$soft}); }
+    100% { background-color: transparent; box-shadow: 0 0 0 0 transparent; }
+  }
+  .#{$name} { animation: #{$name} 1.4s var(--fs-ease-out); }
+}
+@include flash(fs-flash-up-a, --fs-pos, --fs-pos-soft);
+@include flash(fs-flash-up-b, --fs-pos, --fs-pos-soft);
+@include flash(fs-flash-down-a, --fs-neg, --fs-neg-soft);
+@include flash(fs-flash-down-b, --fs-neg, --fs-neg-soft);
+
+// ---------------------------------------------------------------- page entrance
+// Each routed page fades up, and its top-level blocks follow one after another.
+.fs-content > router-outlet + * { animation: fs-fade var(--fs-dur-2) ease-out backwards; }
+.fs-page > * { animation: fs-rise var(--fs-dur-3) var(--fs-ease-out) backwards; }
+@for $i from 1 through 10 {
+  .fs-page > :nth-child(#{$i}) { animation-delay: #{($i - 1) * 45}ms; }
+}
+// Cards inside grids rise in turn as well.
+.fs-stagger > * { animation: fs-rise var(--fs-dur-3) var(--fs-ease-out) backwards; }
+@for $i from 1 through 16 {
+  .fs-stagger > :nth-child(#{$i}) { animation-delay: #{($i - 1) * 40}ms; }
+}
+
+// ---------------------------------------------------------------- hover depth
+.card { transition: box-shadow var(--fs-dur-2) ease, border-color var(--fs-dur-2) ease, transform var(--fs-dur-2) var(--fs-ease-out); }
+a.card, .fs-kpi.kpi-link, .fs-lift {
+  &:hover { transform: translateY(-2px); box-shadow: var(--fs-shadow); border-color: color-mix(in srgb, var(--fs-accent) 35%, var(--fs-border)); }
+  &:active { transform: translateY(0); transition-duration: var(--fs-dur-1); }
+}
+.btn { transition: color var(--fs-dur-1) ease, background-color var(--fs-dur-1) ease, border-color var(--fs-dur-1) ease, box-shadow var(--fs-dur-2) ease, transform var(--fs-dur-1) ease; }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+
+// ---------------------------------------------------------------- shared visuals
+// A loading bar or block with a moving sheen.
+.fs-shimmer {
+  background: var(--fs-surface-3);
+  background-image: linear-gradient(90deg, transparent, color-mix(in srgb, var(--fs-text) 8%, transparent), transparent);
+  background-size: 200% 100%;
+  animation: fs-shimmer 1.6s linear infinite;
+}
+// A slow moving gradient for agent and highlight surfaces.
+.fs-gradient-live { background-size: 200% 200% !important; animation: fs-gradient-pan 12s ease-in-out infinite; }
+// Bars that grow from their start once, e.g. P&L and allocation bars.
+.fs-grow-x { transform-origin: left center; animation: fs-grow-x var(--fs-dur-4) var(--fs-ease-out) backwards; }
+.fs-grow-y { transform-origin: center bottom; animation: fs-grow-y var(--fs-dur-4) var(--fs-ease-out) backwards; }
+.fs-pop { animation: fs-pop var(--fs-dur-3) var(--fs-ease-spring); }
+// A pill for a day change, coloured by direction.
+.fs-change {
+  display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.05rem 0.45rem; border-radius: 999px;
+  font-size: 0.75rem; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--fs-muted); background: var(--fs-surface-3);
+  &.up { color: var(--fs-pos); background: var(--fs-pos-soft); }
+  &.down { color: var(--fs-neg); background: var(--fs-neg-soft); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fs-shimmer, .fs-gradient-live { animation: none !important; }
+  a.card, .fs-kpi.kpi-link, .fs-lift { &:hover { transform: none; } }
+}

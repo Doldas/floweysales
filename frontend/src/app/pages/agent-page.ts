@@ -70,7 +70,7 @@ import { toolLabel } from '../components/agent-tools';
   `,
   styles: [`
     :host { display: block; }
-    .agent-page { display: grid; grid-template-columns: minmax(0, 1fr) 300px; height: calc(100dvh - var(--fs-topbar-height)); min-height: 480px; }
+    .agent-page { display: grid; grid-template-columns: minmax(0, 1fr) 300px; height: calc(100dvh - var(--fs-topbar-height) - var(--fs-tape-height, 0px)); min-height: 480px; }
     .agent-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; border-right: 1px solid var(--fs-border); }
     .agent-head { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; padding: 1rem clamp(1rem, 4vw, 3rem); border-bottom: 1px solid var(--fs-border); }
     .agent-head h1 { font-size: 1.15rem; margin: 0; }

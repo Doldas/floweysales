@@ -17,6 +17,7 @@ import { AgentDockComponent } from './agent-dock';
 import { FeedStatusComponent } from './feed-status';
 import { CommandPaletteComponent, CommandPaletteService } from './command-palette';
 import { SymbolSearchComponent } from './symbol-search';
+import { TickerTapeComponent } from './ticker-tape';
 import { ToastHostComponent } from './toast-host';
 
 interface NavItem {
@@ -36,7 +37,7 @@ interface NavSection {
 @Component({
   selector: 'fs-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, DecimalPipe, AgentDockComponent, CommandPaletteComponent, SymbolSearchComponent, ToastHostComponent, FeedStatusComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, DecimalPipe, AgentDockComponent, CommandPaletteComponent, SymbolSearchComponent, ToastHostComponent, FeedStatusComponent, TickerTapeComponent],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
 })

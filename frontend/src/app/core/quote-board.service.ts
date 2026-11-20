@@ -1,0 +1,100 @@
+import { computed, DestroyRef, effect, inject, Injectable, signal, untracked } from '@angular/core';
+
+import { MarketService } from '../services';
+import type { QuoteSnapshot } from '../models';
+import { MarketState } from './market-state';
+import { type BoardEntry, type BoardInstrument, boardInstruments, boardKey, dayPercent, nextEntry, sameBoard } from './quote-board';
+
+/** How often every price on the board is fetched again while the tab is visible. */
+const REFRESH_MS = 60_000;
+
+/** One instrument of the board with its latest quote, the price to show and its day change. */
+export interface BoardRow extends BoardInstrument {
+  key: string;
+  entry?: BoardEntry;
+  quote?: QuoteSnapshot;
+  /** The live tick for the instrument on screen, else the last quote's close; 0 when none yet. */
+  price: number;
+  live: boolean;
+  dayPct: number | null;
+}
+
+/**
+ * The latest quote of every tracked and starred instrument, shared by the watchlist, the ticker
+ * tape, the heatmap and the top movers so each price is one request a minute, not one per widget.
+ * Prices are provider bar closes (see QuoteSnapshot.note), never executable bids or asks.
+ */
+@Injectable({ providedIn: 'root' })
+export class QuoteBoardService {
+  private readonly api = inject(MarketService);
+  private readonly market = inject(MarketState);
+
+  readonly instruments = computed(() => boardInstruments(this.market.trackedAssets(), this.market.favorites()), { equal: sameBoard });
+  readonly entries = signal<Record<string, BoardEntry>>({});
+  /** When the last full refresh started, in ms since the epoch. */
+  readonly refreshedAt = signal(0);
+
+  readonly rows = computed<BoardRow[]>(() => {
+    const entries = this.entries();
+    const symbol = this.market.trackedSymbol();
+    const provider = this.market.trackedProvider();
+    const tick = this.market.selectedTracked() ? this.market.livePrice() : 0;
+    return this.instruments().map(i => {
+      const key = boardKey(i);
+      const entry = entries[key];
+      const live = tick > 0 && i.symbol === symbol.toUpperCase() && i.provider === provider.toUpperCase();
+      const price = live ? tick : entry?.quote?.price ?? 0;
+      return { ...i, key, entry, quote: entry?.quote, price, live, dayPct: dayPercent(entry?.quote, price) };
+    });
+  });
+
+  /** Rows with a price, for widgets that show nothing until the first quote arrives. */
+  readonly priced = computed(() => this.rows().filter(r => r.price > 0));
+
+  private closed = false;
+
+  constructor() {
+    // A new instrument is fetched at once; the timer refreshes the whole board.
+    effect(() => {
+      const list = this.instruments();
+      untracked(() => {
+        if (!this.refreshedAt()) this.refreshedAt.set(Date.now());
+        this.load(list.filter(i => !this.entries()[boardKey(i)]));
+      });
+    });
+    const visible = () => typeof document === 'undefined' || document.visibilityState === 'visible';
+    const timer = setInterval(() => { if (visible()) this.refresh(); }, REFRESH_MS);
+    const onVisible = () => { if (visible() && Date.now() - this.refreshedAt() >= REFRESH_MS) this.refresh(); };
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
+    inject(DestroyRef).onDestroy(() => {
+      this.closed = true;
+      clearInterval(timer);
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible);
+    });
+  }
+
+  row(a: { symbol: string; provider: string }): BoardRow | undefined {
+    const key = boardKey(a);
+    return this.rows().find(r => r.key === key);
+  }
+
+  /** Fetches every price on the board again now. */
+  refresh(): void {
+    this.refreshedAt.set(Date.now());
+    this.load(this.instruments());
+  }
+
+  private load(list: readonly BoardInstrument[]): void {
+    for (const i of list) {
+      const key = boardKey(i);
+      this.api.getQuote(i.symbol, i.provider).subscribe({
+        next: (quote) => { if (!this.closed) this.entries.update(e => ({ ...e, [key]: nextEntry(e[key], quote) })); },
+        error: () => {
+          if (this.closed) return;
+          // A failed refresh keeps the last price; only an instrument that never had one is marked.
+          this.entries.update(e => (e[key]?.quote ? e : { ...e, [key]: { move: '', moveSeq: 0, failed: true } }));
+        },
+      });
+    }
+  }
+}
