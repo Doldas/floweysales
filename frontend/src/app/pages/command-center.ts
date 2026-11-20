@@ -17,6 +17,7 @@ import { REGIME_LABELS, alertName, hasAnything, regimeIcon, signedChange, todayP
 import { formatUtcLongDay } from '../ui/datetime';
 import { SkeletonComponent } from '../ui/skeleton';
 import { SourceComponent } from '../ui/source';
+import { MarketClockComponent } from '../components/market-clock';
 
 interface TrackerStatus { symbol: string; provider: string; has_tick: boolean; age_seconds: number | null }
 interface WorkspaceFile { path: string; content_type: string; size: number }
@@ -28,7 +29,7 @@ interface WorkspaceFile { path: string; content_type: string; size: number }
 @Component({
   selector: 'fs-command-center',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, DecimalPipe, SparklineComponent, SkeletonComponent, SourceComponent],
+  imports: [RouterLink, DecimalPipe, SparklineComponent, SkeletonComponent, SourceComponent, MarketClockComponent],
   templateUrl: './command-center.html',
   styleUrl: './command-center.scss',
 })
