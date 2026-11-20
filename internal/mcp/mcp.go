@@ -200,8 +200,9 @@ func mcpTools() []mcpTool {
 	for _, d := range defs {
 		// read_source needs a run's source registry, delegate_to_team a signed-in
 		// user's saved teams and the collection tools a signed-in user's
-		// collections; the MCP server has none of them.
-		if d.Function.Name == "read_source" || d.Function.Name == ai.DelegateToolName || slices.Contains(ai.CollectionToolNames, d.Function.Name) {
+		// collections and the skill tools a signed-in user's skills; the MCP
+		// server has none of them.
+		if d.Function.Name == "read_source" || d.Function.Name == ai.DelegateToolName || slices.Contains(ai.CollectionToolNames, d.Function.Name) || slices.Contains(ai.SkillToolNames, d.Function.Name) {
 			continue
 		}
 		out = append(out, mcpTool{

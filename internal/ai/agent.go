@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -260,6 +261,9 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	}
 	if strict {
 		system += evidenceRules(policy)
+	}
+	if ss, ok := src.(SkillSource); ok && !opts.DisableTools && (opts.AllowedTools == nil || slices.Contains(opts.AllowedTools, "use_skill")) {
+		system += ss.SkillIndex(ctx)
 	}
 	pageNames, pageGated := PageTools(opts.Page)
 	if pageGated && !opts.DisableTools {

@@ -47,8 +47,8 @@ var toolCategories = []ToolCategory{
 }
 
 // alwaysOnTools are sent on every gated page: finding a symbol is the first
-// step of almost any request.
-var alwaysOnTools = []string{"search_symbols"}
+// step of almost any request, and a saved skill applies on any page.
+var alwaysOnTools = []string{"search_symbols", "use_skill", "save_skill"}
 
 // pageCategories maps a page (the first segment of the frontend route, "home"
 // for the root) to the categories offered by default. A page not listed here is

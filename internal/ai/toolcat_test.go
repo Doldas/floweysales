@@ -15,7 +15,7 @@ func TestEveryToolHasACategory(t *testing.T) {
 	}
 	names := ToolNames()
 	for _, n := range names {
-		if n == "search_symbols" {
+		if slices.Contains(alwaysOnTools, n) {
 			continue // always on, not in a category
 		}
 		if count[n] != 1 {
