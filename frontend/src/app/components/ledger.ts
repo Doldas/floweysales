@@ -90,8 +90,8 @@ export class LedgerComponent {
         { label: 'Equity', value: '—', cls: '' },
         { label: 'Buying power', value: '—', cls: '' },
         { label: 'Market value', value: '—', cls: '' },
-        { label: 'Unrealised P&L', value: '—', cls: '' },
-        { label: 'Realised P&L', value: '—', cls: '' },
+        { label: 'Unrealized P&L', value: '—', cls: '' },
+        { label: 'Realized P&L', value: '—', cls: '' },
         { label: 'Open orders', value: '—', cls: '' },
       ];
     }
@@ -100,12 +100,12 @@ export class LedgerComponent {
       { label: 'Buying power', value: this.money(s.cash), cls: '' },
       { label: 'Market value', value: this.money(s.market_value), cls: '' },
       {
-        label: 'Unrealised P&L',
+        label: 'Unrealized P&L',
         value: `${this.signed(s.unrealized_pnl)} ${cur}`,
         cls: this.pnlClass(s.unrealized_pnl),
       },
       {
-        label: 'Realised P&L',
+        label: 'Realized P&L',
         value: `${this.signed(s.realized_pnl)} ${cur}`,
         cls: this.pnlClass(s.realized_pnl),
       },

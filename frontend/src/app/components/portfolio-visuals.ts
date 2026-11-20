@@ -7,7 +7,7 @@ import { signedPercent } from '../core/quote-board';
 
 /**
  * The paper account at a glance: a donut of how equity is split between positions and cash, the
- * return since the starting cash, and each position's unrealised result as a bar either side of zero.
+ * return since the starting cash, and each position's unrealized result as a bar either side of zero.
  */
 @Component({
   selector: 'fse-portfolio-visuals',
@@ -42,9 +42,9 @@ import { signedPercent } from '../core/quote-board';
             </ul>
           </div>
           <div class="pnl">
-            <h3 class="pnl-title">Unrealised P&amp;L</h3>
+            <h3 class="pnl-title">Unrealized P&amp;L</h3>
             @if (bars().length) {
-              <ul class="pnl-list fs-stagger" aria-label="Unrealised result by position">
+              <ul class="pnl-list fs-stagger" aria-label="Unrealized result by position">
                 @for (b of bars(); track b.symbol) {
                   <li class="pnl-row" [class.down]="b.pnl < 0" [attr.data-symbol]="b.symbol">
                     <span class="pnl-sym">{{ b.symbol }}</span>

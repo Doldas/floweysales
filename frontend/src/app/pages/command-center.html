@@ -120,7 +120,7 @@
       </a>
     } @else if (access.liveMarkets()) {
       <a class="card fs-kpi kpi-link" routerLink="/portfolio">
-        <span class="fs-kpi-label"><i class="bi bi-wallet2" aria-hidden="true"></i>Unrealised P&amp;L</span>
+        <span class="fs-kpi-label"><i class="bi bi-wallet2" aria-hidden="true"></i>Unrealized P&amp;L</span>
         <span class="fs-kpi-value" [class.text-pos]="market.totalPnL() > 0" [class.text-neg]="market.totalPnL() < 0">{{ market.totalPnL() >= 0 ? '+' : '' }}{{ market.totalPnL() | number: '1.2-2' }}</span>
         <span class="fs-kpi-sub">Paper portfolio</span>
       </a>

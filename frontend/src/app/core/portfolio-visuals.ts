@@ -1,6 +1,6 @@
 /**
  * Shapes for the paper portfolio's charts: how the account is split between positions and cash, and
- * each position's unrealised result. Pure functions over the positions the server reports.
+ * each position's unrealized result. Pure functions over the positions the server reports.
  */
 
 export interface PositionLike { symbol: string; quantity: number; market_value: number; unrealized_pnl: number; cost_basis: number }
@@ -45,7 +45,7 @@ const turn = (t: number) => `${+(Math.min(1, Math.max(0, t)) * 360).toFixed(2)}d
 
 export interface PnlBar { symbol: string; pnl: number; pct: number | null; width: number }
 
-/** Each position's unrealised result, best first, with bar widths relative to the largest result. */
+/** Each position's unrealized result, best first, with bar widths relative to the largest result. */
 export function pnlBars(positions: readonly PositionLike[]): PnlBar[] {
   const rows = positions.filter(p => p.quantity !== 0 && Number.isFinite(p.unrealized_pnl));
   const max = Math.max(0, ...rows.map(p => Math.abs(p.unrealized_pnl)));

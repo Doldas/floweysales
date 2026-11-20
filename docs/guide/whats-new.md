@@ -2,7 +2,7 @@
 title: What's new
 order: 13
 summary: What changed in the November 2026 release, and what is still not available.
-last-reviewed: 2026-11-15
+last-reviewed: 2026-11-20
 ---
 
 # What's new
@@ -59,6 +59,16 @@ last-reviewed: 2026-11-15
 **Markets**
 - The feed status badge separates the connection, freshness, kind of data and market session.
 - The instrument chip in the top bar has favorites, recent instruments and a full-screen picker on phones that also shows the full instrument identity and holds the favorite button. The phone top bar stays on one row without the page title or a star, with low-frequency actions in a More menu. See [Markets](markets.md).
+
+**Trading desk and visuals**
+- A ticker tape under the top bar scrolls every tracked and starred instrument with its price and day change. It pauses on hover, on focus or with its pause button, and stands still when your system asks for reduced motion. Click an entry to open it in Markets.
+- The watchlist is a quote board: the latest price, the day's change, a five-day trend line and how fresh the price is, with starred instruments that are not tracked in their own list.
+- The quote header on Markets shows the previous close, the open, where the price sits in the day's range and the market session.
+- [Price alerts](markets.md#price-alerts): set a level from the bell beside the instrument name. A hit shows a message and, if you allow it, a browser notification. Alerts are kept in this browser and never place an order.
+- The price chart draws your alert levels and the average entry of an open paper position as [price lines](markets.md#price-lines-on-the-chart).
+- [Command Center](more-areas.md#command-center) has a **Market pulse** heatmap with the top gainers and losers, a **Market sessions** clock for the major exchanges in UTC and a **Price alerts** card.
+- [Paper portfolio](more-areas.md#paper-portfolio) opens with **Account at a glance**: an allocation donut, the return since the start and the unrealized result of each position.
+- Cards, lists and numbers animate in and react to hover. Every animation respects your system's reduced-motion setting.
 
 **Flow Studio**
 - Follow a run in the Flow editor: a run panel shows its status, progress and each node's output and errors, and the canvas marks each node as it finishes, without switching to Run history. Cancel or open the full trace from the panel. See [Flow Studio](flows.md#follow-a-run-in-the-editor).

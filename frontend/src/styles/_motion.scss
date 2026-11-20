@@ -77,7 +77,7 @@ a.card, .fs-kpi.kpi-link, .fs-lift {
 .fs-grow-x { transform-origin: left center; animation: fs-grow-x var(--fs-dur-4) var(--fs-ease-out) backwards; }
 .fs-grow-y { transform-origin: center bottom; animation: fs-grow-y var(--fs-dur-4) var(--fs-ease-out) backwards; }
 .fs-pop { animation: fs-pop var(--fs-dur-3) var(--fs-ease-spring); }
-// A pill for a day change, coloured by direction.
+// A pill for a day change, colored by direction.
 .fs-change {
   display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.05rem 0.45rem; border-radius: 999px;
   font-size: 0.75rem; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--fs-muted); background: var(--fs-surface-3);

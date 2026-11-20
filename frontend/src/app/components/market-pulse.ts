@@ -11,7 +11,7 @@ import { type BoardRow, QuoteBoardService } from '../core/quote-board.service';
 const LEGEND = [-3, -2, -1, 0, 1, 2, 3];
 
 /**
- * The day at a glance for every tracked and starred instrument: a heatmap whose tiles are coloured
+ * The day at a glance for every tracked and starred instrument: a heatmap whose tiles are colored
  * by the day's change, and the biggest gainers and losers with bars scaled to the largest move.
  * Prices and changes come from the shared quote board; a click opens the instrument in Markets.
  */

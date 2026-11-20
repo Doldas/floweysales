@@ -238,9 +238,9 @@
                     <th class="num">Avg entry</th>
                     <th class="num">Last</th>
                     <th class="num">Market value</th>
-                    <th class="num">Unrealised P&amp;L</th>
+                    <th class="num">Unrealized P&amp;L</th>
                     <th class="num">%</th>
-                    <th class="num">Realised</th>
+                    <th class="num">Realized</th>
                     <th class="actions-col">Trade</th>
                   </tr>
                 </thead>
@@ -252,7 +252,7 @@
                       <td data-label="Average entry" class="num">{{ p.avg_entry.toFixed(4) }}</td>
                       <td data-label="Last price" class="num">{{ lastOf(p).toFixed(4) }}</td>
                       <td data-label="Market value" class="num">{{ money(p.market_value) }}</td>
-                      <td data-label="Unrealised P&L" class="num" [class.txt-green]="positionPnl(p) > 0"
+                      <td data-label="Unrealized P&L" class="num" [class.txt-green]="positionPnl(p) > 0"
                           [class.txt-red]="positionPnl(p) < 0">
                         {{ signed(positionPnl(p)) }} {{ currency() }}
                       </td>
@@ -260,7 +260,7 @@
                           [class.txt-red]="positionPnl(p) < 0">
                         {{ signed(positionPnlPct(p)) }}%
                       </td>
-                      <td data-label="Realised P&L" class="num" [class.txt-green]="p.realized_pnl > 0"
+                      <td data-label="Realized P&L" class="num" [class.txt-green]="p.realized_pnl > 0"
                           [class.txt-red]="p.realized_pnl < 0">
                         {{ signed(p.realized_pnl) }}
                       </td>

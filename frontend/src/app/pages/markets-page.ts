@@ -193,7 +193,7 @@ export class MarketsPage {
       { label: 'Stop loss', value: (tick?.stop_loss ?? 0) > 0 ? `${tick!.stop_loss.toFixed(2)} ${cur}` : 'Standby', tone: 'neg', icon: 'bi-shield-exclamation' },
       { label: 'Fast EMA', value: fmt(tick?.fast_ema ?? seed?.fastEMA), icon: 'bi-lightning' },
       { label: 'Slow EMA', value: fmt(tick?.slow_ema ?? seed?.slowEMA), icon: 'bi-hourglass-split' },
-      { label: 'Unrealised P&L', value: `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} ${cur}`, tone: pnl > 0 ? 'pos' : pnl < 0 ? 'neg' : '', icon: 'bi-wallet2' },
+      { label: 'Unrealized P&L', value: `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} ${cur}`, tone: pnl > 0 ? 'pos' : pnl < 0 ? 'neg' : '', icon: 'bi-wallet2' },
     ];
   });
 

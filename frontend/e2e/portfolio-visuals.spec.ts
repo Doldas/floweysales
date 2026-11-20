@@ -18,7 +18,7 @@ test.describe('the paper account at a glance', () => {
     }));
   });
 
-  test('splits the account between positions and cash and ranks each unrealised result', async ({ page }) => {
+  test('splits the account between positions and cash and ranks each unrealized result', async ({ page }) => {
     await open(page, 'portfolio');
     const card = page.getByRole('region', { name: 'Account at a glance' });
     await expect(card.getByRole('img', { name: 'Allocation: AAPL 3.8%, NVDA 1.2%, TSLA 0.9%, Cash 94.1%' })).toBeVisible();
@@ -26,7 +26,7 @@ test.describe('the paper account at a glance', () => {
     await expect(card.locator('[data-slice="TSLA"]')).toContainText('short');
     await expect(card.locator('[data-slice="Cash"]')).toContainText('94.1%');
 
-    const rows = card.getByRole('list', { name: 'Unrealised result by position' }).getByRole('listitem');
+    const rows = card.getByRole('list', { name: 'Unrealized result by position' }).getByRole('listitem');
     await expect(rows).toHaveCount(3);
     await expect(rows.nth(0)).toContainText('AAPL+300.00+8.57%');
     await expect(rows.nth(1)).toContainText('NVDA+114.00+10.36%');
