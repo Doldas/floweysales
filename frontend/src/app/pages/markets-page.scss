@@ -24,6 +24,8 @@
   align-self: center; border-left: 1px solid var(--fs-border);
   animation: fs-fade var(--fs-dur-3) ease-out backwards;
   @media (max-width: 575.98px) { margin: 0.35rem 0 0; padding-left: 0; border-left: 0; flex-basis: 100%; }
+  // On the narrowest phones the day range is kept and the two figures go, so the chart stays in the first screen.
+  @media (max-width: 374.98px) { div:not(.day-range) { display: none; } }
   div { display: grid; gap: 0.1rem; }
   dt { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fs-muted); }
   dd { margin: 0; font-weight: 600; }
