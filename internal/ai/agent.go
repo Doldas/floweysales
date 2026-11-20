@@ -85,6 +85,10 @@ type AgentOptions struct {
 	// AllowedTools, when non-nil, limits the catalogue to these tool names;
 	// calls to any other tool are refused without running it.
 	AllowedTools []string
+	// Page is the app page the user is on (see PageTools). A page with
+	// default tools offers only those plus more_tools, which opens other
+	// groups on request; empty or unknown offers every granted tool.
+	Page string
 	// AnswerAfterToolBudget makes an exhausted tool budget withdraw the tools
 	// and ask for a final answer instead of ending the run with an error.
 	AnswerAfterToolBudget bool
@@ -257,6 +261,10 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 	if strict {
 		system += evidenceRules(policy)
 	}
+	pageNames, pageGated := PageTools(opts.Page)
+	if pageGated && !opts.DisableTools {
+		system += ToolIndex()
+	}
 	messages = append(messages, Message{Role: "system", Content: system})
 	if opts.Resume != nil {
 		messages = append(messages, opts.Resume.Messages...)
@@ -293,6 +301,27 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 		}
 		tools = kept
 	}
+	// offered is the set of tools sent so far on a gated page; more_tools grows it.
+	var offered map[string]bool
+	allTools := tools
+	if pageGated && !opts.DisableTools && len(tools) > 0 {
+		offered = map[string]bool{}
+		for _, name := range pageNames {
+			offered[name] = true
+		}
+	}
+	gate := func() {
+		if offered == nil {
+			return
+		}
+		tools = []Tool{MoreToolsDef()}
+		for _, t := range allTools {
+			if offered[t.Function.Name] {
+				tools = append(tools, t)
+			}
+		}
+	}
+	gate()
 	if opts.DisableTools || len(tools) == 0 {
 		tools = nil
 	}
@@ -486,8 +515,13 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 			} else if noTools {
 				// A model run without tools may still invent a call; it is never executed.
 				err = fmt.Errorf("tool %s is not available: this run has no tools", tc.Function.Name)
+			} else if tc.Function.Name == MoreToolsName && offered != nil {
+				result, err = openCategory(allTools, offered, tc.Function.Arguments)
+				gate()
 			} else if granted != nil && !granted[tc.Function.Name] {
 				err = fmt.Errorf("tool %s is not granted to this agent", tc.Function.Name)
+			} else if offered != nil && !offered[tc.Function.Name] {
+				err = fmt.Errorf("tool %s is not offered on this page; call %s with the category that holds it (%s)", tc.Function.Name, MoreToolsName, strings.Join(CategoryIDs(), ", "))
 			} else if perr := ValidateToolArgs(tc.Function.Name, tc.Function.Arguments); perr != nil {
 				err = perr
 			} else if callArgs, err = readSourceArgs(registry, tc.Function.Name, callArgs); err != nil {
@@ -532,8 +566,12 @@ func Run(ctx context.Context, client *Client, src DataSource, transcript []Messa
 			ev.Truncated = ev.Truncated || cut
 			ev.DurationMS = time.Since(started).Milliseconds()
 			emit(ev)
-			ledger = append(ledger, LedgerEntry{Seq: len(ledger) + 1, Tool: tc.Function.Name, Arguments: clip(tc.Function.Arguments, 300),
-				Preview: clip(result, ledgerPreviewBytes), Error: ev.ToolError, At: time.Now().UTC()})
+			if tc.Function.Name == MoreToolsName {
+				// Opening a tool group gathers no evidence.
+			} else {
+				ledger = append(ledger, LedgerEntry{Seq: len(ledger) + 1, Tool: tc.Function.Name, Arguments: clip(tc.Function.Arguments, 300),
+					Preview: clip(result, ledgerPreviewBytes), Error: ev.ToolError, At: time.Now().UTC()})
+			}
 
 			toolMessage := Message{Role: "tool", ToolCallID: tc.ID, Content: result}
 			messages = append(messages, toolMessage)
