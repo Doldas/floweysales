@@ -129,6 +129,8 @@
 
   <div class="cc-grid">
     <div class="cc-main">
+      <fse-market-pulse />
+
       @if (access.flowsRead()) {
         <!-- Agent activity -->
         <section class="card" aria-labelledby="activity-title">
@@ -234,15 +236,22 @@
         @if (market.trackedAssets().length) {
           <ul class="list-group list-group-flush">
             @for (t of market.trackedAssets(); track t.provider + '|' + t.symbol) {
-              <li class="list-group-item list-group-item-action watch-row" [class.active-row]="isActive(t)">
+              <li class="list-group-item list-group-item-action watch-row" [class.active-row]="isActive(t)" [attr.data-symbol]="t.symbol">
                 <button type="button" class="watch-btn" (click)="openTracker(t)" [title]="'Open ' + t.symbol + ' on ' + t.provider">
                   <span class="watch-sym">{{ t.symbol }}</span>
-                  <span class="watch-prov">{{ t.provider }}</span>
+                  <span class="watch-prov">{{ t.provider }}@if (freshness(t).label; as label) { <span class="fs-status" [class]="freshness(t).tone">{{ label }}</span> }</span>
                 </button>
-                @if (isActive(t)) {
-                  <fs-sparkline class="watch-spark" [values]="market.sparkline()" [width]="80" [height]="24" />
+                @if (board.row(t); as r) {
+                  @if (r.quote?.spark?.length) {
+                    <fs-sparkline class="watch-spark" [values]="r.quote!.spark!" [width]="64" [height]="22" [label]="t.symbol + ' five-day trend'" />
+                  }
+                  @if (r.price > 0) {
+                    <span class="watch-quote">
+                      <span class="watch-price tabular" [class]="flash(r)">{{ r.price | number: '1.2-2' }}</span>
+                      <span class="fs-change" [class.up]="(r.dayPct ?? 0) > 0" [class.down]="(r.dayPct ?? 0) < 0">{{ pct(r.dayPct) }}</span>
+                    </span>
+                  }
                 }
-                @if (freshness(t).label; as label) { <span class="fs-status" [class]="freshness(t).tone">{{ label }}</span> }
               </li>
             }
           </ul>

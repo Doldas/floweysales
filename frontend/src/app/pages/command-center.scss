@@ -97,8 +97,9 @@
 }
 .watch-btn {
   display: flex;
-  align-items: baseline;
-  gap: 0.45rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
   flex: 1 1 auto;
   min-width: 0;
   border: 0;
@@ -108,8 +109,10 @@
   text-align: left;
 }
 .watch-sym { font-weight: 650; font-size: 0.875rem; }
-.watch-prov { font-size: 0.7rem; color: var(--fs-muted); }
-.watch-spark { width: 80px; height: 24px; flex: 0 0 auto; }
+.watch-prov { display: flex; align-items: center; gap: 0.35rem; font-size: 0.7rem; color: var(--fs-muted); .fs-status { font-size: 0.65rem; } }
+.watch-spark { width: 64px; height: 22px; flex: 0 0 auto; }
+.watch-quote { display: flex; flex-direction: column; align-items: flex-end; gap: 0.15rem; flex: 0 0 auto; min-width: 4.5rem; }
+.watch-price { font-size: 0.82rem; font-weight: 650; border-radius: 4px; padding: 0 0.15rem; }
 
 .template {
   display: flex;

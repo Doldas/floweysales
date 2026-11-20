@@ -18,6 +18,9 @@ import { formatUtcLongDay } from '../ui/datetime';
 import { SkeletonComponent } from '../ui/skeleton';
 import { SourceComponent } from '../ui/source';
 import { MarketClockComponent } from '../components/market-clock';
+import { MarketPulseComponent } from '../components/market-pulse';
+import { flashClass, signedPercent } from '../core/quote-board';
+import { type BoardRow, QuoteBoardService } from '../core/quote-board.service';
 
 interface TrackerStatus { symbol: string; provider: string; has_tick: boolean; age_seconds: number | null }
 interface WorkspaceFile { path: string; content_type: string; size: number }
@@ -29,7 +32,7 @@ interface WorkspaceFile { path: string; content_type: string; size: number }
 @Component({
   selector: 'fs-command-center',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, DecimalPipe, SparklineComponent, SkeletonComponent, SourceComponent, MarketClockComponent],
+  imports: [RouterLink, DecimalPipe, SparklineComponent, SkeletonComponent, SourceComponent, MarketClockComponent, MarketPulseComponent],
   templateUrl: './command-center.html',
   styleUrl: './command-center.scss',
 })
@@ -40,6 +43,7 @@ export class CommandCenterPage {
   readonly agent = inject(AgentSession);
   readonly market = inject(MarketState);
   readonly palette = inject(CommandPaletteService);
+  readonly board = inject(QuoteBoardService);
   private readonly router = inject(Router);
   private readonly notify = inject(NotifyService);
   private readonly marketApi = inject(MarketService);
@@ -127,6 +131,9 @@ export class CommandCenterPage {
     this.market.view(t);
     void this.router.navigateByUrl('/markets');
   }
+
+  pct(p: number | null): string { return signedPercent(p); }
+  flash(r: BoardRow): string { return flashClass(r.entry); }
 
   isActive(t: TrackedAsset): boolean {
     return t.symbol === this.market.trackedSymbol() && t.provider === this.market.provider();
