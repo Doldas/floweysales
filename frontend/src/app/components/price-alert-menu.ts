@@ -14,12 +14,12 @@ import { signedPercent } from '../core/quote-board';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DecimalPipe],
   template: `
-    <button type="button" class="btn btn-outline-secondary alert-toggle" [attr.aria-expanded]="open()" aria-controls="price-alert-panel" (click)="toggle()">
-      <i class="bi" [class.bi-bell]="!activeCount()" [class.bi-bell-fill]="activeCount() > 0" aria-hidden="true"></i>Price alert
+    <button type="button" class="btn btn-outline-secondary alert-toggle" [class.btn-sm]="compact()" [attr.aria-expanded]="open()" aria-controls="price-alert-panel" (click)="toggle()">
+      <i class="bi" [class.bi-bell]="!activeCount()" [class.bi-bell-fill]="activeCount() > 0" aria-hidden="true"></i><span [class.visually-hidden]="compact()">Price alert</span>
       @if (activeCount()) { <span class="alert-count" [attr.aria-label]="activeCount() + ' active'">{{ activeCount() }}</span> }
     </button>
     @if (open()) {
-      <div class="alert-panel" id="price-alert-panel" role="dialog" [attr.aria-label]="'Price alerts for ' + symbol()">
+      <div class="alert-panel" [class.start]="compact()" id="price-alert-panel" role="dialog" [attr.aria-label]="'Price alerts for ' + symbol()">
         <form class="alert-form" (submit)="add($event)">
           <label class="form-label small" for="price-alert-level">Alert when {{ symbol() }} reaches</label>
           <div class="input-group input-group-sm">
@@ -50,7 +50,8 @@ import { signedPercent } from '../core/quote-board';
     }
   `,
   styles: [`
-    :host { position: relative; display: inline-block; }
+    :host { position: relative; display: inline-block; font-size: 1rem; font-weight: 400; line-height: 1.5; letter-spacing: normal; align-self: center; }
+    .alert-panel.start { right: auto; left: 0; transform-origin: top left; }
     .alert-toggle { display: inline-flex; align-items: center; gap: 0.4rem; }
     .alert-toggle[aria-expanded='true'] .bi, .bi-bell-fill { color: var(--fs-warn); }
     .alert-count { min-width: 1.15rem; padding: 0 0.3rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; line-height: 1.15rem; color: #1b1300; background: var(--fs-warn); }
@@ -71,6 +72,8 @@ import { signedPercent } from '../core/quote-board';
 })
 export class PriceAlertMenuComponent {
   readonly symbol = input.required<string>();
+  /** Icon only, with the panel opening to the right: for a place beside the title. */
+  readonly compact = input(false);
   readonly provider = input.required<string>();
   readonly price = input(0);
 

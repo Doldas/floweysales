@@ -5,6 +5,7 @@
       <div class="fs-eyebrow">{{ market.provider() }}@if (market.mode() === 'research') { · research mode }</div>
       <h1>
         {{ market.trackedSymbol() || 'Markets' }} <fs-help-button topic="markets" />
+        @if (market.trackedSymbol()) { <fse-price-alert-menu [compact]="true" [symbol]="market.trackedSymbol()" [provider]="market.trackedProvider()" [price]="quoteRow()?.price || market.livePrice()" /> }
         @if (market.trackedName()) { <span class="quote-name">{{ market.trackedName() }}</span> }
       </h1>
       @if (market.trackedSymbol()) {
@@ -50,7 +51,6 @@
       @if (market.trackedSymbol()) {
         <button type="button" class="btn btn-agent" (click)="askAgent()"><i class="bi bi-stars" aria-hidden="true"></i>Analyze with agent</button>
         <a class="btn btn-outline-secondary" routerLink="/financials"><i class="bi bi-bank" aria-hidden="true"></i>Financials</a>
-        <fse-price-alert-menu [symbol]="market.trackedSymbol()" [provider]="market.trackedProvider()" [price]="quoteRow()?.price || market.livePrice()" />
       }
     </div>
   </header>
@@ -153,7 +153,7 @@
           }
         </div>
         <div class="pt-2">
-          <fse-trading-chart [epoch]="market.chartEpoch()" [flags]="market.indicators()" [settings]="market.indicatorSettings()" [chartStyle]="chartStyle()" [class.phone-options-open]="chartOptionsOpen()" [drawings]="drawings()" (drawingsChange)="setDrawings($event)" />
+          <fse-trading-chart [epoch]="market.chartEpoch()" [flags]="market.indicators()" [settings]="market.indicatorSettings()" [chartStyle]="chartStyle()" [class.phone-options-open]="chartOptionsOpen()" [drawings]="drawings()" [marks]="chartMarks()" (drawingsChange)="setDrawings($event)" />
         </div>
       </fs-pane>
 

@@ -40,6 +40,9 @@ import type { TrackedAsset } from '../services';
 import { flashClass, rangePosition } from '../core/quote-board';
 import { QuoteBoardService } from '../core/quote-board.service';
 import { PriceAlertMenuComponent } from '../components/price-alert-menu';
+import { PriceAlertsService } from '../core/price-alerts.service';
+import { OrdersState } from '../orders-state';
+import { chartMarks } from '../core/chart-marks';
 
 interface Kpi { label: string; value: string; sub?: string; tone?: 'pos' | 'neg' | ''; icon: string }
 
@@ -55,6 +58,15 @@ export class MarketsPage {
   readonly market = inject(MarketState);
   readonly access = inject(Access);
   private readonly board = inject(QuoteBoardService);
+  private readonly priceAlerts = inject(PriceAlertsService);
+  private readonly orders = inject(OrdersState);
+  /** Alert levels and the open position's entry, drawn as price lines on the chart. */
+  readonly chartMarks = computed(() => {
+    const symbol = this.market.trackedSymbol();
+    const alerts = this.priceAlerts.forInstrument({ symbol, provider: this.market.trackedProvider() });
+    const position = this.orders.positions().find(p => p.symbol.toUpperCase() === symbol.toUpperCase());
+    return chartMarks(alerts, position);
+  });
   private readonly agent = inject(AgentSession);
   private readonly notify = inject(NotifyService);
   private readonly chart = viewChild(TradingChartComponent);

@@ -28,6 +28,17 @@ test.describe('price alerts', () => {
     await expect(card).toContainText('No alerts yet.');
   });
 
+  test('the chart draws the open position entry and each alert level as price lines', async ({ page }) => {
+    await open(page, 'markets');
+    const lines = page.getByRole('list', { name: 'Price lines on the chart' });
+    await expect(lines.getByRole('listitem')).toHaveText(['Avg entry 110']);
+    await page.getByRole('button', { name: 'Price alert' }).click();
+    const panel = page.getByRole('dialog', { name: 'Price alerts for NVDA' });
+    await panel.getByLabel('Alert when NVDA reaches').fill('120');
+    await panel.getByRole('button', { name: 'Add alert' }).click();
+    await expect(lines.getByRole('listitem')).toHaveText(['Avg entry 110', 'Alert above 120']);
+  });
+
   test('a price past the level fires the alert once and keeps it as a hit until cleared', async ({ page }) => {
     await page.addInitScript(() => {
       if (!sessionStorage.getItem('seeded')) {
