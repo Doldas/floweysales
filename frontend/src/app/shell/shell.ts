@@ -9,6 +9,7 @@ import { Access } from '../core/access';
 import { ActivityStore } from '../core/activity';
 import { AgentSession } from '../core/agent-session';
 import { MarketState } from '../core/market-state';
+import { PriceAlertsService } from '../core/price-alerts.service';
 import { PluginTools } from '../core/plugin-tools';
 import { tabIcon } from '../components/plugin-tools';
 import { Workspace } from '../core/workspace.service';
@@ -45,6 +46,8 @@ export class ShellComponent {
   readonly auth = inject(AuthState);
   readonly access = inject(Access);
   readonly market = inject(MarketState);
+  /** Checks price alerts on every page, not only where they are shown. */
+  private readonly priceAlerts = inject(PriceAlertsService);
   readonly agent = inject(AgentSession);
   readonly activity = inject(ActivityStore);
   readonly pluginTools = inject(PluginTools);

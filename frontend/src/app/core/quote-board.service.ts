@@ -86,12 +86,21 @@ export class QuoteBoardService {
     this.load(this.watched());
   }
 
-  /** The board and the instrument on screen, each once. */
+  /** Instruments other features need prices for, such as price alerts; refreshed with the board. */
+  readonly extra = signal<readonly BoardInstrument[]>([], { equal: sameBoard });
+
+  /** The board, the instrument on screen and the extra instruments, each once. */
   private readonly watched = computed(() => {
-    const list = this.instruments();
-    const focus = this.focus();
-    return focus && !list.some(i => boardKey(i) === boardKey(focus)) ? [...list, focus] : list;
+    const list = [...this.instruments()];
+    const keys = new Set(list.map(boardKey));
+    for (const i of [this.focus(), ...this.extra()]) {
+      if (i && !keys.has(boardKey(i))) { keys.add(boardKey(i)); list.push(i); }
+    }
+    return list;
   });
+
+  /** A row for every instrument whose price is fetched, the board's and the extra ones. */
+  readonly watchedRows = computed<BoardRow[]>(() => this.watched().map(i => this.toRow(i)));
 
   private toRow(i: BoardInstrument): BoardRow {
     const key = boardKey(i);

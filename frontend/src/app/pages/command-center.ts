@@ -19,6 +19,7 @@ import { SkeletonComponent } from '../ui/skeleton';
 import { SourceComponent } from '../ui/source';
 import { MarketClockComponent } from '../components/market-clock';
 import { MarketPulseComponent } from '../components/market-pulse';
+import { PriceAlertsCardComponent } from '../components/price-alerts-card';
 import { flashClass, signedPercent } from '../core/quote-board';
 import { type BoardRow, QuoteBoardService } from '../core/quote-board.service';
 
@@ -32,7 +33,7 @@ interface WorkspaceFile { path: string; content_type: string; size: number }
 @Component({
   selector: 'fs-command-center',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, DecimalPipe, SparklineComponent, SkeletonComponent, SourceComponent, MarketClockComponent, MarketPulseComponent],
+  imports: [RouterLink, DecimalPipe, SparklineComponent, SkeletonComponent, SourceComponent, MarketClockComponent, MarketPulseComponent, PriceAlertsCardComponent],
   templateUrl: './command-center.html',
   styleUrl: './command-center.scss',
 })

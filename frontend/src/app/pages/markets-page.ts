@@ -39,6 +39,7 @@ function readChartStyle(): ChartStyleId {
 import type { TrackedAsset } from '../services';
 import { flashClass, rangePosition } from '../core/quote-board';
 import { QuoteBoardService } from '../core/quote-board.service';
+import { PriceAlertMenuComponent } from '../components/price-alert-menu';
 
 interface Kpi { label: string; value: string; sub?: string; tone?: 'pos' | 'neg' | ''; icon: string }
 
@@ -46,7 +47,7 @@ interface Kpi { label: string; value: string; sub?: string; tone?: 'pos' | 'neg'
 @Component({
   selector: 'fs-markets-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PaneComponent, PhoneDisclosureComponent, HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, LedgerComponent, WatchlistComponent, MarketGroups, SymbolSearchComponent, ProgressStatusComponent],
+  imports: [PaneComponent, PhoneDisclosureComponent, HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, LedgerComponent, WatchlistComponent, MarketGroups, SymbolSearchComponent, ProgressStatusComponent, PriceAlertMenuComponent],
   templateUrl: './markets-page.html',
   styleUrl: './markets-page.scss',
 })

@@ -50,6 +50,7 @@
       @if (market.trackedSymbol()) {
         <button type="button" class="btn btn-agent" (click)="askAgent()"><i class="bi bi-stars" aria-hidden="true"></i>Analyze with agent</button>
         <a class="btn btn-outline-secondary" routerLink="/financials"><i class="bi bi-bank" aria-hidden="true"></i>Financials</a>
+        <fse-price-alert-menu [symbol]="market.trackedSymbol()" [provider]="market.trackedProvider()" [price]="quoteRow()?.price || market.livePrice()" />
       }
     </div>
   </header>
