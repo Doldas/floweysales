@@ -254,6 +254,21 @@ export interface QuoteSnapshot {
   /** open, closed or unknown. */
   market_session: string;
   quote_type: string;
+  /** The newest trading day against the close before it; absent when the bars hold no earlier day. */
+  day?: QuoteDay;
+  /** Up to 48 closes of about five days, in time order, ending with the price. */
+  spark?: number[];
+}
+
+/** GET /api/quote `day`: the newest trading day (exchange-local date, else UTC). */
+export interface QuoteDay {
+  date: string;
+  previous_close: number;
+  open: number;
+  high: number;
+  low: number;
+  change: number;
+  change_percent: number;
 }
 
 export const HISTORY_RANGES = ['1D', '5D', '1M', '3M', '1Y', '3Y', '5Y', '10Y', 'MAX'] as const;

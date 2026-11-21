@@ -116,6 +116,11 @@ type QuoteSnapshot struct {
 	// regular_hours (holidays not known) when computed from the exchange.
 	MarketSession      string `json:"market_session"`
 	MarketSessionBasis string `json:"market_session_basis,omitempty"`
+	// Day compares the newest trading day with the close before it; absent
+	// when the bars hold no earlier day. Spark is up to 48 closes of the same
+	// bars (about five days) for a small trend line.
+	Day   *DayStats `json:"day,omitempty"`
+	Spark []float64 `json:"spark,omitempty"`
 }
 
 func SnapshotFromSeries(symbol string, p Provider, series HistorySeries, now time.Time) (QuoteSnapshot, error) {
@@ -164,6 +169,7 @@ func SnapshotFromSeries(symbol string, p Provider, series HistorySeries, now tim
 		QuoteType: "ohlc_bar_close", IsRealtime: false, Stale: age > threshold,
 		StaleThresholdSeconds: threshold,
 		MarketSession:         session.State, MarketSessionBasis: session.Basis,
+		Day: dayStats(symbol, series.Points), Spark: spark(series.Points, sparkPoints),
 		Note: "Last available provider OHLC bar CLOSE, not an executable bid/ask or verified live quote. Market holidays and closed sessions affect age.",
 	}, nil
 }

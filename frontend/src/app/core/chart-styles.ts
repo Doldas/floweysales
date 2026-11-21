@@ -37,7 +37,7 @@ export function fullBar(b: Bar): Ohlc {
 
 /**
  * Heikin Ashi bars: close is the average of the bar, open the midpoint of the previous
- * Heikin Ashi body, so a run in one direction shows as same-coloured bars. The values are
+ * Heikin Ashi body, so a run in one direction shows as same-colored bars. The values are
  * derived, not traded prices.
  */
 export function heikinAshi(bars: Bar[]): Ohlc[] {

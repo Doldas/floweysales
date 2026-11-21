@@ -61,15 +61,27 @@ export const paperApprovals = [
     rationale: 'Filing summary flagged accelerating data-center revenue; limit order below 20-day average.', decision_source: 'flow-run:41', requested_by: 2, created_at: iso(1700), expires_at: iso(-3600 * 20), approved_by: null, rejected_by: null, consumed_order_id: null, status: 'pending' },
 ];
 
-const QUOTES = { NVDA: [118.16, 'USD', 'open', false, 20], BTCUSDT: [67234.5, 'USDT', 'open', true, 5], 'VOLV-B': [285.4, 'SEK', 'closed', false, 7200] };
+const QUOTES = { NVDA: [118.16, 'USD', 'open', false, 20, 1.84], BTCUSDT: [67234.5, 'USDT', 'open', true, 5, -0.92], 'VOLV-B': [285.4, 'SEK', 'closed', false, 7200, 0.45] };
+
+/** The day figures and five-day trend of a quote: deterministic, ending at the price. */
+function quoteDay(price, pct) {
+  const prev = +(price / (1 + pct / 100)).toFixed(4);
+  const spark = Array.from({ length: 48 }, (_, i) => +(prev * (1 + 0.012 * Math.sin(i / 5) + (pct / 100) * (i / 47) ** 2)).toFixed(4));
+  spark[47] = price;
+  return {
+    day: { date: '2026-10-28', previous_close: prev, open: +(prev * 1.002).toFixed(4), high: +(Math.max(price, prev) * 1.006).toFixed(4), low: +(Math.min(price, prev) * 0.994).toFixed(4),
+      change: +(price - prev).toFixed(4), change_percent: pct },
+    spark,
+  };
+}
 
 /** The latest quote of a symbol, as GET /api/quote serves it. */
 export function quote(symbol, provider = 'YAHOO') {
-  const [price, currency, session, realtime, age] = QUOTES[symbol] ?? [100, 'USD', 'unknown', false, 60];
+  const [price, currency, session, realtime, age, pct] = QUOTES[symbol] ?? [100, 'USD', 'unknown', false, 60, 0.3];
   return {
     symbol, requested_provider: provider, source: provider.toLowerCase(), currency, price, as_of_unix: NOW - age, fetched_at_unix: NOW, age_seconds: age,
     interval: '1m', quote_type: realtime ? 'realtime' : 'delayed', is_realtime: realtime, stale: age > 3600, stale_threshold_seconds: 3600, note: '',
-    market_session: session, market_session_basis: 'regular_hours',
+    market_session: session, market_session_basis: 'regular_hours', ...quoteDay(price, pct),
   };
 }
 

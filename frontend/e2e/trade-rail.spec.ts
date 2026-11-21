@@ -12,6 +12,10 @@ test.describe('trade rail beside the chart', () => {
     await expect(row('BTCUSDT')).toContainText('live');
     await expect(row('VOLV-B')).toContainText('285.40');
     await expect(row('VOLV-B')).toContainText('stale · 2 h');
+    // The day's change from the quote's previous close, colored by direction.
+    await expect(row('VOLV-B')).toContainText('+0.45%');
+    await expect(row('BTCUSDT').locator('.wl-day')).toHaveText('−0.92%');
+    await expect(row('BTCUSDT').getByRole('img', { name: 'BTCUSDT five-day trend' })).toBeVisible();
     await expect(row('NVDA')).toHaveAttribute('aria-pressed', 'true');
 
     await row('VOLV-B').click();

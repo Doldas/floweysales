@@ -13,6 +13,8 @@ These screens are smaller than the ones with their own pages. Each is described 
 
 The home page. A **Today** briefing is built from figures only, with no model running on load: your wealth-plan phase and chance of reaching your goal, the macro regime, the paper portfolio's day change and drawdown where you have access to it, and a few things worth a look. If nothing is available it says so and suggests setting up your plan, tracking some symbols or installing a provider plugin with events. **Brief me** sends the figures to the [Research Agent](agents.md) for a written summary, which is AI-generated.
 
+**Market pulse** colors a tile for each tracked and starred instrument by its day change and ranks the top gainers and losers. **Market sessions** shows a 24-hour UTC track for each major exchange with its regular hours, whether it is open, at lunch or closed, and how long until that changes; holidays and early closes are not known. **Price alerts** lists the alerts set on Markets with how far each price has to go. Click an instrument to open it in Markets.
+
 Below it are key figures for agent runs over the last 24 hours, agent activity across flows, automations, live trackers, starter flow templates and recent files.
 
 ## Wealth plan
@@ -21,7 +23,7 @@ Where you are, what that phase needs and how likely your goal is. You enter your
 
 ## Paper portfolio
 
-For administrators. Practice decisions against live marks with **simulated fills only**; nothing reaches a broker. The **Desk** view has the order ticket, positions and blotter, with position sizing by risk. The **Risk** view shows concentration, volatility, beta, correlation, drift from your plan and rebalancing suggestions, which prefill the ticket without submitting it. Paper-trade proposals made by analysts or flows need approval from a different administrator than the requester. Limits and costs are set under Settings, Trading limits.
+For administrators. Practice decisions against live marks with **simulated fills only**; nothing reaches a broker. The **Desk** view opens with **Account at a glance**: a donut of positions and cash with equity in the middle, the return since the starting cash and a bar for the unrealized result of each position. Below it are the order ticket, positions and blotter, with position sizing by risk. The **Risk** view shows concentration, volatility, beta, correlation, drift from your plan and rebalancing suggestions, which prefill the ticket without submitting it. Paper-trade proposals made by analysts or flows need approval from a different administrator than the requester. Limits and costs are set under Settings, Trading limits.
 
 ## Inbox
 

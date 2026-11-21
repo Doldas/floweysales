@@ -44,6 +44,7 @@ import {
   type DrawingKind,
   type DrawingTool,
 } from '../core/chart-drawings';
+import { type ChartMark, type ChartMarkTone, markPlacement } from '../core/chart-marks';
 import { barsFor, DEFAULT_CHART_STYLE, isCandleStyle, type ChartStyleId, type Ohlc } from '../core/chart-styles';
 import { HistorySeries, TradingRecord } from '../models';
 import { formatNumber, formatUtcDateTime, formatUtcMonthDay, formatUtcTime } from '../ui/datetime';
@@ -76,6 +77,7 @@ interface BarsOptions {
  */
 const barsState = new WeakMap<Chart, BarsOptions>();
 const drawingsState = new WeakMap<Chart, DrawingsOptions>();
+const marksState = new WeakMap<Chart, () => readonly ChartMark[]>();
 
 /**
  * Draws candles, hollow candles and OHLC bars beneath the studies. The price line
@@ -249,8 +251,57 @@ const drawingsPlugin: Plugin<'line'> = {
   },
 };
 
+const MARK_COLORS: Record<ChartMarkTone, { line: string; text: string }> = {
+  entry: { line: '#3b82f6', text: '#ffffff' },
+  alert: { line: '#f59e0b', text: '#111827' },
+  hit: { line: '#16a34a', text: '#ffffff' },
+};
+
+/** Draws the entry and alert price lines, with a tag at the right edge; a level off the range gets an arrow tag at that edge. */
+const marksPlugin: Plugin<'line'> = {
+  id: 'fsMarks',
+  afterDatasetsDraw(chart) {
+    const marks = marksState.get(chart)?.() ?? [];
+    const y = chart.scales['y'];
+    if (!marks.length || !y) return;
+    const { ctx, chartArea: a } = chart;
+    ctx.save();
+    ctx.font = '600 10px Inter, sans-serif';
+    ctx.textBaseline = 'middle';
+    // Tags past the same edge stack inward so none hides another.
+    let up = 0;
+    let down = 0;
+    for (const m of marks) {
+      const where = markPlacement(m.price, y.min, y.max);
+      const color = MARK_COLORS[m.tone];
+      const py = where === 'above' ? a.top + 9 + 18 * up++ : where === 'below' ? a.bottom - 9 - 18 * down++ : y.getPixelForValue(m.price);
+      if (where === 'in') {
+        ctx.strokeStyle = withAlpha(color.line, 0.85);
+        ctx.lineWidth = 1;
+        ctx.setLineDash(m.tone === 'entry' ? [] : [4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(a.left, py);
+        ctx.lineTo(a.right, py);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      const text = `${where === 'above' ? '▲ ' : where === 'below' ? '▼ ' : ''}${m.label} ${formatNumber(m.price, { maximumFractionDigits: 4 })}`;
+      const w = ctx.measureText(text).width + 10;
+      const x = a.right - w - 4;
+      ctx.fillStyle = color.line;
+      ctx.beginPath();
+      ctx.roundRect(x, py - 8, w, 16, 3);
+      ctx.fill();
+      ctx.fillStyle = color.text;
+      ctx.fillText(text, x + 5, py);
+    }
+    ctx.restore();
+  },
+};
+
 Chart.register(
   drawingsPlugin,
+  marksPlugin,
   barsPlugin,
   BarController,
   BarElement,
@@ -343,6 +394,11 @@ interface PointMeta {
     <div class="chart-container" [class.drawing]="tool() !== 'cursor'" tabindex="-1" (keydown)="onKeydown($event)">
       <canvas #canvas></canvas>
     </div>
+    @if (marks().length) {
+      <ul class="visually-hidden" aria-label="Price lines on the chart">
+        @for (m of marks(); track $index) { <li>{{ m.label }} {{ markPrice(m) }}</li> }
+      </ul>
+    }
     @if (flags().rsi) {
       <div class="subchart-container">
         <canvas #rsiCanvas></canvas>
@@ -405,6 +461,8 @@ export class TradingChartComponent implements AfterViewInit {
   /** The user's drawings for this instrument; changes are reported through drawingsChange. */
   readonly drawings = input<Drawing[]>([]);
   readonly drawingsChange = output<Drawing[]>();
+  /** Price lines for alert levels and the position's entry. */
+  readonly marks = input<readonly ChartMark[]>([]);
 
   readonly tools = DRAWING_TOOLS;
   readonly maxDrawings = MAX_DRAWINGS;
@@ -467,6 +525,11 @@ export class TradingChartComponent implements AfterViewInit {
     effect(() => {
       const list = this.drawings();
       if (this.selectedId() && !list.some(d => d.id === this.selectedId())) this.selectedId.set(null);
+      this.chart?.draw();
+    });
+
+    effect(() => {
+      this.marks();
       this.chart?.draw();
     });
 
@@ -844,6 +907,7 @@ export class TradingChartComponent implements AfterViewInit {
         ? { borderColor: (c) => ((c.p1.parsed.y ?? base) >= base ? UP_COLOR : DOWN_COLOR) }
         : {};
     barsState.set(chart, { style, bars: () => this.currentBars() });
+    marksState.set(chart, () => this.marks());
     drawingsState.set(chart, {
       list: () => this.drawings(),
       pending: () => this.pending,
@@ -852,6 +916,10 @@ export class TradingChartComponent implements AfterViewInit {
       text: () => this.theme.def().textColor,
     });
     if (update) chart.update('none');
+  }
+
+  markPrice(m: ChartMark): string {
+    return formatNumber(m.price, { maximumFractionDigits: 4 });
   }
 
   private signalAt(index: number): string | null {

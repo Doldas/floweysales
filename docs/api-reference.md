@@ -103,6 +103,8 @@ nyckeltal, kurva, ombalanseringar och varningar. Båda läses med
 
 `GET|PUT /api/market/leaderboard/preferences` reads and saves the signed-in user's own leaderboard objective and constraints; see [investor automations](investor-automations.md#your-objective-and-constraints). `GET /api/market/leaderboard?preferences=off` ranks without them.
 
+`GET /api/quote` is the newest complete bar close of the last five days. It also carries `day` (absent when those bars hold no earlier trading day): `date`, `previous_close`, `open`, `high`, `low`, `change` and `change_percent` of the newest trading day, where the day is the exchange's local date when the ticker suffix names the exchange (`.ST`, `.AX`) and the UTC date otherwise. `spark` is up to 48 closes of the same bars in time order, ending with the quoted price, for a small trend line. Neither is an executable bid or ask.
+
 `GET /api/plan`, `PUT /api/plan/profile` och `POST /api/plan/preview` hanterar
 den inloggade användarens egen förmögenhetsplan (fas, målallokering och
 simulering); se [wealth plan](wealth-plan.md). `GET /api/portfolio/analytics` (SYS_ADMIN)

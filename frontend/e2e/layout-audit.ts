@@ -10,6 +10,8 @@ export interface Finding { kind: string; target: string; detail: string }
 
 /** Collects layout defects of the current page. Runs in the page. */
 export async function audit(page: Page, opts: { touch: boolean }): Promise<Finding[]> {
+  // Measure the settled layout: an entrance animation caught midway scales boxes below their size.
+  await page.evaluate(() => { for (const a of document.getAnimations()) if (a.effect?.getComputedTiming().iterations !== Infinity) a.finish(); });
   return page.evaluate(({ touch }) => {
     const out: { kind: string; target: string; detail: string }[] = [];
     const vw = document.documentElement.clientWidth;

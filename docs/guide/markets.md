@@ -83,6 +83,18 @@ The badge in the top bar describes four separate things, and you can open it for
 
 The wording is deliberate. **Live prices** appears only when the provider says its quotes are real time and an update arrived recently. **Last update 14:32 UTC** means prices are arriving but are not confirmed real time. **No new prices since …** means the connection is open but nothing recent came in; the market may simply be closed. When a provider states the time of the last quote, the badge reads **Last quote 14:32 UTC**; a stated delay reads **Delayed 15 min** and overrides any real-time claim. A closed market reads **Market closed · last 21:00 UTC** instead of stale, with no Reconnect. Providers that do not send a quote time or delay show those as unknown. Use Reconnect in the badge if the stream seems stuck.
 
+## The quote header
+
+Above the chart, the instrument's price and day change are followed by the day's figures where the provider has them: **Prev. close**, **Open** and a **Day range** bar with a dot at the price now. A pill shows the market session. The watchlist shows each tracked instrument's latest price, day change, a five-day trend line and how fresh the price is; prices refresh once a minute while the tab is visible. The ticker tape under the top bar shows the same prices on every page; pause it with its button.
+
+## Price alerts
+
+The bell beside the instrument name sets price alerts. The level starts a little above the price; an alert must be above or below the price now, and the panel says which and how far away it is. When a price reaches the level you get a message and, if you allowed notifications, a browser notification while the tab is in the background. A hit alert stays listed, with its price and time in UTC, until you clear it. Alerts are kept in this browser only, are checked only while FloweySales is open and never place an order. Command Center lists all of them with how far the price has to go.
+
+## Price lines on the chart
+
+The chart draws the average entry of an open paper position as a solid blue line and each alert level as a dashed line, amber while waiting and green once hit, each with a tag at the right edge. A level outside the visible range shows as a tag with an arrow at the top or bottom edge. Screen readers get the same lines as a list.
+
 ## The selected instrument
 
 The instrument chip in the top bar follows you across pages. Open the search with nothing typed to see your **Favorites** (star the selected instrument) and your **Recent** instruments, each with exchange and provider. Favorites and recent instruments are kept in this browser. On phones the top bar shows only the ticker, on one row and not cut off at normal text sizes; tap it to open a full-screen picker with the full ticker, name, exchange and provider, the **Add to favorites** / **Remove from favorites** button and the search. There is no separate star in the top bar. Less-used actions (Search or run, theme) sit in the **More actions** menu, and the page name is shown by the page heading and the highlighted entry in the navigation. In live mode, choosing an instrument selects it without starting to track it: the badge says "Not tracked live" and a **Track live** button starts the tracker (up to 16). Pages that do not use the instrument, such as Flows or Settings, mute the chip and say so.

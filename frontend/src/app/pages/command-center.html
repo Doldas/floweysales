@@ -120,7 +120,7 @@
       </a>
     } @else if (access.liveMarkets()) {
       <a class="card fs-kpi kpi-link" routerLink="/portfolio">
-        <span class="fs-kpi-label"><i class="bi bi-wallet2" aria-hidden="true"></i>Unrealised P&amp;L</span>
+        <span class="fs-kpi-label"><i class="bi bi-wallet2" aria-hidden="true"></i>Unrealized P&amp;L</span>
         <span class="fs-kpi-value" [class.text-pos]="market.totalPnL() > 0" [class.text-neg]="market.totalPnL() < 0">{{ market.totalPnL() >= 0 ? '+' : '' }}{{ market.totalPnL() | number: '1.2-2' }}</span>
         <span class="fs-kpi-sub">Paper portfolio</span>
       </a>
@@ -129,6 +129,8 @@
 
   <div class="cc-grid">
     <div class="cc-main">
+      <fse-market-pulse />
+
       @if (access.flowsRead()) {
         <!-- Agent activity -->
         <section class="card" aria-labelledby="activity-title">
@@ -234,15 +236,22 @@
         @if (market.trackedAssets().length) {
           <ul class="list-group list-group-flush">
             @for (t of market.trackedAssets(); track t.provider + '|' + t.symbol) {
-              <li class="list-group-item list-group-item-action watch-row" [class.active-row]="isActive(t)">
+              <li class="list-group-item list-group-item-action watch-row" [class.active-row]="isActive(t)" [attr.data-symbol]="t.symbol">
                 <button type="button" class="watch-btn" (click)="openTracker(t)" [title]="'Open ' + t.symbol + ' on ' + t.provider">
                   <span class="watch-sym">{{ t.symbol }}</span>
-                  <span class="watch-prov">{{ t.provider }}</span>
+                  <span class="watch-prov">{{ t.provider }}@if (freshness(t).label; as label) { <span class="fs-status" [class]="freshness(t).tone">{{ label }}</span> }</span>
                 </button>
-                @if (isActive(t)) {
-                  <fs-sparkline class="watch-spark" [values]="market.sparkline()" [width]="80" [height]="24" />
+                @if (board.row(t); as r) {
+                  @if (r.quote?.spark?.length) {
+                    <fs-sparkline class="watch-spark" [values]="r.quote!.spark!" [width]="64" [height]="22" [label]="t.symbol + ' five-day trend'" />
+                  }
+                  @if (r.price > 0) {
+                    <span class="watch-quote">
+                      <span class="watch-price tabular" [class]="flash(r)">{{ r.price | number: '1.2-2' }}</span>
+                      <span class="fs-change" [class.up]="(r.dayPct ?? 0) > 0" [class.down]="(r.dayPct ?? 0) < 0">{{ pct(r.dayPct) }}</span>
+                    </span>
+                  }
                 }
-                @if (freshness(t).label; as label) { <span class="fs-status" [class]="freshness(t).tone">{{ label }}</span> }
               </li>
             }
           </ul>
@@ -250,6 +259,9 @@
           <div class="card-body"><p class="text-muted small mb-0">Search a ticker in the top bar to start {{ access.liveMarkets() ? 'tracking' : 'your watchlist' }}.</p></div>
         }
       </section>
+
+      <fse-price-alerts />
+      <fse-market-clock />
 
       @if (access.flowsWrite()) {
         <section class="card" aria-labelledby="tpl-title">

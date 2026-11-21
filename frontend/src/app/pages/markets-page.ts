@@ -37,6 +37,12 @@ function readChartStyle(): ChartStyleId {
   try { return parseChartStyle(localStorage.getItem(CHART_STYLE_KEY)); } catch { return DEFAULT_CHART_STYLE; }
 }
 import type { TrackedAsset } from '../services';
+import { flashClass, rangePosition } from '../core/quote-board';
+import { QuoteBoardService } from '../core/quote-board.service';
+import { PriceAlertMenuComponent } from '../components/price-alert-menu';
+import { PriceAlertsService } from '../core/price-alerts.service';
+import { OrdersState } from '../orders-state';
+import { chartMarks } from '../core/chart-marks';
 
 interface Kpi { label: string; value: string; sub?: string; tone?: 'pos' | 'neg' | ''; icon: string }
 
@@ -44,13 +50,23 @@ interface Kpi { label: string; value: string; sub?: string; tone?: 'pos' | 'neg'
 @Component({
   selector: 'fs-markets-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PaneComponent, PhoneDisclosureComponent, HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, LedgerComponent, WatchlistComponent, MarketGroups, SymbolSearchComponent, ProgressStatusComponent],
+  imports: [PaneComponent, PhoneDisclosureComponent, HelpButtonComponent, DecimalPipe, RouterLink, AssetInfoComponent, LeaderboardComponent, TradingChartComponent, LedgerComponent, WatchlistComponent, MarketGroups, SymbolSearchComponent, ProgressStatusComponent, PriceAlertMenuComponent],
   templateUrl: './markets-page.html',
   styleUrl: './markets-page.scss',
 })
 export class MarketsPage {
   readonly market = inject(MarketState);
   readonly access = inject(Access);
+  private readonly board = inject(QuoteBoardService);
+  private readonly priceAlerts = inject(PriceAlertsService);
+  private readonly orders = inject(OrdersState);
+  /** Alert levels and the open position's entry, drawn as price lines on the chart. */
+  readonly chartMarks = computed(() => {
+    const symbol = this.market.trackedSymbol();
+    const alerts = this.priceAlerts.forInstrument({ symbol, provider: this.market.trackedProvider() });
+    const position = this.orders.positions().find(p => p.symbol.toUpperCase() === symbol.toUpperCase());
+    return chartMarks(alerts, position);
+  });
   private readonly agent = inject(AgentSession);
   private readonly notify = inject(NotifyService);
   private readonly chart = viewChild(TradingChartComponent);
@@ -109,8 +125,28 @@ export class MarketsPage {
   }
   readonly confirmClear = signal(false);
 
-  readonly change = computed(() => this.market.dayChange() ?? this.market.rangeChange());
-  readonly changeLabel = computed(() => (this.market.dayChange() !== null ? 'today' : this.market.historyRange()));
+  /** The latest quote of the instrument on screen: the day's statistics and the session state. */
+  readonly quoteRow = this.board.focusRow;
+  readonly day = computed(() => this.quoteRow()?.quote?.day ?? null);
+  private readonly dayFromQuote = computed(() => this.quoteRow()?.dayPct ?? null);
+  readonly change = computed(() => this.market.dayChange() ?? this.dayFromQuote() ?? this.market.rangeChange());
+  readonly changeLabel = computed(() => (this.market.dayChange() !== null || this.dayFromQuote() !== null ? 'today' : this.market.historyRange()));
+  readonly priceFlash = computed(() => flashClass(this.quoteRow()?.entry));
+  readonly session = computed(() => {
+    const s = this.quoteRow()?.quote?.market_session;
+    return s === 'open' || s === 'closed' ? s : '';
+  });
+  /** The day's range, widened to the price when a newer tick lies outside it, and where the price sits in it. */
+  readonly dayRange = computed(() => {
+    const d = this.day();
+    // The quote's own price, so the dot and the range come from the same moment (a live tick when tracked).
+    const price = this.quoteRow()?.price || this.market.livePrice();
+    if (!d || !(d.high > 0) || !(d.low > 0) || !(price > 0)) return null;
+    const low = Math.min(d.low, price);
+    const high = Math.max(d.high, price);
+    const position = rangePosition(price, low, high);
+    return position === null ? null : { low, high, position };
+  });
 
   private readonly chartInput = computed<ChartMetaInput>(() => {
     const s = this.shownSeries();
@@ -157,7 +193,7 @@ export class MarketsPage {
       { label: 'Stop loss', value: (tick?.stop_loss ?? 0) > 0 ? `${tick!.stop_loss.toFixed(2)} ${cur}` : 'Standby', tone: 'neg', icon: 'bi-shield-exclamation' },
       { label: 'Fast EMA', value: fmt(tick?.fast_ema ?? seed?.fastEMA), icon: 'bi-lightning' },
       { label: 'Slow EMA', value: fmt(tick?.slow_ema ?? seed?.slowEMA), icon: 'bi-hourglass-split' },
-      { label: 'Unrealised P&L', value: `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} ${cur}`, tone: pnl > 0 ? 'pos' : pnl < 0 ? 'neg' : '', icon: 'bi-wallet2' },
+      { label: 'Unrealized P&L', value: `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} ${cur}`, tone: pnl > 0 ? 'pos' : pnl < 0 ? 'neg' : '', icon: 'bi-wallet2' },
     ];
   });
 

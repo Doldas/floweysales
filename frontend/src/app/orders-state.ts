@@ -24,7 +24,7 @@ export class OrdersState {
   livePrices: Record<string, number> = {};
 
   /**
-   * Total unrealised P&L. Marks from the tick stream win so the KPI moves
+   * Total unrealized P&L. Marks from the tick stream win so the KPI moves
    * with the market; otherwise the last value the engine reported is used.
    */
   readonly totalPnL = computed(() => {
